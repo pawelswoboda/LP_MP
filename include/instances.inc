@@ -29,6 +29,8 @@ namespace LP_MP {
    using INDEX_SIMD = Vc::int_v;
    using INDEX_MASK_SIMD = Vc::int_m;
 
+   enum class Chirality {left,right};
+
 }
 
 #endif // LP_MP_INSTANCES_INC

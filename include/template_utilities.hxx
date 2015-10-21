@@ -11,6 +11,13 @@
 
 namespace LP_MP {
 
+   template<class LIST> struct tuple_from_list_impl {};
+   template<template<class...> class LIST, class...T> 
+      struct tuple_from_list_impl<LIST<T...> > 
+      { using type = std::tuple<T...>; };
+   template<class LIST> using tuple_from_list = typename tuple_from_list_impl<LIST>::type;
+
+
    // expression templates for negative array
    // introduce traits for expression templates such that Vc::Memory compatible expression templates are taken care of recursively
    template<typename T>

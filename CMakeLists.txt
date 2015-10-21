@@ -20,8 +20,8 @@ add_definitions(-ffast-math)
 
 
 # packages
-set(Vc_DIR "/home/pswoboda/svn/praca doktorska/code/LP_MP/lib/Vc/Vc-0.7.5-Installation/lib/cmake/Vc")
-set(Vc_LIBRARIES "/home/pswoboda/svn/praca doktorska/code/LP_MP/lib/Vc/Vc-0.7.5-Installation/lib/libVc.a") # needed?
+set(Vc_DIR "/net/hciserver03/storage/pswoboda/LP_MP/lib/Vc/Vc-0.7.5-Installation/lib/cmake/Vc")
+set(Vc_LIBRARIES "/net/hciserver03/storage/pswoboda/LP_MP/lib/Vc/Vc-0.7.5-Installation/lib/libVc.a") # needed?
 find_package(Vc 0.7.5 REQUIRED)
 if(Vc_FOUND)
    message(STATUS "Vc found")

@@ -165,7 +165,7 @@ public:
    using LEFT_FACTOR_TYPE = meta::at_c<typename FACTOR_MESSAGE_TRAIT::factor_list, left_factor_number>;
    using RIGHT_FACTOR_TYPE = meta::at_c<typename FACTOR_MESSAGE_TRAIT::factor_list, right_factor_number>;
    // FactorType of factor held by FactorContainer
-   // do zrobienia: clean up naming mess
+   // do zrobienia: clean up naming mess: WRITING_STYLE like this should only refer to templates. NormalClassName should refer to class names otherwise
    using LEFT_FACTOR_TYPE_OP = typename LEFT_FACTOR_TYPE::FactorType;
    using RIGHT_FACTOR_TYPE_OP = typename RIGHT_FACTOR_TYPE::FactorType;
 
@@ -595,9 +595,9 @@ public:
 
    void SendMessages(const std::vector<REAL>& omega) {
       assert(omega.size() == GetNoMessages());
-      // do zrobienia: can be constexpr in c++1y
-      INDEX n = NumberOfSendMessagesCalls<std::valarray<REAL>, decltype(omega.begin())>(MESSAGE_DISPATCHER_TYPELIST{});
-      // do zrobienia: also do not construct currentRepam, if exactly one message update call will be issued
+      static constexpr INDEX n = NumberOfSendMessagesCalls<std::valarray<REAL>, decltype(omega.begin())>(MESSAGE_DISPATCHER_TYPELIST{});
+      // do zrobienia: also do not construct currentRepam, if exactly one message update call will be issued. 
+      // Check if there is one message dispatcher such that its size can be called via a constexpr function and is 1 -> complicated!
       if( n > 0 ) { // no need to construct currentRepam, if it will not be used at all
          // make a copy of the current reparametrization. The new messages are computed on it. Messages are updated implicitly and hence possibly the new reparametrization is automatically adjusted, which would INDEXerfere with message updates
          // do zrobienia: use static memory for this, do not always allocate new memory
@@ -611,10 +611,10 @@ public:
    }
 
    template<typename REPAM_ARRAY, typename ITERATOR, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   constexpr INDEX NumberOfSendMessagesCalls(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) const 
+   constexpr static INDEX NumberOfSendMessagesCalls(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) 
    { return 0; }
    template<typename REPAM_ARRAY, typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   constexpr INDEX NumberOfSendMessagesCalls(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t) const { 
+   constexpr static INDEX NumberOfSendMessagesCalls(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t) { 
       constexpr INDEX n = meta::find_index<MESSAGE_DISPATCHER_TYPELIST, MESSAGE_DISPATCHER_TYPE>::value;
       constexpr INDEX no = MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<decltype(std::get<n>(msg_)), REPAM_ARRAY, ITERATOR>()
          || MESSAGE_DISPATCHER_TYPE::template CanCallSendMessage<REPAM_ARRAY>()
@@ -801,12 +801,6 @@ protected:
    using msg_type_list = meta::transform< msg_list, meta::quote<get_vector_of_pointers> >;
    using msg_container_type_list = meta::concat<left_msg_container_list, right_msg_container_list>;
 
-   template<class LIST> struct tuple_from_list_impl {};
-   template<template<class...> class LIST, class...T> 
-      struct tuple_from_list_impl<LIST<T...> > 
-      { using type = std::tuple<T...>; };
-   template<class LIST> using tuple_from_list = typename tuple_from_list_impl<LIST>::type;
-
    tuple_from_list<msg_container_type_list> msg_;
 };
 
@@ -816,6 +810,7 @@ protected:
 
 // FixedSizeContainer must hold exactly N messages
 // do zrobienia: use partial specialization as on page 732 in Stroustrup to eliminate code bloat
+// do zrobienia: possibly overload operator[] to check for accessing nullptr
 template<class T, INDEX N>
 class FixedSizeContainer : public std::array<T,N>
 {

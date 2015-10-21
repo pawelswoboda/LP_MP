@@ -67,7 +67,7 @@ std::vector<int> ComputeAssignment(string filename, bool load_neib = true)
          if(s.fail() || i0>N[0] || i1>N[1]) { 
             assert(false); throw runtime_error(filename + " wrong format2!\n"); 
          }
-         cs.AddAssignmentCost(i0,i1,cost);
+         cs.AddAssignmentCost(i0,i1,0.0+cost);
 
       } else if( LINE[0] == 'i') {
          INDEX a,b;
@@ -79,14 +79,14 @@ std::vector<int> ComputeAssignment(string filename, bool load_neib = true)
                assert(false); 
                throw std::runtime_error("Wrong format5l"); 
             }
-            cs.AddLeftPottsTerm(a,b,cost);
+            cs.AddLeftPottsTerm(a,b,0.001*cost);
          } else if(side == '2') {
             s >> a >> b >> cost;
             if(s.fail() || a>N[0] || b>N[0] || a==b) { 
                assert(false); 
                throw std::runtime_error("Wrong format5r"); 
             }
-            cs.AddRightPottsTerm(a,b,cost);
+            cs.AddRightPottsTerm(a,b,0.001*cost);
          } else {
             assert(false);
             throw std::runtime_error("Wrong format for Potts");

@@ -8,7 +8,6 @@
 
 namespace LP_MP {
 
-
 // the polytope {x >= 0 : x_i <= varCapacity_[i], x_1 + ... + x_n = sum_ }
 // dual problem:
 //      max_{z,y} sum_*z + varCapacity_[0]*y[0] + ... + varCapacity_[n-1]*y[n-1]
