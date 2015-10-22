@@ -35,6 +35,7 @@ endif()
 OPTION(BUILD_GRAPH_MATCHING "Build graph matching" ON)
 OPTION(BUILD_MULTICUT "Build multicut" OFF)
 OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" OFF)
+OPTION(BUILD_BINARY_TOMOGRAPHY "Build binary tomography solver" OFF)
 
 
 IF(UNIX AND NOT APPLE)
