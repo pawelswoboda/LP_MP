@@ -755,24 +755,24 @@ protected:
    // compile time metaprogramming to transform Factor-Message information into lists of which messages this factor must hold
    // first get lists with left and right message types
    struct get_msg_type_list {
-      template<typename... E>
-         using apply = meta::front<E...>;
+      template<class LIST>
+         using apply = meta::front<LIST>;
    };
    struct get_left_msg {
-      template<class... E>
-         using apply = typename std::is_same< meta::at_c<E..., 1>, meta::size_t<FACTOR_NO> >::type;
+      template<class LIST>
+         using apply = typename std::is_same< meta::at_c<LIST, 1>, meta::size_t<FACTOR_NO> >::type;
    };
    struct get_right_msg {
-      template<class... E>
-         using apply = typename std::is_same< meta::at_c<E..., 2>, meta::size_t<FACTOR_NO> >::type;
+      template<class LIST>
+         using apply = typename std::is_same< meta::at_c<LIST, 2>, meta::size_t<FACTOR_NO> >::type;
    };
    struct get_left_msg_container_type_list {
-      template<class... E>
-         using apply = meta::at_c<E...,3>;
+      template<class LIST>
+         using apply = meta::at_c<LIST, 3>;
    };
    struct get_right_msg_container_type_list {
-      template<class... E>
-         using apply = meta::at_c<E...,4>;
+      template<class LIST>
+         using apply = meta::at_c<LIST, 4>;
    };
 
    using left_msg_list = meta::transform< meta::filter<typename FACTOR_MESSAGE_TRAIT::msg_list, get_left_msg>, get_msg_type_list>;
@@ -782,12 +782,12 @@ protected:
 
    // now construct a tuple with left and right dispatcher
    struct left_dispatch {
-      template<class... E>
-         using apply = MessageDispatcher<E..., LeftMessageFuncGetter>;
+      template<class LIST>
+         using apply = MessageDispatcher<LIST, LeftMessageFuncGetter>;
    };
    struct right_dispatch {
-      template<class... E>
-         using apply = MessageDispatcher<E..., RightMessageFuncGetter>;
+      template<class LIST>
+         using apply = MessageDispatcher<LIST, RightMessageFuncGetter>;
    };
    using left_dispatcher_list = meta::transform< left_msg_list, left_dispatch >;
    using right_dispatcher_list = meta::transform< right_msg_list, right_dispatch >;
