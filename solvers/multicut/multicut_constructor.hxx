@@ -237,6 +237,7 @@ protected:
 
    // do zrobienia: one can reuse the parent structure in subsequent FindPath computations
    // However one then needs to store in union find data structures whether end node is in component. Similar can be done in most violated path search, more complicated, though
+   // Use two-sided bfs to find path between given nodes. Also reuse previous search trees (?)
    struct BfsData {
       struct Item { INDEX parent; INDEX flag; };
       BfsData(const Graph& g) 
@@ -245,71 +246,101 @@ protected:
          for(INDEX i=0; i<d.size(); ++i) {
             d[i].flag = 0;
          }
-         flag = 0;
+         flag1 = 0;
+	 flag2 = 1;
       }
-      void Reset() { ++flag; }
+      void Reset() 
+      {
+	      flag1 += 2;
+	      flag2 += 2; 
+      }
       Item& operator[](const INDEX i) { return d[i]; }
-      void Label(const INDEX i) { d[i].flag = flag; }
-      bool Labelled(const INDEX i) const { return d[i].flag == flag; }
+      void Label1(const INDEX i) { d[i].flag = flag1; }
+      void Label2(const INDEX i) { d[i].flag = flag2; }
+      bool Labelled(const INDEX i) const { return Labelled1(i) || Labelled2(i); }
+      bool Labelled1(const INDEX i) const { return d[i].flag == flag1; }
+      bool Labelled2(const INDEX i) const { return d[i].flag == flag2; }
       INDEX& Parent(const INDEX i) { return d[i].parent; }
+      INDEX Parent(const INDEX i) const { return d[i].parent; }
+      std::vector<INDEX> TracePath(const INDEX i) const 
+      {
+	      std::vector<INDEX> path({i});
+	      INDEX j=i;
+	      while(Parent(j) != j) {
+		      //minPathCost = std::min(minPathCost);
+		      //std::cout << j << ",";
+		      j = Parent(j);
+		      path.push_back(j);
+	      }
+	      return path;
+      }
 
       // do bfs with thresholded costs and iteratively lower threshold until enough cycles are found
-      std::tuple<REAL,std::vector<INDEX>> FindPath(const INDEX startNode, const INDEX endNode, const REAL th, const INDEX maxLength, const Graph& g) 
+      std::tuple<REAL,std::vector<INDEX>> FindPath(const INDEX startNode, const INDEX endNode, const Graph& g) 
       {
          Reset();
          std::queue<INDEX> visit; // do zrobienia: do not allocate each time, make visit a member
+         visit.push(startNode);
+         Label1(startNode);
+         Parent(startNode) = startNode;
          visit.push(endNode);
-         Label(endNode);
+         Label2(endNode);
+         Parent(endNode) = endNode;
+
          while(!visit.empty()) {
             const INDEX i=visit.front();
             visit.pop();
-            //std::cout << "Investigating node " << i << "\n";
 
-            // found path
-            if(i == startNode) { // trace back path to startNode
-               //std::cout << "Found shortest cycle\n";
-               REAL minPathCost = std::numeric_limits<REAL>::max();
-               std::vector<INDEX> path({i});
-               INDEX j = i;
-               while(Parent(j) != endNode) {
-                  //minPathCost = std::min(minPathCost);
-                  //std::cout << j << ",";
-                  j = Parent(j);
-                  path.push_back(j);
-               }
-               //std::cout << "\n";
-               path.push_back(endNode);
-               //std::cout << "Found cycle ";
-               for(INDEX i=0;i<path.size();++i) {
-                  //std::cout << path[i] << ",";
-               }
-               return std::make_tuple(minPathCost,path);
-            } 
-
-            for(Arc* a=g[i].first; a!=nullptr; a = a->next) { // do zrobienia: make iteration out of this?
-               if(a->cost >= th) {
+            if(Labelled1(i)) {
+               for(Arc* a=g[i].first; a!=nullptr; a = a->next) { // do zrobienia: make iteration out of this?
                   Node* head = a->head;
-                  if(!Labelled(g[head])) {
-                     visit.push(g[head]);
-                     Parent(g[head]) = i;
-                     Label(g[head]);
+                  const INDEX j = g[head];
+                  if(!Labelled(j)) {
+                     visit.push(j);
+                     Parent(j) = i;
+                     Label1(j);
+                  } else if(Labelled2(j)) { // shortest path found
+                     // trace bacj path from j to endNode and from i to startNode
+                     std::vector<INDEX> startPath = TracePath(i);
+                     std::vector<INDEX> endPath = TracePath(j);
+                     std::reverse(endPath.begin(), endPath.end());
+                     startPath.insert( startPath.end(), endPath.begin(), endPath.end());
+                     return std::make_tuple(0.0, startPath);
+                  }
+               }
+            } else {
+               assert(Labelled2(i));
+               for(Arc* a=g[i].first; a!=nullptr; a = a->next) { // do zrobienia: make iteration out of this?
+                  Node* head = a->head;
+                  const INDEX j = g[head];
+                  if(!Labelled(j)) {
+                     visit.push(j);
+                     Parent(j) = i;
+                     Label2(j);
+                  } else if(Labelled1(j)) { // shortest path found
+                     // trace bacj path from j to endNode and from i to startNode
+                     std::vector<INDEX> startPath = TracePath(j);
+                     std::vector<INDEX> endPath = TracePath(i);
+                     std::reverse(endPath.begin(), endPath.end());
+                     startPath.insert( startPath.end(), endPath.begin(), endPath.end());
+                     return std::make_tuple(0.0, startPath);
                   }
                }
             }
          }
          return std::make_tuple(0.0,std::vector<INDEX>(0));
-      }
+   }
 
 
 
 
-      private:
-      std::vector<Item> d;
-      INDEX flag;
-   };
+private:
+   std::vector<Item> d;
+   INDEX flag1, flag2;
+};
 
 public:
-   MulticutConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd) 
+MulticutConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd) 
    {
       globalFactor_ = nullptr;
    }
@@ -443,17 +474,27 @@ public:
    INDEX FindNegativeCycles(const REAL minDualIncrease, const INDEX maxTripletsToAdd)
    {
       std::vector<std::tuple<INDEX,INDEX,REAL> > negativeEdges;
+      // we can speed up compution by skipping path searches for node pairs which lie in different connected components. Connectedness is stored in a union find structure
+      UnionFind uf(noNodes_);
       Graph posEdgesGraph(noNodes_,unaryFactors_.size()); // graph consisting of positive edges
       for(auto& it : unaryFactors_) {
          const REAL v = it.second->operator[](0);
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
-         if(v < 0.0) {
-            negativeEdges.push_back(std::make_tuple(i,j,v));
-         } else {
+         if(v > minDualIncrease) {
             posEdgesGraph.AddEdge(i,j,v);
+            uf.merge(i,j);
          }
       }
+      for(auto& it : unaryFactors_) {
+         const REAL v = it.second->operator[](0);
+         const INDEX i = std::get<0>(it.first);
+         const INDEX j = std::get<1>(it.first);
+         if(v <= -minDualIncrease && uf.connected(i,j)) {
+            negativeEdges.push_back(std::make_tuple(i,j,v));
+         }
+      }
+
 
       //std::cout << "Found " << negativeEdges.size() << " negative edges." << std::endl;
 
@@ -472,26 +513,34 @@ public:
       using CycleType = std::tuple<REAL, std::vector<INDEX>>;
       std::vector< CycleType > cycles;
       for(auto& it : negativeEdges) {
-         const INDEX i1 = std::get<0>(it);
-         const INDEX i2 = std::get<1>(it);
+         const INDEX i = std::get<0>(it);
+         const INDEX j = std::get<1>(it);
          const REAL v = std::get<2>(it);
          if(-v < minDualIncrease) break;
-         //auto cycle = mp.FindPath(i2,i1,posEdgesGraph);
-         auto cycle = mp.FindPath(i2,i1,0.0001,0,posEdgesGraph);
+         auto cycle = mp.FindPath(i,j,posEdgesGraph);
          const REAL dualIncrease = std::min(-v, std::get<0>(cycle));
+         assert(std::get<1>(cycle).size() > 0);
          if(std::get<1>(cycle).size() > 0) {
-            cycles.push_back( std::make_tuple(dualIncrease, std::move(std::get<1>(cycle))) );
+            //cycles.push_back( std::make_tuple(dualIncrease, std::move(std::get<1>(cycle))) );
+            tripletsAdded += AddCycle(std::get<1>(cycle));
+            if(tripletsAdded > maxTripletsToAdd) {
+               return tripletsAdded;
+            }
+         } else {
+            throw std::runtime_error("No path found although there is one"); 
          }
       }
       // sort by guaranteed increase in decreasing order
+      /*
       std::sort(cycles.begin(), cycles.end(), [](const CycleType& i, const CycleType& j) { return std::get<0>(i) > std::get<0>(j); });
       for(auto& cycle : cycles) {
          const REAL cycleDualIncrease = std::get<0>(cycle);
          tripletsAdded += AddCycle(std::get<1>(cycle));
-         if(tripletsAdded > maxTripletsToAdd || cycleDualIncrease < minDualIncrease) {
+         if(tripletsAdded > maxTripletsToAdd) {
             return tripletsAdded;
          }
       }
+      */
 
       return tripletsAdded;
    }

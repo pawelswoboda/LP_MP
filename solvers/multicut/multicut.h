@@ -7,6 +7,7 @@
 #include "multicut_unary_factor.hxx"
 #include "multicut_triplet_factor.hxx"
 #include "multicut_global_factor.hxx"
+#include "multicut_odd_wheel_factor.hxx"
 #include "multicut_message.hxx"
 #include "multicut_constructor.hxx"
 

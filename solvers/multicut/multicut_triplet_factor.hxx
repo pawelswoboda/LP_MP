@@ -5,7 +5,6 @@
 
 namespace LP_MP {
 
-// possibly better inherit from simplex factor with two labels
 class MulticutTripletFactor 
 {
 public:

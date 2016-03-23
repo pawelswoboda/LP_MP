@@ -235,6 +235,8 @@ namespace LP_MP {
                   return LPVisitorReturnType::SetRoundingReparametrization;
                }
                // if no sufficient dual increase was achieved
+            } else if(LP_STATE == LPVisitorReturnType::Break) {
+               std::cout << "Tightening took " << tightenTime_ << " milliseconds\n";
             }
          }
          const auto ret = BaseVisitorType::template visit<LP_STATE>(lp);
@@ -252,9 +254,13 @@ namespace LP_MP {
 
          return ret;
       }
-      bool Tighten()
+      INDEX Tighten()
       {
-         return BaseVisitorType::pd_.Tighten(tightenMinDualIncrease_, tightenConstraintsMax_);
+         auto tightenBeginTime = std::chrono::steady_clock::now();
+         INDEX constraintsAdded = BaseVisitorType::pd_.Tighten(tightenMinDualIncrease_, tightenConstraintsMax_);
+         auto tightenEndTime = std::chrono::steady_clock::now();
+         tightenTime_ += std::chrono::duration_cast<std::chrono::milliseconds>(tightenEndTime - tightenBeginTime).count();
+         return constraintsAdded;
       }
 
       protected:
@@ -276,6 +282,8 @@ namespace LP_MP {
       INDEX tightenInterval_;
       INDEX tightenConstraintsMax_;
       REAL tightenMinDualIncrease_;
+      
+      INDEX tightenTime_ = 0;
 
    };
 } // end namespace LP_MP
