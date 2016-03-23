@@ -5,6 +5,10 @@
 
 namespace LP_MP {
 
+// do zrobienia: introduce sensible template names instead of G1,G2 etc.
+
+// note: only Repam{Left|Right} or Get{Left|Right}Message need to be minimally implemented. Everything else is optional.
+
 class EmptyMessageTemplate {
 public:
    template<typename RIGHT_FACTOR, typename G1, typename G2>
@@ -31,11 +35,11 @@ public:
    static void SendMessagesToRight(const MSG_ARRAY& msgs, const LEFT_REPAM& leftRepam, ITERATOR omegaIt)
    {}
 
-   template<typename G>
-   void RepamLeft(G& leftRepamPot, const REAL msg, const INDEX dim)
+   template<typename REPAM_ARRAY>
+   void RepamLeft(REPAM_ARRAY& leftRepamPot, const REAL msg, const INDEX dim)
    {}
-   template<typename G>
-   void RepamRight(G& rightRepamPot, const REAL msg, const INDEX dim)
+   template<typename REPAM_ARRAY>
+   void RepamRight(REPAM_ARRAY& rightRepamPot, const REAL msg, const INDEX dim)
    {}
 
    template<typename M>
@@ -49,4 +53,3 @@ public:
 } // end namespace LP_MP
 
 #endif // LP_MP_EMPTY_MESSAGE_TEMPLATE_HXX
-

@@ -41,6 +41,52 @@ constexpr static bool TESTER_NAME () { \
 
 
 
+// generates helper class and constexpr function with which is is possible to detect existence and callability of member function that returns an object that one can write to
+// do zrobienia: possibly also check for operator+= and operator-=
+#define LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(TESTER_NAME, MEMBER) \
+template<typename C, typename VALUE_TYPE, typename... Args> \
+struct struct_##TESTER_NAME { \
+private: \
+   template<typename T> \
+      static constexpr auto check(T*) \
+      -> typename \
+      std::is_same< \
+      decltype( VALUE_TYPE (std::declval<T>(). MEMBER (std::declval<Args>()...) = std::declval<VALUE_TYPE>() ) ), \
+      VALUE_TYPE \
+         >::type; \
+ \
+   template<typename> \
+      static constexpr std::false_type check(...); \
+ \
+   typedef decltype(check<C>(0)) type; \
+public: \
+   static constexpr bool value = type::value; \
+}; \
+template<class C, typename VALUE_TYPE, typename... ARGS> \
+constexpr static bool TESTER_NAME () { \
+   return struct_##TESTER_NAME<C,VALUE_TYPE,ARGS&...>::value; \
+} \
+
+
+// generates helper class and constexpre function with which it is possible to detect existence of class existence
+// do zrobienia: stupid name, but consistent with above. Possibly rename all of them
+#define LP_MP_CLASS_EXISTENCE_CLASS(TESTER_NAME,CLASS_NAME) \
+template<typename C> \
+struct struct_##TESTER_NAME { \
+private: \
+   template<typename T> \
+      static constexpr auto check(T*) \
+   -> typename std::is_class<typename T::CLASS_NAME>::type; \
+   template<typename> \
+      static constexpr std::false_type check(...); \
+   typedef decltype(check<C>(0)) type; \
+public: \
+   static constexpr bool value = type::value; \
+}; \
+template<typename C> \
+constexpr static bool TESTER_NAME () { \
+   return struct_##TESTER_NAME<C>::value; \
+} \
 
 
 #endif // LP_MP_FUNCTION_EXISTENCE_HXX

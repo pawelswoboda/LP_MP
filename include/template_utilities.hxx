@@ -4,12 +4,18 @@
 #include <type_traits>
 #include <utility>
 #include <tuple>
-#include "instances.inc"
+#include "config.hxx"
 
-// possibly obsolete due to the meta-library
-
+// mostly obsolete due to the meta-library
 
 namespace LP_MP {
+
+   template<SIGNED_INDEX NUMERATOR, SIGNED_INDEX DENOMINATOR>
+   struct RationalNumberTemplate
+   {
+      static constexpr REAL value = REAL(NUMERATOR)/REAL(DENOMINATOR);
+
+   };
 
    template<class LIST> struct tuple_from_list_impl {};
    template<template<class...> class LIST, class...T> 
@@ -18,8 +24,37 @@ namespace LP_MP {
    template<class LIST> using tuple_from_list = typename tuple_from_list_impl<LIST>::type;
 
 
-   // expression templates for negative array
+   // expression templates for various array transformations
    // introduce traits for expression templates such that Vc::Memory compatible expression templates are taken care of recursively
+   // do zrobienia: put this all in expression_template.hxx
+   // do zrobienia: expression templates not working recursively yet, as only references are stored, but references to expressions might vanish. They need to be stored by copy.
+
+   // do zrobienia: detect for const expressions and let them not have assignment operators
+
+   template<typename T>
+   struct VecSlice {
+      VecSlice(T& a, const INDEX begin, const INDEX end)
+         : a_(a), begin_(begin), end_(end)
+      {
+         assert(end_ > begin_);
+         assert(begin_ >= 0);
+         assert(end_ <= a_.size());
+      }
+      const REAL operator[](const INDEX i) const {
+         return a_[i + begin_];
+      }
+      REAL& operator[](const INDEX i) {
+         return a_[i + begin_];
+      }
+      const INDEX size() const {
+         return end_ - begin_;
+      }
+      private:
+      T& a_;
+      const INDEX begin_;
+      const INDEX end_;
+   };
+
    template<typename T>
    struct ScaledVec {
       ScaledVec(const REAL& omega, const T& a) : omega_(omega), a_(a) {}
@@ -30,7 +65,7 @@ namespace LP_MP {
          return a_.size();
       }
       private:
-      T& a_;
+      const T& a_;
       const REAL& omega_;
    };
 
@@ -107,6 +142,40 @@ namespace LP_MP {
          private:
          const Vc::Memory<REAL_SIMD> a_;
       };  
+
+
+   template<typename T1, typename T2>
+   struct PlusExprVec {
+      PlusExprVec(const T1& a, const T2& b) : a_(a), b_(b) {
+         assert(a_.size() == b_.size());
+      }
+      const REAL operator[](const INDEX i) const {
+         return a_[i] + b_[i];
+      }
+      const INDEX size() const {
+         return a_.size();
+      }
+      private:
+      const T1& a_;
+      const T2& b_;
+   };
+
+
+   template<typename T1, typename T2>
+   struct MinusExprVec {
+      MinusExprVec(const T1& a, const T2& b) : a_(a), b_(b) {
+         assert(a_.size() == b_.size());
+      }
+      const REAL operator[](const INDEX i) const {
+         return a_[i] - b_[i];
+      }
+      const INDEX size() const {
+         return a_.size();
+      }
+      private:
+      const T1& a_;
+      const T2& b_;
+   };
 
 
 

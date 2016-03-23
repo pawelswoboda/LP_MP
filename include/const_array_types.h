@@ -16,11 +16,14 @@ public:
       } 
       if(c.size() > 0) { 
          v_ = c[0]; 
+      } else {
+         throw std::runtime_error("constant array with length 0 cannot be allocated");
       }
    }
    const INDEX operator[](const INDEX i) const { return v_; }
 private:
    INDEX v_;
+   // second index can be used for size. Another possibility: put everything in one INDEX and mask
 };
 
 // compile time constant array
@@ -31,13 +34,12 @@ public:
    constexpr const INDEX operator[](const INDEX i) const { return N; }
 };
 
-// do zrobienia: remove this class
+// do zrobienia: remove this class, constexpr_array does the same
 class const_ones_array {
 public:
    constexpr const_ones_array(const std::vector<INDEX>& c) {}
    constexpr const INDEX operator[](const INDEX i) const { return 1; }
 };
-
 
 template<INDEX N>
 class constant {

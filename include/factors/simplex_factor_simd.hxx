@@ -56,4 +56,3 @@ private:
 
 #endif // LP_MP_SIMPLEX_FACTOR_SIMD
 
-

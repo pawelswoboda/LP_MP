@@ -1,5 +1,5 @@
-#ifndef LP_MP_MULTIPLEX_MARG_MESSAGE
-#define LP_MP_MULTIPLEX_MARG_MESSAGE
+#ifndef LP_MP_SIMPLEX_MARG_MESSAGE_HXX
+#define LP_MP_SIMPLEX_MARG_MESSAGE_HXX
 
 #include "LP_MP.h"
 #include "factors_messages.hxx"
@@ -8,60 +8,80 @@
 namespace LP_MP {
 
 
-// kL*(l_11 + ... + l_1n) = kR*(r_11 + ... + r_l1)
+// l_11 + ... + l_1n = r_11 + ... + r_l1
 // ...
-// kL*(l_k1 + ... + l_kn) = kR*(r_1k + ... + r_lk)
+// l_k1 + ... + l_kn = r_1k + ... + r_lk
 // all variables must be distinct
-// left and right factor must be either simplex factor or multiplex factor
+// left and right factor must be simplices and all variables of left and right simplex must be covered
 
-// template parameters: left and right shape iterator, which messages to compute, i.e. message for pairwise factors need not be computed
-// note: left and right factor type must be MultiplexFactor
-// do zrobienia: make functions const where applicable
-// {LEFT|RIGHT}_SIDE_ACTIVE activates with SFINAE message updates for left and right factor resp.
-template<class LEFT_LOOP_TYPE, class RIGHT_LOOP_TYPE, bool LEFT_SIDE_ACTIVE, bool RIGHT_SIDE_ACTIVE>
+// {LEFT|RIGHT}_SIDE_ACTIVE activates by SFINAE message updates for left and right factor resp.
+
+// do zrobienia: rename to SimplexMargMessage. Multiplex will not be supported anymore. Throw away the associated types
+
+// stride classes are used for cases when variables accessed in reparametrization are not 0,...,n-1, e.g. for min cost flow factor
+/*
+struct ConstantStrideOffset {
+   const INDEX operator[](const INDEX i) const { return offset_ + stride_*i; }
+private:
+   const INDEX offset_;
+   const INDEX stride_;
+};
+struct UniformStrideOffset {
+   const INDEX operator[](const INDEX i) const { return offset_ + i; }
+private:
+   const INDEX offset_;
+};
+*/
+struct UniformStride {
+   const INDEX operator[](const INDEX i) const { return i; }
+};
+
+// replace all thos bools by named parameters via enum classes
+template<class LEFT_LOOP_TYPE, class RIGHT_LOOP_TYPE, bool LEFT_SIDE_ACTIVE, bool RIGHT_SIDE_ACTIVE, bool PROPAGATE_PRIMAL_TO_LEFT = false, bool PROPAGATE_PRIMAL_TO_RIGHT = false, typename LEFT_STRIDE = UniformStride, typename RIGHT_STRIDE = UniformStride>
 class MultiplexMargMessage
 {
 public:
    typedef LEFT_LOOP_TYPE LeftLoopType;
    typedef RIGHT_LOOP_TYPE RightLoopType;
 
-   MultiplexMargMessage(LEFT_LOOP_TYPE loopLeft, RIGHT_LOOP_TYPE loopRight, const INDEX kL, const INDEX kR)
+   MultiplexMargMessage(LEFT_LOOP_TYPE loopLeft, RIGHT_LOOP_TYPE loopRight)
+      : loopLeft_(loopLeft),
+      loopRight_(loopRight)
+   {}
+   MultiplexMargMessage(LEFT_LOOP_TYPE loopLeft, RIGHT_LOOP_TYPE loopRight, LEFT_STRIDE leftStride, RIGHT_STRIDE rightStride)
       : loopLeft_(loopLeft),
       loopRight_(loopRight),
-      kL_(kL),
-      kR_(kR)
-   { 
-      assert(kL_ > 0 && kR_ > 0);
-      assert(kL_ == 1 && kR_ == 1); // do zrobienia: for now
-   }
+      leftStride_(leftStride),
+      rightStride_(rightStride)
+   {}
 
    // standard functions which take all possible arguments, to be replaced with minimal ones
    template<typename RIGHT_FACTOR, typename G1, typename G2, bool LSA = LEFT_SIDE_ACTIVE>
    typename std::enable_if<LSA,void>::type
    ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg) 
    {
-      //std::cout << "LEFT_SIDE_ACTIVE " << LEFT_SIDE_ACTIVE << "\n"; // jest true
+      static_assert(LSA == LEFT_SIDE_ACTIVE,"");
       MinimizeRight(r,rightPot,msg); 
    }
    template<typename LEFT_FACTOR, typename G1, typename G2, bool RSA = RIGHT_SIDE_ACTIVE>
    typename std::enable_if<RSA,void>::type 
    ReceiveMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg) 
    { 
-      //std::cout << "RIGHT_SIDE_ACTIVE " << RIGHT_SIDE_ACTIVE << "\n"; // jest false
+      static_assert(RSA == RIGHT_SIDE_ACTIVE,"");
       MaximizeLeft(l,leftPot,msg); 
    }
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G2, typename G3, bool LSA = LEFT_SIDE_ACTIVE>
    typename std::enable_if<LSA,void>::type
    SendMessageToRight(LEFT_FACTOR* const l, RIGHT_FACTOR* const r, const G1& leftPot, const G2& rightPot, G3& msg, const REAL omega)
    { 
-      //std::cout << "LEFT_SIDE_ACTIVE " << LEFT_SIDE_ACTIVE << "\n"; // jest true
+      static_assert(LSA == LEFT_SIDE_ACTIVE,"");
       MaximizeLeft(l,leftPot,msg,omega); 
    }
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G2, typename G3, bool RSA = RIGHT_SIDE_ACTIVE>
    typename std::enable_if<RSA,void>::type
    SendMessageToLeft(LEFT_FACTOR* const l, RIGHT_FACTOR* const r, const G1& leftPot, const G2& rightPot, G3& msg, const REAL omega) 
    { 
-      //std::cout << "RIGHT_SIDE_ACTIVE " << RIGHT_SIDE_ACTIVE << "\n"; // jest false
+      static_assert(RSA == RIGHT_SIDE_ACTIVE,"");
       MinimizeRight(r,rightPot,msg,omega); 
    }
 
@@ -98,7 +118,7 @@ public:
       REAL delta;
       auto pot = static_cast<typename decltype(*msgs[0])::LEFT_FACTOR_TYPE*>(msgs[0]->GetLeftFactor());
       auto leftLoop = msgs[0]->msg_op_.loopLeft_;
-      const REAL breakPoINDEX = msgs[0]->GetLeftFactor()->GetBreakpoINDEXCost(pot);
+      const REAL breakPoint = msgs[0]->GetLeftFactor()->GetBreakpoINDEXCost(pot);
       const REAL k = msgs[0]->msg_op_.kL_;
       leftLoop.loop( 
          [&](const INDEX outer_idx){ delta = std::numeric_limits<REAL>::max(); 
@@ -107,7 +127,7 @@ public:
          [&](const INDEX full_idx, const INDEX outer_idx){ 
          //std::cout << "full_idx = " << full_idx <<  ", outer_idx = " << outer_idx << "\n";
          assert(full_idx < pot.size());
-         if(pot[ full_idx ] > breakPoINDEX) { delta = std::min(delta, (pot[ full_idx ] - breakPoINDEX)/REAL(k)); }
+         if(pot[ full_idx ] > breakPoint) { delta = std::min(delta, (pot[ full_idx ] - breakPoint)/REAL(k)); }
          else { delta = 0.0; }
          },
          [&](const INDEX outer_idx){ 
@@ -121,90 +141,97 @@ public:
    }
    */
    // reparametrize left potential for i-th entry of msg
+   // do zrobienia: put strides in here and below
    template<typename G>
-   void RepamLeft(G& repamPot, const REAL msg, const INDEX dim)
+   void RepamLeft(G& repamPot, const REAL msg, const INDEX msg_dim)
    { 
-      loopLeft_.loop(dim, [&](const INDEX i) { repamPot[i] = repamPot[i] - msg; });
+      loopLeft_.loop(msg_dim, [&](const INDEX i) { repamPot[leftStride_[i]] = repamPot[leftStride_[i]] - msg; });
    }
    template<typename G>
    void RepamRight(G& repamPot, const REAL msg, const INDEX dim)
    {
-      loopRight_.loop(dim, [&](const INDEX i) { repamPot[i] = repamPot[i] + msg; });
+      loopRight_.loop(dim, [&](const INDEX i) { repamPot[rightStride_[i]] = repamPot[rightStride_[i]] + msg; });
    }
    // get message for i-th dimension of left potential
    // do zrobienia: prawidlowo?
    // do zrobinia: currently only for 2-dim
-   // for ImplicitRepamStorage
-   template<typename M>
-   const REAL GetLeftMessage(const INDEX i, const M& msg) const
+   // used in conjunction with ImplicitRepamStorage
+   template<typename MSG>
+   const REAL GetLeftMessage(const INDEX pot_dim, const MSG& msg) const
    {
-      //assert(i < loopLeft_.GetDim(0)*loopLeft_.GetDim(1));
-      //return -msg[ i%loopLeft_.GetDim(0) ];
-      return -msg[ loopLeft_.GetMsgIndex(i) ];
+      return -msg[ loopLeft_.GetMsgIndex(pot_dim) ];
    }
-   template<typename M>
-   const REAL GetRightMessage(const INDEX i, const M& msg) const
+   template<typename MSG>
+   const REAL GetRightMessage(const INDEX i, const MSG& msg) const
    {
-      //assert(i < loopRight_.GetDim(0)*loopRight_.GetDim(1));
-      //return msg[ i/loopRight_.GetDim(1) ]; // do zrobienia: correct?
       return msg[ loopRight_.GetMsgIndex(i) ];
    }
+
+   // note: the two functions below only make sense, if loop type is pairwise.
+   template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = PROPAGATE_PRIMAL_TO_LEFT>
+   typename std::enable_if<PROPAGATE_PRIMAL_TO_LEFT_TMP,void>::type
+   ComputeLeftFromRightPrimal(INDEX& leftPrimal, const INDEX rightPrimal) 
+   {
+      static_assert(PROPAGATE_PRIMAL_TO_LEFT_TMP == PROPAGATE_PRIMAL_TO_LEFT,"");
+      std::cout << "enable primal computation again";
+      /*
+      if(loopRight_.commonIdx == 0) {
+         leftPrimal += loopLeft_.Label(rightPrimal,0);
+      } else {
+         leftPrimal += loopLeft_.Label(0,rightPrimal);
+      }
+      */
+   }
+   template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = PROPAGATE_PRIMAL_TO_RIGHT>
+   typename std::enable_if<PROPAGATE_PRIMAL_TO_RIGHT_TMP,void>::type
+   ComputeRightFromLeftPrimal(const INDEX leftPrimal, INDEX& rightPrimal)
+   {
+      static_assert(PROPAGATE_PRIMAL_TO_RIGHT_TMP == PROPAGATE_PRIMAL_TO_RIGHT,"");
+      rightPrimal += loopRight_.PropagateLabel(leftPrimal);
+   }
+
    
 private:
-   template<class OP, typename FACTOR_TYPE, typename G1, typename G2, class LOOP>
-   void Optimize(OP op, const G1& pot, G2& msg, FACTOR_TYPE* fac, const INDEX k, LOOP& l, const REAL omega); 
-
    template<typename LEFT_FACTOR, typename G1, typename G2>
    void MaximizeLeft(LEFT_FACTOR* const l, const G1& leftPot, G2& msg, const REAL omega = 1.0)
    {
-      // do this with template lambdas
-      //auto plus_op = [](decltype(msg[0]) x, const REAL y) -> REAL { return x+y; };
-      ;
       Optimize(
             [](const REAL y) -> REAL { return y; },
-            leftPot, msg, l, kL_, loopLeft_, omega);
+            leftPot, msg, l, loopLeft_, omega);
    }
    template<typename RIGHT_FACTOR, typename G1, typename G2>
    void MinimizeRight(RIGHT_FACTOR* r, const G1& rightPot, G2& msg, const REAL omega = 1.0)
    {
-      // do this with template lambdas
-      //auto minus_op = [](decltype(msg[0]) x, const REAL y) -> REAL { return x-y; };
       Optimize(
             [](const REAL y) -> REAL { return -y; }, 
-            rightPot, msg, r, kR_, loopRight_, omega);
+            rightPot, msg, r, loopRight_, omega);
    }
 
+   // do zrobienia: derive from the four classes below, to enable empty base class optimization.
    LEFT_LOOP_TYPE loopLeft_;
    RIGHT_LOOP_TYPE loopRight_;
-   // do zrobienia: replace this with templates or get from factor
-   const INDEX kL_, kR_; // multipliers, see explanation of the model above
+
+   LEFT_STRIDE leftStride_;
+   RIGHT_STRIDE rightStride_;
+
+   template<typename OP, class FACTOR_TYPE, typename G1, typename G2, class LOOP>
+   void Optimize(OP op, const G1& pot, G2& msg, FACTOR_TYPE* fac, LOOP& l, const REAL omega)
+   {
+      REAL delta;
+      l.loop( 
+            [&](const INDEX outer_idx){ 
+            delta = std::numeric_limits<REAL>::max(); 
+            }, 
+            [&](const INDEX full_idx, const INDEX outer_idx){ 
+            delta = std::min(delta, pot[ full_idx ]);
+            },
+            [&](const INDEX outer_idx){ 
+            assert( outer_idx < msg.size() );
+            msg[ outer_idx ] = msg[ outer_idx ] + omega*op(delta);
+            } );
+   }
 };
-
-template<class LEFT_FACTOR_TYPE, class RIGHT_FACTOR_TYPE, bool LEFT_SIDE_ACTIVE, bool RIGHT_SIDE_ACTIVE>
-//template<typename MultiplexMargMessage<LEFT_FACTOR_TYPE,RIGHT_FACTOR_TYPE>::OptimizeOp Op, class FACTOR_TYPE, typename G1, typename G2, class LOOP>
-template<typename OP, class FACTOR_TYPE, typename G1, typename G2, class LOOP>
-void 
-MultiplexMargMessage<LEFT_FACTOR_TYPE,RIGHT_FACTOR_TYPE,LEFT_SIDE_ACTIVE,RIGHT_SIDE_ACTIVE>::Optimize(OP op, const G1& pot, G2& msg, FACTOR_TYPE* fac, const INDEX k, LOOP& l, const REAL omega)
-//MultiplexMargMessage::Optimize(const G1& pot, G2& msg, FACTOR_TYPE* fac, const INDEX k, LOOP& l, const REAL omega)
-{
-   //const REAL breakPoINDEX = fac->GetBreakpoINDEXCost(pot);
-   assert(k == 1); // do zrobienia: templatize for k such that it may be a constexpr, thus fast, possibly get k directly from factor
-
-   REAL delta;
-   l.loop( 
-         [&](const INDEX outer_idx){ 
-         delta = std::numeric_limits<REAL>::max(); 
-         }, 
-         [&](const INDEX full_idx, const INDEX outer_idx){ 
-         delta = std::min(delta, pot[ full_idx ]);
-         //delta = std::min(delta, (pot[ full_idx ] - breakPoINDEX)/REAL(k)); // this is very slow, makes algorithm run two times longer
-         },
-         [&](const INDEX outer_idx){ 
-         assert( outer_idx < msg.size() );
-         msg[ outer_idx ] = msg[ outer_idx ] + omega*op(delta);
-         } );
-}
 
 } // end namespace LP_MP
 
-#endif // LP_MP_MULTIPLEX_MARG_MESSAGE
+#endif // LP_MP_SIMPLEX_MARG_MESSAGE_HXX

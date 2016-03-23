@@ -7,6 +7,9 @@
 
 namespace LP_MP {
 
+// do zrobienia: remove this file, functionality is in assignment_problem_constructor.hxx
+// AddEdge has been changed in MinCost.h
+
 // template argument only needed because of hxx file. do zrobienia: templatize for cost and graph vector to allow other representations as well
 template<bool unneeded = true>
 std::vector<int> GetAssignment(

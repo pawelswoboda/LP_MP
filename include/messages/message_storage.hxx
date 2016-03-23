@@ -27,7 +27,8 @@ public:
    MessageStorageSIMD(const INDEX msg_size) : Vc::Memory<REAL_SIMD>(msg_size)
    {
       for(INDEX i=0; i<Memory::vectorsCount(); ++i) {
-         Memory::vector(i) = 0.0; // Vc::Zero
+		assert(false); // not implemented now
+         //Memory::vector(i) = Vc::Zero;
       }
    }  
    const size_t size() const { return Memory::entriesCount(); }

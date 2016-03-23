@@ -1,16 +1,16 @@
-#ifndef LP_MP_MESSAGE_LOOP
-#define LP_MP_MESSAGE_LOOP
+#ifndef LP_MP_MESSAGE_LOOP_HXX
+#define LP_MP_MESSAGE_LOOP_HXX
 
 #include <utility>
 #include "LP_MP.h"
 
 namespace LP_MP {
-// for use in multiplex_marg_message.hxx and marg_message.hxx to template loops
-// do zrobienia: specify loop constraINDEXs or loop concept?
+// for use in multiplex_marg_message.hxx and to templatize loops
+// do zrobienia: specify loop constraints or loop concept?
 // do zrobienia: check if LAMBDA1, LAMBDA2 and LAMBDA3 are lambdas with correct function specification
 // do zrobienia: think about switching loop order for better aligning when COMMON_IDX is true
 
-// loop mult implement
+// loop must implement
 // for(i=1:outer) {
 //    f1(i);
 //    for(j=1:inner) {
@@ -19,14 +19,17 @@ namespace LP_MP {
 //    f3(i);
 // }
 
+template<class ITER_LIMIT = std::array<INDEX,1> >
 class UnaryLoop
 {
 public:
-   UnaryLoop(const INDEX dim) : dim_(dim) {}
+   // default constructor for derived classes with constant limits
+   UnaryLoop() {}
+   UnaryLoop(const INDEX dim) : dim_({dim}) {}
 
    template<typename Lambda1, typename Lambda2, typename Lambda3> 
    inline void loop(const Lambda1 f1, const Lambda2 f2, const Lambda3 f3) {
-      for(INDEX idx=0; idx<dim_; ++idx) {
+      for(INDEX idx=0; idx<dim_[0]; ++idx) {
          f1(idx);
          f2(idx, idx);
          f3(idx);
@@ -39,11 +42,11 @@ public:
       f(msg_index);
    }
 
-   const INDEX GetDim(const INDEX i) const { assert(i==0); return dim_; }
+   const INDEX GetDim(const INDEX i) const { assert(i==0); return dim_[0]; }
 
    const INDEX GetMsgIndex(const INDEX potIndex) const { return potIndex; } // for dimension i of potential, which message dimension acts on that point?
 private:
-   const INDEX dim_;
+   const ITER_LIMIT dim_;
 };
 
 // do zrobienia: write optimized loops for fixed ITER_LIMIT
@@ -87,6 +90,7 @@ public:
 private:
    ITER_LIMIT iter_limit_;
 };
+
 
 template<class ITER_LIMIT = std::array<INDEX,2>>
 class RightPairwiseLoopSIMD
@@ -139,9 +143,11 @@ template<INDEX COMMON_IDX, class ITER_LIMIT = std::array<INDEX,2> >
 class PairwiseLoop
 {
 public:
+   constexpr static INDEX commonIdx = COMMON_IDX;
+
    //PairwiseLoop(const INDEX first_dim, const INDEX second_dim) : iter_limit_( {{first_dim, second_dim}} ) { }
    PairwiseLoop(ITER_LIMIT iter_limit) : iter_limit_( iter_limit ) { }
-   PairwiseLoop() { } // e.g. for non-type template for constant limits -> loop unrolling etc.
+   PairwiseLoop() {} // e.g. for non-type template for constant limits -> loop unrolling etc.
    ~PairwiseLoop() {
       static_assert(0 <= COMMON_IDX && COMMON_IDX <= 1, "first template argument must be 0/1");
    }
@@ -153,7 +159,7 @@ public:
          f1(i[COMMON_IDX]);
 
          for(i[1-COMMON_IDX]=0; i[1-COMMON_IDX]<iter_limit_[1-COMMON_IDX]; ++i[1-COMMON_IDX]) {
-            f2( i[0] + i[1]*iter_limit_[0], i[COMMON_IDX]);
+            f2( Label(i[0],i[1]) , i[COMMON_IDX]);
          }
          
          f3(i[COMMON_IDX]);
@@ -166,13 +172,13 @@ public:
       std::array<INDEX,2> i;
       i[COMMON_IDX] = msg_index;
       for(i[1-COMMON_IDX]=0; i[1-COMMON_IDX]<iter_limit_[1-COMMON_IDX]; ++i[1-COMMON_IDX]) {
-         const INDEX index = i[0] + i[1]*iter_limit_[0];
-         f(index);
+         f(Label(i[0],i[1]));
       }
    }
 
    const INDEX GetDim(const INDEX i) const { assert(i==0 || i==1); return iter_limit_[i]; }
 
+   // for dimension i of potential, which message dimension acts on that point?
    const INDEX GetMsgIndex(const INDEX potIndex) const { 
       if(COMMON_IDX == 0) {
          return potIndex%iter_limit_[0];
@@ -180,12 +186,99 @@ public:
       if(COMMON_IDX == 1) {
          return potIndex/iter_limit_[0];
       }
-      
-      ; } // for dimension i of potential, which message dimension acts on that point?
+   } 
+
+   const INDEX Label(const INDEX i0, const INDEX i1) const 
+   { 
+      assert(i0 < iter_limit_[0]);
+      assert(i1 < iter_limit_[1]);
+      return i0 + i1*iter_limit_[0]; 
+   }
+
+   INDEX PropagateLabel(const INDEX l) const
+   {
+      if(commonIdx == 0) {
+         return Label(l,0);
+      } else {
+         return Label(0,l);
+      }
+   }
 private:
-   ITER_LIMIT iter_limit_;
+   ITER_LIMIT iter_limit_; // possibly derive from ITER_LIMIT to enable empty base class optimization
 };
 
+template<INDEX COMMON_IDX1, INDEX COMMON_IDX2, class ITER_LIMIT = std::array<INDEX,3> >
+class PairwiseTripletLoop
+{
+public:
+   constexpr static INDEX commonIdx1 = COMMON_IDX1;
+   constexpr static INDEX commonIdx2 = COMMON_IDX2;
+   // the complementary index
+   constexpr static INDEX tripletIdx = commonIdx1 == 0 && commonIdx2 == 1 ? 2 : (commonIdx1 == 0 && commonIdx2 == 2 ? 1 : 0);
+
+   //PairwiseLoop(const INDEX first_dim, const INDEX second_dim) : iter_limit_( {{first_dim, second_dim}} ) { }
+   PairwiseTripletLoop(ITER_LIMIT iter_limit) : iter_limit_( iter_limit ) { }
+   PairwiseTripletLoop() {} // e.g. for non-type template for constant limits -> loop unrolling etc.
+   ~PairwiseTripletLoop() {
+      static_assert(0 <= COMMON_IDX1 && COMMON_IDX1 < COMMON_IDX2 && COMMON_IDX2 <= 2, "first two template arguments must be in {0,1,2}");
+   }
+
+   template<typename Lambda1, typename Lambda2, typename Lambda3> 
+   inline void loop(const Lambda1 f1, const Lambda2 f2, const Lambda3 f3) {
+      std::array<INDEX,3> i;
+      for(i[COMMON_IDX1]=0; i[COMMON_IDX1]<iter_limit_[COMMON_IDX1]; ++i[COMMON_IDX1]) {
+         for(i[COMMON_IDX2]=0; i[COMMON_IDX2]<iter_limit_[COMMON_IDX2]; ++i[COMMON_IDX2]) {
+            f1(PairwiseLabel(i));
+            for(i[tripletIdx]=0; i[tripletIdx]<iter_limit_[tripletIdx]; ++i[tripletIdx]) {
+               f2( TripletLabel(i) , PairwiseLabel(i));
+            }
+            f3(PairwiseLabel(i));
+         }
+      }
+   }
+
+   // iterate over all dimensions where msg[msg_index] works on and apply function f on them
+   template<typename Lambda>
+   inline void loop(const INDEX msg_index, const Lambda f) {
+      std::array<INDEX,3> i;
+      // correct?
+      i[COMMON_IDX1] = msg_index%iter_limit_[commonIdx1];
+      i[COMMON_IDX2] = msg_index/iter_limit_[commonIdx1];
+      for(i[tripletIdx]=0; i[tripletIdx]<iter_limit_[tripletIdx]; ++i[tripletIdx]) {
+         f(TripletLabel(i));
+      }
+   }
+
+   const INDEX GetDim(const INDEX i) const { assert(i==0 || i==1 || i==2); return iter_limit_[i]; }
+
+   const INDEX TripletLabel(const std::array<INDEX,3>& i) const 
+   { 
+      assert(i[0] < iter_limit_[0]);
+      assert(i[1] < iter_limit_[1]);
+      assert(i[1] < iter_limit_[2]);
+      return i[0] + i[1]*iter_limit_[0] + i[2]*iter_limit_[0]*iter_limit_[1]; 
+   }
+   // ignore index not coming from pairwise potential
+   const INDEX PairwiseLabel(const std::array<INDEX,3>& i) const
+   { 
+      assert(i[COMMON_IDX1] < iter_limit_[COMMON_IDX1]);
+      assert(i[COMMON_IDX2] < iter_limit_[COMMON_IDX2]);
+      return i[COMMON_IDX1] + i[COMMON_IDX2]*iter_limit_[COMMON_IDX1];
+   }
+
+   INDEX PropagateLabel(const INDEX l) const
+   {
+      std::array<INDEX,3> i;
+      i[commonIdx1] = l % iter_limit_[commonIdx1];
+      i[commonIdx1] = l / iter_limit_[commonIdx1];
+      i[tripletIdx] = 0;
+      return TripletLabel(i);
+   }
+
+
+private:
+   ITER_LIMIT iter_limit_; // possibly derive from ITER_LIMIT to enable empty base class optimization
+};
 /*
 template<INDEX ITER_LIMIT_1, INDEX ITER_LIMIT_2>
 struct ConstantIterLimit {
@@ -196,7 +289,7 @@ struct ConstantIterLimit {
 */
 
 // class for flexible number of constant iteration limits
-// do zrobienia: possibly make this like tuple, i.e. make a teplated getter function instead of constexpr operator[]
+// do zrobienia: possibly make this like tuple, i.e. make a templated getter function instead of constexpr operator[]
 template <INDEX ... REST> struct ConstantIterLimit {
    constexpr INDEX operator[](const INDEX i) const noexcept {
       // do zrobienia: make this cleaner
@@ -212,10 +305,21 @@ struct ConstantIterLimit<ITER_LIMIT, REST...> : ConstantIterLimit<REST...> {
    }
 };
 
-// class for constant iteration limits
+// classes for constant iteration limits
+template<INDEX ITER_LIMIT>
+class UnaryLoopConstant : public UnaryLoop<ConstantIterLimit<ITER_LIMIT> >
+{
+public:
+   UnaryLoopConstant(const INDEX dim) {}
+};
+
 template<INDEX COMMON_IDX, INDEX ITER_LIMIT_1, INDEX ITER_LIMIT_2>
 class PairwiseLoopConstant : public PairwiseLoop<COMMON_IDX, ConstantIterLimit<ITER_LIMIT_1, ITER_LIMIT_2> >
-{ };
+{
+public:
+   PairwiseLoopConstant(std::array<INDEX,2>& iter_limit) {}
+   //using PairwiseLoop<COMMON_IDX, ConstantIterLimit<ITER_LIMIT_1, ITER_LIMIT_2> >::PairwiseLoop;
+};
 
 
 
@@ -315,26 +419,19 @@ private:
 */
 
 
-class TernaryLoop
-{
-public:
-   TernaryLoop(const std::array<INDEX,3> dim) : dim_(dim) {}
-
-   template<typename Lambda1, typename Lambda2, typename Lambda3> 
-   inline void loop(const Lambda1 f1, const Lambda2 f2, const Lambda3 f3) {
-      for(INDEX i=0; i<dim_[0]; ++i) {
-         for(INDEX j=0; j<dim_[1]; ++j) {
-            for(INDEX k=0; k<dim_[2]; ++k) {
-            }
-         }
-      }
-   }
+// general marginalization loop
+// Let A be a 0/1-matric such that columns sum to 1.
+// Require A*mu_1 = mu_2, where mu_{1,2} are multiplex-factors.
+/*
+class ProjectionLoop {
 
 private:
-   const std::array<INDEX,3> dim_;
-};
+   const INDEX leftDim_;
+   const INDEX rightDim_;
 
+};
+*/
 
 } // end namespace LP_MP
 
-#endif // LP_MP_MESSAGE_LOOP
+#endif // LP_MP_MESSAGE_LOOP_HXX

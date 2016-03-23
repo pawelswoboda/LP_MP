@@ -1,6 +1,7 @@
-#ifndef LP_MP_HELP_FUNCTIONS
-#define LP_MP_HELP_FUNCTIONS
+#ifndef LP_MP_HELP_FUNCTIONS_HXX
+#define LP_MP_HELP_FUNCTIONS_HXX
 
+#include <string>
 #include <map>
 #include <set>
 #include <vector>
@@ -9,7 +10,34 @@
 #include <algorithm>
 #include <assert.h>
 
+#include <libgen.h>
+
 namespace LP_MP {
+
+inline std::string LatexEscape(const std::string& s)
+{
+   std::string escaped = s;
+   size_t start_pos = 0;
+   while(start_pos < escaped.length() && (start_pos = escaped.find("_", start_pos)) != std::string::npos) {
+      escaped.replace(start_pos, 1, "{\\_}");
+      start_pos += 4;
+   }
+   return escaped;
+}
+
+// extract file name without extension, only works on linux for regular filenames.
+inline std::string ExtractFilename(const std::string& path)
+{
+   char* pathTmp = new char[path.length()+1];
+   std::strcpy(pathTmp,path.c_str());
+   std::string file(basename(pathTmp));
+   delete pathTmp;
+   auto extensionPos = file.find_last_of("."); 
+   if(extensionPos != std::string::npos) {
+      file = file.substr(0,extensionPos);
+   }
+   return file;
+}
 
 inline int binary_compl(const int i)
 {
@@ -25,14 +53,14 @@ int find_index(const T i, const std::vector<T>& vec)
    return index;
 }
 
-template<class F, class I>
-void BuildIndexMaps(const std::vector<F>& f, std::map<F,I>& elemToIndex, std::map<I,F>& indexToElem)
+template<class F, class I, typename ITERATOR>
+void BuildIndexMaps(ITERATOR fIt, const ITERATOR fEndIt, std::map<F,I>& elemToIndex, std::map<I,F>& indexToElem)
 {
    // do zrobienia: - reserve space, 
    //               - possibly use hash_map for speed
-   for(size_t i=0; i<f.size(); i++) {
-      elemToIndex.insert(std::make_pair(f[i],i));
-      indexToElem.insert(std::make_pair(i,f[i]));
+   for(INDEX i=0; fIt+i!=fEndIt; ++i) {
+      elemToIndex.insert(std::make_pair(*(fIt+i),i));
+      indexToElem.insert(std::make_pair(i,*(fIt+i)));
    }
 }
 
@@ -111,6 +139,23 @@ void NormalizeVector(std::vector<T>& v)
    }
 }
 
+// compute permutation of v1 onto v2
+template<typename VECTOR>
+std::vector<INDEX> ComputePermutation(const VECTOR& v1, const VECTOR& v2)
+{
+   assert(v1.size() == v2.size());
+   //assert(std::is_unique(v1));
+   std::map<typename std::remove_reference<typename std::remove_cv<decltype(v1[0])>::type>::type,INDEX> m;
+   for(INDEX i=0; i<v1.size(); ++i) {
+      m.insert(std::make_pair(v1[i],i));
+   }
+   std::vector<INDEX> perm(v1.size());
+   for(INDEX i=0; i<v2.size(); ++i) {
+      perm[i] = m[v2[i]]; 
+   }
+   return perm;
+}
+
 } // end namespace LP_MP
 
-#endif // LP_MP_HELP_FUNCTIONS
+#endif // LP_MP_HELP_FUNCTIONS_HXX

@@ -5,7 +5,7 @@
 #include <queue> 
 #include <assert.h>
 #include "help_functions.hxx"
-#include "instances.inc"
+#include "config.hxx"
 
 namespace LP_MP {
 namespace Topological_Sort {
@@ -35,42 +35,7 @@ void Graph::addEdge(INDEX v, INDEX w)
 
 std::vector<INDEX> Graph::topologicalSort()
 {
-   /*
-   std::stack<INDEX> nodeList; 
-   std::vector<INDEX> pred(V,-1);
-   std::vector<bool> visited(V,false);
-   std::vector<INDEX> finishingTime(V,0);
-
-   INDEX f = 1;
-   for(INDEX i=0; i<V; i++) {
-      if(visited[i] == false) {
-         nodeList.push(i);
-         while(!nodeList.empty()) {
-            const INDEX node = nodeList.top();
-            nodeList.pop();
-            std::list<INDEX> newVec = adj[node]; //vector of neighbors
-            for(auto it=newVec.begin(); it!=newVec.end(); ++it) {
-               if(visited[*it] == false) {
-                  //path[depth+1] = node;
-                  pred[*it] = node;
-                  visited[*it] = true;
-                  finishingTime[*it] = f++;
-                  nodeList.push(*it);
-               }
-            }
-         }
-      }
-   }
-
-   // now sort with respect to finishing times. This will determine the order
-   std::vector<INDEX> nodeOrder(V);
-   for(INDEX i=0; i<nodeOrder.size(); i++) nodeOrder[i] = i;
-   std::sort(nodeOrder.begin(), nodeOrder.end(), [&](const INDEX i, const INDEX j)->bool {return finishingTime[i] < finishingTime[j];});
-   return nodeOrder;
-   */
-
-
-
+   // do zrobienia: unnecessary copying below
    std::vector<bool> visited(V,false);
    std::stack<std::pair<bool,INDEX> > dfs;
    std::stack<INDEX> postOrder;

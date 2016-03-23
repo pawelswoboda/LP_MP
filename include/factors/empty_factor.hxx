@@ -16,8 +16,8 @@ public:
    }
 
    void MaximizePotential() {}
-   template<typename G>
-   REAL LowerBound(const G& repamPot) const { 
+   template<typename REPAM_ARRAY>
+   REAL LowerBound(const REPAM_ARRAY& repamPot) const { 
       return 0.0;
    }
 

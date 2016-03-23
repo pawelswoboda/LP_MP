@@ -1,121 +1,90 @@
-#ifndef LP_MP_MULTIPLEX_FACTOR
-#define LP_MP_MULTIPLEX_FACTOR
+#ifndef LP_MP_SIMPLEX_FACTOR_HXX
+#define LP_MP_SIMPLEX_FACTOR_HXX
 
 #include "LP_MP.h"
 #include "factors_messages.hxx"
 #include "const_array_types.h"
-//#include "multiplex_marg_message.hxx"
+#include <tuple>
+
+// rename this class to SimplexFactor
+// Investigate contingency tables (Knuth) for more general tabular structures.
 
 namespace LP_MP {
 
-// the polytope {x >= 0 : x_i <= varCapacity_[i], x_1 + ... + x_n = sum_ }
+// the polytope {x >= 0 : x_1 + ... + x_n = 1 }
 // dual problem:
-//      max_{z,y} sum_*z + varCapacity_[0]*y[0] + ... + varCapacity_[n-1]*y[n-1]
-//      s.t.      z + y[i] <= \theta^{\phi}(i)
-//                    y[i] <= 0
-// template arguments give cost type, varCapacity type and sum type
+//      max_{z} z 
+//      s.t.    z <= repamPot[i]
 template<typename COST_ARRAY = std::vector<REAL>, typename VAR_CAPACITY_ARRAY = std::vector<INDEX>, typename SUM = INDEX>
-//template<typename COST_ARRAY = Vc::memory<REAL_SIMD>, typename VAR_CAPACITY_ARRAY = Vc::Memory<INDEX_SIMD>, typename SUM = INDEX>
 class MultiplexFactor
 {
 public:
-   //MultiplexFactor(const COST& cost, const VAR_CAPACITY& varCapacity, SUM sum)
    MultiplexFactor(const std::vector<REAL>& cost, const std::vector<INDEX>& varCapacity, INDEX sum)
-      : //FactorBase(cost),
+      : 
       c_(cost),
       varCapacity_(varCapacity),
       sum_(sum)
    {
-      assert(sum_ == 1); // for now, later >= 1
+      assert(sum_ == 1); 
    }
 
-   std::vector<REAL> GetPotential() { return c_; }
-   void MaximizePotential() {};
-   template<typename G>
-   REAL LowerBound(const G& repamPot) const { return LowerBoundImpl(repamPot, varCapacity_, sum_); }
+
+   template<typename COST_ARRAY_TMP = COST_ARRAY>
+   MultiplexFactor(const std::vector<REAL>& cost) // fallback to simplex
+      : c_(cost),
+      varCapacity_(std::vector<INDEX>(cost.size(),1)),
+      sum_(1)
+   {}
 
    template<typename REPAM_ARRAY>
-   REAL GetBreakpointCost(const REPAM_ARRAY& repamPot) const { return GetBreakpointCostImpl(repamPot, varCapacity_, sum_); }
+   void MaximizePotential(const REPAM_ARRAY& repam) {};
+   template<typename REPAM_ARRAY>
+   std::pair<INDEX,REAL> MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam) 
+   {
+      // note: currently possibly also pairwise factors are called here, although this should not be made for SRMP style rounding
+      INDEX min_element = 0;
+      REAL min_value = repam[0];
+      for(INDEX i=1; i<repam.size(); ++i) {
+         if(min_value > repam[i]) {
+            min_value = repam[i];
+            min_element = i;
+         }
+      }
+      return std::make_pair(min_element, min_value);
+   };
 
-   INDEX GetSum() const { return sum_; }
+   template<typename REPAM_ARRAY>
+   REAL LowerBound(const REPAM_ARRAY& repamPot) const {
+      REAL min_val = repamPot[0];
+      for(INDEX i=1; i<repamPot.size(); ++i) {
+         min_val = std::min(min_val, repamPot[i]);
+      }
+      return min_val;
+   }
 
-   REAL operator[](const INDEX i) const { return c_[i]; }
-   INDEX size() const { return c_.size(); }
+   // only provide those if cost needs to be stored
+   const REAL operator[](const INDEX i) const { return c_[i]; }
+   const INDEX size() const { return c_.size(); }
+
+   template<typename REPAM_ARRAY>
+   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const INDEX primal) const
+   {
+      assert(primal<repam.size());
+      return repam[primal];
+   }
+   void WritePrimal(const INDEX primal, std::ofstream& fs) const
+   {
+      fs << primal;
+   }
+
 private:
-   const COST_ARRAY c_;
+   // do zrobienia: privately inherit COST_ARRAY c_ to enable empty base class optimization
+   const COST_ARRAY c_; // const not  doable in array constructor
    const VAR_CAPACITY_ARRAY varCapacity_; // maximum of each variable
    const SUM sum_; // sum of variables must be equal to
 };
 
-// do zrobienia: write specialization for sum_ = 1 and sum_ = 2;
-
-template<typename REPAM_ARRAY, typename VAR_CAPACITY_ARRAY, typename SUM>
-REAL LowerBoundImpl(const REPAM_ARRAY& repamPot, const VAR_CAPACITY_ARRAY& varCapacity, const SUM sum)
-{
-   std::cout << "no Specialization\n"; 
-   std::vector<INDEX> indices(repamPot.size()); // do zrobienia: preallocate memory for that, or find way to push on stack
-   for(INDEX i=0; i<indices.size(); ++i) indices[i] = i;
-   // do not sort all, but only the first sum_ ones
-   std::partial_sort(indices.begin(), indices.begin() + std::min(sum, indices.size()), indices.end(), [&](const INDEX i, const INDEX j) { return repamPot[i] < repamPot[j]; });
-   //std::sort(indices.begin(), indices.end(), [&](const INDEX i, const INDEX j) { return pot[i] < pot[j]; });
-   REAL dualCost = 0.0;
-   INDEX remainingCapacity = sum;
-   for(INDEX i=0; i<indices.size(); ++i) {
-      dualCost += repamPot[indices[i]] * std::min(varCapacity[indices[i]], remainingCapacity);
-      remainingCapacity -= varCapacity[indices[i]];
-      if(remainingCapacity <= 0) return dualCost;
-   }
-   throw std::runtime_error("variable capacities smaller than sum");
-}
-
-template<typename REPAM_ARRAY, typename VAR_CAPACITY_ARRAY>
-REAL LowerBoundImpl(const REPAM_ARRAY& repamPot, const VAR_CAPACITY_ARRAY& varCapacity, const const_one sum)
-{
-   REAL min_val = std::numeric_limits<REAL>::max();
-   for(INDEX i=0; i<repamPot.size(); ++i) {
-      min_val = std::min(min_val, repamPot[i]);
-   }
-   return min_val;
-}
-
-/*
-REAL LowerBoundImpl(const std::valarray<REAL>& repamPot, const const_ones_array varCapacity, const const_one sum)
-{
-   std::cout << "kwas\n";
-   return repamPot.min();
-}
-*/
-
-// get reparametrized cost for which the breakpoint is active in the sense that we can reduce all cost higher than breakpoint to breakpoint and dual cost does not change
-// do zrobienia: preallocate indices
-template<typename REPAM_ARRAY, typename VAR_CAPACITY_ARRAY, typename SUM>
-REAL GetBreakpoint(const REPAM_ARRAY& repamPot, const VAR_CAPACITY_ARRAY& varCapacity, const SUM sum)
-{
-   std::vector<INDEX> indices(repamPot.size());
-   for(INDEX i=0; i<indices.size(); ++i) indices[i] = i;
-   // do zrobienia: possibly do not sort all, but only the first sum_ ones
-   std::partial_sort(indices.begin(), indices.begin() + std::min(sum, indices.size()), indices.end(), [&](const INDEX i, const INDEX j) { return repamPot[i] < repamPot[j]; });
-   //std::sort(indices.begin(), indices.end(), [&](const INDEX i, const INDEX j) { return repamPot[i] < repamPot[j]; });
-   INDEX remainingCapacity = sum;
-   for(INDEX i=0; i<indices.size(); ++i) {
-      remainingCapacity -= varCapacity[indices[i]];
-      if(remainingCapacity <= 0) return repamPot[indices[i]];;
-   }
-   throw std::runtime_error("variable capacities smaller than sum");
-}
-
-template<typename REPAM_ARRAY, typename VAR_CAPACITY_ARRAY>
-REAL GetBreakpoint(const REPAM_ARRAY& repamPot, const VAR_CAPACITY_ARRAY& varCapacity, const const_one sum)
-{
-   REAL min_val = std::numeric_limits<REAL>::max();
-   for(INDEX i=0; i<repamPot.size(); ++i) {
-      min_val = std::min(min_val, repamPot[i]);
-   }
-   return min_val;
-
-}
-
 } // end namespace LP_MP
 
-#endif // LP_MP_MULTIPLEX_FACTOR
+#endif // LP_MP_SIMPLEX_FACTOR_HXX
 

@@ -1,6 +1,8 @@
 #ifndef LP_MP_EQUALITY_MESSAGE
 #define LP_MP_EQUALITY_MESSAGE
 
+#include "tolerance.hxx"
+
 namespace LP_MP {
 
 // maximize/minimize to second min/max
@@ -15,9 +17,9 @@ public:
    {}
 
    template<typename G1, typename G2>
-      void MakeRightFactorUniform(const G1& rightPot, G2& msg, const REAL omega = 1.0);
+   void MakeRightFactorUniform(const G1& rightPot, G2& msg, const REAL omega = 1.0);
    template<typename G1, typename G2>
-      void MakeLeftFactorUniform(const G1& leftPot, G2& msg, const REAL omega = 1.0);
+   void MakeLeftFactorUniform(const G1& leftPot, G2& msg, const REAL omega = 1.0);
 
    template<typename OP, typename REPAM_ARRAY, typename MSG>
    void MakeFactorUniform(const OP op, const REPAM_ARRAY& repamPot, MSG& msg, const INDEX var_idx, const REAL omega = 1.0)
@@ -32,10 +34,6 @@ public:
             min_val = std::min(min_val, repamPot[i]);
          }
       }
-      // could possibly be replaced by, but repamPot need not support iterators
-      //min_val = *std::min_element(repamPot.cbegin(), repamPot.cbegin()+var_idx);
-      //min_val = std::min(*std::min_element(repamPot.cbegin() + var_idx+1, repamPot.cend()), min_val);
-      // faster?
 
       const REAL new_msg = msg[0] + op(min_val - repamPot[var_idx]);
       const REAL old_msg = msg[0];
@@ -90,15 +88,19 @@ public:
    {
       assert(msgs.size() >= 2); // otherwise calling this method makes no sense
       assert(msgs.size() <= repam.size());
+      //assert(msgs.size() == repam.size()-1); // special case of one edge is not assignment in QAP or cosegmentation. For now. Only for hotel and house
       const ITERATOR omegaEnd = omegaIt + msgs.size();
 
-      const REAL omega_sum = 0.7 * std::accumulate(omegaIt, omegaEnd, 0.0); // strangely, a smaller factor makes the algortihm faster
-      assert(omega_sum <= 1.0 + 1e-6);
+      // do zrobienia:
+      const REAL omega_sum = 0.5 * std::accumulate(omegaIt, omegaEnd, 0.0); // strangely, a smaller factor makes the algorithm faster
+      //const REAL omega_sum = std::accumulate(omegaIt, omegaEnd, 0.0);
+      assert(omega_sum <= 1.0 + eps);
 
       // find minimal value of potential over all indices accessed by messages
       REAL min_val_covered = std::numeric_limits<REAL>::max();
       for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx) {
-         const INDEX var_idx = var_access_op(msgs[msg_idx]->msg_op_);
+         const INDEX var_idx = var_access_op(msgs[msg_idx]->GetMessageOp());
+         //assert(var_idx != repam.size()-1); // this is only valied for assignment problems from house and hotel
          //std::cout << "leftVar = " << leftVar << "\n";
          min_val_covered = std::min(min_val_covered, repam[var_idx]);
       }
@@ -116,7 +118,6 @@ public:
          }
       }
       assert(std::make_pair(min_val, second_min_val) == SmallestValues<REAL>(repam));
-      //assert(second_min_val != std::numeric_limits<REAL>::max());
 
       REAL new_val;  // this value will be taken by the new reparametrized entries
       if(min_val < min_val_covered) { new_val = min_val; }
@@ -129,26 +130,27 @@ public:
 
       for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx, omegaIt++) {
          if(*omegaIt > 0) {
-         const INDEX var_idx = var_access_op(msgs[msg_idx]->msg_op_);
+         const INDEX var_idx = var_access_op(msgs[msg_idx]->GetMessageOp());
          const REAL new_msg = msgs[msg_idx]->operator[](0) + sign_op(new_val - repam[var_idx]);
          const REAL old_msg = msgs[msg_idx]->operator[](0);
-         //std::cout << "new message = " << (1.0-omega_sum)*old_msg + omega_sum*new_msg << ", delta = " << -(new_val - leftRepam[leftVar]) << "\n";
-         //msgs[msg_idx]->operator[](0) = (1.0-*omegaBegin)*old_msg + *omegaBegin*new_msg;
+         ////std::cout << "new message = " << (1.0-omega_sum)*old_msg + omega_sum*new_msg << ", delta = " << -(new_val - leftRepam[leftVar]) << "\n";
+         ////msgs[msg_idx]->operator[](0) = (1.0-*omegaBegin)*old_msg + *omegaBegin*new_msg;
          msgs[msg_idx]->operator[](0) = (1.0-omega_sum)*old_msg + omega_sum*new_msg;
          }
       }
    }
 
-   template<typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
-   static void SendMessagesToLeft(const MSG_ARRAY& msgs, const RIGHT_REPAM& rightRepam, ITERATOR omegaIt)
+   // do zrobienia: enable again
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
+   static void SendMessagesToLeft(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& rightRepam, const MSG_ARRAY& msgs, ITERATOR omegaIt)
    {
       auto sign_op = [](const REAL x) -> REAL { return +x; };
       auto var_access_op = [](const EqualityMessage& msg) -> INDEX { return msg.rightVar_; };
       MakeFactorUniformParallel(sign_op, var_access_op, msgs, rightRepam, omegaIt);
    }
 
-   template<typename MSG_ARRAY, typename LEFT_REPAM, typename ITERATOR>
-   static void SendMessagesToRight(const MSG_ARRAY& msgs, const LEFT_REPAM& leftRepam, ITERATOR omegaIt)
+   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename LEFT_REPAM, typename ITERATOR>
+   static void SendMessagesToRight(const LEFT_FACTOR& leftFactor, const LEFT_REPAM& leftRepam, const MSG_ARRAY& msgs, ITERATOR omegaIt)
    {
       auto sign_op = [](const REAL x) -> REAL { return -x; };
       auto var_access_op = [](const EqualityMessage& msg) -> INDEX { return msg.leftVar_; };
@@ -180,12 +182,21 @@ public:
       else return 0.0;
    }
    
+   // here it is checked whether labeling on left side and labeling on right side fulfill the constraints of the message
+   // note: If we build an LP-model, this could be checked automatically!
+   bool CheckPrimalConsistency(const INDEX leftPrimal, const INDEX rightPrimal) const
+   {
+      if(leftPrimal == leftVar_) { return rightPrimal == rightVar_; }
+      if(rightPrimal == rightVar_) { return leftPrimal == leftVar_; }
+      return true;
+   }
 
 private:
    //do zrobienia: possibly SHORT_INDEX
    const INDEX leftVar_, rightVar_; // variables affected 
 };
 
+// do zrobienia: obsolete, remove
 /*
 template<typename G1, typename G2>
 void EqualityMessage::MakeRightFactorUniform(const G1& rightPot, G2& msg, const REAL omega)
