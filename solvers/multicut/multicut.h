@@ -9,6 +9,7 @@
 #include "multicut_global_factor.hxx"
 #include "multicut_odd_wheel_factor.hxx"
 #include "multicut_message.hxx"
+#include "multicut_triplet_odd_wheel_message.hxx"
 #include "multicut_constructor.hxx"
 
 #include "parse_rules.h"
@@ -28,10 +29,8 @@ struct FMC_MULTICUT {
 
    typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<1>::type, FMC_MULTICUT, 0, true> MulticutUnaryFactorContainer;
    typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<3>::type, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<MulticutGlobalFactor, FixedSizeExplicitRepamStorage<0>::type, FMC_MULTICUT, 2> MulticutGlobalFactorContainer;
+   typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_MULTICUT, 2> MulticutGlobalFactorContainer;
 
-   //typedef MessageContainer<MulticutUnaryTripletMessage<MessageSending::SRMP>, FixedMessageStorage<1>, FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   //typedef MessageContainer<MulticutUnaryTripletMessage<MessageSending::MPLP>, FixedMessageStorage<1>, FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
    typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
    typedef MessageContainer<MulticutUnaryGlobalMessage, FixedMessageStorage<0>, FMC_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
 
@@ -42,6 +41,35 @@ struct FMC_MULTICUT {
       >;
 
    using multicut = MulticutConstructor<FMC_MULTICUT,0,1,2,0,1>;
+   using ProblemDecompositionList = meta::list<multicut>;
+};
+
+// maybe this will not work, as factors in base class have wrong FMC
+template<MessageSending MESSAGE_SENDING>
+struct FMC_ODD_WHEEL_MULTICUT : public FMC_MULTICUT<MESSAGE_SENDING> {
+   constexpr static const char* name = "Multicut with odd wheel constraints";
+
+   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<1>::type, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<3>::type, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_ODD_WHEEL_MULTICUT, 2> MulticutGlobalFactorContainer;
+   typedef FactorContainer<MulticutOddWheelFactor, ExplicitRepamStorage, FMC_ODD_WHEEL_MULTICUT, 3> MulticutOddWheelFactorContainer;
+
+   /*
+   typedef MessageContainer<MulticutUnaryOddWheelCycleMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_ODD_WHEEL_MULTICUT, 2 > MulticutUnaryOddWheelCycleMessageContainer;
+   typedef MessageContainer<MulticutUnaryOddWheelCenterMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_ODD_WHEEL_MULTICUT, 3 > MulticutUnaryOddWheelCenterMessageContainer;
+   */
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutUnaryGlobalMessage, FixedMessageStorage<0>, FMC_ODD_WHEEL_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
+   typedef MessageContainer<MulticutTripletOddWheelMessage<MESSAGE_SENDING>, FixedMessageStorage<3>, FMC_ODD_WHEEL_MULTICUT, 2 > MulticutTripletOddWheelMessageContainer;
+
+   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer, MulticutOddWheelFactorContainer >;
+   using MessageList = meta::list<
+      MessageListItem< MulticutUnaryTripletMessageContainer, 0, 1, std::vector, FixedSizeMessageContainer<3>::type >,
+      MessageListItem< MulticutUnaryGlobalMessageContainer, 0, 2, FixedSizeMessageContainer<1>::type, std::vector >,
+      MessageListItem< MulticutTripletOddWheelMessageContainer, 1, 3, std::vector, std::vector >
+      >;
+
+   using multicut = MulticutOddWheelConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,2,0,1,3,2>;
    using ProblemDecompositionList = meta::list<multicut>;
 };
 
@@ -171,7 +199,7 @@ namespace MulticutTextInput {
    struct numberOfVariables_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace > {};
    struct edge_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace, positive_integer, opt_whitespace, real_number, opt_whitespace > {};
 
-   struct grammar : pegtl::seq<
+   struct grammar : pegtl::must<
                     init_line, pegtl::eol,
                     numberOfVariables_line, pegtl::eol,
                     pegtl::star<edge_line, pegtl::eol>,
@@ -235,7 +263,16 @@ namespace MulticutTextInput {
          for(const auto& it : mcInput.edges_) {
             mc.AddUnaryFactor( std::get<0>(it), std::get<1>(it), std::get<2>(it) );
          }
-         //mc.Tighten(mcInput.numberOfVariables_); // initial tightening
+         //mc.Tighten(0.0,mcInput.numberOfVariables_); // initial tightening
+         // only for odd wheel example
+         mc.AddTripletFactor(0,1,2);
+         mc.AddTripletFactor(0,1,3);
+         mc.AddTripletFactor(0,2,3);
+         mc.AddTripletFactor(1,2,3);
+         //mc.AddOddWheelFactor(0, std::vector<INDEX>{1,2,3});
+         //mc.AddOddWheelFactor(1, std::vector<INDEX>{0,2,3});
+         //mc.AddOddWheelFactor(2, std::vector<INDEX>{0,1,3});
+         //mc.AddOddWheelFactor(3, std::vector<INDEX>{0,1,2});
       }
    };
 
@@ -245,13 +282,16 @@ namespace MulticutTextInput {
       };
       
    template<typename FMC>
-   bool ParseProblem(const std::string problem_data, ProblemDecomposition<FMC>& pd)
+   bool ParseProblem(const std::string filename, ProblemDecomposition<FMC>& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;
       MulticutInput mcInput;
+      std::cout << "parsing " << filename << "\n";
 
-      return pegtl::parse< grammar, actionSpecialization<FMC>::template type >(problem_data,"multicut instance", pd, integer_stack, real_stack, mcInput);
+      pegtl::file_parser problem(filename);
+
+      return problem.parse< grammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, mcInput);
    }
 
 } // end namespace MulticutTextInput

@@ -56,6 +56,8 @@ else()
    message(STATUS "Linking to RT is disabled")
 endif()
 
+#add_subdirectory(lib/cpp-sort)
+include_directories(lib/cpp-sort/include)
 add_subdirectory(lib)
 include_directories(lib/PEGTL-master)
 add_subdirectory(solvers)

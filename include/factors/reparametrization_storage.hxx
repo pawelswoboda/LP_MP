@@ -2,7 +2,6 @@
 #define LP_MP_POTENTIAL_STORAGE_CLASSES_HXX
 
 #include "LP_MP.h"
-#include "tolerance.hxx"
 
 namespace LP_MP {
 

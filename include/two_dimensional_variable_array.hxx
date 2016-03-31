@@ -51,16 +51,22 @@ public:
 
    struct ArrayAccessObject
    {
-      ArrayAccessObject(T** p) : p_(p) {}
-      const T operator[](const INDEX i) const { return p_[0][i]; } // possibly do not implement this function but return reference, for copying elements may be costly for sizeof(T) big. Look up std::vector
-      T& operator[](const INDEX i) { return p_[0][i]; }
-      const INDEX size() const {  return (p_[1] - p_[0]); }
+      //ArrayAccessObject(T** p) : p_(p) {}
+      ArrayAccessObject(T* begin, T* end) : begin_(begin), end_(end) {}
+      //const T operator[](const INDEX i) const { return p_[0][i]; } // possibly do not implement this function but return reference, for copying elements may be costly for sizeof(T) big. Look up std::vector
+      const T operator[](const INDEX i) const { return begin_[i]; } // possibly do not implement this function but return reference, for copying elements may be costly for sizeof(T) big. Look up std::vector
+      //T& operator[](const INDEX i) { return p_[0][i]; }
+      T& operator[](const INDEX i) { return begin_[i]; }
+      //const INDEX size() const {  return (p_[1] - p_[0]); }
+      const INDEX size() const {  return (begin_ - end_); }
       private:
-         T** p_;
+         //T** p_;
+         T* begin_;
+         T* end_;
    };
    ArrayAccessObject operator[](const INDEX i) {
       assert(i<dim1_);
-      return ArrayAccessObject( &p_[i] ); 
+      return ArrayAccessObject( &p_[i], &p_[i+1] ); 
    }
    const INDEX size() const { return dim1_; }
 

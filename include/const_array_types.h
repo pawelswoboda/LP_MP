@@ -1,7 +1,8 @@
 #ifndef LP_MP_CONST_ARRAY_TYPES
 #define LP_MP_CONST_ARRAY_TYPES
 
-#include "instances.inc"
+//#include "instances.inc"
+#include "config.hxx"
 
 namespace LP_MP {
 // used for multiplex_factor to efficiently hold constant var_capacity and sum for known values

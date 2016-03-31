@@ -11,13 +11,14 @@ class MulticutUnaryFactor
 {
 public:
    using PrimalType = bool;
-   MulticutUnaryFactor(const double cost) : c_(cost) {};
+   MulticutUnaryFactor(const double cost) {};
    template<typename REPAM_ARRAY>
    void MaximizePotential(const REPAM_ARRAY& repam) {};
    template<typename REPAM_ARRAY>
-   std::pair<bool,REAL> MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam) 
+   void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    {
       assert(repam.size() == 1);
+      /*
       if(repam[0] == 0.0) { // round solution, flip coin. it does not seem to help, but I will double check this
          if(r() == 1) {
             return std::make_pair(true,0.0);
@@ -25,8 +26,9 @@ public:
             return std::make_pair(false,0.0);
          }
       }
-      if(repam[0] < 0) { return std::make_pair(true,repam[0]); }
-      else { return std::make_pair(false,0.0); }
+      */
+      if(repam[0] <= 0) { primal[0] = true; }
+      else { primal[1] = false; }
    }
    template<typename REPAM_ARRAY>
    REAL LowerBound(const REPAM_ARRAY& repamPot) const {
@@ -34,22 +36,21 @@ public:
       return std::min(repamPot[0],0.0);
    }
 
-   const REAL operator[](const INDEX i) const { assert(i==0); return c_; }
    const INDEX size() const { return 1; }
 
    template<typename REPAM_ARRAY>
-   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const bool primal) const
+   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
    {
-      assert(primal == 0 || primal == 1);
-      return primal*repam[0];
+      assert(repam.size() == 1);
+      return primal[0]*repam[0];
    }
-   void WritePrimal(const bool primal, std::ofstream& fs) const
+   void WritePrimal(const PrimalSolutionStorage::Element primal, std::ofstream& fs) const
    {
-      fs << primal;
+      assert(false);
+      //fs << primal;
    }
 
 private:
-   const double c_;
 
    static std::uniform_int_distribution<>::param_type p;
    static decltype(std::bind(std::uniform_int_distribution<>{p}, std::default_random_engine{})) r;

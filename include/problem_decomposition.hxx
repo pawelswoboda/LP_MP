@@ -175,8 +175,9 @@ public:
          throw std::runtime_error("Could not open output file " + filename);
       }
       std::cout << "write solutions to " << filename << "\n";
-      auto primalSolution = lp_->GetBestPrimal();
-      WritePrimal<0>(primalSolution.begin(),fs);
+      std::cout << "not implemented\n";
+      //auto primalSolution = lp_->GetBestPrimal();
+      //WritePrimal<0>(primalSolution.begin(),fs);
       fs.close();
    }
 

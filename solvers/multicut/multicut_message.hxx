@@ -27,7 +27,6 @@ public:
       const REAL x = rightPot[sortIndices[0]] + rightPot[sortIndices[1]];
 
       // investigate all possiblities: labelings + position in labeling -> 3x3 decisions
-      // all three possible states (up to permutation)
       // do zrobienia: devise one formula which takes into account all those decisions. faster?
       if(x > 0.0) { // labeling 000
          if(sortIndices[0] == i_) {
@@ -77,8 +76,13 @@ public:
    SendMessagesToLeft(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& rightRepam, const MSG_ARRAY& msgs, ITERATOR omegaIt)
    {
       static_assert(MST_TMP == MST,"");
+      assert(msgs[0]->GetMessageOp().i_ == 0);
+      assert(msgs[1]->GetMessageOp().i_ == 1);
+      assert(msgs[2]->GetMessageOp().i_ == 2);
       const REAL omega = std::accumulate(omegaIt, omegaIt+3,0.0);
       //const REAL omega = 1.0; // do zrobienia: for now, in general this will not converge
+      rightFactor.MakeFactorUniform(rightRepam, msgs, omega);
+      /*
       assert(omega < 1.0 + eps);
       //std::cout << "(" << *omegaIt << "," << *(omegaIt+1) << "," << *(omegaIt+2) << ")\n";
       const auto sortIndices = rightFactor.SortIndices(rightRepam);
@@ -123,6 +127,7 @@ public:
             msgs[i]->operator[](0) -= omega*rightRepam[i];
          }
       }
+      */
    }
 
    template<typename G>

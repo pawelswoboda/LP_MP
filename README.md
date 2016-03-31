@@ -1,6 +1,6 @@
 # LP_MP
-Solving LPs with convergent message passing
+Solving LPs arising from discrete optimization with convergent message passing
 
 Installation: 
-- Install Vc from https://github.com/VcDevel/Vc/releases
+- Install Vc from https://github.com/VcDevel/Vc/releases, take version 1.2.0
 - Edit CmakeLists file and set Vc-paths correctly

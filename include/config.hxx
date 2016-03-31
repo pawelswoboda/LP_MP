@@ -32,6 +32,7 @@ namespace LP_MP {
 
    enum class Chirality {left,right};
 
+   constexpr REAL eps = 1e-8;
 }
 
 template class MinCost<LP_MP::SIGNED_INDEX,LP_MP::REAL>;

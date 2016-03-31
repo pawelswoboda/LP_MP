@@ -172,12 +172,12 @@ struct MessageDispatcher
       return FuncGetter<MSG_CONTAINER>::CanComputePrimalThroughMessage();
    }
    // do zrobienia: kwaskwaskwas return type, solutions as arguments
-   template<typename PRIMAL_SOLUTION_STORAGE1, typename PRIMAL_SOLUTION_STORAGE2>
-   static void ComputePrimalThroughMessage(MSG_CONTAINER& t, PRIMAL_SOLUTION_STORAGE1* primalSolution, PRIMAL_SOLUTION_STORAGE2* primalSolutionToBeComputed) 
+   //template<typename PRIMAL_SOLUTION_STORAGE1, typename PRIMAL_SOLUTION_STORAGE2>
+   static void ComputePrimalThroughMessage(MSG_CONTAINER& t, typename PrimalSolutionStorage::Element primalSolution, typename PrimalSolutionStorage::Element primalSolutionToBeComputed) 
    // note that argument 2 and 3 need to be swapped, depending on which function getter is employed
    {
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetComputePrimalThroughMessageFunc();
-      return (t.*staticMemberFunc)(primalSolution->primal_, primalSolutionToBeComputed->primal_);
+      return (t.*staticMemberFunc)(primalSolution, primalSolutionToBeComputed);
    }
 };
 
@@ -333,26 +333,23 @@ public:
       MessageType::SendMessagesToRight(leftFactor, repam, msgs, omegaBegin);
    }
 
-   using LeftPrimalSolutionStorage = decltype(LeftFactorContainer::PrimalSolutionStorage::primal_);
-   using RightPrimalSolutionStorage = decltype(RightFactorContainer::PrimalSolutionStorage::primal_);
-
    constexpr static bool
    CanComputeRightFromLeftPrimal()
    {
-      return FunctionExistence::HasComputeRightFromLeftPrimal<MessageType,void,LeftPrimalSolutionStorage,RightPrimalSolutionStorage>();
+      return FunctionExistence::HasComputeRightFromLeftPrimal<MessageType,void,typename PrimalSolutionStorage::Element,typename PrimalSolutionStorage::Element>();
    }
    constexpr static bool
    CanComputeLeftFromRightPrimal()
    {
-      return FunctionExistence::HasComputeLeftFromRightPrimal<MessageType,void,LeftPrimalSolutionStorage,RightPrimalSolutionStorage>();
+      return FunctionExistence::HasComputeLeftFromRightPrimal<MessageType,void,typename PrimalSolutionStorage::Element,typename PrimalSolutionStorage::Element>();
    }
 
-   void ComputeRightFromLeftPrimal(const LeftPrimalSolutionStorage& leftPrimal, RightPrimalSolutionStorage& rightPrimal) 
+   void ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element leftPrimal, typename PrimalSolutionStorage::Element rightPrimal) 
    {
       msg_op_.ComputeRightFromLeftPrimal(leftPrimal, rightPrimal);
    }
 
-   void ComputeLeftFromRightPrimal(const RightPrimalSolutionStorage& rightPrimal, LeftPrimalSolutionStorage& leftPrimal)
+   void ComputeLeftFromRightPrimal(const PrimalSolutionStorage::Element rightPrimal, typename PrimalSolutionStorage::Element leftPrimal)
    {
       msg_op_.ComputeLeftFromRightPrimal(leftPrimal, rightPrimal);
    }
@@ -360,29 +357,25 @@ public:
    constexpr static bool
    CanCheckPrimalConsistency()
    {
-      return FunctionExistence::HasCheckPrimalConsistency<MessageType,bool,LeftPrimalSolutionStorage,RightPrimalSolutionStorage>();
+      return FunctionExistence::HasCheckPrimalConsistency<MessageType,bool,PrimalSolutionStorage::Element,PrimalSolutionStorage::Element>();
    }
    template<bool ENABLE=CanCheckPrimalConsistency()>
    typename std::enable_if<ENABLE,bool>::type
-   CheckPrimalConsistencyImpl(const LeftPrimalSolutionStorage& leftPrimal, const RightPrimalSolutionStorage& rightPrimal) const
+   CheckPrimalConsistencyImpl(const PrimalSolutionStorage::Element leftPrimal, const PrimalSolutionStorage::Element rightPrimal) const
    {
       static_assert(ENABLE == CanCheckPrimalConsistency(),"");
       return msg_op_.CheckPrimalConsistency(leftPrimal, rightPrimal);
    }
    template<bool ENABLE=CanCheckPrimalConsistency()>
    typename std::enable_if<!ENABLE,bool>::type
-   CheckPrimalConsistencyImpl(const LeftPrimalSolutionStorage& leftPrimal, const RightPrimalSolutionStorage& rightPrimal) const
+   CheckPrimalConsistencyImpl(const PrimalSolutionStorage::Element leftPrimal, const PrimalSolutionStorage::Element rightPrimal) const
    {
       static_assert(ENABLE == CanCheckPrimalConsistency(),"");
       return true;
    }
-   bool CheckPrimalConsistency(PrimalSolutionStorageAdapter* leftPrimal, PrimalSolutionStorageAdapter* rightPrimal) const final
+   bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, PrimalSolutionStorage::Element rightPrimal) const final
    { 
-      assert(dynamic_cast<typename LeftFactorContainer::PrimalSolutionStorage*>(leftPrimal) != nullptr);
-      assert(dynamic_cast<typename RightFactorContainer::PrimalSolutionStorage*>(rightPrimal) != nullptr);
-      return CheckPrimalConsistencyImpl(
-            static_cast<typename LeftFactorContainer::PrimalSolutionStorage*>(leftPrimal)->primal_,
-            static_cast<typename RightFactorContainer::PrimalSolutionStorage*>(rightPrimal)->primal_);
+      return CheckPrimalConsistencyImpl(leftPrimal,rightPrimal);
    }
 
    // do zrobienia: this does not capture write back functions not returning REAL&
@@ -642,11 +635,11 @@ public:
    using RepamStorageType = REPAM_STORAGE_TYPE<FactorContainerType>;
    friend class REPAM_STORAGE_TYPE<FactorContainerType>;
 
-   class PrimalSolutionStorage;
    bool CanComputePrimalSolution() const final { return COMPUTE_PRIMAL_SOLUTION; }
    
    // do zrobienia: templatize cosntructor to allow for more general initialization of reparametrization storage and factor
-   FactorContainer(const FactorType& factor, const std::vector<double>& cost) : RepamStorageType(factor,cost), factor_(factor) {
+   template<typename ...ARGS>
+   FactorContainer(const FactorType& factor, ARGS... args) : RepamStorageType(factor,args...), factor_(factor) {
       //INDEX status;
       //std::cout << "msg_ type= "  << abi::__cxa_demangle(typeid(msg_).name(),0,0,&status) << "\n";
       //std::cout << "dispatcher list = "  << abi::__cxa_demangle(typeid(MESSAGE_DISPATCHER_TYPELIST).name(),0,0,&status) << "\n";
@@ -703,64 +696,62 @@ public:
       SendMessages(omega);
    }
 
-   void UpdateFactor(const std::vector<REAL>& omega, PrimalSolutionStorageAdapter* primal) final
+   void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal) final
    {
       ReceiveMessages(omega);
-      MaximizePotentialAndComputePrimal(dynamic_cast<PrimalSolutionStorage*>(primal));
+      std::fill(primal,primal+size(),false); // factors assume that primal solution is filled with false initially (or shall it be true). This is important for prapagating through messages. Also factors often do not explicitly zero out
+      MaximizePotentialAndComputePrimal(primal);
       SendMessages(omega);
    }
 
    // if primal solution is to be computed by this factor, then we must take primal solution from some other factor and derive the solution through the messages
    template<bool COMPUTE_PRIMAL_SOLUTION_TMP = COMPUTE_PRIMAL_SOLUTION>
-   typename std::enable_if<COMPUTE_PRIMAL_SOLUTION_TMP == false,REAL>::type 
-   MaximizePotentialAndComputePrimal(PrimalSolutionStorage*)
+   typename std::enable_if<COMPUTE_PRIMAL_SOLUTION_TMP == false>::type 
+   MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal)
    {
       factor_.MaximizePotential(*this);
-      return 0.0; // do zrobienia: kwaskwaskwas
    }
 
    // if primal solution is to be computed by this factor, we store the solution in primal and give back the dual cost
    // kwaskwaskwas do zrobienia: primal cost need not be valid anymore
    template<bool COMPUTE_PRIMAL_SOLUTION_TMP = COMPUTE_PRIMAL_SOLUTION>
-   typename std::enable_if<COMPUTE_PRIMAL_SOLUTION_TMP == true,REAL>::type 
-   MaximizePotentialAndComputePrimal(PrimalSolutionStorage* primal)
+   typename std::enable_if<COMPUTE_PRIMAL_SOLUTION_TMP == true>::type 
+   MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal)
    {
       static_assert(COMPUTE_PRIMAL_SOLUTION_TMP == COMPUTE_PRIMAL_SOLUTION,"");
-      auto ret = factor_.MaximizePotentialAndComputePrimal(*this);
-      primal->primal_ = std::get<0>(ret);
-      return std::get<1>(ret);
+      factor_.MaximizePotentialAndComputePrimal(*this, primal);
    }
 
    template<typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE>
    typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanComputePrimalThroughMessage() == true>::type 
-   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, PrimalSolutionStorage* primalSolution, ITERATOR primalSolutionStorageIt) const
+   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element primal, ITERATOR primalSolutionStorageIt) const
    {
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it, ++primalSolutionStorageIt) {
-         MESSAGE_DISPATCHER_TYPE::ComputePrimalThroughMessage(*(*it), primalSolution, dynamic_cast<typename MESSAGE_DISPATCHER_TYPE::ConnectedFactorType::PrimalSolutionStorage*>(*primalSolutionStorageIt));
+         MESSAGE_DISPATCHER_TYPE::ComputePrimalThroughMessage(*(*it), primal, *primalSolutionStorageIt);
       }
    }
    template<typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE>
    typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanComputePrimalThroughMessage() == false>::type 
-   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, PrimalSolutionStorage* primalSolution, ITERATOR ) const {}
+   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element primal, ITERATOR ) const {}
 
    template<typename ITERATOR, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, PrimalSolutionStorage* primalSolution, ITERATOR) const {}
+   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element primal, ITERATOR) const {}
    template<typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, PrimalSolutionStorage* primalSolution, ITERATOR primalSolutionStorageIt) const 
+   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element primal, ITERATOR primalSolutionStorageIt) const 
    {
-      ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE{}, primalSolution, primalSolutionStorageIt);
+      ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE{}, primal, primalSolutionStorageIt);
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       primalSolutionStorageIt += std::get<n>(msg_).size(); // do zrobienia: we increase iterator twice: in ...Impl function and here. Possibly, give reference to iterator and let increase be done in ...Impl function. Same for {Receive|Send}Messages.
-      ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, primalSolution, primalSolutionStorageIt);
+      ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, primal, primalSolutionStorageIt);
    }
    // first argument is pointer to already computed primal solution of current factor.
    // second argument is vector of pointers to (possible partially computed) primal solutions of connected factors, as ordered by messages
    // do zrobienia: rename PropagatePrimalThroughMessages
-   void ComputePrimalThroughMessages(PrimalSolutionStorageAdapter* primalSolution, std::vector<PrimalSolutionStorageAdapter*>& primalVec) const final
+   void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element primal, std::vector<typename PrimalSolutionStorage::Element>& primalVec) const final
    {
       assert(primalVec.size() == GetNoMessages());
-      ComputePrimalThroughMessages(MESSAGE_DISPATCHER_TYPELIST{}, dynamic_cast<PrimalSolutionStorage*>(primalSolution), primalVec.begin()); // possibly make this a static cast and check only in Debug mode if this would be valid
+      ComputePrimalThroughMessages(MESSAGE_DISPATCHER_TYPELIST{}, primal, primalVec.begin()); // possibly make this a static cast and check only in Debug mode if this would be valid
    }
    
 
@@ -1001,6 +992,8 @@ public:
       return repam;
    }
 
+   INDEX size() const final { return RepamStorageType::size(); }
+
    REAL LowerBound() const final { return factor_.LowerBound(*this); } 
 
    const FactorType* GetFactor() const { return &factor_; }
@@ -1072,56 +1065,29 @@ protected:
    // note that MaximizePotentialAndComputePrimal need not be implemented by the factor. If this is so, then the type shall be derived from Compute{Left|Right}From{Right|Left}Primal
    // currently: read PrimalType in factor
 public:
-   using PrimalSolutionType = typename FactorType::PrimalType;
-   //using PrimalSolutionType = typename std::remove_cv<typename std::remove_reference<decltype(std::get<0>(factor_.MaximizePotentialAndComputePrimal(std::vector<REAL>(0))))>::type>::type;
-   REAL EvaluatePrimal(PrimalSolutionStorageAdapter* primalSolution) const final
+   REAL EvaluatePrimal(typename PrimalSolutionStorage::Element primalIt) const final
    {
-      return factor_.EvaluatePrimal(*this,dynamic_cast<PrimalSolutionStorage*>(primalSolution)->primal_);
+      return factor_.EvaluatePrimal(*this,primalIt);
    }
 
    template<bool WRITE_PRIMAL_SOLUTION_TMP = WRITE_PRIMAL_SOLUTION>
    typename std::enable_if<!WRITE_PRIMAL_SOLUTION_TMP>::type
-   WritePrimalImpl(PrimalSolutionStorageAdapter* primal, std::ofstream& fs) const
+   WritePrimalImpl(typename PrimalSolutionStorage::Element primal, std::ofstream& fs) const
    { static_assert(WRITE_PRIMAL_SOLUTION_TMP == WRITE_PRIMAL_SOLUTION, ""); }
    template<bool WRITE_PRIMAL_SOLUTION_TMP = WRITE_PRIMAL_SOLUTION>
    typename std::enable_if<WRITE_PRIMAL_SOLUTION_TMP>::type
-   WritePrimalImpl(PrimalSolutionStorageAdapter* primal, std::ofstream& fs) const
+   WritePrimalImpl(typename PrimalSolutionStorage::Element primal, std::ofstream& fs) const
    {
       static_assert(WRITE_PRIMAL_SOLUTION_TMP == WRITE_PRIMAL_SOLUTION, "");
-      factor_.WritePrimal(dynamic_cast<PrimalSolutionStorage*>(primal)->primal_,fs);
-      fs << "\n";
+      fs << "Implement this\n";
+      //factor_.WritePrimal(dynamic_cast<PrimalSolutionStorage*>(primal)->primal_,fs);
+      //fs << "\n";
    }
-   void WritePrimal(PrimalSolutionStorageAdapter* primal, std::ofstream& fs) const final
+   void WritePrimal(typename PrimalSolutionStorage::Element primal, std::ofstream& fs) const final
    {
       WritePrimalImpl(primal,fs);
    }
-
-   // do zrobienia: think about defining a PrimalSolutionStorageVector, such that PrimalSolutionStorage classes are stored contiguously and indexing is possible efficiently. Latter point is not straightforward!
-   // do zrobienia: currently, it would be enough, if PrimalSolutionStorage just named a type
-   class PrimalSolutionStorage : public PrimalSolutionStorageAdapter
-   {
-      public:
-         PrimalSolutionStorage() : primal_(0) {}
-         virtual ~PrimalSolutionStorage() {}
-         void reset()  // needed for the following reason: For some factors, the primal solution gets incremented or modified, but assumes that initially, the solution is zero. Hence reusing primal solution storage requires resetting it
-         { 
-            primal_ = PrimalSolutionType(0); 
-         }
-         PrimalSolutionType primal_;
-         // holds information whether the primal solution to factors attached to current one via message indexed by msg_ has been computed.
-         // In general, primal solutions are computed as follows: During a pass, all factors, which provide a MaximizePotentialAndComputePrimal, compute primal solutions.
-         // Then, in bfs-manner, solutions are computed through messages. 
-         // How shall we check, whether a solution is consistent with messages?
-   };
-
-   // make static
-   PrimalSolutionStorageAdapter* AllocatePrimalSolutionStorage() const 
-   { 
-      PrimalSolutionStorageAdapter* p = new PrimalSolutionStorage(); 
-      return p;
-   }
 };
-
 
 // factory for fixed size containers holding pointers. For storing pointers to messages in factors, when number of messages is known at compile time
 template<INDEX NO_ELEMENTS>

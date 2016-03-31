@@ -224,4 +224,5 @@ template <typename FlowType, typename CostType>
 
 #endif
 
-#include "instances.inc"
+#include "config.hxx"
+//#include "instances.inc"

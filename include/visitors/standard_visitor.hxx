@@ -94,7 +94,7 @@ namespace LP_MP {
                   return LPVisitorReturnType::Break;
                }
                if(minDualImprovement_ > 0 && remainingIter_ > 1 && lowerBoundDiff < minDualImprovement_) {
-                                    std::cout << "Dual improvement smaller than " << minDualImprovement_ << "\n";
+                  std::cout << "Dual improvement smaller than " << minDualImprovement_ << "\n";
                   remainingIter_ = 1;
                   return LPVisitorReturnType::SetRoundingReparametrization;
                }
@@ -217,7 +217,7 @@ namespace LP_MP {
                   Tighten();
                   lastTightenIteration_ = this->GetIter();
                   lp->Init(); // reinitialize factors, as they might have changed
-                  std::cout << "New number of factors = " << lp->GetNumberOfFactors() << "\n";
+                  std::cout << "New number of factors = " << lp->GetNumberOfFactors() << ", tightening took " << tightenTime_ << "ms\n";
                   if(repamModeBeforeTightening_ == LPReparametrizationMode::Anisotropic) {
                      return LPVisitorReturnType::SetAnisotropicReparametrization;
                   } else if(repamModeBeforeTightening_ == LPReparametrizationMode::Rounding) {
