@@ -12,5 +12,9 @@ endif()
 
 if(BUILD_BINARY_TOMOGRAPHY)
    add_subdirectory(binary_tomography)
+ endif()
+
+if(BUILD_TOMOGRAPHY)
+   add_subdirectory(tomography)
 endif()
 
