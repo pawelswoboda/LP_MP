@@ -45,6 +45,7 @@ OPTION(BUILD_GRAPH_MATCHING "Build graph matching" ON)
 OPTION(BUILD_MULTICUT "Build multicut" ON)
 OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" ON)
 OPTION(BUILD_BINARY_TOMOGRAPHY "Build binary tomography solver" OFF)
+OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" OFF)
 
 
 IF(UNIX AND NOT APPLE)
