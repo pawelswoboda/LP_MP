@@ -4,9 +4,9 @@
 #include "problem_decomposition.hxx"
 #include "factors_messages.hxx"
 #include "LP_MP.h"
-#include "factors/multiplex_factor.hxx"
+#include "factors/simplex_factor.hxx"
 #include "const_array_types.h"
-#include "messages/multiplex_marg_message.hxx"
+#include "messages/simplex_marginalization_message.hxx"
 #include "messages/equality_message.hxx"
 #include "problem_constructors/mrf_problem_construction.hxx"
 #include "factors/min_cost_flow_factor_lemon.hxx"
@@ -38,16 +38,16 @@ typedef UnaryLoop<> UnaryLoopType;
 typedef PairwiseLoop<0> LeftLoopType;
 typedef PairwiseLoop<1> RightLoopType;
 
-typedef MultiplexMargMessage<UnaryLoopType,LeftLoopType,true,false,false,true> LeftMargMessage;
-typedef MultiplexMargMessage<UnaryLoopType,RightLoopType,true,false,false,true> RightMargMessage;
+typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,false,false,true> LeftMargMessage;
+typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false,false,true> RightMargMessage;
 
 typedef PairwiseTripletLoop<0,1> PairwiseTripletLoopType12;
 typedef PairwiseTripletLoop<0,2> PairwiseTripletLoopType13;
 typedef PairwiseTripletLoop<1,2> PairwiseTripletLoopType23;
 // do zrobienia: not enough messages sent below
-typedef MultiplexMargMessage<UnaryLoopType,PairwiseTripletLoopType12,false,false,false,true> PairwiseTriplet12Message;
-typedef MultiplexMargMessage<UnaryLoopType,PairwiseTripletLoopType13,false,false,false,true> PairwiseTriplet13Message;
-typedef MultiplexMargMessage<UnaryLoopType,PairwiseTripletLoopType23,false,false,false,true> PairwiseTriplet23Message;
+typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType12,false,false,false,true> PairwiseTriplet12Message;
+typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType13,false,false,false,true> PairwiseTriplet13Message;
+typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType23,false,false,false,true> PairwiseTriplet23Message;
 
 typedef SimplexFactor<> Simplex;
 
