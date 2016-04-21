@@ -11,7 +11,8 @@ template <typename FlowType, typename CostType>
 	  edgeNumMax(_edgeNumMax),
 	  counter(0),
 	  cost(0),
-	  error_function(err_function)
+	  error_function(err_function),
+     bounds(_edgeNumMax)
 {
 	nodes = (Node*) malloc(nodeNum*sizeof(Node));
 	arcs = (Arc*) malloc(2*edgeNumMax*sizeof(Arc));
@@ -20,6 +21,38 @@ template <typename FlowType, typename CostType>
 	memset(nodes, 0, nodeNum*sizeof(Node));
 	memset(arcs, 0, 2*edgeNumMax*sizeof(Arc));
 	firstActive = &nodes[nodeNum];
+#ifdef MINCOST_DEBUG
+	for (int i=0; i<nodeNum; i++) nodes[i].id = i;
+#endif
+}
+
+template <typename FlowType, typename CostType> 
+MinCost<FlowType, CostType>::MinCost(const MinCost<FlowType, CostType>& other)
+	: nodeNum(other.nodeNum),
+	  edgeNum(other.edgeNum),
+	  edgeNumMax(other.edgeNumMax),
+	  counter(0),
+	  cost(0),
+	  error_function(other.error_function),
+     bounds(other.bounds)
+{
+	nodes = (Node*) malloc(nodeNum*sizeof(Node));
+	arcs = (Arc*) malloc(2*edgeNumMax*sizeof(Arc));
+	if (!nodes || !arcs) { if (error_function) (*error_function)("Not enough memory!"); exit(1); }
+
+	memset(arcs+edgeNum, 0, 2*(edgeNumMax-edgeNum)*sizeof(Arc));
+   
+	firstActive = &nodes[nodeNum];
+
+	for (int i=0; i<nodeNum; i++) {
+      AddNodeExcess(i, other.GetNodeExcess(i));
+      SetPotential(i, other.GetPotential(i));
+   }
+   for(int e=0; e<edgeNum; e++) {
+      // AddEdge has been modified.
+      exit(1);
+      AddEdge(other.GetTailNodeId(e), other.GetHeadNodeId(e), other.GetRCap(e), other.GetReverseRCap(e), other.GetCost(e));
+   }
 #ifdef MINCOST_DEBUG
 	for (int i=0; i<nodeNum; i++) nodes[i].id = i;
 #endif
@@ -79,6 +112,76 @@ template <typename FlowType, typename CostType>
 	start->excess -= delta;
 
 	return delta;
+}
+
+
+// function which computes cost of a shortest path between specified nodes given optimal primal/dual values (i.e. after solve) for computing marginals
+// do zrobienia: not tested
+template <typename FlowType, typename CostType> 
+	CostType MinCost<FlowType, CostType>::ShortestPath(const NodeId start_node, const NodeId end_node)
+{
+   Node* start = &nodes[start_node];
+   Node* end = &nodes[end_node];
+
+   int FLAG0 = ++ counter; // permanently labelled
+   int FLAG1 = ++ counter; // temporarily labelled
+
+   start->parent = NULL;
+   start->flag = FLAG1;
+   queue.Reset();
+   queue.Add(start, 0.0);
+
+   Node* i;
+
+	CostType d; // the current minimum distance
+	while ( (i=queue.RemoveMin(d)) )
+   {
+      if(i == end) break; // do zrobienia: possibly directly return d - start->pi + end-pi (albo -+ odwrotnie)
+      i->flag = FLAG0;
+
+      for(Arc* a=i->firstNonsaturated; a; a=a->next)
+      {
+         assert(a->r_cap > 0);
+         Node* j = a->head;
+         if (j->flag == FLAG0) continue;
+         CostType reduced_cost = a->GetRCost(); // must use reduced cost, otherwise cost might be negative and then Dijkstra's algorithm would not work
+         assert(reduced_cost > -1e-10);
+         if (j->flag == FLAG1)
+         {
+            if (reduced_cost + d >= queue.GetKey(j)) continue;
+            queue.DecreaseKey(j, reduced_cost + d);
+         }
+         else
+         {
+            queue.Add(j, reduced_cost + d);
+            j->flag = FLAG1;
+         }
+         j->parent = a;
+      }
+   }
+   assert(i == end);
+
+   // trace back to start node via parent pointers and record cost of shortest path
+   CostType path_cost = 0.0;
+   while(i != start) 
+   {
+      Arc* a = i->parent;
+      // do zrobienia: possibly use reduced cost. but this has to be done everywhere
+      //path_cost += a->GetRCost();
+      path_cost += a->cost;
+      i = a->sister->head; // the tail
+   }
+   /*
+   assert(i->parent == NULL);
+   assert(path_cost >= -1e-7);
+   if(path_cost < -1e-7) { // kwaskwas
+      printf("error: negative path cost = %f\n", path_cost);  
+      exit(1);
+   }
+   assert((d - path_cost) < 1e-7 || (path_cost - d) < 1e-7);
+   */
+
+   return path_cost;
 }
 
 template <typename FlowType, typename CostType> 
@@ -155,6 +258,7 @@ template <typename FlowType, typename CostType>
 			Dijkstra(i);
 			if (i->excess > 0 && !i->next) 
 			{ 
+            assert(i != firstActive);
 				i->next = firstActive; 
 				firstActive = i; 
 			}
@@ -225,4 +329,3 @@ template <typename FlowType, typename CostType>
 #endif
 
 #include "config.hxx"
-//#include "instances.inc"

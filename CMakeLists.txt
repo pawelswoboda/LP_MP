@@ -10,14 +10,14 @@ include_directories(include)
 include_directories(lib)
 
 # C++11
-SET(C++_STD_FLAG "c++14" CACHE STRING "e.g. c++11,c++14")
+SET(C++_STD_FLAG "c++14")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${C++_STD_FLAG}")
 MARK_AS_ADVANCED(C++_STD_FLAG)
 
 # compiler options
 add_definitions(-DIL_STD)
 add_definitions(-ffast-math)
-
+add_definitions(-march=native)
 
 # packages
 
@@ -43,7 +43,7 @@ set (LINK_LIBS ${LINK_LIBS} ${HDF5_C_STATIC_LIBRARY})
 # Options
 OPTION(BUILD_GRAPH_MATCHING "Build graph matching" ON)
 OPTION(BUILD_MULTICUT "Build multicut" ON)
-OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" OFF)
+OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" ON)
 OPTION(BUILD_BINARY_TOMOGRAPHY "Build binary tomography solver" OFF)
 
 
@@ -58,6 +58,9 @@ endif()
 
 #add_subdirectory(lib/cpp-sort)
 include_directories(lib/cpp-sort/include)
-add_subdirectory(lib)
+add_subdirectory(lib/lemon-1.3.1)
+include_directories(lib/lemon-1.3.1)
+add_subdirectory(lib/MinCost)
 include_directories(lib/PEGTL-master)
+#include_directories(lib/hana-0.7.0/include)
 add_subdirectory(solvers)

@@ -16,6 +16,7 @@ namespace LP_MP {
    };
 
    // standard visitor class for LP_MP solver, when no custom visitor is given
+   // do zrobienia: add xor arguments primalBoundComputationInterval, dualBoundComputationInterval with boundComputationInterval
    template<class PROBLEM_DECOMPOSITION>
    class StandardVisitor {
       
@@ -23,6 +24,7 @@ namespace LP_MP {
       StandardVisitor(TCLAP::CmdLine& cmd, PROBLEM_DECOMPOSITION& pd)
          :
             maxIterArg_("","maxIter","maximum number of iterations of LP_MP, default = 1000",false,1000,"positive integer",cmd),
+            maxMemoryArg_("","maxMemory","maximum amount of memory (MB) LP_MP is allowed to use",false,std::numeric_limits<INDEX>::max(),"positive integer",cmd),
             timeoutArg_("","timeout","time after which algorithm is stopped, in seconds, default = never, should this be type double?",false,std::numeric_limits<INDEX>::max(),"positive integer",cmd),
             boundComputationIntervalArg_("","boundComputationInterval","lower bound computation performed every x-th iteration, default = 1",false,1,"positive integer",cmd),
             posConstraint_(),
@@ -37,6 +39,7 @@ namespace LP_MP {
       {
          try {
             maxIter_ = maxIterArg_.getValue();
+            maxMemory_ = maxMemoryArg_.getValue();
             remainingIter_ = maxIter_;
             minDualImprovement_ = minDualImprovementArg_.getValue();
             timeout_ = timeoutArg_.getValue();
@@ -123,6 +126,13 @@ namespace LP_MP {
                if(curIter_ % boundComputationInterval_ == 0) {
                   return LPVisitorReturnType::ReparametrizeAndComputePrimal;
                }
+               if(maxMemory_ > 0) {
+                  const INDEX memoryUsed = 0;
+                  if(maxMemory_ < memoryUsed) {
+                     std::cout << "Solves uses " << memoryUsed << " MB, aborting optimization\n";
+                     return LPVisitorReturnType::SetRoundingReparametrization;
+                  }
+               }
                return LPVisitorReturnType::Reparametrize;
                break;
                }
@@ -147,6 +157,7 @@ namespace LP_MP {
       protected:
       // command line arguments
       TCLAP::ValueArg<INDEX> maxIterArg_;
+      TCLAP::ValueArg<INDEX> maxMemoryArg_;
       TCLAP::ValueArg<INDEX> timeoutArg_;
       TCLAP::ValueArg<INDEX> boundComputationIntervalArg_;
       PositiveRealConstraint posConstraint_;
@@ -156,6 +167,7 @@ namespace LP_MP {
       TCLAP::SwitchArg silentArg_;
 
       INDEX maxIter_;
+      INDEX maxMemory_;
       INDEX remainingIter_;
       INDEX curIter_ = 0;
       INDEX timeout_;

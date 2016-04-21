@@ -7,12 +7,13 @@ namespace LP_MP {
 
 // specialized storage classes for reparametrized potentials
 
+// do zrobienia: use simd classes here
 template<INDEX N>
 class FixedSizeExplicitRepamStorage {
 public:
    template<typename FACTOR_CONTAINER>
    class type : public std::array<REAL,N> {
-      using ARRAY_TYPE = std::array<REAL,N>;
+      using ARRAY_TYPE = std::array<REAL,N>; // use Vc class here. Inherit, so as to be able to access simd operations
    public:
       template<typename FACTOR_TYPE, typename ARRAY>
       type(const FACTOR_TYPE& f, const ARRAY& cost)
@@ -30,7 +31,7 @@ public:
          assert(i < N);
          return ARRAY_TYPE::operator[](i);
       }
-      constexpr INDEX size() const { return N; }
+      constexpr static INDEX size() { return N; }
    };
 };
 

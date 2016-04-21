@@ -35,9 +35,8 @@ public:
          }
       }
 
-      const REAL new_msg = msg[0] + op(min_val - repamPot[var_idx]);
-      const REAL old_msg = msg[0];
-      msg[0] = (1.0-omega)*old_msg + omega*new_msg;
+      msg[0] -= omega*(repamPot[var_idx] - min_val);
+      return;
    }
 
    template<typename RIGHT_FACTOR, typename G1, typename G2>
@@ -56,16 +55,16 @@ public:
       //MakeLeftFactorUniform(leftPot, msg); 
    }
 
-   template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G2, typename G3>
-   void SendMessageToRight(LEFT_FACTOR* const l, RIGHT_FACTOR* const r, const G1& leftPot, const G2& rightPot, G3& msg, const REAL omega)
+   template<typename LEFT_FACTOR, typename G1, typename G3>
+   void SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega)
    { //std::cout << "Send message to right equal\n";
       auto op = [](const REAL x) { return -x; };
       MakeFactorUniform<decltype(op)>(op,leftPot, msg, leftVar_, omega);
       //MakeLeftFactorUniform(leftPot,msg,omega); 
    }
    
-   template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G2, typename G3>
-   void SendMessageToLeft(LEFT_FACTOR* const l, RIGHT_FACTOR* const r, const G1& leftPot, const G2& rightPot, G3& msg, const REAL omega)
+   template<typename RIGHT_FACTOR, typename G2, typename G3>
+   void SendMessageToLeft(RIGHT_FACTOR* const r, const G2& rightPot, G3& msg, const REAL omega)
    { 
       auto op = [](const REAL x) { return +x; };
       MakeFactorUniform<decltype(op)>(op,rightPot, msg, rightVar_, omega);
@@ -83,8 +82,8 @@ public:
    // code duplication: templatize code
 
    // for sending multiple messages at once: makes factor uniform by sending all messages at once
-   template<typename SIGN_OP, typename VAR_ACCESS_OP, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
-   static void MakeFactorUniformParallel(const SIGN_OP sign_op, VAR_ACCESS_OP var_access_op, const MSG_ARRAY& msgs, const RIGHT_REPAM& repam, ITERATOR omegaIt)
+   template<typename VAR_ACCESS_OP, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
+   static void MakeFactorUniformParallel(VAR_ACCESS_OP var_access_op, const MSG_ARRAY& msgs, const RIGHT_REPAM& repam, ITERATOR omegaIt)
    {
       assert(msgs.size() >= 2); // otherwise calling this method makes no sense
       assert(msgs.size() <= repam.size());
@@ -130,12 +129,8 @@ public:
 
       for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx, omegaIt++) {
          if(*omegaIt > 0) {
-         const INDEX var_idx = var_access_op(msgs[msg_idx]->GetMessageOp());
-         const REAL new_msg = msgs[msg_idx]->operator[](0) + sign_op(new_val - repam[var_idx]);
-         const REAL old_msg = msgs[msg_idx]->operator[](0);
-         ////std::cout << "new message = " << (1.0-omega_sum)*old_msg + omega_sum*new_msg << ", delta = " << -(new_val - leftRepam[leftVar]) << "\n";
-         ////msgs[msg_idx]->operator[](0) = (1.0-*omegaBegin)*old_msg + *omegaBegin*new_msg;
-         msgs[msg_idx]->operator[](0) = (1.0-omega_sum)*old_msg + omega_sum*new_msg;
+            const INDEX var_idx = var_access_op(msgs[msg_idx]->GetMessageOp());
+            msgs[msg_idx]->operator[](0) -= omega_sum*(repam[var_idx] - new_val);
          }
       }
    }
@@ -144,35 +139,35 @@ public:
    template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
    static void SendMessagesToLeft(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& rightRepam, const MSG_ARRAY& msgs, ITERATOR omegaIt)
    {
-      auto sign_op = [](const REAL x) -> REAL { return +x; };
       auto var_access_op = [](const EqualityMessage& msg) -> INDEX { return msg.rightVar_; };
-      MakeFactorUniformParallel(sign_op, var_access_op, msgs, rightRepam, omegaIt);
+      MakeFactorUniformParallel(var_access_op, msgs, rightRepam, omegaIt);
    }
 
    template<typename LEFT_FACTOR, typename MSG_ARRAY, typename LEFT_REPAM, typename ITERATOR>
    static void SendMessagesToRight(const LEFT_FACTOR& leftFactor, const LEFT_REPAM& leftRepam, const MSG_ARRAY& msgs, ITERATOR omegaIt)
    {
-      auto sign_op = [](const REAL x) -> REAL { return -x; };
       auto var_access_op = [](const EqualityMessage& msg) -> INDEX { return msg.leftVar_; };
-      MakeFactorUniformParallel(sign_op, var_access_op, msgs, leftRepam, omegaIt);
+      MakeFactorUniformParallel(var_access_op, msgs, leftRepam, omegaIt);
    }
 
    template<typename G>
    void RepamLeft(G& leftRepamPot, const REAL msg, const INDEX dim) { 
       assert(dim == 0); 
-      leftRepamPot[leftVar_] = leftRepamPot[leftVar_] - msg; 
+      //leftRepamPot[leftVar_] = leftRepamPot[leftVar_] - msg; 
+      leftRepamPot[leftVar_] += msg; 
    }
    template<typename G>
    void RepamRight(G& rightRepamPot, const REAL msg, const INDEX dim) { 
       assert(dim == 0); 
-      rightRepamPot[rightVar_] = rightRepamPot[rightVar_] + msg; 
+      //rightRepamPot[rightVar_] = rightRepamPot[rightVar_] + msg; 
+      rightRepamPot[rightVar_] += msg; 
    }
 
    // for implicit repam storage, not really needed, only test
    template<typename M>
    const REAL GetLeftMessage(const INDEX i, const M& msg) const
    {
-      if(i==leftVar_) return -msg[0];
+      if(i==leftVar_) return msg[0];
       else return 0.0;
    }
    template<typename M>

@@ -63,6 +63,7 @@ public:
    template<typename Lambda1, typename Lambda2, typename Lambda3> 
    inline void loop(const Lambda1 f1, const Lambda2 f2, const Lambda3 f3) 
    {
+      /*
       for(INDEX_SIMD i0 = INDEX_SIMD::IndexesFromZero();
             !(i0<iter_limit_[0]).isEmpty();
             i0 += REAL_SIMD::Size) {
@@ -74,6 +75,7 @@ public:
             
          f3(i0);
       }
+      */
       // do zrobienia: last i0 indices with ordinary loop
    }
 

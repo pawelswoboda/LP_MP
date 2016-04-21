@@ -70,16 +70,16 @@ public:
       static_assert(RSA == RIGHT_SIDE_ACTIVE,"");
       MaximizeLeft(l,leftPot,msg); 
    }
-   template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G2, typename G3, bool LSA = LEFT_SIDE_ACTIVE>
+   template<typename LEFT_FACTOR, typename G1, typename G3, bool LSA = LEFT_SIDE_ACTIVE>
    typename std::enable_if<LSA,void>::type
-   SendMessageToRight(LEFT_FACTOR* const l, RIGHT_FACTOR* const r, const G1& leftPot, const G2& rightPot, G3& msg, const REAL omega)
+   SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega)
    { 
       static_assert(LSA == LEFT_SIDE_ACTIVE,"");
       MaximizeLeft(l,leftPot,msg,omega); 
    }
-   template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G2, typename G3, bool RSA = RIGHT_SIDE_ACTIVE>
+   template<typename RIGHT_FACTOR, typename G2, typename G3, bool RSA = RIGHT_SIDE_ACTIVE>
    typename std::enable_if<RSA,void>::type
-   SendMessageToLeft(LEFT_FACTOR* const l, RIGHT_FACTOR* const r, const G1& leftPot, const G2& rightPot, G3& msg, const REAL omega) 
+   SendMessageToLeft(RIGHT_FACTOR* const r, const G2& rightPot, G3& msg, const REAL omega) 
    { 
       static_assert(RSA == RIGHT_SIDE_ACTIVE,"");
       MinimizeRight(r,rightPot,msg,omega); 
@@ -145,12 +145,12 @@ public:
    template<typename G>
    void RepamLeft(G& repamPot, const REAL msg, const INDEX msg_dim)
    { 
-      loopLeft_.loop(msg_dim, [&](const INDEX i) { repamPot[leftStride_[i]] = repamPot[leftStride_[i]] - msg; });
+      loopLeft_.loop(msg_dim, [&](const INDEX i) { repamPot[leftStride_[i]] += msg; });
    }
    template<typename G>
    void RepamRight(G& repamPot, const REAL msg, const INDEX dim)
    {
-      loopRight_.loop(dim, [&](const INDEX i) { repamPot[rightStride_[i]] = repamPot[rightStride_[i]] + msg; });
+      loopRight_.loop(dim, [&](const INDEX i) { repamPot[rightStride_[i]] += msg; });
    }
    // get message for i-th dimension of left potential
    // do zrobienia: prawidlowo?
@@ -159,11 +159,13 @@ public:
    template<typename MSG>
    const REAL GetLeftMessage(const INDEX pot_dim, const MSG& msg) const
    {
+      assert(false); // sign not correct
       return -msg[ loopLeft_.GetMsgIndex(pot_dim) ];
    }
    template<typename MSG>
    const REAL GetRightMessage(const INDEX i, const MSG& msg) const
    {
+      assert(false); // sign not correct
       return msg[ loopRight_.GetMsgIndex(i) ];
    }
 
@@ -202,8 +204,9 @@ private:
    template<typename RIGHT_FACTOR, typename G1, typename G2>
    void MinimizeRight(RIGHT_FACTOR* r, const G1& rightPot, G2& msg, const REAL omega = 1.0)
    {
+      // do zrobienia: Maximize and Minize Left,Right do the same now. Unify
       Optimize(
-            [](const REAL y) -> REAL { return -y; }, 
+            [](const REAL y) -> REAL { return y; }, 
             rightPot, msg, r, loopRight_, omega);
    }
 
@@ -227,7 +230,7 @@ private:
             },
             [&](const INDEX outer_idx){ 
             assert( outer_idx < msg.size() );
-            msg[ outer_idx ] = msg[ outer_idx ] + omega*op(delta);
+            msg[ outer_idx ] -= omega*op(delta);
             } );
    }
 };

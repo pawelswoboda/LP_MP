@@ -1,7 +1,7 @@
 #ifndef LP_MP_TWO_DIMENSIONAL_VARIABLE_ARRAY_HXX
 #define LP_MP_TWO_DIMENSIONAL_VARIABLE_ARRAY_HXX
 
-#include "instances.inc"
+#include "config.hxx"
 #include <vector>
 
 namespace LP_MP {

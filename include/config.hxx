@@ -31,8 +31,12 @@ namespace LP_MP {
    using INDEX_MASK_SIMD = Vc::int_m;
 
    enum class Chirality {left,right};
+   enum class MessageSendingType {SRMP,MPLP};
+   enum class ReparametrizationMode {Explicit,Implicit};
 
    constexpr REAL eps = 1e-8;
+   constexpr SIGNED_INDEX variableMessageNumber = -1;
+   constexpr SIGNED_INDEX variableMessageSize = -1;
 }
 
 template class MinCost<LP_MP::SIGNED_INDEX,LP_MP::REAL>;

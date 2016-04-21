@@ -143,12 +143,16 @@ public:
    void LinkLeftUnaryPairwiseFactor(UnaryFactorContainer* const left, PairwiseFactorContainer* const p, LeftMessageType msg)
    {
       //assert(false); // left->size need not be msg size. Use instead message size
-      leftMessage_.push_back( new LeftMessageContainer(msg, left, p, left->size()) );
+      auto* m = new LeftMessageContainer(msg, left, p, left->size());
+      leftMessage_.push_back(m);
+      pd_.GetLP()->AddMessage(m);
    }
    void LinkRightUnaryPairwiseFactor(UnaryFactorContainer* const right, PairwiseFactorContainer* const p, RightMessageType msg)
    {
       //assert(false); // left->size need not be msg size. Use instead message size
-      rightMessage_.push_back( new RightMessageContainer(msg, right, p, right->size()) );
+      auto* m = new RightMessageContainer(msg, right, p, right->size());
+      rightMessage_.push_back(m);
+      pd_.GetLP()->AddMessage(m);
    }
    void LinkUnaryPairwiseFactor(UnaryFactorContainer* const left, PairwiseFactorContainer* const p, UnaryFactorContainer* right)
    {

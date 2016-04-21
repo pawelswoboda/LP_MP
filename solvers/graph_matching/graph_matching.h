@@ -20,9 +20,13 @@
 #include <vector>
 
 // this file contains definitions of various graph matching solvers and grammars.
+// solvers:
 // FMC_MP implements graph matching with the uniqueness constraints implemented via messages,
 // FMC_MCF implements graph matching with a global min cost flow factor.
+// FMC_GM amounts to TRWS with infinity on diagonals
+// grammars:
 // TorresaniEtAlInput contains the grammar used by the dual decomposition algorithm of Torresani, Kolmogorov and Rother
+// UAIInput contains the grammar in uai MRF format plus constraints section
 
 // do zrobienia: possibly put everything in global namespace GraphMatching
 
@@ -40,11 +44,12 @@ typedef MultiplexMargMessage<UnaryLoopType,RightLoopType,true,false,false,true> 
 typedef PairwiseTripletLoop<0,1> PairwiseTripletLoopType12;
 typedef PairwiseTripletLoop<0,2> PairwiseTripletLoopType13;
 typedef PairwiseTripletLoop<1,2> PairwiseTripletLoopType23;
+// do zrobienia: not enough messages sent below
 typedef MultiplexMargMessage<UnaryLoopType,PairwiseTripletLoopType12,false,false,false,true> PairwiseTriplet12Message;
 typedef MultiplexMargMessage<UnaryLoopType,PairwiseTripletLoopType13,false,false,false,true> PairwiseTriplet13Message;
 typedef MultiplexMargMessage<UnaryLoopType,PairwiseTripletLoopType23,false,false,false,true> PairwiseTriplet23Message;
 
-typedef MultiplexFactor<std::vector<REAL>, const_ones_array, const_one> Simplex;
+typedef SimplexFactor<> Simplex;
 
 // graph matching with assignment via message passing
 template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left>
@@ -63,16 +68,16 @@ struct FMC_MP {
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 0, true, true > UnaryFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 1, false, false > PairwiseFactor;
 
-   typedef MessageContainer<EqualityMessage, FixedMessageStorage<1>, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
-   typedef MessageContainer<LeftMargMessage, StandardMessageStorage, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, StandardMessageStorage, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<EqualityMessage, 0, 0, variableMessageNumber, variableMessageNumber, 1, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
+   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeft;
+   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRight;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor >;
-   using MessageList = meta::list<
-      MessageListItem< AssignmentConstraintMessage, 0, 0, std::vector, std::vector >,
-      MessageListItem< UnaryPairwiseMessageLeft,  0, 1, std::vector, FixedSizeMessageContainer<1>::type >,
-      MessageListItem< UnaryPairwiseMessageRight, 0, 1, std::vector, FixedSizeMessageContainer<1>::type >
-      >;
+   using MessageList = meta::list< AssignmentConstraintMessage, UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight >;
+//      MessageListItem< AssignmentConstraintMessage, 0, 0, std::vector, std::vector >,
+//      MessageListItem< UnaryPairwiseMessageLeft,  0, 1, std::vector, FixedSizeMessageContainer<1>::type >,
+//      MessageListItem< UnaryPairwiseMessageRight, 0, 1, std::vector, FixedSizeMessageContainer<1>::type >
+//      >;
 
    using assignment = AssignmentViaMessagePassingProblemConstructor<FMC_MP_PARAM,0,0>;
    using mrf = MRFProblemConstructor<FMC_MP_PARAM,0,1,1,2>;
@@ -107,23 +112,29 @@ struct FMC_MCF {
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 2 > PairwiseFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 3 > EmptyTripletFactor;
 
-   typedef MessageContainer<LeftMargMessage, StandardMessageStorage, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, StandardMessageStorage, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
+   typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
    // possibly remove the rational numbers at the end
-   typedef MessageContainer<UnaryToAssignmentMessage<McfCoveringFactor>, StandardMessageStorage, FMC_MCF_PARAM, 2, RationalNumberTemplate<0,30>, RationalNumberTemplate<0,1>> UnaryToAssignmentMessageContainer;
+   typedef MessageContainer<UnaryToAssignmentMessage<McfCoveringFactor>, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
 
-   typedef MessageContainer<PairwiseTriplet12Message, StandardMessageStorage, FMC_MCF_PARAM, 3> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, StandardMessageStorage, FMC_MCF_PARAM, 4> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, StandardMessageStorage, FMC_MCF_PARAM, 5> PairwiseTriplet23MessageContainer;
+   typedef MessageContainer<PairwiseTriplet12Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 3> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTriplet13Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 4> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTriplet23Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 5> PairwiseTriplet23MessageContainer;
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor, EmptyTripletFactor>;
    using MessageList = meta::list<
-      MessageListItem< UnaryPairwiseMessageLeft,  1, 2, std::vector, FixedSizeMessageContainer<1>::type >,
-      MessageListItem< UnaryPairwiseMessageRight, 1, 2, std::vector, FixedSizeMessageContainer<1>::type >,
-      MessageListItem< UnaryToAssignmentMessageContainer, 1, 0, FixedSizeMessageContainer<1>::type, std::vector>,
-      MessageListItem< PairwiseTriplet12MessageContainer, 2, 3, std::vector, FixedSizeMessageContainer<1>::type >,
-      MessageListItem< PairwiseTriplet13MessageContainer, 2, 3, std::vector, FixedSizeMessageContainer<1>::type >,
-      MessageListItem< PairwiseTriplet23MessageContainer, 2, 3, std::vector, FixedSizeMessageContainer<1>::type >
+       UnaryPairwiseMessageLeft,  
+       UnaryPairwiseMessageRight, 
+       UnaryToAssignmentMessageContainer, 
+       PairwiseTriplet12MessageContainer, 
+       PairwiseTriplet13MessageContainer, 
+       PairwiseTriplet23MessageContainer 
+      //MessageListItem< UnaryPairwiseMessageLeft,  1, 2, std::vector, FixedSizeMessageContainer<1>::type >,
+      //MessageListItem< UnaryPairwiseMessageRight, 1, 2, std::vector, FixedSizeMessageContainer<1>::type >,
+      //MessageListItem< UnaryToAssignmentMessageContainer, 1, 0, FixedSizeMessageContainer<1>::type, std::vector>,
+      //MessageListItem< PairwiseTriplet12MessageContainer, 2, 3, std::vector, FixedSizeMessageContainer<1>::type >,
+      //MessageListItem< PairwiseTriplet13MessageContainer, 2, 3, std::vector, FixedSizeMessageContainer<1>::type >,
+      //MessageListItem< PairwiseTriplet23MessageContainer, 2, 3, std::vector, FixedSizeMessageContainer<1>::type >
       >;
 
    using assignment = AssignmentViaMinCostFlowConstructor<FMC_MCF_PARAM,0>;
@@ -152,14 +163,14 @@ struct FMC_GM {
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, true, true > UnaryFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 1, false, false > PairwiseFactor;
 
-   typedef MessageContainer<LeftMargMessage, StandardMessageStorage, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, StandardMessageStorage, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
+   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor >;
-   using MessageList = meta::list<
-      MessageListItem< UnaryPairwiseMessageLeft,  0, 1, std::vector, FixedSizeMessageContainer<1>::type >,
-      MessageListItem< UnaryPairwiseMessageRight, 0, 1, std::vector, FixedSizeMessageContainer<1>::type >
-      >;
+   using MessageList = meta::list< UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight >;
+      //MessageListItem< UnaryPairwiseMessageLeft,  0, 1, std::vector, FixedSizeMessageContainer<1>::type >,
+      //MessageListItem< UnaryPairwiseMessageRight, 0, 1, std::vector, FixedSizeMessageContainer<1>::type >
+      //>;
 
    using mrf = MRFProblemConstructor<FMC_GM_PARAM,0,1,0,1>;
    using ProblemDecompositionList = meta::list<mrf>;
@@ -559,13 +570,17 @@ namespace TorresaniEtAlInput {
       };
 
    template<typename FMC>
-   bool ParseProblem(const std::string problem_data, ProblemDecomposition<FMC>& pd)
+   bool ParseProblem(const std::string filename, ProblemDecomposition<FMC>& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;
       GraphMatchingInput gmInput;
 
-      return pegtl::parse< grammar, actionSpecialization<FMC>::template type >(problem_data,"graph matching instance", pd, integer_stack, real_stack, gmInput);
+      pegtl::file_parser problem(filename);
+      std::cout << "parsing " << filename << "\n";
+
+      //return problem.parse< grammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, mcInput);
+      return problem.parse< grammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, gmInput);
    }
 } // end TorresaniEtAlInput
 

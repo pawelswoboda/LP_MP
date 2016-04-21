@@ -4,15 +4,33 @@
 
 #include <string.h>
 #include <assert.h>
-#include "block.h"
+#include <stdlib.h>
+#include <vector> // do zrobienia: used for bounds
+#include <iostream>
 
 // if GRAPH_ASSERT is defined then all calls to graph construction functions are assert'ed for correctness
 // (e.g. that node_id's are valid id's and edge capacities are non-negative).
 //#define GRAPH_ASSERT 
 
-//#define MINCOST_DEBUG
+#define MINCOST_DEBUG
 
 
+// do zrobienia: 
+// - put MinCost inside appropriate namespace
+// - we have many parallel edges next to each other each with same capacities. Handle this better (i.e. sort parallel edges), so that pushing flow along shortest path can be possibly done faster.
+//   possibly hold such edges in a heap sorted by edge cost. Have two of them for each edge with one containing all edges with some residual capacity left and the other one with reversed residual capacity left
+//   for this have in each arc a pointer to left and right element of heap.
+// - use double ended dijkstra search to speed up shortest path computation. Reuse? Global source and sink node? Search from all nodes with positive excess simultaneously?
+// - improve function names: currently "R" can stand for residual or reduced. Substitute R by correct meaning
+// - static_assert for integral type for FlowType and for either integral or floating point type f or CostType in destructor
+// - arcs and reverse arcs are stored next to each other in the arcs array. one can get sister arc either by explicitly storing its address or by computing its address, given that we know that adresses are aligned in some way. Is getting away with sister pointer advantageous for runtime? 
+// - also it is possible to do some bittricks (as in Knuth) to make some fast modulo arithmetic to get sister arc. Possibly look into "Hacker's Delight".
+// - cpp file seems not worth the issue. Templatize code and put everything in one hxx.
+// - could other priority queues be better than the one used for shortest path computation?
+// - replace NULL by nullptr everywhere.
+// - make ArcIterator compatible with standard iterators. Still needed? What about nonSaturatedIterator?
+// - support various heaps for Dijkstra via template
+// - reorder arcs, such that outgoing arcs are consecutive. Better runtime?
 
 template <typename FlowType, typename CostType> class MinCost
 {
@@ -20,7 +38,11 @@ public:
 	typedef int NodeId;
 	typedef int EdgeId;
 
+	struct Node;
+	struct Arc;
+
 	MinCost(int NodeNum, int edgeNumMax, void (*err_function)(const char *) = NULL);
+   MinCost(const MinCost<FlowType, CostType>& other); // copy constructor
 
 	// Destructor
 	~MinCost();
@@ -28,33 +50,111 @@ public:
 	void AddNodeExcess(NodeId i, FlowType excess);
 
 	// first call returns 0, second 1, and so on.
-	// cap, rev_cap must be non-negative. 
+	// lower_bound < upper_bound
 	// cost can be negative.
-	EdgeId AddEdge(NodeId i, NodeId j, FlowType cap, FlowType rev_cap, CostType cost);
+	EdgeId AddEdge(NodeId i, NodeId j, FlowType lower_bound, FlowType upper_bound, CostType cost);
 
 	CostType Solve();
 
 	///////////////////////////////////////////////////
 
-	FlowType GetRCap(EdgeId e);
+	FlowType GetRCap(EdgeId e) const;
 	void SetRCap(EdgeId e, FlowType new_rcap);
-	FlowType GetReverseRCap(EdgeId e);
+	FlowType GetReverseRCap(EdgeId e) const;
 	void SetReverseRCap(EdgeId e, FlowType new_rcap);
 	void PushFlow(EdgeId e, FlowType delta);
 	void UpdateCost(EdgeId e, FlowType cap_orig, CostType delta);
+
+   // functions added by Paul Swoboda //
+   FlowType GetFlow(EdgeId e) const
+   {
+      assert(0 <= e && e < edgeNumMax);
+      const FlowType lb = bounds[e].lower;
+      const FlowType ub = bounds[e].upper;
+      const FlowType r_cap = GetRCap(e);
+      //std::cout << "ub = " << ub << ", residual capacity = " << r_cap << ", lb = " << lb << ", reverse residual capacity = " << reverse_r_cap << std::endl;
+      FlowType delta;
+      if(ub < 0) {
+         delta += ub;
+      } else if(lb > 0) {
+         delta -= lb;
+      } else {
+         delta = 0;
+      }
+      return ub + delta - r_cap;
+   }
+   FlowType ExcessSum() const
+   {
+      FlowType sum = 0;
+      for(int i=0; i<nodeNum; ++i) {
+         sum += nodes[i].excess;
+      }
+      return sum;
+   }
+
+   void SetCost(const EdgeId e, const FlowType cap_orig, const CostType c) { UpdateCost(e, cap_orig, c - GetCost(e)); }
+	CostType ShortestPath(const NodeId start_node, const NodeId end_node);
+   FlowType GetNodeExcess(const NodeId i) const { return nodes[i].excess; }
+   NodeId GetTailNodeId(const EdgeId e) const { assert(&arcs[2*e+1] == arcs[2*e].sister); return arcs[2*e+1].head - nodes; }
+   NodeId GetHeadNodeId(const EdgeId e) const { return arcs[2*e].head - nodes; }
+   CostType GetCost(const EdgeId e) const { return arcs[2*e].cost; }
+   CostType GetReducedCost(const EdgeId e) const { assert(e<edgeNum); return arcs[2*e].GetRCost(); }
+   void SetPotential(const NodeId i, const FlowType pi) { nodes[i].pi = pi; }
+   CostType GetPotential(const NodeId i) const { return nodes[i].pi; }
+   const Node& GetNode(const NodeId i) const { return nodes[i]; }
+   EdgeId GetEdgeId(const Arc* const arc) const { assert(arc >= arcs && arc - arcs < 2*edgeNum); return (arc - arcs)/2; }
+
+   FlowType GetUpperBound(const EdgeId e) const { return bounds[e].upper; }
+   FlowType GetLowerBound(const EdgeId e) const { return bounds[e].lower; }
+
+   int GetNodeNum() const { return nodeNum; }
+   int GetEdgeNum() const { return edgeNum; }
+
+   // delete all edges and reset all nodes
+   void Reset() 
+   {
+	  edgeNum = 0;
+	  counter = 0;
+	  cost = 0;
+     memset(nodes, 0, nodeNum*sizeof(Node));
+     memset(arcs, 0, 2*edgeNumMax*sizeof(Arc));
+     firstActive = &nodes[nodeNum];
+#ifdef MINCOST_DEBUG
+     for (int i=0; i<nodeNum; i++) nodes[i].id = i;
+#endif
+   }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 	
-private:
 	// internal variables and functions
 
-	struct Node;
-	struct Arc;
+   struct Node
+   {
+      // I doubt that this structure is of much use, as writing any costs to the arcs is not possible while iterating, due to writing changing the linking structure. Possibly remove iterator again.
+      struct ArcIterator // iterate over all arcs emanating from some node. Note that edges may be given in arbitrary order, and this order may change
+      {
+         ArcIterator(Arc* const arc) : arc_(arc) {}
+         Arc* arc_;
+         bool inNonsaturatedList_ = true;
 
-	struct Node
-	{
+         ArcIterator& operator++() 
+         {
+            assert(arc_ != NULL); 
+            if(arc_->next == NULL && inNonsaturatedList_ == true) { arc_ = arc_->sister->head->firstSaturated; inNonsaturatedList_ = false; }
+            else { assert(arc_->next != NULL); arc_ = arc_->next; }
+            return *this; 
+         }
+         bool operator==(const ArcIterator& other) { return other.arc_ == arc_; }
+         bool operator!=(const ArcIterator& other) { return !operator==(other); } // do zrobienia: direct implementation faster?
+         const Arc* operator*() { return arc_; } // note that it is dangerous to write anything to arc, as this will change linking structure of arcs.
+         const Arc* operator->() { return arc_; }
+
+      };
+      ArcIterator begin() const { return ArcIterator(this->firstNonsaturated); }
+      ArcIterator end() const { return ArcIterator(NULL); }
+
 		Arc			*firstNonsaturated;
 		Arc			*firstSaturated;
 
@@ -86,8 +186,10 @@ private:
 		FlowType	cap_orig;
 #endif
 		CostType	cost;
-		CostType GetRCost() { return cost + head->pi - sister->head->pi; }
+		CostType GetRCost() const { return cost + head->pi - sister->head->pi; }
 	};
+
+private:
 
 	int		nodeNum, edgeNum, edgeNumMax;
 	Node	*nodes;
@@ -95,6 +197,8 @@ private:
 	Node*	firstActive;
 	int		counter;
 	CostType cost;
+   struct bound { FlowType lower, upper; };
+   std::vector<bound> bounds; // used to hold original lower and upper bound, such that primal flow can be recomputed. To zrobienia: templatize this, such that this information is not held unless wanted. Default: false
 
 
 	void	(*error_function)(const char *);	// this function is called if a error occurs,
@@ -170,24 +274,47 @@ template <typename FlowType, typename CostType>
 	}
 }
 
+// alternative definition in terms of lower and upper bound
 template <typename FlowType, typename CostType> 
-	inline typename MinCost<FlowType, CostType>::EdgeId MinCost<FlowType, CostType>::AddEdge(NodeId _i, NodeId _j, FlowType cap, FlowType rev_cap, CostType cost)
+	inline typename MinCost<FlowType, CostType>::EdgeId MinCost<FlowType, CostType>::AddEdge(const NodeId _i, const NodeId _j, const FlowType lb, const FlowType ub, CostType cost)
 {
 	assert(_i>=0 && _i<nodeNum);
 	assert(_j>=0 && _j<nodeNum);
 	assert(_i!=_j && edgeNum<edgeNumMax);
-	assert(cap >= 0);
-	assert(rev_cap >= 0);
+	assert(lb < ub);
+
+   bounds[edgeNum].lower = lb;
+   bounds[edgeNum].upper = ub;
+
+   FlowType cap = ub;
+   FlowType rev_cap = -lb;
 
 	Arc *a = &arcs[2*edgeNum];
 	Arc *a_rev = a+1;
 	edgeNum ++;
+
+   // if either lb > 0 or ub < 0, shift both by the minimal amount so that the previous constraints are satisfied and modify excess on either end node
+   FlowType delta = 0;
+   if(ub < 0) {
+      delta = -ub;
+   } else if(lb > 0) {
+      delta = -lb;
+   }
+   if(delta != 0) {
+      cap += delta;
+      rev_cap -= delta;
+      AddNodeExcess(_j, +delta);
+      AddNodeExcess(_i, -delta);
+      cost += -delta*cost;
+   }
+   assert(cap >= 0 && rev_cap >= 0);
 
 	Node* i = nodes + _i;
 	Node* j = nodes + _j;
 
 	a -> sister = a_rev;
 	a_rev -> sister = a;
+
 	if (cap > 0)
 	{
 		if (i->firstNonsaturated) i->firstNonsaturated->prev = a;
@@ -271,8 +398,9 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-	inline FlowType MinCost<FlowType, CostType>::GetRCap(EdgeId e)
+	inline FlowType MinCost<FlowType, CostType>::GetRCap(EdgeId e) const
 {
+   assert(0<=e && e<edgeNum);
 	Arc* a = &arcs[2*e];
 	return a->r_cap;
 }
@@ -316,7 +444,7 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-	inline FlowType MinCost<FlowType, CostType>::GetReverseRCap(EdgeId e)
+	inline FlowType MinCost<FlowType, CostType>::GetReverseRCap(EdgeId e) const
 {
 	Arc* a = &arcs[2*e+1];
 	return a->r_cap;
@@ -353,6 +481,7 @@ template <typename FlowType, typename CostType>
 template <typename FlowType, typename CostType> 
 	inline void MinCost<FlowType, CostType>::UpdateCost(EdgeId e, FlowType cap_orig, CostType delta)
 {
+   assert(0<=e && e<edgeNum);
 	Arc* a = &arcs[2*e];
 	cost += delta*(cap_orig-a->r_cap);
 	a->cost += delta;

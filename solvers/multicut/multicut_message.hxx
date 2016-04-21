@@ -17,6 +17,8 @@ class MulticutUnaryTripletMessage
 public:
    MulticutUnaryTripletMessage(const INDEX i) : i_(i) { assert(i < 3); }; // i is the index in the triplet factor
 
+   constexpr static INDEX size() { return 1; }
+
    template<typename RIGHT_FACTOR, typename G1, typename G2, MessageSending MST_TMP = MST>
    typename std::enable_if<MST_TMP == MessageSending::SRMP,void>::type
    ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg) 
@@ -82,53 +84,7 @@ public:
       const REAL omega = std::accumulate(omegaIt, omegaIt+3,0.0);
       //const REAL omega = 1.0; // do zrobienia: for now, in general this will not converge
       rightFactor.MakeFactorUniform(rightRepam, msgs, omega);
-      /*
-      assert(omega < 1.0 + eps);
-      //std::cout << "(" << *omegaIt << "," << *(omegaIt+1) << "," << *(omegaIt+2) << ")\n";
-      const auto sortIndices = rightFactor.SortIndices(rightRepam);
-      const REAL x = rightRepam[sortIndices[0]] + rightRepam[sortIndices[1]];
-
-      assert(msgs.size() == 3);
-      // do zrobienia: stupid interface. Make references. See also in factors_messages.hxx
-      assert(msgs[0]->GetMessageOp().i_ == 0);
-      assert(msgs[1]->GetMessageOp().i_ == 1);
-      assert(msgs[2]->GetMessageOp().i_ == 2);
-
-      if(x > 0.0) { // labeling 000
-         if(rightRepam[sortIndices[0]] < 0.0) {
-            //msgs[sortIndices[2]]->operator[](0) += omega*(-rightRepam[sortIndices[2]] + rightRepam[sortIndices[1]] - x);
-            //msgs[sortIndices[1]]->operator[](0) -= omega*x;
-            const REAL delta = rightRepam[sortIndices[1]] - 0.5*x;
-            msgs[sortIndices[0]]->operator[](0) -= 0.5*omega*x;
-            msgs[sortIndices[1]]->operator[](0) -= 0.5*omega*x;
-            msgs[sortIndices[2]]->operator[](0) += omega*(-rightRepam[sortIndices[2]] + delta);
-         } else {
-            for(INDEX i=0; i<3; ++i) {
-               msgs[i]->operator[](0) -= omega*rightRepam[i];
-            }
-         }
-      } else if(rightRepam[sortIndices[2]] > 0.0) { //labeling 110
-         if(rightRepam[sortIndices[1]] > 0.0) {
-            //msgs[sortIndices[0]]->operator[](0) -= omega*x;
-            //msgs[sortIndices[2]]->operator[](0) += omega*(-rightRepam[sortIndices[2]] + rightRepam[sortIndices[1]]);
-            // do zrobiebia: make decrease of rightRepam[sortIndices[2]] and increase of rightRepam[sortIndices[1]] as equal as pssible.
-            const REAL b = std::min(-0.5*x,0.5*(rightRepam[sortIndices[2]] - rightRepam[sortIndices[1]]));
-            const REAL delta = rightRepam[sortIndices[1]] + b;
-            msgs[sortIndices[1]]->operator[](0) += omega*b;
-            msgs[sortIndices[2]]->operator[](0) += omega*(-rightRepam[sortIndices[2]] + delta);
-            msgs[sortIndices[0]]->operator[](0) -= omega*(0.5*x + b); // do zrobienia: can possibly be heightened more
-         } else {
-            for(INDEX i=0; i<3; ++i) {
-               msgs[i]->operator[](0) -= omega*rightRepam[i];
-            }
-         }
-      } else { // labeling 111
-         for(INDEX i=0; i<3; ++i) {
-            msgs[i]->operator[](0) -= omega*rightRepam[i];
-         }
-      }
-      */
-   }
+    }
 
    template<typename G>
    void RepamLeft(G& repamPot, const REAL msg, const INDEX msg_dim)

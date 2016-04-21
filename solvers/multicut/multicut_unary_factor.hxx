@@ -10,7 +10,6 @@ namespace LP_MP {
 class MulticutUnaryFactor 
 {
 public:
-   using PrimalType = bool;
    MulticutUnaryFactor(const double cost) {};
    template<typename REPAM_ARRAY>
    void MaximizePotential(const REPAM_ARRAY& repam) {};
@@ -27,7 +26,7 @@ public:
          }
       }
       */
-      if(repam[0] <= 0) { primal[0] = true; }
+      if(repam[0] < 0) { primal[0] = true; }
       else { primal[1] = false; }
    }
    template<typename REPAM_ARRAY>
@@ -36,7 +35,7 @@ public:
       return std::min(repamPot[0],0.0);
    }
 
-   const INDEX size() const { return 1; }
+   constexpr static INDEX size() { return 1; }
 
    template<typename REPAM_ARRAY>
    REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
@@ -46,8 +45,7 @@ public:
    }
    void WritePrimal(const PrimalSolutionStorage::Element primal, std::ofstream& fs) const
    {
-      assert(false);
-      //fs << primal;
+      //fs << primal[0];
    }
 
 private:

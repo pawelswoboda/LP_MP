@@ -97,12 +97,13 @@ public:
    {}
 
    template<typename REPAM_ARRAY>
-   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const std::vector<INDEX>& flow) const
+   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
    {
       REAL cost = 0.0;
-      assert(repam.size() == flow.size() && repam.size() == arcs_.size());
+      assert(repam.size() == arcs_.size());
+      // assert that primal is indeed a flow
       for(INDEX e=0; e<repam.size(); e++) {
-         cost += repam[e]*flow[e];
+         cost += repam[e]*primal[e];
       }
       return cost;
    }
@@ -127,14 +128,18 @@ public:
    }
 
    template<typename REPAM_ARRAY>
-   std::pair<std::vector<INDEX>,REAL> MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam)
+   void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    { 
       MaximizePotential(repam);
-      std::vector<INDEX> sol(arcs_.size());
+      assert(repam.size() == arcs_.size());
       for(INDEX e=0; e<arcs_.size(); ++e) {
-         sol[e] = minCostFlow_->flow(arcs_[e]);
+        primal[e] = minCostFlow_->flow(arcs_[e]);
       }
-      return std::make_pair(sol, Descale(minCostFlow_->totalCost()));
+      //std::vector<INDEX> sol(arcs_.size());
+      //for(INDEX e=0; e<arcs_.size(); ++e) {
+      //   sol[e] = minCostFlow_->flow(arcs_[e]);
+      //}
+      //return std::make_pair(sol, Descale(minCostFlow_->totalCost()));
    }
 
    template<typename REPAM_ARRAY>
@@ -287,6 +292,7 @@ public:
       assert(active_edges.size() == noEdges_);
       MinCostFlowSolverType minCostFlowRepamUpdate(*graph_);
       const SIGNED_INDEX max_cap = 100000;//minCostFlowRepamUpdate.INF; // note: INF is not good, as negative INF is handled incorrectly.
+      //std::cout << "maximally perturb mcf\n";
       GraphType::ArcMap<SIGNED_INDEX> lower(*graph_), upper(*graph_);
       GraphType::ArcMap<LONG_SIGNED_INDEX> cost(*graph_);
       for(INDEX e=0; e<active_edges.size(); ++e) {
@@ -311,11 +317,16 @@ public:
             }
          }
          assert(lower[arcs_[e]] < upper[arcs_[e]]);
+         //std::cout << repam[e] << ", ";
          cost[arcs_[e]] = Scale(repam[e]);
       }
+      //std::cout << "\n";
       //std::cout << "Solving reparametrization problem\n";
       auto ret = minCostFlowRepamUpdate.lowerMap(lower).upperMap(upper).costMap(cost).run();
       assert(ret == MinCostFlowSolverType::OPTIMAL);
+      if(ret != MinCostFlowSolverType::OPTIMAL) {
+         throw std::runtime_error("Reparametrization problem could not be solved to optimality");
+      }
       //std::cout << "done\n";
       // check now whether the flow reparametrization update does not violate the capacity constraints, i.e. whether max_cap is achieved somewhere
       for(INDEX e=0; e<arcs_.size(); ++e) {
@@ -328,17 +339,20 @@ public:
          noActiveEdges += active_edges[e];
       }
       repam_cost.reserve(noActiveEdges);
+      //std::cout << "max perturb\n";
       //repam_cost.reserve(std::count(active_edges.begin(),active_edges.end(),true));
       for(INDEX e=0; e<active_edges.size(); ++e) {
          if(active_edges[e] == true) {
             // do zrobienia: why should this be true?
             const REAL reducedCost = Descale(Scale(repam[e]) + minCostFlowRepamUpdate.potential(graph_->source(arcs_[e])) - minCostFlowRepamUpdate.potential(graph_->target(arcs_[e])));
             if(minCostFlow_->flow(arcs_[e]) == 1) {
+               //std::cout << -reducedCost << ", ";
                repam_cost.push_back( -reducedCost );
                // these asserts are only valid if we make (-\infty,-1] and [1,\infty) the intervals for the flow in the reparametrization problem
                //assert(reducedCost < +eps);
                //assert(reducedCost > -eps);
             } else if(minCostFlow_->flow(arcs_[e]) == 0) {
+               //std::cout << -reducedCost << ", ";
                repam_cost.push_back( -reducedCost );
                //assert(reducedCost > -eps);
             } else {
@@ -346,6 +360,7 @@ public:
             }
          }
       }
+      //std::cout << "\n";
       // do zrobienia: construct test problem with perturbed cost and see whether solution is still optimal and just at edge
       return repam_cost;
    }

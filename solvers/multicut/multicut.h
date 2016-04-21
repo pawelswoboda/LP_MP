@@ -8,8 +8,9 @@
 #include "multicut_triplet_factor.hxx"
 #include "multicut_global_factor.hxx"
 #include "multicut_odd_wheel_factor.hxx"
-#include "multicut_message.hxx"
-#include "multicut_triplet_odd_wheel_message.hxx"
+//#include "multicut_triplet_odd_wheel_message.hxx"
+//#include "multicut_unary_odd_wheel_message.hxx"
+#include "multicut_odd_wheel.hxx"
 #include "multicut_constructor.hxx"
 
 #include "parse_rules.h"
@@ -27,49 +28,58 @@ template<MessageSending MESSAGE_SENDING>
 struct FMC_MULTICUT {
    constexpr static const char* name = "Multicut";
 
-   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<1>::type, FMC_MULTICUT, 0, true> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<3>::type, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_MULTICUT, 0, true> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
    typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_MULTICUT, 2> MulticutGlobalFactorContainer;
 
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutUnaryGlobalMessage, FixedMessageStorage<0>, FMC_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, -1, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, -1, 0, FMC_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
 
    using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer >;
-   using MessageList = meta::list<
-      MessageListItem< MulticutUnaryTripletMessageContainer, 0, 1, std::vector, FixedSizeMessageContainer<3>::type >,
-      MessageListItem< MulticutUnaryGlobalMessageContainer, 0, 2, FixedSizeMessageContainer<1>::type, std::vector >
-      >;
+   using MessageList = meta::list<MulticutUnaryTripletMessageContainer, MulticutUnaryGlobalMessageContainer>;
 
    using multicut = MulticutConstructor<FMC_MULTICUT,0,1,2,0,1>;
    using ProblemDecompositionList = meta::list<multicut>;
 };
 
-// maybe this will not work, as factors in base class have wrong FMC
+// It would be nice to be able to derive from FMC_MULTICUT. This is not possible due to deviating FMCs
 template<MessageSending MESSAGE_SENDING>
 struct FMC_ODD_WHEEL_MULTICUT : public FMC_MULTICUT<MESSAGE_SENDING> {
    constexpr static const char* name = "Multicut with odd wheel constraints";
 
-   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<1>::type, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<3>::type, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
    typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_ODD_WHEEL_MULTICUT, 2> MulticutGlobalFactorContainer;
-   typedef FactorContainer<MulticutOddWheelFactor, ExplicitRepamStorage, FMC_ODD_WHEEL_MULTICUT, 3> MulticutOddWheelFactorContainer;
 
-   /*
-   typedef MessageContainer<MulticutUnaryOddWheelCycleMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_ODD_WHEEL_MULTICUT, 2 > MulticutUnaryOddWheelCycleMessageContainer;
-   typedef MessageContainer<MulticutUnaryOddWheelCenterMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_ODD_WHEEL_MULTICUT, 3 > MulticutUnaryOddWheelCenterMessageContainer;
-   */
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutUnaryGlobalMessage, FixedMessageStorage<0>, FMC_ODD_WHEEL_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
-   typedef MessageContainer<MulticutTripletOddWheelMessage<MESSAGE_SENDING>, FixedMessageStorage<3>, FMC_ODD_WHEEL_MULTICUT, 2 > MulticutTripletOddWheelMessageContainer;
+   //typedef FactorContainer<MulticutCriticalTripletFactor, FixedSizeExplicitRepamStorage<2>::type, FMC_ODD_WHEEL_MULTICUT, 3> MulticutCriticalTripletFactorContainer;
+   //typedef FactorContainer<MulticutCriticalTripletCountingFactor, ExplicitRepamStorage, FMC_ODD_WHEEL_MULTICUT, 4> MulticutCriticalTripletCountingFactorContainer;
+   
+   typedef FactorContainer<MulticutTripletPlusSpokeFactor, FixedSizeExplicitRepamStorage<MulticutTripletPlusSpokeFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 3> MulticutTripletPlusSpokeFactorContainer;
+      
+   //typedef FactorContainer<MulticutOddWheelFactor, ExplicitRepamStorage, FMC_ODD_WHEEL_MULTICUT, 3> MulticutOddWheelFactorContainer;
 
-   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer, MulticutOddWheelFactorContainer >;
+   //typedef MessageContainer<MulticutUnaryOddWheelCycleMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_ODD_WHEEL_MULTICUT, 2 > MulticutUnaryOddWheelCycleMessageContainer;
+   //typedef MessageContainer<MulticutUnaryOddWheelCenterMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_ODD_WHEEL_MULTICUT, 3 > MulticutUnaryOddWheelCenterMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, -1, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, -1, 0, FMC_ODD_WHEEL_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
+   //typedef MessageContainer<MulticutTripletOddWheelMessage<MESSAGE_SENDING>, FixedMessageStorage<3>, FMC_ODD_WHEEL_MULTICUT, 2 > MulticutTripletOddWheelMessageContainer;
+   //typedef MessageContainer<MulticutUnaryOddWheelMessage<MESSAGE_SENDING>, FixedMessageStorage<1>, FMC_ODD_WHEEL_MULTICUT, 3 > MulticutUnaryOddWheelMessageContainer;
+   //typedef MessageContainer<MulticutCriticalTripletMessage, FixedMessageStorage<3>, FMC_ODD_WHEEL_MULTICUT, 2> MulticutCriticalTripletMessageContainer;
+   //typedef MessageContainer<MulticutCriticalTripletCountingMessage, FixedMessageStorage<1>, FMC_ODD_WHEEL_MULTICUT, 3> MulticutCriticalTripletCountingMessageContainer;
+   
+   typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 3, -1, -1, MulticutTripletPlusSpokeMessage::size(), FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeMessageContainer;
+   typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 3, -1, 1, MulticutTripletPlusSpokeCoverMessage::size(), FMC_ODD_WHEEL_MULTICUT, 3> MulticutTripletPlusSpokeCoverMessageContainer;
+
+
+   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer, MulticutTripletPlusSpokeFactorContainer >;
    using MessageList = meta::list<
-      MessageListItem< MulticutUnaryTripletMessageContainer, 0, 1, std::vector, FixedSizeMessageContainer<3>::type >,
-      MessageListItem< MulticutUnaryGlobalMessageContainer, 0, 2, FixedSizeMessageContainer<1>::type, std::vector >,
-      MessageListItem< MulticutTripletOddWheelMessageContainer, 1, 3, std::vector, std::vector >
+      MulticutUnaryTripletMessageContainer, 
+      MulticutUnaryGlobalMessageContainer, 
+      MulticutTripletPlusSpokeMessageContainer, // one unfortunately cannot use a fixed size container on the right, as one spoke factor might participate in more than one odd wheel constraint
+      MulticutTripletPlusSpokeCoverMessageContainer
       >;
 
-   using multicut = MulticutOddWheelConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,2,0,1,3,2>;
+   using multicut = MulticutOddWheelConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,2,0,1,3,2,3>;
    using ProblemDecompositionList = meta::list<multicut>;
 };
 
@@ -173,6 +183,7 @@ namespace MulticutOpenGmInput {
       assert(edgeCosts.size()/2 == edges.size());
       for(INDEX i=0; i<edges.size(); ++i) {
          std::get<2>(edges[i]) = -edgeCosts[2*i] + edgeCosts[2*i+1]; // do zrobienia: or the other way around
+         //std::get<2>(edges[i]) = edgeCosts[2*i] - edgeCosts[2*i+1];
       }
       // note: theoretically, this could be much more complicated, if some factors are shared etc. Then this simple approach above will not work.
 
@@ -265,10 +276,10 @@ namespace MulticutTextInput {
          }
          //mc.Tighten(0.0,mcInput.numberOfVariables_); // initial tightening
          // only for odd wheel example
-         mc.AddTripletFactor(0,1,2);
-         mc.AddTripletFactor(0,1,3);
-         mc.AddTripletFactor(0,2,3);
-         mc.AddTripletFactor(1,2,3);
+         //mc.AddTripletFactor(0,1,2);
+         //mc.AddTripletFactor(0,1,3);
+         //mc.AddTripletFactor(0,2,3);
+         //mc.AddTripletFactor(1,2,3);
          //mc.AddOddWheelFactor(0, std::vector<INDEX>{1,2,3});
          //mc.AddOddWheelFactor(1, std::vector<INDEX>{0,2,3});
          //mc.AddOddWheelFactor(2, std::vector<INDEX>{0,1,3});

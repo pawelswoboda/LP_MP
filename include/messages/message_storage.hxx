@@ -7,6 +7,7 @@
 
 namespace LP_MP {
 
+   /*
 class StandardMessageStorage : public std::vector<REAL>
 {
 public:
@@ -17,7 +18,7 @@ template<INDEX N>
 class FixedMessageStorage : public std::array<REAL,N>
 {
 public:
-   FixedMessageStorage(const INDEX msg_size) { std::array<REAL,N>::fill(0.0); }
+   FixedMessageStorage(const INDEX msg_size) { assert(msg_size == N); std::array<REAL,N>::fill(0.0); }
 }; 
 
 class MessageStorageSIMD : public Vc::Memory<REAL_SIMD>
@@ -44,6 +45,7 @@ class EmptyMessageStorage
 public:
    EmptyMessageStorage(const INDEX msg_size) {}
 };
+*/
 
 } // end namespace LP_MP
 

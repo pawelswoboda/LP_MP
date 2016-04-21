@@ -346,7 +346,6 @@ SIGNED_INDEX LP::Solve(VISITOR& v)
          case LPVisitorReturnType::ReparametrizeAndComputePrimal:
             //std::cout << "reparametrize in " << (repamMode_ == LPReparametrizationMode::Rounding ? " rounding " : " anisotropic ") << "mode\n";
             assert(forwardPrimal_.size() == forwardOrdering_.size());
-            // do zrobienia: it would be nicer to reset primal in ComputePassAndPrimal, possibly interleave with UpdateFactor computation
             ComputePassAndPrimal(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_.begin(), forwardPrimal_.begin(), bestForwardPrimal_.begin(), bestForwardPrimalCost_); 
             assert(backwardPrimal_.size() == forwardOrdering_.size());
             ComputePassAndPrimal(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_.begin(), backwardPrimal_.rbegin(), bestBackwardPrimal_.rbegin(), bestBackwardPrimalCost_); 
@@ -411,7 +410,7 @@ bool LP::CheckPrimalConsistency(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR 
 {
    std::map<FactorTypeAdapter*, INDEX> factorToIndex;
    std::map<INDEX, FactorTypeAdapter*> indexToFactor; // do zrobienia: this should equal f_. Modify BuildIndexMaps
-   BuildIndexMaps(factorIt,factorEndIt,factorToIndex,indexToFactor);
+   BuildIndexMaps(factorIt,factorEndIt,factorToIndex,indexToFactor); // do zrobienia: precompute BuildIndexMaps by hashing it with pair(factorIt,factorEndIt). Also this can be done faster by noting that factorIt is either forward or backward order of primalIt, hence it is just simple index calculations everywhere
 
    for(auto msgIt = m_.begin(); msgIt!=m_.end(); ++msgIt) {
       FactorTypeAdapter* const leftFactor = (*msgIt)->GetLeftFactor();
@@ -569,8 +568,8 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
 
    fcIt = fc.begin();
    fcAccessedLaterIt = fcAccessedLater.begin();
-   for(auto omegaIt = omega.begin(); factorIt != factorEndIt; ++factorIt, ++omegaIt, ++fcIt) {
-   //for(INDEX i=0; i<f.size(); i++) {
+   for(auto omegaIt = omega.begin(); factorIt != factorEndIt; ++factorIt, ++omegaIt, ++fcIt, ++fcAccessedLaterIt) {
+      assert(fcIt->size() == fcAccessedLaterIt->size());
       (*omegaIt).resize(fcIt->size(), 0.0);
       INDEX noFactorsAccessedLater = 0;
       for(INDEX j=0;j<fcIt->size(); j++) {
@@ -641,7 +640,7 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
    auto omegaIt = omega.begin();
    auto fcIt = fc.begin();
    for(; factorIt != factorEndIt; ++factorIt, ++omegaIt, ++fcIt) {
-      (*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 1.5) );
+      (*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 1.0) );
    }
 }
 
