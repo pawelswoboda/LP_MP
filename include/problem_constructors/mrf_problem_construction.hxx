@@ -5,29 +5,26 @@
 #include "cycle_inequalities.hxx"
 
 #include <string>
-#include <regex>
-#include <sstream>
 
 namespace LP_MP {
 
 // expects simplex factor as unary and pairwise factors and marg message such that unary factor is on the left side and pairwise factor is on the right side
-
+// possibly use static inheritance instead of virtual functions
 template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX PAIRWISE_FACTOR_NO, INDEX LEFT_MESSAGE_NO, INDEX RIGHT_MESSAGE_NO>
 class MRFProblemConstructor {
-protected:
+public:
    using FMC = FACTOR_MESSAGE_CONNECTION;
 
    using UnaryFactorContainer = meta::at_c<typename FMC::FactorList, UNARY_FACTOR_NO>;
    using UnaryFactorType = typename UnaryFactorContainer::FactorType;
    using PairwiseFactorContainer = meta::at_c<typename FMC::FactorList, PAIRWISE_FACTOR_NO>;
-   using PairwiseFactor = typename PairwiseFactorContainer::FactorType;
+   using PairwiseFactorType = typename PairwiseFactorContainer::FactorType;
    using LeftMessageContainer = typename meta::at_c<typename FMC::MessageList, LEFT_MESSAGE_NO>::MessageContainerType;
    using LeftMessageType = typename LeftMessageContainer::MessageType;
    using RightMessageContainer = typename meta::at_c<typename FMC::MessageList, RIGHT_MESSAGE_NO>::MessageContainerType;
    using RightMessageType = typename RightMessageContainer::MessageType;
 
 
-public:
    MRFProblemConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd) {}
    // do zrobienia: this object is not movable
    /*
@@ -36,53 +33,12 @@ public:
       assert(false);
    }
    */
+   virtual UnaryFactorType ConstructUnaryFactor(const std::vector<REAL>& cost) = 0;
+   virtual PairwiseFactorType ConstructPairwiseFactor(const std::vector<REAL>& cost, const INDEX leftDim, const INDEX rightDim) = 0;
+   virtual RightMessageType ConstructRightUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
+   virtual LeftMessageType ConstructLeftUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
 
-   // obsolete
-   void ReadLine(ProblemDecomposition<FMC>& pd, std::string line) {
-      std::stringstream s{line};
-      std::string arity;
-      s >> arity;
-      if(arity == "unary") {
-         INDEX node_number;
-         s >> node_number;
-         std::string cost;
-         s >> cost;
-         if(cost != "cost") { throw std::runtime_error("variable numbers must be followed by string cost"); }
-         // now read in vector
-         while(s.get() != '[') {}
-         std::vector<REAL> cost_vec{};
-         for(REAL c; s >> c;) {
-            cost_vec.push_back(c);
-         }
-         // check for ending ']' // do zrobienia. Put in vec read function
-         
-         AddUnaryFactor(node_number, cost_vec);
-      } else if(arity == "pairwise") {
-         INDEX i1, i2;
-         s >> i1 >> i2;
-         assert(i1<i2);
-         assert(i2 < unaryFactor_.size());
-         std::string cost;
-         s >> cost;
-         if(cost != "cost") { throw std::runtime_error("variable numbers must be followed by string cost"); }
-         // now read in vector
-         while(s.get() != '[') {}
-         std::vector<REAL> cost_vec{};
-         for(REAL c; s >> c;) {
-            cost_vec.push_back(c);
-         }
-         // check for ending ']' // do zrobienia, see above
-
-         PairwiseFactorContainer* p = AddPairwiseFactor(std::vector<REAL>{cost_vec});
-         assert(i1 != i2 && i1 < unaryFactor_.size() && i2 < unaryFactor_.size());
-         LinkUnaryPairwiseFactor(p, unaryFactor_[i1], unaryFactor_[i2]);
-         pairwiseIndices_.push_back(std::make_tuple(i1,i2));
-      } else {
-         throw std::runtime_error("line must start with arity of potential: {unary|pairwise}\n" + line);
-      }
-   }
-
-   // remove the node_number. It should be given automatically
+   /*
    INDEX AddUnaryFactor(const std::vector<REAL>& cost)
    {
       UnaryFactorContainer* u = new UnaryFactorContainer(UnaryFactorType(cost), cost);
@@ -90,11 +46,11 @@ public:
       pd_.GetLP()->AddFactor(u);;
       return unaryFactor_.size()-1;
    }
+   */
    UnaryFactorContainer* AddUnaryFactor(const INDEX node_number, const std::vector<REAL>& cost)
    {
-      //std::cout << "Add unary factor " << GetNumberOfVariables() << "\n";
-      //std::cout << this << "\n";
-      UnaryFactorContainer* u = new UnaryFactorContainer(UnaryFactorType(cost), cost);
+      //UnaryFactorContainer* u = new UnaryFactorContainer(UnaryFactorType(cost), cost);
+      auto* u = new UnaryFactorContainer( ConstructUnaryFactor(cost), cost);
       if(node_number >= unaryFactor_.size()) {
          unaryFactor_.resize(node_number+1,nullptr);
       } else {
@@ -116,14 +72,6 @@ public:
       }
       unaryFactor_[node_number] = u;
    }
-   /*
-   PairwiseFactorContainer* AddPairwiseFactor(const std::vector<REAL>& cost)
-   { 
-      PairwiseFactorContainer* p = new PairwiseFactorContainer(PairwiseFactor(cost), cost);
-      pairwiseFactor_.push_back(p);
-      return p;
-   }
-   */
    PairwiseFactorContainer* AddPairwiseFactor(INDEX var1, INDEX var2, const std::vector<REAL>& cost)
    { 
       //if(var1 > var2) std::swap(var1,var2);
@@ -131,15 +79,22 @@ public:
       assert(!HasPairwiseFactor(var1,var2));
       assert(cost.size() == GetNumberOfLabels(var1) * GetNumberOfLabels(var2));
       //assert(pairwiseMap_.find(std::make_tuple(var1,var2)) == pairwiseMap_.end());
-      PairwiseFactorContainer* p = new PairwiseFactorContainer(PairwiseFactor(cost), cost);
+      //PairwiseFactorContainer* p = new PairwiseFactorContainer(PairwiseFactor(cost), cost);
+      auto* p = new PairwiseFactorContainer(ConstructPairwiseFactor(cost, GetNumberOfLabels(var1), GetNumberOfLabels(var2)), cost);
       pairwiseFactor_.push_back(p);
       pairwiseIndices_.push_back(std::make_tuple(var1,var2));
       const INDEX factorId = pairwiseFactor_.size()-1;
       pairwiseMap_.insert(std::make_pair(std::make_tuple(var1,var2), factorId));
       LinkUnaryPairwiseFactor(unaryFactor_[var1], p, unaryFactor_[var2]);
-      pd_.GetLP()->AddFactor(p);
+
+      auto* lp = pd_.GetLP();
+      lp->AddFactor(p);
+      lp->AddFactorRelation(unaryFactor_[var1], p);
+      lp->AddFactorRelation(p, unaryFactor_[var2]);
+
       return p;
    }
+   /*
    void LinkLeftUnaryPairwiseFactor(UnaryFactorContainer* const left, PairwiseFactorContainer* const p, LeftMessageType msg)
    {
       //assert(false); // left->size need not be msg size. Use instead message size
@@ -154,8 +109,16 @@ public:
       rightMessage_.push_back(m);
       pd_.GetLP()->AddMessage(m);
    }
+   */
    void LinkUnaryPairwiseFactor(UnaryFactorContainer* const left, PairwiseFactorContainer* const p, UnaryFactorContainer* right)
    {
+      auto* l = new LeftMessageContainer(ConstructLeftUnaryPairwiseMessage(left, p), left, p, left->size());
+      leftMessage_.push_back(l);
+      pd_.GetLP()->AddMessage(l);
+      auto* r = new RightMessageContainer(ConstructRightUnaryPairwiseMessage(right, p), right, p, right->size());
+      rightMessage_.push_back(r);
+      pd_.GetLP()->AddMessage(r);
+      /*
       using LeftUnaryLoopType = typename LeftMessageType::LeftLoopType;
       using LeftPairwiseLoopType = typename LeftMessageType::RightLoopType;
       using RightUnaryLoopType = typename RightMessageType::LeftLoopType;
@@ -173,6 +136,7 @@ public:
 
       LinkLeftUnaryPairwiseFactor(left, p, LeftMessageType(leftUnaryLoop, leftPairwiseLoop));
       LinkRightUnaryPairwiseFactor(right, p, RightMessageType(rightUnaryLoop, rightPairwiseLoop));
+      */
    }
 
 
@@ -219,15 +183,27 @@ public:
       std::cout << "Construct MRF problem with " << unaryFactor_.size() << " unary factors and " << pairwiseFactor_.size() << " pairwise factors\n";
       LP* lp = pd.GetLP();
 
-      /*
+      // add order relations. These are important for the anisotropic weights computation to work.
       unaryFactorIndexBegin_ = lp->GetNumberOfFactors();
-      for(auto it=unaryFactor_.begin(); it!=unaryFactor_.end(); ++it) {
-         lp->AddFactor(*it);
+      if(unaryFactor_.size() > 1) {
+         for(auto it=unaryFactor_.begin(); it+1 != unaryFactor_.end(); ++it) {
+            assert(*it != nullptr);
+            lp->AddFactorRelation(*it,*(it+1));
+         }
       }
-      unaryFactorIndexEnd_ = lp->GetNumberOfFactors();
-      for(PairwiseFactorContainer* pairwiseIt : pairwiseFactor_) {
-         lp->AddFactor(pairwiseIt);
+
+      assert(pairwiseIndices_.size() == pairwiseFactor_.size());
+      /*
+      auto pairwiseFactorIt = pairwiseFactor_.begin();
+      auto pairwiseIndicesIt = pairwiseIndices_.begin();
+      for(; pairwiseFactorIt != pairwiseFactor_.end(); ++pairwiseFactorIt, ++pairwiseIndicesIt) {
+         const INDEX i = std::get<0>(*pairwiseIndicesIt);
+         const INDEX j = std::get<1>(*pairwiseIndicesIt);
+         lp->AddFactorRelation(unaryFactor_[i], *pairwiseFactorIt);
+         lp->AddFactorRelation(*pairwiseFactorIt, unaryFactor_[j]);
       }
+      */
+      /*
       for(LeftMessageContainer* messageIt : leftMessage_) {
          lp->AddMessage(messageIt);
       }
@@ -251,6 +227,56 @@ protected:
    INDEX unaryFactorIndexBegin_, unaryFactorIndexEnd_; 
 
    ProblemDecomposition<FMC>& pd_;
+};
+
+// overloads virtual functions above for standard SimplexFactor and SimplexMarginalizationMessage
+template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX PAIRWISE_FACTOR_NO, INDEX LEFT_MESSAGE_NO, INDEX RIGHT_MESSAGE_NO>
+class StandardMrfConstructor : public MRFProblemConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, PAIRWISE_FACTOR_NO, LEFT_MESSAGE_NO, RIGHT_MESSAGE_NO>
+{
+public:
+   using MRFProblemConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, PAIRWISE_FACTOR_NO, LEFT_MESSAGE_NO, RIGHT_MESSAGE_NO>::MRFProblemConstructor;
+   // this is not nice: how to import all aliases directly here? Is it possible at all, while base class is parametrized by templates?
+   using BaseConstructor = MRFProblemConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, PAIRWISE_FACTOR_NO, LEFT_MESSAGE_NO, RIGHT_MESSAGE_NO>;
+   using UnaryFactorType = typename BaseConstructor::UnaryFactorType;
+   using UnaryFactorContainer = typename BaseConstructor::UnaryFactorContainer;
+   using PairwiseFactorType = typename BaseConstructor::PairwiseFactorType;
+   using PairwiseFactorContainer = typename BaseConstructor::PairwiseFactorContainer;
+   using RightMessageType = typename BaseConstructor::RightMessageType;
+   using LeftMessageType = typename BaseConstructor::LeftMessageType;
+
+   UnaryFactorType ConstructUnaryFactor(const std::vector<REAL>& cost) 
+   { return UnaryFactorType(cost); }
+
+   PairwiseFactorType ConstructPairwiseFactor(const std::vector<REAL>& cost, const INDEX leftDim, const INDEX rightDim) 
+   { return PairwiseFactorType(cost); }
+
+   RightMessageType ConstructRightUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p)
+   { 
+      using RightUnaryLoopType = typename RightMessageType::LeftLoopType;
+      using RightPairwiseLoopType = typename RightMessageType::RightLoopType;
+
+      const INDEX rightDim = right->size();
+      const INDEX leftDim = p->size() / rightDim;
+
+      RightUnaryLoopType rightUnaryLoop(rightDim);
+      std::array<INDEX,2> pairwiseDim = {{leftDim, rightDim}};
+      RightPairwiseLoopType rightPairwiseLoop( pairwiseDim );
+      return RightMessageType(rightUnaryLoop, rightPairwiseLoop);
+   }
+
+   LeftMessageType ConstructLeftUnaryPairwiseMessage(UnaryFactorContainer* const left, PairwiseFactorContainer* const p)
+   {
+      using LeftUnaryLoopType = typename LeftMessageType::LeftLoopType;
+      using LeftPairwiseLoopType = typename LeftMessageType::RightLoopType;
+
+      const INDEX leftDim = left->size();
+      const INDEX rightDim = p->size() / leftDim;
+
+      LeftUnaryLoopType leftUnaryLoop(leftDim);
+      std::array<INDEX,2> pairwiseDim = {{leftDim, rightDim}};
+      LeftPairwiseLoopType leftPairwiseLoop( pairwiseDim );
+      return LeftMessageType(leftUnaryLoop, leftPairwiseLoop);
+   }
 };
 
 // derives from a given mrf problem constructor and adds tightening capabilities on top of it, as implemented in cycle_inequalities and proposed by David Sontag

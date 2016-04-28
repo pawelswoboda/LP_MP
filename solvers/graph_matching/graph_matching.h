@@ -80,7 +80,7 @@ struct FMC_MP {
 //      >;
 
    using assignment = AssignmentViaMessagePassingProblemConstructor<FMC_MP_PARAM,0,0>;
-   using mrf = MRFProblemConstructor<FMC_MP_PARAM,0,1,1,2>;
+   using mrf = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
    using ProblemDecompositionList = meta::list<assignment, mrf>;
 };
 
@@ -138,7 +138,8 @@ struct FMC_MCF {
       >;
 
    using assignment = AssignmentViaMinCostFlowConstructor<FMC_MCF_PARAM,0>;
-   using mrf = MRFProblemConstructor<FMC_MCF_PARAM,1,2,0,1>;
+   //using mrf = MRFProblemConstructor<FMC_MCF_PARAM,1,2,0,1>;
+   using mrf = StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>;
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,3,4,5>;
    using mrfLeft = tighteningMrf;
    using mrfRight = tighteningMrf;
@@ -172,7 +173,7 @@ struct FMC_GM {
       //MessageListItem< UnaryPairwiseMessageRight, 0, 1, std::vector, FixedSizeMessageContainer<1>::type >
       //>;
 
-   using mrf = MRFProblemConstructor<FMC_GM_PARAM,0,1,0,1>;
+   using mrf = StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>;
    using ProblemDecompositionList = meta::list<mrf>;
 };
 
@@ -498,6 +499,7 @@ namespace TorresaniEtAlInput {
             }
          }
 
+         // finish mrf construction
          mrfLeft.Construct(pd);
          mrfRight.Construct(pd);
       }
@@ -1005,14 +1007,16 @@ namespace UAIInput {
       };
 
    template<typename FMC>
-   bool ParseProblem(const std::string problem_data, ProblemDecomposition<FMC>& pd)
+   bool ParseProblem(const std::string filename, ProblemDecomposition<FMC>& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;
       GraphMatchingInput gmInput;
 
-      std::cout << "read in problem" << std::endl;
-      return pegtl::parse< grammar, actionSpecialization<FMC>::template type >(problem_data,"graph matching instance", pd, integer_stack, real_stack, gmInput);
+      pegtl::file_parser problem(filename);
+      std::cout << "parsing " << filename << "\n";
+
+      return problem.parse< grammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, gmInput);
    }
 }
 

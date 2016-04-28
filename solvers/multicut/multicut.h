@@ -15,7 +15,7 @@
 
 #include "parse_rules.h"
 
-#include "hdf5.h"
+#include "hdf5_routines.hxx"
 
 #include <iostream>
 #include <vector>

@@ -120,7 +120,7 @@ public:
       assert(active_edges.size() == minCostFlow_->GetEdgeNum());
 
       // do zrobienia: do not allocate anew each time but only once
-      std::unique_ptr<MinCost<SIGNED_INDEX, REAL>> minCostFlowRepamUpdate_( {new MinCost<SIGNED_INDEX,REAL>(minCostFlow_->GetNodeNum(), minCostFlow_->GetEdgeNum())} );
+      std::unique_ptr<MinCost<SIGNED_INDEX, REAL>> minCostFlowRepamUpdate_( new MinCost<SIGNED_INDEX,REAL>(minCostFlow_->GetNodeNum(), minCostFlow_->GetEdgeNum()) );
       
       const SIGNED_INDEX max_cap = 1000* minCostFlowRepamUpdate_->GetNodeNum();
       for(INDEX e=0; e<active_edges.size(); ++e) {

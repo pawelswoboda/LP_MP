@@ -537,11 +537,12 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
    for(; factorItTmp != factorEndIt; ++factorItTmp, ++fcAccessedLaterIt, ++fcIt) {
       assert(factorToIndex.find(*factorItTmp) != factorToIndex.end());
       const INDEX index1 = factorToIndex[*factorItTmp];
-      //assert(INDEX(index1) == i);
+      assert(index1 == factorItTmp - factorIt);
       (*fcAccessedLaterIt).resize(fcIt->size(),false);
       for(INDEX j=0; j<(*fcIt).size(); j++) {
          assert(factorToIndex.find((*fcIt)[j]) != factorToIndex.end());
          const INDEX index2 = factorToIndex[ (*fcIt)[j] ];
+         //std:: cout << index2 << ", ";
          bool intermedFactor = false;
          // do zrobienia: this will take extremely long for factors connected to very many other factors.
          
@@ -563,6 +564,7 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
    omega.resize(factorEndIt - factorIt);
    if(m_.size() == 0) { 
       std::cout << "no messages in problem\n"; 
+      assert(false);
       return;
    }
 
@@ -577,46 +579,15 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
             noFactorsAccessedLater++;
          }
       }
-      // this was for custom defined message weights. Currently not supported.
-      //std::vector<INDEX> messageClassNumber(omega[i].size());
-      //for(INDEX j=0; j<messageClassNumber.size(); ++j) {
-      //   messageClassNumber[j] = f[i]->GetMessage(j)->GetMessageNumber();
-      //}
-      //std::vector<INDEX> numberMessagesOfClass(*std::max_element(messageClassNumber.begin(), messageClassNumber.end())+1, 0);
-      //for(INDEX j=0; j<messageClassNumber.size(); ++j) {
-      //   if(fcAccessedLater[i][j]) {
-      //      numberMessagesOfClass[messageClassNumber[j]] += 1;
-      //   }
-      //}
-      //std::vector<REAL> minimumWeight(*std::max_element(messageClassNumber.begin(), messageClassNumber.end())+1, 0.0);
-      //for(INDEX j=0; j<messageClassNumber.size(); ++j) {
-      //   if(fcAccessedLater[i][j]) {
-      //      const INDEX c = messageClassNumber[j];
-      //      auto m = f[i]->GetMessage(j);
-      //      if(f[i] == m->GetLeftFactor()) {
-      //         minimumWeight[c] = m->GetMessageWeightToRight();
-      //      } else {
-      //         assert(f[i] == m->GetRightFactor());
-      //         minimumWeight[c] = m->GetMessageWeightToLeft();
-      //      }
-      //   }
-      //}
-      //assert(std::accumulate(minimumWeight.begin(), minimumWeight.end(), 0.0) <= 1.0 + eps);
-      // now distribute slack weights evenly across messages
-      //const REAL slackWeight = 1.0 - std::accumulate(minimumWeight.begin(), minimumWeight.end(), 0.0); // do zrobienia: take into account weight construction below of traditional weight as in SRMP
-      const INDEX numberActiveMessages = std::count(fcAccessedLaterIt->begin(), fcAccessedLaterIt->end(), true);
+      //const INDEX numberActiveMessages = std::count(fcAccessedLaterIt->begin(), fcAccessedLaterIt->end(), true);
 
-      std::vector<REAL> weights(omegaIt->size(),0.0);
       //const REAL weight = 1.0 / REAL(noFactorsAccessedLater);
-      //const REAL weight = 0.8*1.0 / REAL(fcAccessedLater[i].size());
+      //const REAL weight = 0.8*1.0 / REAL(noFactorsAccessedLater);
       // do zrobienia: not the traditional way
       const REAL weight = 1.0 / (std::max(REAL(noFactorsAccessedLater), REAL(fcAccessedLaterIt->size() - noFactorsAccessedLater)) );
       //const REAL weight = 0.1; // 0.5 works well for pure assignment with equality messages
       for(INDEX j=0; j<fcIt->size(); j++) {
          if((*fcAccessedLaterIt)[j]) {
-            //const INDEX c = messageClassNumber[j];
-            // do zrobienia: denominator should count how many messages of this class are accessed later
-            //omega[i][j] = minimumWeight[c]/REAL(numberMessagesOfClass[c]) + slackWeight/REAL(numberActiveMessages);
             (*omegaIt)[j] = weight; 
          } else {
             (*omegaIt)[j] = 0.0;
@@ -624,6 +595,15 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
       }
       assert( std::accumulate(omegaIt->begin(), omegaIt->end(),0.0) <= 1.0 + eps);
    }
+   for(INDEX i=0; i<omega.size(); ++i) {
+      for(INDEX j=0; j<omega[i].size(); ++j) {
+         //std::cout << omega[i][j] << ", ";
+      }
+      if(omega[i].size() > 0) {
+         //std::cout << "\n";
+      }
+   }
+   //std::cout << "\n";
 }
 
 // compute uniform weights so as to help decoding for obtaining primal solutions
@@ -640,7 +620,8 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
    auto omegaIt = omega.begin();
    auto fcIt = fc.begin();
    for(; factorIt != factorEndIt; ++factorIt, ++omegaIt, ++fcIt) {
-      (*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 1.0) );
+      //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 1.0) );
+      (*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size()) );
    }
 }
 

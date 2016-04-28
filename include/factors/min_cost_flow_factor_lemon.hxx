@@ -303,7 +303,7 @@ public:
                lower[arcs_[e]] = -max_cap;
                upper[arcs_[e]] = -1;
             } else if(flow == 0) {
-               lower[arcs_[e]] = 0; // do zrobienia: possibly could be 1, but this exhibits worse convergence
+               lower[arcs_[e]] = 1;
                upper[arcs_[e]] = max_cap;
             }
          } else {

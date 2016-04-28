@@ -3,6 +3,7 @@
 
 #include "LP_MP.h"
 #include "tolerance.hxx"
+#include "mem_use.c"
 #include "tclap/CmdLine.h"
 #include <chrono>
 
@@ -123,15 +124,16 @@ namespace LP_MP {
                   remainingIter_ = 1;
                   return LPVisitorReturnType::SetRoundingReparametrization;
                }
-               if(curIter_ % boundComputationInterval_ == 0) {
-                  return LPVisitorReturnType::ReparametrizeAndComputePrimal;
-               }
                if(maxMemory_ > 0) {
-                  const INDEX memoryUsed = 0;
+                  const INDEX memoryUsed = memory_used()/(1024*1024);
                   if(maxMemory_ < memoryUsed) {
-                     std::cout << "Solves uses " << memoryUsed << " MB, aborting optimization\n";
+                     remainingIter_ = 1;
+                     std::cout << "Solver uses " << memoryUsed << " MB memory, aborting optimization\n";
                      return LPVisitorReturnType::SetRoundingReparametrization;
                   }
+               }
+               if(curIter_ % boundComputationInterval_ == 0) {
+                  return LPVisitorReturnType::ReparametrizeAndComputePrimal;
                }
                return LPVisitorReturnType::Reparametrize;
                break;
