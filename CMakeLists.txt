@@ -21,6 +21,13 @@ add_definitions(-march=native)
 
 # packages
 
+# GUROBI
+include_directories("/home/pswoboda/gurobi/linux64/include")
+# more robust: use add_library with IMPORTED
+LINK_DIRECTORIES("/home/pswoboda/gurobi/linux64/lib")
+#LINK_DIRECTORIES("/home/pswoboda/gurobi/linux64/src/build")
+SET(GUROBI_LIB "/home/pswoboda/gurobi/linux64/lib/libgurobi_c++.a /home/pswoboda/gurobi/linux64/lib/libgurobi65.so")
+
 # Vc SIMD library
 set(Vc_DIR "/home/pswoboda/repo/LP_MP/lib/Vc-1.2.0/Release/cmake")
 set(Vc_LIBRARIES "/home/pswoboda/repo/LP_MP/lib/Vc-Installation/lib/libVc.a") # needed?
@@ -44,7 +51,6 @@ set (LINK_LIBS ${LINK_LIBS} ${HDF5_C_STATIC_LIBRARY})
 OPTION(BUILD_GRAPH_MATCHING "Build graph matching" ON)
 OPTION(BUILD_MULTICUT "Build multicut" ON)
 OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" ON)
-OPTION(BUILD_BINARY_TOMOGRAPHY "Build binary tomography solver" OFF)
 OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" OFF)
 
 
@@ -59,9 +65,10 @@ endif()
 
 #add_subdirectory(lib/cpp-sort)
 include_directories(lib/cpp-sort/include)
-add_subdirectory(lib/lemon-1.3.1)
+#add_subdirectory(lib/lemon-1.3.1)
 include_directories(lib/lemon-1.3.1)
 add_subdirectory(lib/MinCost)
 include_directories(lib/PEGTL-master)
+include_directories(lib/opengm/include)
 #include_directories(lib/hana-0.7.0/include)
 add_subdirectory(solvers)

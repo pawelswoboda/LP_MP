@@ -31,13 +31,17 @@ inline std::string ExtractFilename(const std::string& path)
    char* pathTmp = new char[path.length()+1];
    std::strcpy(pathTmp,path.c_str());
    std::string file(basename(pathTmp));
-   delete pathTmp;
+   delete[] pathTmp;
    auto extensionPos = file.find_last_of("."); 
    if(extensionPos != std::string::npos) {
       file = file.substr(0,extensionPos);
    }
    return file;
 }
+//inline std::string ExtractFileName(const char* path)
+//{
+//   return ExtractFilename(std::string(path));
+//}
 
 inline int binary_compl(const int i)
 {

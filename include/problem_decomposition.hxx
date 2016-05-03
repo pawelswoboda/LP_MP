@@ -61,6 +61,7 @@ public:
       // set precision for reading numbers out of file
       std::cout.precision(9); 
 
+      /*
       std::ifstream fs{inputFile_};
       if(!fs.is_open()) { 
          throw std::runtime_error("Could not open file " + inputFile_);
@@ -71,9 +72,10 @@ public:
       for(std::string line; std::getline(fs,line);) {
          data.append(line).append("\n");
       }
+      */
       
-      // do zrobienia: see how PEGTL can parse files.
       //const bool success = f(data,*this);
+
       const bool success = f(inputFile_,*this);
       assert(success);
       if(!success) throw std::runtime_error("could not parse problem file");

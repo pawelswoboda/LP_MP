@@ -55,6 +55,7 @@ public:
       //MakeLeftFactorUniform(leftPot, msg); 
    }
 
+   /*
    template<typename LEFT_FACTOR, typename G1, typename G3>
    void SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega)
    { //std::cout << "Send message to right equal\n";
@@ -70,6 +71,7 @@ public:
       MakeFactorUniform<decltype(op)>(op,rightPot, msg, rightVar_, omega);
       //MakeRightFactorUniform(rightPot,msg,omega); 
    }
+   */
 
    // send all messages of the same type at once
    // possibly templatize this so that case, where all variables of left factor are accessed exatly once, is processed with greater speed (only one minimum searching required then)
@@ -98,7 +100,7 @@ public:
       // find minimal value of potential over all indices accessed by messages
       REAL min_val_covered = std::numeric_limits<REAL>::max();
       for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx) {
-         const INDEX var_idx = var_access_op(msgs[msg_idx]->GetMessageOp());
+         const INDEX var_idx = var_access_op(msgs[msg_idx].GetMessageOp());
          //assert(var_idx != repam.size()-1); // this is only valied for assignment problems from house and hotel
          //std::cout << "leftVar = " << leftVar << "\n";
          min_val_covered = std::min(min_val_covered, repam[var_idx]);
@@ -129,8 +131,8 @@ public:
 
       for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx, omegaIt++) {
          if(*omegaIt > 0) {
-            const INDEX var_idx = var_access_op(msgs[msg_idx]->GetMessageOp());
-            msgs[msg_idx]->operator[](0) -= omega_sum*(repam[var_idx] - new_val);
+            const INDEX var_idx = var_access_op(msgs[msg_idx].GetMessageOp());
+            msgs[msg_idx].operator[](0) -= omega_sum*(repam[var_idx] - new_val);
          }
       }
    }

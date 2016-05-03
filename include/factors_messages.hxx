@@ -110,7 +110,7 @@ struct RightMessageFuncGetter
 
    template<typename RIGHT_FACTOR, typename RIGHT_REPAM, typename MSG_ARRAY, typename ITERATOR>
    constexpr static decltype(&MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, RIGHT_REPAM, MSG_ARRAY, ITERATOR>) GetSendMessagesFunc() 
-      { return &MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, RIGHT_REPAM, MSG_ARRAY, ITERATOR>; }
+   { return &MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, RIGHT_REPAM, MSG_ARRAY, ITERATOR>; }
 
    constexpr static bool CanCallReceiveMessage() 
    { return MSG_CONTAINER::CanCallReceiveMessageFromLeftContainer(); }
@@ -152,7 +152,7 @@ struct MessageDispatcher
       return (t.*staticMemberFunc)(repam, omega);
    }
 
-   // batch based message sending
+   // batch message sending
    template<typename FACTOR, typename REPAM_ARRAY, typename MSG_ARRAY, typename ITERATOR>
    constexpr static bool CanCallSendMessages() { return FuncGetter<MSG_CONTAINER>::template CanCallSendMessages<FACTOR, REPAM_ARRAY, MSG_ARRAY, ITERATOR>(); }
 
@@ -173,8 +173,6 @@ struct MessageDispatcher
    {
       return FuncGetter<MSG_CONTAINER>::CanComputePrimalThroughMessage();
    }
-   // do zrobienia: kwaskwaskwas return type, solutions as arguments
-   //template<typename PRIMAL_SOLUTION_STORAGE1, typename PRIMAL_SOLUTION_STORAGE2>
    static void ComputePrimalThroughMessage(MSG_CONTAINER& t, typename PrimalSolutionStorage::Element primalSolution, typename PrimalSolutionStorage::Element primalSolutionToBeComputed) 
    // note that argument 2 and 3 need to be swapped, depending on which function getter is employed
    {
@@ -425,15 +423,31 @@ public:
    template<typename RIGHT_FACTOR, typename RIGHT_REPAM, typename MSG_ARRAY, typename ITERATOR>
    static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& repam, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
    {
-      // this is not nice: heavy static casting! Additionally, in SendMessagesImpl, we make the access a reference, and here we cast. This should possibly be done in one place
+      // this is not nice: heavy static casting!
+      // We get msgs an array with pointers to messages. We wrap it so that operator[] gives a reference to the respective message with the correct view
       struct ViewWrapper : public MSG_ARRAY {
          MessageContainerView<Chirality::right>& operator[](const INDEX i) const 
          { 
-            return *static_cast<MessageContainerView<Chirality::right>*>( &(static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
+            return *static_cast<MessageContainerView<Chirality::right>*>( (static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
+            //return *static_cast<MessageContainerView<Chirality::right>*>( operator[](i) ); 
+            //return operator[](i);
          }
       };
-      MessageType::SendMessagesToLeft(rightFactor, repam, *static_cast<const ViewWrapper*>(&msgs), omegaBegin);
-      //MessageType::SendMessagesToLeft(rightFactor, repam, msgs, omegaBegin);
+      return MessageType::SendMessagesToLeft(rightFactor, repam, *static_cast<const ViewWrapper*>(&msgs), omegaBegin);
+
+      struct ViewWrapper2 {
+         ViewWrapper2(const MSG_ARRAY& msgs) : msgs_(msgs) {}
+         MessageContainerView<Chirality::right>& operator[](const INDEX i) const {
+            return static_cast<MessageContainerView<Chirality::right>&>( *(msgs_[i]) );
+         }
+         INDEX size() const {
+            return msgs_.size();
+         }
+         private:
+         const MSG_ARRAY& msgs_;
+      } msgsProxy(msgs);
+
+      return MessageType::SendMessagesToLeft(rightFactor, repam, msgsProxy, omegaBegin);
    }
 
    template<typename LEFT_FACTOR, typename LEFT_REPAM, typename MSG_ARRAY, typename ITERATOR>
@@ -448,9 +462,8 @@ public:
       struct ViewWrapper : public MSG_ARRAY {
          MessageContainerView<Chirality::left>& operator[](const INDEX i) const 
          { 
-            return *static_cast<MessageContainerView<Chirality::left>*>( &(static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
+            return *static_cast<MessageContainerView<Chirality::left>*>( (static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
          }
-
       };
       MessageType::SendMessagesToRight(leftFactor, repam, *static_cast<const ViewWrapper*>(&msgs), omegaBegin);
    }
@@ -607,6 +620,7 @@ public:
          dim_(dim)
       {}
       // do zrobienia: do not support this operation! Goal is to not hold messages anymore, except for implicitly held reparametrizations.
+      /*
       MsgVal& operator=(const REAL x) __attribute__ ((always_inline))
       {
          assert(false);
@@ -618,6 +632,7 @@ public:
          msg_->RepamRight( diff, dim_);
          return *this;
       }
+      */
       MsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
       {
          if(CHIRALITY == Chirality::right) {
@@ -941,7 +956,8 @@ public:
       // receive messages for current MESSAGE_DISPATCER_TYPE
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it, ++omegaIt) {
-         //if(*omegaIt != 0.0) { // makes large difference for cosegmentation_bins, why?
+         // this is not valid. Instead, use a vector of bools which indicates whether to receive messages and let it be computed by Compute...Weights
+         //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
             MESSAGE_DISPATCHER_TYPE::ReceiveMessage(*(*it));
          //}
       }
@@ -1016,6 +1032,7 @@ public:
          // do zrobienia: construct proxy object for msgs, so that it directly points to &(msgs[i]->msg_op_), make msg_op_ protected in MessageContainer again
                   //MsgProxy<MSG_ARRAY> msgProxy({msgs});
                
+         /*
          struct MsgProxy {
             MsgProxy(const MSG_ARRAY& msgs) : msgs_(msgs) {}
             decltype(*(std::declval<const MSG_ARRAY&>().operator[](0)))& operator[](const INDEX i) const { return *(msgs_[i]); }
@@ -1023,9 +1040,10 @@ public:
             private:
             const MSG_ARRAY& msgs_;
          } msgProxy(msgs);
-
-         //MESSAGE_DISPATCHER_TYPE::SendMessages(factor_, repam, msgs, omegaIt);
          MESSAGE_DISPATCHER_TYPE::SendMessages(factor_, repam, msgProxy, omegaIt);
+         */
+
+         MESSAGE_DISPATCHER_TYPE::SendMessages(factor_, repam, msgs, omegaIt);
       }
       return msgs.size();
    }
