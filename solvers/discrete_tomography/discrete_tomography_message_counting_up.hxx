@@ -14,22 +14,18 @@ namespace LP_MP {
     DiscreteTomographyMessageCountingUP(){};
 
     // UP
-    template<typename RIGHT_FACTOR, typename G1, typename G2, MessageSending MST_TMP = MST>
-    typename std::enable_if<MST_TMP == MessageSending::SRMP,void>::type
-    ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg);
+    template<typename RIGHT_FACTOR, typename G1, typename G2>
+    void ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg);
 
-    template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G2, typename G3, MessageSending MST_TMP = MST>
-    typename std::enable_if<MST_TMP == MessageSending::SRMP,void>::type
-    SendMessageToRight(LEFT_FACTOR* const l, RIGHT_FACTOR* const r, const G1& leftPot, const G2& rightPot, G3& msg, const REAL omega);
+    template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G3>
+    void SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega);
 
     // DOWN
-    template<typename LEFT_FACTOR, typename G1, typename G2, MessageSending MST_TMP = MST>
-    typename std::enable_if<MST_TMP == MessageSending::SRMP,void>::type
-    ReceiveMessageFromLeft(LEFT_FACTOR* const r, const G1& rightPot, G2& msg);
+    template<typename LEFT_FACTOR, typename G1, typename G2>
+    void ReceiveMessageFromLeft(LEFT_FACTOR* const r, const G1& rightPot, G2& msg);
 
-    template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G2, typename G3, MessageSending MST_TMP = MST>
-    typename std::enable_if<MST_TMP == MessageSending::SRMP,void>::type
-    SendMessageToLeft(LEFT_FACTOR* const l, RIGHT_FACTOR* const r, const G1& leftPot, const G2& rightPot, G3& msg, const REAL omega);
+    template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G2, typename G3>
+    void SendMessageToLeft(RIGHT_FACTOR* const r, const G2& rightPot, G3& msg, const REAL omega);
 
     /*------*/
     template<typename G>
