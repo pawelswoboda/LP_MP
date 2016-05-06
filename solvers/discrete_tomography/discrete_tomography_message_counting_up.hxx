@@ -5,8 +5,6 @@
 
 namespace LP_MP {
 
-  enum class MessageSending { SRMP, MPLP };
-  template<MessageSending MST = MessageSending::SRMP>
   class DiscreteTomographyMessageCountingUP{
 
   public:
