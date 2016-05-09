@@ -14,3 +14,7 @@ if(BUILD_DISCRETE_TOMOGRAPHY)
    add_subdirectory(discrete_tomography)
 endif()
 
+if(BUILD_EVALUATION)
+   add_subdirectory(evaluation)
+endif()
+

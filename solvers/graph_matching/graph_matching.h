@@ -129,12 +129,6 @@ struct FMC_MCF {
        PairwiseTriplet12MessageContainer, 
        PairwiseTriplet13MessageContainer, 
        PairwiseTriplet23MessageContainer 
-      //MessageListItem< UnaryPairwiseMessageLeft,  1, 2, std::vector, FixedSizeMessageContainer<1>::type >,
-      //MessageListItem< UnaryPairwiseMessageRight, 1, 2, std::vector, FixedSizeMessageContainer<1>::type >,
-      //MessageListItem< UnaryToAssignmentMessageContainer, 1, 0, FixedSizeMessageContainer<1>::type, std::vector>,
-      //MessageListItem< PairwiseTriplet12MessageContainer, 2, 3, std::vector, FixedSizeMessageContainer<1>::type >,
-      //MessageListItem< PairwiseTriplet13MessageContainer, 2, 3, std::vector, FixedSizeMessageContainer<1>::type >,
-      //MessageListItem< PairwiseTriplet23MessageContainer, 2, 3, std::vector, FixedSizeMessageContainer<1>::type >
       >;
 
    using assignment = AssignmentViaMinCostFlowConstructor<FMC_MCF_PARAM,0>;
@@ -595,8 +589,8 @@ namespace UAIInput {
    struct cardinality_line : pegtl::seq< opt_whitespace, positive_integer, pegtl::star< opt_whitespace, positive_integer>, opt_whitespace> {};
    struct numberOfCliques : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace> {};
    // first is the number of variables in the clique, then the actual variables.
-   struct cliqueScope_line : pegtl::seq< opt_whitespace, positive_integer, pegtl::plus< opt_whitespace, positive_integer>, opt_whitespace> {};
-   struct cliqueScopes : pegtl::star<cliqueScope_line, pegtl::eol> {};
+   struct cliqueScope_line : pegtl::seq< opt_whitespace, positive_integer, pegtl::plus< opt_whitespace, positive_integer>, opt_whitespace, pegtl::eol> {};
+   struct cliqueScopes : pegtl::star<cliqueScope_line> {};
    // a function table is begun by number of entries and then a list of real numbers. Here we record all the values in the real stack
    struct functionTables : pegtl::seq<pegtl::star<pegtl::sor<mand_whitespace, pegtl::eol>>, real_number, pegtl::plus<pegtl::star<pegtl::sor<mand_whitespace, pegtl::eol>>, real_number>> {};
 

@@ -29,10 +29,21 @@ class MessageIterator;
 // Do zrobienia: offsets could be stored once for multiple primal solutions. Then iterator based on offsets would be more complicated, though.
 class PrimalSolutionStorage {
 public:
+   // revert to bool
    using Element = std::vector<bool>::iterator;
    using ConstElement = std::vector<bool>::const_iterator;
 
    PrimalSolutionStorage() {}
+
+   void Initialize()
+   {
+      std::fill(primal_.begin(), primal_.end(), true);
+      /*
+      for(INDEX i=0; i<primal_.size(); ++i) {
+         primal_[i] = true;
+      }
+      */
+   }
    // we must make a deep copy for the offset variables, as they point directly to entried of primal_
    void operator=(const PrimalSolutionStorage& rhs)
    {
@@ -63,7 +74,7 @@ public:
          size += (*factorItTmp)->size();
          ++factorItTmp;
       }
-      primal_.resize(size,false);
+      primal_.resize(size,true);
       offset_.reserve(factorItEnd - factorItBegin);
       INDEX offset = 0;
       while(factorItBegin != factorItEnd) {
@@ -104,7 +115,7 @@ public:
    virtual std::vector<REAL> GetReparametrizedPotential() const = 0;
    //virtual PrimalSolutionStorageAdapter* AllocatePrimalSolutionStorage() const = 0;
    virtual bool CanComputePrimalSolution() const = 0;
-   virtual void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element primalSolution, std::vector<typename PrimalSolutionStorage::Element>& connectedPrimalSolution) const = 0;
+   virtual void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element& primalSolution, std::vector<typename PrimalSolutionStorage::Element>& connectedPrimalSolution) const = 0;
    // do zrobienia: this function is not needed. Evaluation can be performed automatically
    virtual REAL EvaluatePrimal(typename PrimalSolutionStorage::Element primalSolution) const = 0;
    // do zrobienia: this is not needed as well and could be automated. Possibly it is good to keep this to enable solution rewriting.
@@ -345,8 +356,10 @@ SIGNED_INDEX LP::Solve(VISITOR& v)
             break;
          case LPVisitorReturnType::ReparametrizeAndComputePrimal:
             //std::cout << "reparametrize in " << (repamMode_ == LPReparametrizationMode::Rounding ? " rounding " : " anisotropic ") << "mode\n";
+            forwardPrimal_.Initialize();
             assert(forwardPrimal_.size() == forwardOrdering_.size());
             ComputePassAndPrimal(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_.begin(), forwardPrimal_.begin(), bestForwardPrimal_.begin(), bestForwardPrimalCost_); 
+            backwardPrimal_.Initialize();
             assert(backwardPrimal_.size() == forwardOrdering_.size());
             ComputePassAndPrimal(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_.begin(), backwardPrimal_.rbegin(), bestBackwardPrimal_.rbegin(), bestBackwardPrimalCost_); 
             s = v.template visit<LPVisitorReturnType::ReparametrizeAndComputePrimal>(this);
@@ -369,7 +382,7 @@ template<typename FACTOR_ITERATOR, typename PRIMAL_STORAGE_ITERATOR>
 void LP::ComputePrimalThroughMessages(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_STORAGE_ITERATOR primalIt)
 {
    std::map<FactorTypeAdapter*, INDEX> factorToIndex;
-   std::map<INDEX, FactorTypeAdapter*> indexToFactor; // do zrobienia: this should equal f_. Modify BuildIndexMaps
+   std::map<INDEX, FactorTypeAdapter*> indexToFactor; // do zrobienia: this should equal forwardFactors_. Modify BuildIndexMaps
    BuildIndexMaps(factorIt,factorEndIt,factorToIndex,indexToFactor);
 
    std::vector<bool> visited(factorEndIt - factorIt, false);

@@ -155,13 +155,11 @@ public:
    template<typename G>
    void RepamLeft(G& leftRepamPot, const REAL msg, const INDEX dim) { 
       assert(dim == 0); 
-      //leftRepamPot[leftVar_] = leftRepamPot[leftVar_] - msg; 
       leftRepamPot[leftVar_] += msg; 
    }
    template<typename G>
    void RepamRight(G& rightRepamPot, const REAL msg, const INDEX dim) { 
       assert(dim == 0); 
-      //rightRepamPot[rightVar_] = rightRepamPot[rightVar_] + msg; 
       rightRepamPot[rightVar_] += msg; 
    }
 

@@ -8,6 +8,7 @@ file(GLOB_RECURSE headers include/*.hxx)
 file(GLOB_RECURSE sources src/*.cpp)
 include_directories(include)
 include_directories(lib)
+include_directories(.)
 
 # C++11
 SET(C++_STD_FLAG "c++14")
@@ -52,6 +53,7 @@ OPTION(BUILD_GRAPH_MATCHING "Build graph matching" ON)
 OPTION(BUILD_MULTICUT "Build multicut" ON)
 OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" ON)
 OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" OFF)
+OPTION(BUILD_EVALUATION "Build evaluation" OFF)
 
 
 IF(UNIX AND NOT APPLE)

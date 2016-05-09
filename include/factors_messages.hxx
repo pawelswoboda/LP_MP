@@ -875,8 +875,9 @@ public:
 
    void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal) final
    {
+      //// first we compute restricted incoming messages, on which to compute the primal
+      //ReceiveRestrictedMessages(primal);
       ReceiveMessages(omega);
-      std::fill(primal,primal+size(),false); // factors assume that primal solution is filled with false initially (or shall it be true). This is important for prapagating through messages. Also factors often do not explicitly zero out
       MaximizePotentialAndComputePrimal(primal);
       SendMessages(omega);
    }
@@ -909,7 +910,7 @@ public:
    // kwaskwaskwas do zrobienia: primal cost need not be valid anymore
    template<bool COMPUTE_PRIMAL_SOLUTION_TMP = COMPUTE_PRIMAL_SOLUTION>
    typename std::enable_if<COMPUTE_PRIMAL_SOLUTION_TMP == true>::type 
-   MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal)
+   MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element& primal)
    {
       static_assert(COMPUTE_PRIMAL_SOLUTION_TMP == COMPUTE_PRIMAL_SOLUTION,"");
       factor_.MaximizePotentialAndComputePrimal(*this, primal);
@@ -917,7 +918,7 @@ public:
 
    template<typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE>
    typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanComputePrimalThroughMessage() == true>::type 
-   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element primal, ITERATOR primalSolutionStorageIt) const
+   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element& primal, ITERATOR primalSolutionStorageIt) const
    {
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it, ++primalSolutionStorageIt) {
@@ -926,12 +927,12 @@ public:
    }
    template<typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE>
    typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanComputePrimalThroughMessage() == false>::type 
-   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element primal, ITERATOR ) const {}
+   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element& primal, ITERATOR ) const {}
 
    template<typename ITERATOR, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element primal, ITERATOR) const {}
+   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element& primal, ITERATOR) const {}
    template<typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element primal, ITERATOR primalSolutionStorageIt) const 
+   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element& primal, ITERATOR primalSolutionStorageIt) const 
    {
       ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE{}, primal, primalSolutionStorageIt);
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
@@ -941,10 +942,10 @@ public:
    // first argument is pointer to already computed primal solution of current factor.
    // second argument is vector of pointers to (possible partially computed) primal solutions of connected factors, as ordered by messages
    // do zrobienia: rename PropagatePrimalThroughMessages
-   void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element primal, std::vector<typename PrimalSolutionStorage::Element>& primalVec) const final
+   void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element& primal, std::vector<typename PrimalSolutionStorage::Element>& primalVec) const final
    {
       assert(primalVec.size() == GetNoMessages());
-      ComputePrimalThroughMessages(MESSAGE_DISPATCHER_TYPELIST{}, primal, primalVec.begin()); // possibly make this a static cast and check only in Debug mode if this would be valid
+      ComputePrimalThroughMessages(MESSAGE_DISPATCHER_TYPELIST{}, primal, primalVec.begin());
    }
    
 

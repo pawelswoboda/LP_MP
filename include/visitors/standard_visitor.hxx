@@ -94,10 +94,12 @@ namespace LP_MP {
                std::cout << "Iteration " << curIter_ << ", lower bound = " << curDualBound_ << ", upper bound = " << primalCost << ", time elapsed = " << timeElapsed << " ms\n";
                assert(primalCost >= curDualBound_ - eps);
                if(primalCost <= curDualBound_ + eps) {
+                  ++curIter_;
                   std::cout << "Primal cost equals lower bound\n";
                   return LPVisitorReturnType::Break;
                }
                if(minDualImprovement_ > 0 && remainingIter_ > 1 && lowerBoundDiff < minDualImprovement_) {
+                  ++curIter_;
                   std::cout << "Dual improvement smaller than " << minDualImprovement_ << "\n";
                   remainingIter_ = 1;
                   return LPVisitorReturnType::SetRoundingReparametrization;

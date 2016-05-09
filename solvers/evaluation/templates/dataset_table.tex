@@ -1,0 +1,37 @@
+\documentclass{standalone}
+\usepackage{booktabs}
+\begin{document}
+
+\begin{table}
+{% set solvers =  c.execute("SELECT id,algorithmName FROM Solvers ORDER BY id").fetchall() -%}
+{% set no_algorithms = solvers|length -%}
+\begin{tabular}{l{{ "c" * (solvers|length) }}}
+\hline
+
+Dataset 
+{% for a in solvers -%}
+& {{ a[1] }}
+{% endfor-%}
+\\ \hline
+
+{% for dataset_row in conn.cursor().execute("SELECT id,name FROM Datasets;") %}
+   \multirow{3}{*}{ {{ dataset_row[1] }} }
+   {% for solver in solvers %}
+      & {{ conn.cursor().execute("SELECT lowerBound FROM AggregateInstances WHERE dataset_id = '" + dataset_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone()[0] }}
+   {% endfor %}
+   \\ 
+   {% for solver in solvers %}
+      & {{ conn.cursor().execute("SELECT upperBound FROM AggregateInstances WHERE dataset_id = '" + dataset_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone()[0] }}
+   {% endfor %}
+   \\
+   {% for solver in solvers %}
+      & {{ conn.cursor().execute("SELECT runtime FROM AggregateInstances WHERE dataset_id = '" + dataset_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone()[0]/1000 }}
+   {% endfor %}
+   \\ \hline
+{% endfor %}
+
+\end{tabular}
+\end{table}
+
+\end{document}
+ 
