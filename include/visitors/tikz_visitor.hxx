@@ -19,6 +19,7 @@ struct IterationStatistics {
 // visitor deriving from StandardVisitor and adding option to output tikz graphs for runtime and convergence plots 
 // rename to PlotsVisitor
 // this visitor generates tikz plots and a file with runtime information
+// deprecated: run sqlite visitor and generate plots from database.
 template<class PROBLEM_DECOMPOSITION>
 class TikzVisitor : public StandardVisitor<PROBLEM_DECOMPOSITION> {
 

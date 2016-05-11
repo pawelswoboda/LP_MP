@@ -10,6 +10,7 @@
 #include "messages/equality_message.hxx"
 #include "problem_constructors/mrf_problem_construction.hxx"
 #include "factors/min_cost_flow_factor_lemon.hxx"
+#include "factors/minimum_cost_flow_labeling.hxx"
 #include "../cosegmentation/assignment_via_min_cost_flow_constructor.hxx" // move file to problem_constructors
 #include "../cosegmentation/assignment_via_message_passing_problem_constructor.hxx" // move file to problem_constructors
 
@@ -65,23 +66,25 @@ struct FMC_MP {
       //: (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "Graph Matching via Message Passing, both sides variant"
       //: "unknown variant"));
 
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 0, true, true > UnaryFactor;
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 0, false, true > UnaryFactor; // set to true if labeling by unaries is desired
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 1, false, false > PairwiseFactor;
+   typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_MP_PARAM, 2, true, false> McfLabelingFactor;
 
    typedef MessageContainer<EqualityMessage, 0, 0, variableMessageNumber, variableMessageNumber, 1, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeft;
    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_MP_PARAM, 3 > UnaryMcfLabelingMessage;
 
-   using FactorList = meta::list< UnaryFactor, PairwiseFactor >;
-   using MessageList = meta::list< AssignmentConstraintMessage, UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight >;
-//      MessageListItem< AssignmentConstraintMessage, 0, 0, std::vector, std::vector >,
-//      MessageListItem< UnaryPairwiseMessageLeft,  0, 1, std::vector, FixedSizeMessageContainer<1>::type >,
-//      MessageListItem< UnaryPairwiseMessageRight, 0, 1, std::vector, FixedSizeMessageContainer<1>::type >
-//      >;
+   using FactorList = meta::list< UnaryFactor, PairwiseFactor, McfLabelingFactor >;
+   using MessageList = meta::list< AssignmentConstraintMessage, UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight, UnaryMcfLabelingMessage >;
 
    using assignment = AssignmentViaMessagePassingProblemConstructor<FMC_MP_PARAM,0,0>;
-   using mrf = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
-   using ProblemDecompositionList = meta::list<assignment, mrf>;
+   using mrfLeft = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
+   using mrfRight = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
+   using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
+   using ProblemDecompositionList = meta::list<assignment, mrfLeft, mrfRight, mcfLabeling>;
+   //using mrf = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
+   //using ProblemDecompositionList = meta::list<assignment, mrf>;
 };
 
 // graph matching with assignment via minimum cost flow solver
@@ -155,20 +158,20 @@ struct FMC_GM {
       //: (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "Graph Matching via TRW-S, right variant"
       //: "unknown variant");
 
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, true, true > UnaryFactor;
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, false, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 1, false, false > PairwiseFactor;
+   typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_GM_PARAM, 2, true, false> McfLabelingFactor;
 
    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_GM_PARAM, 2 > UnaryMcfLabelingMessage;
 
-   using FactorList = meta::list< UnaryFactor, PairwiseFactor >;
-   using MessageList = meta::list< UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight >;
-      //MessageListItem< UnaryPairwiseMessageLeft,  0, 1, std::vector, FixedSizeMessageContainer<1>::type >,
-      //MessageListItem< UnaryPairwiseMessageRight, 0, 1, std::vector, FixedSizeMessageContainer<1>::type >
-      //>;
+   using FactorList = meta::list< UnaryFactor, PairwiseFactor, McfLabelingFactor >;
+   using MessageList = meta::list< UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight, UnaryMcfLabelingMessage >;
 
    using mrf = StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>;
-   using ProblemDecompositionList = meta::list<mrf>;
+   using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_GM_PARAM,0,2,2>;
+   using ProblemDecompositionList = meta::list<mrf,mcfLabeling>;
 };
 
 // helper function for extracting types from FMC
@@ -399,13 +402,15 @@ namespace TorresaniEtAlInput {
          assignment.Construct(pd);
 
          constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
-         auto& mrf = pd.template GetProblemConstructor<1>();
+         auto& mrfLeft = pd.template GetProblemConstructor<1>();
+         auto& mrfRight = pd.template GetProblemConstructor<2>();
          // first register unary factors from assignment problem
          for(INDEX i=0; i<assignment.GetNumberOfLeftFactors(); i++) {
-            mrf.RegisterUnaryFactor(i,assignment.GetLeftFactor(i));
+            mrfLeft.RegisterUnaryFactor(i,assignment.GetLeftFactor(i));
          }
          for(INDEX i=0; i<assignment.GetNumberOfRightFactors(); i++) {
-            mrf.RegisterUnaryFactor(assignment.GetNumberOfLeftFactors()+i,assignment.GetRightFactor(i));
+            //mrfRight.RegisterUnaryFactor(assignment.GetNumberOfLeftFactors()+i,assignment.GetRightFactor(i));
+            mrfRight.RegisterUnaryFactor(i,assignment.GetRightFactor(i));
          }
          constexpr REAL pairwiseWeight = pc == PairwiseConstruction::BothSides ? 0.5 : 1.0;
 
@@ -414,7 +419,7 @@ namespace TorresaniEtAlInput {
             for(auto& q : leftQuadraticPot) {
                //auto p = mrf.AddPairwiseFactor(q.second);
                //mrf.LinkUnaryPairwiseFactor(assignment.GetLeftFactor(q.first.first), p, assignment.GetLeftFactor(q.first.second));
-               auto p = mrf.AddPairwiseFactor(q.first.first, q.first.second, q.second);
+               auto p = mrfLeft.AddPairwiseFactor(q.first.first, q.first.second, q.second);
             }
          }
 
@@ -423,11 +428,19 @@ namespace TorresaniEtAlInput {
             for(auto& q : rightQuadraticPot) {
                //auto p = mrf.AddPairwiseFactor(q.second);
                //mrf.LinkUnaryPairwiseFactor(assignment.GetRightFactor(q.first.first), p, assignment.GetRightFactor(q.first.second));
-               auto p = mrf.AddPairwiseFactor(assignment.GetNumberOfLeftFactors()+q.first.first, assignment.GetNumberOfLeftFactors()+q.first.second, q.second);
+               auto p = mrfRight.AddPairwiseFactor(q.first.first, q.first.second, q.second);
             }
          }
 
-         mrf.Construct(pd);
+         mrfLeft.Construct(pd);
+         mrfRight.Construct(pd);
+         
+         // connect left and right mp to mcf labeling factor
+         // construct labeling factor
+         auto& mcf = pd.template GetProblemConstructor<3>();
+         mcf.ConstructLinearAssignmentGraph(gmInput.leftGraph_,true);
+         mcf.LinkLeftUnaries(mrfLeft);
+         mcf.LinkRightUnaries(mrfRight,gmInput.leftGraph_,true);
       }
    };
 
@@ -556,6 +569,17 @@ namespace TorresaniEtAlInput {
          }
 
          mrf.Construct(pd);
+
+         // construct labeling factor
+         auto& mcf = pd.template GetProblemConstructor<1>();
+         if(pc == PairwiseConstruction::Left) {
+            mcf.ConstructLinearAssignmentGraph(gmInput.leftGraph_,true);
+         }
+         if(pc == PairwiseConstruction::Right) {
+            mcf.ConstructLinearAssignmentGraph(gmInput.rightGraph_,true);
+         }
+         mcf.LinkUnaries(mrf);
+
       }
    };
 
@@ -613,8 +637,7 @@ namespace UAIInput {
                     pegtl::eof> {};
 
 
-   struct GraphMatchingInput
-   {
+   struct GraphMatchingInput {
       INDEX numberOfVariables_;
       INDEX numberOfCliques_;
       std::vector<INDEX> cardinality_;
@@ -845,6 +868,11 @@ namespace UAIInput {
             const std::vector<REAL> pot = it->second;
             mrf.AddPairwiseFactor(var1,var2,pot);
          }
+  
+         // construct labeling factor
+         auto& mcf = pd.template GetProblemConstructor<1>();
+         mcf.ConstructLinearAssignmentGraph(BuildGraph(gmInput));
+         mcf.LinkUnaries(mrf);
       }
    };
 
@@ -854,7 +882,8 @@ namespace UAIInput {
          static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left,"");
          std::cout << "construct mp version\n";
          auto& assignment = pd.template GetProblemConstructor<0>();
-         auto& mrf = pd.template GetProblemConstructor<1>();
+         auto& mrfLeft = pd.template GetProblemConstructor<1>();
+         auto& mrfRight = pd.template GetProblemConstructor<2>();
 
          std::vector<std::vector<INDEX>> graph = BuildGraph(gmInput);
          std::vector<std::vector<REAL>> unaryCost(graph.size());
@@ -898,10 +927,13 @@ namespace UAIInput {
             if(gmInput.cliqueScope_[i].size() == 1) {
                const INDEX var = gmInput.cliqueScope_[i][0];
                assert(gmInput.functionTable_[i].size() == gmInput.cardinality_[var]);
-               mrf.RegisterUnaryFactor(var,assignment.GetLeftFactor(var));
+               mrfLeft.RegisterUnaryFactor(var,assignment.GetLeftFactor(var));
             } else if(gmInput.cliqueScope_[i].size() > 2) {
                throw std::runtime_error("only pairwise models are accepted currently");
             }
+         }
+         for(INDEX i=0; i<assignment.GetNumberOfRightFactors(); ++i) {
+               mrfRight.RegisterUnaryFactor(i,assignment.GetRightFactor(i));
          }
          // now the pairwise potentials. 
          for(INDEX i=0; i<gmInput.numberOfCliques_; ++i) {
@@ -910,10 +942,17 @@ namespace UAIInput {
                const INDEX var2 = gmInput.cliqueScope_[i][1];
                assert(var1<var2);
                assert(gmInput.functionTable_[i].size() == gmInput.cardinality_[var1]*gmInput.cardinality_[var2]);
-               mrf.AddPairwiseFactor(var1,var2,gmInput.functionTable_[i]);
+               mrfLeft.AddPairwiseFactor(var1,var2,gmInput.functionTable_[i]);
             }
          }
-         std::cout << "Constructed gm with " << mrf.GetNumberOfVariables() << " unary factors and " << mrf.GetNumberOfPairwiseFactors() << " pairwise factors\n";
+         std::cout << "Constructed gm with " << mrfLeft.GetNumberOfVariables() << " unary factors and " << mrfLeft.GetNumberOfPairwiseFactors() << " pairwise factors\n";
+
+         // connect left and right mp to mcf labeling factor
+         // construct labeling factor
+         auto& mcf = pd.template GetProblemConstructor<3>();
+         mcf.ConstructLinearAssignmentGraph(graph,false);
+         mcf.LinkLeftUnaries(mrfLeft);
+         mcf.LinkRightUnaries(mrfRight,graph,false);
       }
    };
 

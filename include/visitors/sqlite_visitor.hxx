@@ -307,24 +307,19 @@ public:
    LPVisitorReturnType visit(LP* lp)
    {
       auto ret_state = this->template StandardVisitor<PROBLEM_DECOMPOSITION>::template visit<LP_STATE>(lp);
-      switch(LP_STATE) {
-         case LPVisitorReturnType::ReparametrizeAndComputePrimal:
-            {
-               const REAL lowerBound = this->GetLowerBound();
-               const REAL upperBound = lp->BestPrimalBound();
-               const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - StandardVisitor<PROBLEM_DECOMPOSITION>::GetBeginTime()).count();
-               const INDEX curIter = StandardVisitor<PROBLEM_DECOMPOSITION>::GetIter();
-               iterationStatistics_.push_back({curIter,timeElapsed,lowerBound,upperBound});
-               break;
-            }
-         case LPVisitorReturnType::Break:
-            {
-               //if(overwriteDbRecord_) {
-               WriteBounds(iterationStatistics_);
-               //}
-               break;
-            }
+      
+      if(!(LP_STATE == LPVisitorReturnType::Error || LP_STATE == LPVisitorReturnType::Break)) {
+         const REAL lowerBound = lp->BestLowerBound();
+         const REAL upperBound = lp->BestPrimalBound();
+         const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - StandardVisitor<PROBLEM_DECOMPOSITION>::GetBeginTime()).count();
+         const INDEX curIter = StandardVisitor<PROBLEM_DECOMPOSITION>::GetIter();
+         iterationStatistics_.push_back({curIter,timeElapsed,lowerBound,upperBound});
       }
+      if(LP_STATE == LPVisitorReturnType::Break) {
+         std::cout << "write bounds to database\n";
+         WriteBounds(iterationStatistics_);
+      }
+
       return ret_state;
    }
 

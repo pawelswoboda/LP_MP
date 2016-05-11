@@ -42,6 +42,9 @@ namespace FunctionExistence {
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveMessageFromRight,ReceiveMessageFromRight);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveMessageFromLeft, ReceiveMessageFromLeft);
    
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromRight,ReceiveRestrictedMessageFromRight);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromLeft, ReceiveRestrictedMessageFromLeft);
+
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessageToRight,SendMessageToRight);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessageToLeft, SendMessageToLeft);
 
@@ -81,6 +84,10 @@ struct LeftMessageFuncGetter
    CanCallReceiveMessage()
    { return MSG_CONTAINER::CanCallReceiveMessageFromRightContainer(); }
 
+   constexpr static bool
+   CalCallReceiveRestrictedMessage()
+   { return MSG_CONTAINER::CanCallReceiveRestrictedMessageFromRightContainer(); }
+
    template<typename REPAM_ARRAY>
    constexpr static bool CanCallSendMessage() 
    { return MSG_CONTAINER::template CanCallSendMessageToRightContainer<REPAM_ARRAY>(); }
@@ -115,6 +122,9 @@ struct RightMessageFuncGetter
    constexpr static bool CanCallReceiveMessage() 
    { return MSG_CONTAINER::CanCallReceiveMessageFromLeftContainer(); }
 
+   constexpr static bool CanCallReceiveRestrictedMessage() 
+   { return MSG_CONTAINER::CanCallReceiveRestrictedMessageFromLeftContainer(); }
+
    template<typename REPAM_ARRAY>
    constexpr static bool CanCallSendMessage() 
    { return MSG_CONTAINER::template CanCallSendMessageToLeftContainer<REPAM_ARRAY>(); }
@@ -141,6 +151,7 @@ struct MessageDispatcher
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetReceiveFunc();
       return (t.*staticMemberFunc)();
    }
+   constexpr static bool CanCallReceiveRestrictedMessage() { return FuncGetter<MSG_CONTAINER>::CanCallReceiveRestrictedMessage(); }
 
    // individual message sending
    template<typename REPAM_ARRAY>
@@ -376,6 +387,14 @@ public:
    void ReceiveMessageFromRightContainer()
    { msg_op_.ReceiveMessageFromRight(rightFactor_->GetFactor(),*rightFactor_, *static_cast<MessageContainerView<Chirality::right>*>(this) ); }
 
+   // do zrobienia: must use one additional argument for primal storage
+   constexpr static bool
+   CanCallReceiveRestrictedMessageFromRightContainer()
+   { 
+      return FunctionExistence::HasReceiveRestrictedMessageFromRight<MessageType, void, 
+      decltype(rightFactor_->GetFactor()), decltype(*rightFactor_), MessageContainerType>(); 
+   }
+
    constexpr static bool 
    CanCallReceiveMessageFromLeftContainer()
    { 
@@ -384,6 +403,14 @@ public:
    }
    void ReceiveMessageFromLeftContainer()
    { msg_op_.ReceiveMessageFromLeft(leftFactor_->GetFactor(), *leftFactor_, *static_cast<MessageContainerView<Chirality::left>*>(this) ); }
+
+   // do zrobienia: must use one additional argument for primal storage
+   constexpr static bool
+   CanCallReceiveRestrictedMessageFromLeftContainer()
+   { 
+      return FunctionExistence::HasReceiveRestrictedMessageFromLeft<MessageType, void, 
+      decltype(leftFactor_->GetFactor()), decltype(*leftFactor_), MessageContainerType>(); 
+   }
 
 
    template<typename REPAM_ARRAY>
@@ -663,10 +690,18 @@ public:
          }
          return *this;
       }
+      // do zrobienia: this value should never be used. Remove function
       operator REAL() const __attribute__ ((always_inline)) { return static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_); }
    private:
       MessageContainerType* const msg_;
       const INDEX dim_;
+   };
+
+   // for primal computation: record message change only in one side.
+   template<Chirality CHIRALITY>
+   class RestrictedMsgVal
+   {
+
    };
    // this view of the message container is given to left and right factor respectively
    template<Chirality CHIRALITY>
@@ -873,19 +908,52 @@ public:
       SendMessages(omega);
    }
 
-   void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal) final
+   // do zrobienia: possibly also check if method present
+   constexpr static bool
+   CanComputePrimal()
    {
-      //// first we compute restricted incoming messages, on which to compute the primal
-      //ReceiveRestrictedMessages(primal);
-      ReceiveMessages(omega);
-      MaximizePotentialAndComputePrimal(primal);
-      SendMessages(omega);
+      return COMPUTE_PRIMAL_SOLUTION;
    }
 
    constexpr static bool
    CanMaximizePotential()
    {
       return FunctionExistence::HasMaximizePotential<FactorType,void,FactorContainerType>();
+   }
+
+   // do zrobienia: remove this function, obsolete: New primal computation mode
+   void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal) final
+   {
+      ReceiveMessages(omega);
+      MaximizePotentialAndComputePrimal(primal);
+      SendMessages(omega);
+   
+   } 
+   // do zrobienia: make final again
+   void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element& primal, std::vector<typename PrimalSolutionStorage::Element>& adjacentPrimal) 
+   {
+      if(CanComputePrimal() && false) { // do zrobienia: for now
+         std::vector<REAL> restrictedPotential(size()); // into this structure we are going to potential arising from computation of restricted messages
+         for(INDEX i=0; i<restrictedPotential.size(); ++i) {
+            restrictedPotential[i] = this->operator[](i);
+         }
+         // first we compute restricted incoming messages, on which to compute the primal
+         ReceiveRestrictedMessages(restrictedPotential,adjacentPrimal);
+         // not we compute primal
+         ComputePrimal(restrictedPotential,primal);
+      }
+      // go on with dual lower bound increase computation.
+      //ReceiveMessages(omega);
+      //MaximizePotential();
+      //SendMessages(omega);
+
+   }
+
+   template<typename ARRAY, bool ENABLE=CanComputePrimal()>
+   typename std::enable_if<ENABLE,void>::type
+   ComputePrimal(const ARRAY& pot, typename PrimalSolutionStorage::Element& primal)
+   {
+      ///////////////////
    }
 
    template<bool ENABLE=CanMaximizePotential()>
@@ -949,7 +1017,7 @@ public:
    }
    
 
-   // SFINAE-based seletion whether we will perform message updates for receiving   
+   // SFINAE-based selection whether we will perform message updates for receiving   
    template<typename MESSAGE_DISPATCHER_TYPE, typename MSG_ARRAY, typename ITERATOR>
    typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage() == true>::type 
    ReceiveMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, const MSG_ARRAY& msgs, ITERATOR omegaIt)
@@ -987,6 +1055,65 @@ public:
       // receive messages for subsequent MESSAGE_DISPATCHER_TYPES
       ReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, omegaIt);
    }
+
+
+   // SFINAE-based restricted message updates
+   template<typename MESSAGE_DISPATCHER_TYPE, typename MSG_ARRAY, typename REPAM_ARRAY, typename ITERATOR>
+   typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanCallReceiveRestrictedMessage() == true>::type 
+   ReceiveRestrictedMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, const MSG_ARRAY& msgs, REPAM_ARRAY& pot, ITERATOR omegaIt)
+   {
+      // receive restricted messages for current MESSAGE_DISPATCHER_TYPE
+      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it, ++omegaIt) {
+         // this is not valid. Instead, use a vector of bools which indicates whether to receive messages and let it be computed by Compute...Weights
+         //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
+
+         // construct message object such that message change is only propagated to pot
+         class RestrictedMessage {
+            class RestrictedMsgVal {
+               RestrictedMsgVal& operator-=(const REAL x) 
+               {}
+               RestrictedMsgVal& operator+=(const REAL x) 
+               {}
+               private:
+
+               const INDEX dim_;
+            };
+
+            RestrictedMsgVal operator[](const INDEX i) {
+               assert(i < p_.size());
+               return RestrictedMsgVal();
+            }
+            private:
+            REPAM_ARRAY& p_;
+         } msg;
+            MESSAGE_DISPATCHER_TYPE::ReceiveRestrictedMessage(*(*it));
+         //}
+      }
+   }
+   // or do not perform receiving message updates (if no receive message is implemented)
+   template<typename MESSAGE_DISPATCHER_TYPE, typename MSG_ARRAY, typename REPAM_ARRAY, typename ITERATOR>
+   typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanCallReceiveRestrictedMessage() == false>::type 
+   ReceiveRestrictedMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, const MSG_ARRAY& msgs, REPAM_ARRAY& pot, ITERATOR omegaIt)
+   {}
+
+   // we write message change not into original reparametrization, but into temporary one named pot
+   template<typename REPAM_ARRAY>
+   void ReceiveRestrictedMessages(REPAM_ARRAY& pot, const std::vector<REAL>& omega) 
+   {
+      ReceiveRestrictedMessages(MESSAGE_DISPATCHER_TYPELIST{}, omega.cbegin());
+   }
+   template<typename ITERATOR, typename REPAM_ARRAY, typename... MESSAGE_DISPATCHER_TYPES_REST>
+   void ReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, REPAM_ARRAY&, ITERATOR omegaIt) {}
+   template<typename ITERATOR, typename REPAM_ARRAY, typename MESSAGE_DISPATCHER_TYPE, typename... MESSAGE_DISPATCHER_TYPES_REST>
+   void ReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, REPAM_ARRAY& pot, ITERATOR omegaIt) 
+   {
+      // receive messages for current MESSAGE_DISPATCER_TYPE
+      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      ReceiveRestrictedMessagesImpl(MESSAGE_DISPATCHER_TYPE{}, std::get<n>(msg_), pot, omegaIt);
+      ReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, pot, omegaIt);
+   }
+
 
 
    void SendMessages(const std::vector<REAL>& omega) 

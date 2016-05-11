@@ -93,7 +93,8 @@ public:
 
 private:
    std::vector<bool> primal_;
-   std::vector<Element> offset_;
+   std::vector<Element> offset_; // order of factors
+   std::vector<std::vector<Element>> adjacentOffset_; // adjacent factors for every factor for which ReceiveRestrictedMessages can be called.
 };
 
 
@@ -167,10 +168,15 @@ inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, 
 
 
 // steers optimization of LP solver.
+//enum class LPVisitorReturnType {
+//   SetRoundingReparametrization, SetAnisotropicReparametrization, Reparametrize, ReparametrizeAndComputePrimal, Break, Error
+//};
 enum class LPVisitorReturnType {
-   SetRoundingReparametrization, SetAnisotropicReparametrization, Reparametrize, ReparametrizeAndComputePrimal, Break, Error
+   ReparametrizeUniform,ReparametrizeLowerBoundUniform,ReparametrizeLowerBoundPrimalUniform,ReparametrizePrimalUniform,
+   ReparametrizeAnisotropic,ReparametrizeLowerBoundAnisotropic,ReparametrizeLowerBoundPrimalAnisotropic,ReparametrizePrimalAnisotropic,
+   Break,Error
 };
-enum class LPReparametrizationMode {Anisotropic, Rounding, Undefined};
+enum class LPReparametrizationMode {Anisotropic, Uniform, Undefined};
 
 class LP
 {
@@ -192,8 +198,10 @@ public:
    template<typename FACTOR_ITERATOR>
       std::vector<std::vector<FactorTypeAdapter*> > ComputeSendFactorConnection(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt);
 
+   void ComputeAnisotropicWeights();
    template<typename FACTOR_ITERATOR>
    void ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, std::vector<std::vector<REAL> >& omega); 
+   void ComputeUniformWeights();
    template<typename FACTOR_ITERATOR>
    void ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, std::vector<std::vector<REAL> >& omega); // do zrobienia: rename to isotropic weights
 
@@ -201,6 +209,9 @@ public:
    template<typename FACTOR_ITERATOR, typename PRIMAL_STORAGE_ITERATOR>
       REAL EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_STORAGE_ITERATOR primalIt) const;
    void UpdateFactor(FactorTypeAdapter* f, const std::vector<REAL>& omega); // perform one block coordinate step for factor f
+   void ComputePass();
+   void ComputePassAndPrimal();
+   void ComputeLowerBound();
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
       void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt);
    void UpdateFactor(FactorTypeAdapter* f, const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal);
@@ -215,6 +226,8 @@ public:
 
    //PrimalSolutionStorage GetBestPrimal() const;
    REAL BestPrimalBound() const { return std::min(bestForwardPrimalCost_, bestBackwardPrimalCost_); }
+   REAL BestLowerBound() const { return bestLowerBound_; }
+   REAL CurrentLowerBound() const { return currentLowerBound_; }
    template<typename FACTOR_ITERATOR, typename PRIMAL_ITERATOR>
       void WritePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_ITERATOR primalIt, std::ofstream& fs) const;
    template<typename PRIMAL_ITERATOR>
@@ -238,6 +251,9 @@ private:
 
    REAL bestForwardPrimalCost_ = std::numeric_limits<REAL>::max(), 
         bestBackwardPrimalCost_ = std::numeric_limits<REAL>::max();
+
+   REAL bestLowerBound_ = -std::numeric_limits<REAL>::max();
+   REAL currentLowerBound_ = -std::numeric_limits<REAL>::max();
 
    PrimalSolutionStorage forwardPrimal_, backwardPrimal_, bestForwardPrimal_, bestBackwardPrimal_; // note: these vectors are stored in the order of forwardOrdering_
 
@@ -270,12 +286,51 @@ inline void LP::Init()
    assert(f_.size() > 1); // otherwise we need not perform optimization: Just MaximizePotential f_[0]
 }
 
+inline void LP::ComputePass()
+{
+   ComputePass(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_.begin());
+   ComputePass(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_.begin());
+}
 
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
 void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
 {
    for(; factorIt!=factorItEnd; ++factorIt, ++omegaIt) {
       UpdateFactor(*factorIt, *omegaIt);
+   }
+}
+
+inline void LP::ComputePassAndPrimal()
+{
+   forwardPrimal_.Initialize();
+   assert(forwardPrimal_.size() == forwardOrdering_.size());
+   ComputePassAndPrimal(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_.begin(), forwardPrimal_.begin(), bestForwardPrimal_.begin(), bestForwardPrimalCost_); 
+   backwardPrimal_.Initialize();
+   assert(backwardPrimal_.size() == forwardOrdering_.size());
+   ComputePassAndPrimal(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_.begin(), backwardPrimal_.rbegin(), bestBackwardPrimal_.rbegin(), bestBackwardPrimalCost_); 
+}
+
+inline void LP::ComputeLowerBound()
+{
+   currentLowerBound_ = LowerBound();
+   bestLowerBound_ = std::max(currentLowerBound_,bestLowerBound_);
+}
+
+inline void LP::ComputeAnisotropicWeights()
+{
+   if(repamMode_ != LPReparametrizationMode::Anisotropic) {
+      ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_);
+      ComputeAnisotropicWeights(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_);
+      repamMode_ = LPReparametrizationMode::Anisotropic;
+   }
+}
+
+inline void LP::ComputeUniformWeights()
+{
+   if(repamMode_ != LPReparametrizationMode::Uniform) {
+      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_);
+      ComputeUniformWeights(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_);
+      repamMode_ = LPReparametrizationMode::Uniform;
    }
 }
 
@@ -332,6 +387,65 @@ SIGNED_INDEX LP::Solve(VISITOR& v)
 
    while(true) {
       switch(s) {
+         case LPVisitorReturnType::ReparametrizeUniform:
+            ComputeUniformWeights();
+            ComputePass();
+            s = v.template visit<LPVisitorReturnType::ReparametrizeUniform>(this);
+            break;
+         case LPVisitorReturnType::ReparametrizeLowerBoundUniform:
+            ComputeUniformWeights();
+            ComputePass();
+            ComputeLowerBound();
+            s = v.template visit<LPVisitorReturnType::ReparametrizeLowerBoundUniform>(this);
+            break;
+         case LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform:
+            ComputeUniformWeights();
+            ComputePassAndPrimal();
+            ComputeLowerBound();
+            s = v.template visit<LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform>(this);
+            break;
+         case LPVisitorReturnType::ReparametrizePrimalUniform:
+            ComputeUniformWeights();
+            ComputePassAndPrimal();
+            s = v.template visit<LPVisitorReturnType::ReparametrizePrimalUniform>(this);
+            break;
+
+         case LPVisitorReturnType::ReparametrizeAnisotropic:
+            ComputeAnisotropicWeights();
+            ComputePass();
+            s = v.template visit<LPVisitorReturnType::ReparametrizeAnisotropic>(this);
+            break;
+         case LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic:
+            ComputeAnisotropicWeights();
+            ComputePass();
+            ComputeLowerBound();
+            s = v.template visit<LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic>(this);
+            break;
+         case LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic:
+            ComputeAnisotropicWeights();
+            ComputePassAndPrimal();
+            ComputeLowerBound();
+            s = v.template visit<LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic>(this);
+            break;
+         case LPVisitorReturnType::ReparametrizePrimalAnisotropic:
+            ComputeAnisotropicWeights();
+            ComputePassAndPrimal();
+            s = v.template visit<LPVisitorReturnType::ReparametrizePrimalAnisotropic>(this);
+            break;
+
+         case LPVisitorReturnType::Break:
+            s = v.template visit<LPVisitorReturnType::Break>(this);
+            return 0;
+            break;
+         case LPVisitorReturnType::Error:
+            s = v.template visit<LPVisitorReturnType::Error>(this);
+            return -1;
+            break;
+
+
+
+
+            /*
          case LPVisitorReturnType::SetAnisotropicReparametrization:
             if(repamMode_ != LPReparametrizationMode::Anisotropic) {
                ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_);
@@ -371,6 +485,7 @@ SIGNED_INDEX LP::Solve(VISITOR& v)
          case LPVisitorReturnType::Error:
             return -1;
             break;
+            */
       }
    }
 }
@@ -633,8 +748,10 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
    auto omegaIt = omega.begin();
    auto fcIt = fc.begin();
    for(; factorIt != factorEndIt; ++factorIt, ++omegaIt, ++fcIt) {
-      //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 1.0) );
-      (*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size()) );
+      // better for rounding
+      (*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 0.1) );
+      // better for dual convergence
+      //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size()) );
    }
 }
 

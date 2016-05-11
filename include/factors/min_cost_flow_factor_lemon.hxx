@@ -90,11 +90,13 @@ public:
          supply[nodes_[i]] = excess[i];
       }
       minCostFlow_->supplyMap(supply);
-
    }
 
    ~MinCostFlowFactorLemon()
-   {}
+   {
+      // delete minCostFlow_; deleted in repam storage: not very clean!
+      //delete graph_; // one has to delete the graph at the end! However add copy constructor
+   }
 
    template<typename REPAM_ARRAY>
    REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const

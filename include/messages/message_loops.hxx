@@ -235,16 +235,7 @@ public:
       assert(noTrues == 1 || noTrues == iter_limit_[0] || noTrues == iter_limit_[1]);
       */
    }
-   /*
-   INDEX PropagateLabel(const INDEX l) const
-   {
-      if(commonIdx == 0) {
-         return Label(l,0);
-      } else {
-         return Label(0,l);
-      }
-   }
-   */
+
 private:
    ITER_LIMIT iter_limit_; // possibly derive from ITER_LIMIT to enable empty base class optimization
 };
@@ -308,13 +299,17 @@ public:
       return i[COMMON_IDX1] + i[COMMON_IDX2]*iter_limit_[COMMON_IDX1];
    }
 
-   INDEX PropagateLabel(const INDEX l) const
+   void PropagateLabel(const typename PrimalSolutionStorage::Element& labelled, typename PrimalSolutionStorage::Element& to_label) const
    {
+      assert(false);
+      exit(1);
+      /*
       std::array<INDEX,3> i;
       i[commonIdx1] = l % iter_limit_[commonIdx1];
       i[commonIdx1] = l / iter_limit_[commonIdx1];
       i[tripletIdx] = 0;
       return TripletLabel(i);
+      */
    }
 
 
