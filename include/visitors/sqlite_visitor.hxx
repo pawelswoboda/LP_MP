@@ -164,10 +164,11 @@ public:
             "FOREIGN KEY(solver_id) REFERENCES Solvers(id)",
             "UNIQUE(instance_id, solver_id, iteration)"});
       // do zrobienia: or should one make a covering index?
-      ConditionallyCreateIndex("IterationsIndex1","Iterations(instance_id,solver_id)");
-      ConditionallyCreateIndex("IterationsIndex2","Iterations(instance_id,solver_id,lowerBound)");
-      ConditionallyCreateIndex("IterationsIndex3","Iterations(instance_id,solver_id,upperBound)");
-      ConditionallyCreateIndex("IterationsIndex4","Iterations(instance_id,solver_id,runtime)");
+      ConditionallyCreateIndex("IterationsIndex1","Iterations(instance_id,solver_id,lowerBound,upperBound,runtime)");
+      ConditionallyCreateIndex("InstancesIndex1","Instances(id,dataset_id)");
+      //ConditionallyCreateIndex("IterationsIndex2","Iterations(instance_id,solver_id,lowerBound)");
+      //ConditionallyCreateIndex("IterationsIndex3","Iterations(instance_id,solver_id,upperBound)");
+      //ConditionallyCreateIndex("IterationsIndex4","Iterations(instance_id,solver_id,runtime)");
 
       ConditionallyCreateView("LowerBoundView", 
 "SELECT lowerBound,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.lowerBound < b.lowerBound) GROUP BY solver_id, instance_id;");
@@ -175,21 +176,22 @@ public:
       ConditionallyCreateView("MaxLowerBoundView",
 "SELECT MAX(lowerBound) as lowerBound, instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.instance_id = b.instance_id AND a.lowerBound < b.lowerBound) GROUP BY instance_id;");
       ConditionallyCreateView("UpperBoundView", 
-"SELECT upperBound,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations AS b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.upperBound < b.upperBound) GROUP BY solver_id, instance_id");
+"SELECT upperBound,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations AS b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.upperBound > b.upperBound) GROUP BY solver_id, instance_id");
       ConditionallyCreateView("MinUpperBoundView",
 "SELECT MIN(upperBound) as upperBound, instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.instance_id = b.instance_id AND a.upperBound > b.upperBound) GROUP BY instance_id;");
       ConditionallyCreateView("RuntimeView", 
 "SELECT runtime,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations AS b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.runtime < b.runtime) GROUP BY solver_id, instance_id;");
       ConditionallyCreateView("AggregateIterationsHelper",
-" SELECT LowerBoundView.lowerBound, UpperBoundView.upperBound, RuntimeView.runtime, LowerBoundView.solver_id, LowerBoundView.instance_id"
+" SELECT LowerBoundView.lowerBound AS lowerBound, UpperBoundView.upperBound AS upperBound, RuntimeView.runtime AS runtime, LowerBoundView.solver_id AS solver_id, LowerBoundView.instance_id AS instance_id"
 " FROM LowerBoundView "
 " INNER JOIN UpperBoundView ON (LowerBoundView.solver_id = UpperBoundView.solver_id AND LowerBoundView.instance_id = UpperBoundView.instance_id)"
 " INNER JOIN RuntimeView ON (LowerBoundView.solver_id = RuntimeView.solver_id AND LowerBoundView.instance_id = RuntimeView.instance_id)"
 ";"); 
-      ConditionallyCreateView("MinMaxBoundView",
-" SELECT MaxLowerBoundView.lowerBound, MinUpperBoundView.upperBound, MaxLowerBoundView.instance_id"
+      ConditionallyCreateView("MinMaxBoundInstancesView",
+" SELECT MaxLowerBoundView.lowerBound, MinUpperBoundView.upperBound, RuntimeView.runtime, RuntimeView.iteration, MaxLowerBoundView.instance_id"
 " FROM MaxLowerBoundView "
 " INNER JOIN MinUpperBoundView ON (MaxLowerBoundView.instance_id = MinUpperBoundView.instance_id)"
+" INNER JOIN RuntimeView ON (MaxLowerBoundView.instance_id = RuntimeView.instance_id)"
 ";");
       ConditionallyCreateView("AggregateIterations", 
 " SELECT AggregateIterationsHelper.lowerBound, AggregateIterationsHelper.upperBound, AggregateIterationsHelper.runtime, AggregateIterationsHelper.instance_id, AggregateIterationsHelper.solver_id, Instances.name AS instanceName, Datasets.id AS dataset_id, Datasets.name AS datasetName, Solvers.algorithmName, Solvers.algorithmFmc"
@@ -199,10 +201,16 @@ public:
 " INNER JOIN Solvers ON (Solvers.id = AggregateIterationsHelper.solver_id)"
 ";");
       ConditionallyCreateView("AggregateInstances",
-"SELECT AVG(ai.lowerBound) AS lowerBound, AVG(ai.upperBound) AS upperBound, AVG(ai.runtime) AS runtime, ai.dataset_id, ai.solver_id FROM AggregateIterations AS ai "
-"INNER JOIN Instances ON (Instances.dataset_id = ai.dataset_id AND Instances.id = ai.instance_id)"
+" SELECT AVG(ai.lowerBound) AS lowerBound, AVG(ai.upperBound) AS upperBound, AVG(ai.runtime) AS runtime, ai.dataset_id AS dataset_id, ai.datasetName AS datasetName, ai.solver_id AS solver_id FROM AggregateIterations AS ai "
+" WHERE (SELECT 1 FROM Instances WHERE Instances.dataset_id = ai.dataset_id AND Instances.id = ai.instance_id) "
+//" INNER JOIN Instances ON (Instances.dataset_id = ai.dataset_id AND Instances.id = ai.instance_id)"
+" GROUP BY ai.dataset_id, ai.solver_id"
 ";");
-
+      ConditionallyCreateView("MinMaxBoundDatasetsView",
+"SELECT MAX(ai.lowerBound) AS lowerBound, MIN(ai.upperBound) AS upperBound, MIN(ai.runtime) AS runtime, ai.dataset_id AS dataset_id, ai.datasetName AS datasetName FROM AggregateInstances AS ai "
+" WHERE (SELECT 1 FROM AggregateInstances WHERE AggregateInstances.dataset_id = ai.dataset_id)"
+" GROUP BY ai.dataset_id"
+";");
 
    }
 

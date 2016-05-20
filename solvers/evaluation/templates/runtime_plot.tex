@@ -1,0 +1,38 @@
+\documentclass[float=false,preview=true]{standalone}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\begin{document}
+
+\begin{figure}
+\begin{tikzpicture}
+{% set max_upper_bound = conn.cursor().execute("SELECT MAX(upperBound) FROM Iterations WHERE instance_id = '" + instance_id + "' AND upperBound < 100000000;").fetchone()[0]  %}
+{% if max_upper_bound is none %}
+   {% set max_upper_bound = conn.cursor().execute("SELECT MAX(lowerBound) FROM Iterations WHERE instance_id = '" + instance_id + "';").fetchone()[0]  %}
+{% endif %}
+{% set min_lower_bound = conn.cursor().execute("SELECT MIN(lowerBound) FROM Iterations WHERE instance_id = '" + instance_id + "';").fetchone()[0]  %}
+{% set max_runtime = conn.cursor().execute("SELECT MAX(runtime) FROM Iterations WHERE instance_id = '" + instance_id + "';").fetchone()[0]  %}
+
+\begin{semilogxaxis}[ylabel = {energy}, xlabel = {runtime (s)}, ymin = {{ min_lower_bound}}, ymax = {{ max_upper_bound }}, xmax = {{ max_runtime/1000 }}]
+{% for solver_row in conn.cursor().execute("SELECT DISTINCT solver_id FROM Iterations WHERE instance_id = '" + instance_id + "';") -%}
+   {% set solver_id = solver_row[0] -%}
+   {% set algorithmName = conn.cursor().execute("SELECT algorithmName FROM Solvers WHERE id = '" + solver_id|string + "';").fetchone()[0] -%}
+   \addplot[thick,{{ lineStyles[loop.index]}}] coordinates {
+   {% for row in conn.cursor().execute("SELECT runtime, lowerBound FROM Iterations WHERE instance_id = '" + instance_id + "' AND solver_id = '" + solver_row[0]|string + "';") -%}
+      ( {{ row[0]/1000 }} , {{ row[1] }} )
+   {% endfor -%}
+   };
+   \addlegendentry{ {{ algorithmName }} }
+   \addplot[thick,{{ lineStyles[loop.index] }}, dashed, forget plot] coordinates {
+   {% for row in conn.cursor().execute("SELECT runtime, upperBound FROM Iterations WHERE instance_id = '" + instance_id + "' AND solver_id = '" + solver_row[0]|string + "';") -%}
+      ( {{ row[0]/1000 }} , {{ row[1] }} )
+   {% endfor -%}
+   };
+{% endfor -%}
+\end{semilogxaxis}
+\end{tikzpicture}
+   {% set instanceName = c.execute("SELECT name FROM Instances WHERE id = '" + instance_id + "';").fetchone()[0] -%}
+   \caption{ {{ tex_escape( instanceName ) }} }
+   \label{fig:runtime_{{ instanceName }}}
+\end{figure}
+
+\end{document}

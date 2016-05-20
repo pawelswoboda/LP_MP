@@ -1,11 +1,11 @@
 \documentclass{standalone}
 \usepackage{booktabs}
+\usepackage{multirow}
 \begin{document}
 
-\begin{table}
-{% set solvers =  c.execute("SELECT id,algorithmName FROM Solvers ORDER BY id").fetchall() -%}
+{% set solvers =  conn.cursor().execute("SELECT id,algorithmName FROM Solvers ORDER BY id").fetchall() -%}
 {% set no_algorithms = solvers|length -%}
-\begin{tabular}{l{{ "c" * (solvers|length) }}}
+\begin{tabular}{|l{{ "c" * (solvers|length) }}|}
 \hline
 
 Dataset 
@@ -15,23 +15,56 @@ Dataset
 \\ \hline
 
 {% for dataset_row in conn.cursor().execute("SELECT id,name FROM Datasets;") %}
-   \multirow{3}{*}{ {{ dataset_row[1] }} }
+   {% set minMaxBound = conn.cursor().execute("SELECT lowerBound,upperBound,runtime FROM MinMaxBoundDatasetsView WHERE dataset_id = '" + dataset_row[0]|string + "';").fetchone() -%}
+   \multirow{3}{*}{ {{ tex_escape(dataset_row[1]) }} }
    {% for solver in solvers %}
-      & {{ conn.cursor().execute("SELECT lowerBound FROM AggregateInstances WHERE dataset_id = '" + dataset_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone()[0] }}
+      & 
+      {% set solver_row = conn.cursor().execute("SELECT lowerBound FROM AggregateInstances WHERE dataset_id = '" + dataset_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone() -%}
+         {% if solver_row is not none -%}
+         {% if solver_row[0] >= minMaxBound[0] %}
+            \textbf{ {{ "%0.2f" | format(solver_row[0]|float)  }} }
+         {% else %}
+            {{ "%0.2f" | format(solver_row[0]|float)  }}
+         {% endif %}
+         {% else -%}
+            $\dagger$
+         {% endif -%}
    {% endfor %}
    \\ 
    {% for solver in solvers %}
-      & {{ conn.cursor().execute("SELECT upperBound FROM AggregateInstances WHERE dataset_id = '" + dataset_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone()[0] }}
+      & 
+      {% set solver_row = conn.cursor().execute("SELECT upperBound FROM AggregateInstances WHERE dataset_id = '" + dataset_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone() -%}
+         {% if solver_row is not none -%}
+         {% if solver_row[0] <= minMaxBound[1] + 0.00001 %}
+            \textbf{ {{ "%0.2f" | format(solver_row[0]|float)  }} }
+         {% else %}
+            {{ "%0.2f" | format(solver_row[0]|float)  }}
+         {% endif %}
+         {% else -%}
+            $\dagger$
+         {% endif %}
+
    {% endfor %}
    \\
    {% for solver in solvers %}
-      & {{ conn.cursor().execute("SELECT runtime FROM AggregateInstances WHERE dataset_id = '" + dataset_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone()[0]/1000 }}
+      &
+      {% set solver_row = conn.cursor().execute("SELECT runtime FROM AggregateInstances WHERE dataset_id = '" + dataset_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone() -%}
+         {% if solver_row is not none -%}
+         {% if solver_row[0] <= minMaxBound[2] + 0.1 %}
+            \textbf{ {{ "%0.2f" | format(solver_row[0]/1000|float)  }} }
+         {% else %}
+            {{ "%0.2f" | format(solver_row[0]/1000|float)  }}
+         {% endif %}
+         {% else -%}
+            $\dagger$
+         {% endif %}
+
    {% endfor %}
    \\ \hline
 {% endfor %}
 
 \end{tabular}
-\end{table}
+%\caption{Lower bound/upper bound/runtime in seconds averaged over all instances of datasets}
 
 \end{document}
  

@@ -35,7 +35,6 @@ std::string house_prefix = "../../../solvers/graph_matching/tkr_pami13_data/hous
 std::vector<std::string> graphMatchingHouseDatasets = {
    {house_prefix + "energy_house_frame10frame100.txt"},
    {house_prefix + "energy_house_frame10frame95.txt"},
-   /*
    {house_prefix + "energy_house_frame10frame96.txt"},
    {house_prefix + "energy_house_frame10frame97.txt"},
    {house_prefix + "energy_house_frame10frame98.txt"},
@@ -138,7 +137,6 @@ std::vector<std::string> graphMatchingHouseDatasets = {
    {house_prefix + "energy_house_frame9frame96.txt"},
    {house_prefix + "energy_house_frame9frame97.txt"},
    {house_prefix + "energy_house_frame9frame98.txt"},
-   */
    {house_prefix + "energy_house_frame9frame99.txt"}
 };
 
@@ -146,7 +144,6 @@ std::string hotel_prefix = "../../../solvers/graph_matching/tkr_pami13_data/hote
 std::vector<std::string> graphMatchingHotelDatasets = {
    {hotel_prefix + "energy_hotel_frame15frame22.txt"},
    {hotel_prefix + "energy_hotel_frame15frame29.txt"},
-   /*
    {hotel_prefix + "energy_hotel_frame15frame36.txt"},
    {hotel_prefix + "energy_hotel_frame15frame43.txt"},
    {hotel_prefix + "energy_hotel_frame15frame50.txt"},
@@ -249,7 +246,6 @@ std::vector<std::string> graphMatchingHotelDatasets = {
    {hotel_prefix + "energy_hotel_frame8frame85.txt"},
    {hotel_prefix + "energy_hotel_frame8frame92.txt"},
    {hotel_prefix + "energy_hotel_frame8frame99.txt"},
-   */
    {hotel_prefix + "energy_hotel_frame92frame99.txt"}
 };
 
@@ -299,20 +295,32 @@ std::vector<std::string> graphMatchingWormsDatasets = {
 };
 
 
-// emulate command line options
-static std::vector<std::string> options = {
-   {"--maxIter"}, {"1000"},
-   {"--minDualImprovement"}, {"0.00001"},
-   {"--lowerBoundComputationInterval"}, {"1"},
-   {"--primalComputationInterval"}, {"5"},
-   {"--standardReparametrization"}, {"anisotropic"},
-   {"--roundingReparametrization"}, {"uniform"},
-   {"--databaseFile"}, {"graph_matching.db"},
-   {"--overwriteDbRecord"} // do zrobienia: possibly deactivate this. Then we do not overwrite
-};
-
 int main()
 {
+   // emulate command line options
+   std::vector<std::string> options = {
+      {"--maxIter"}, {"1000"},
+      {"--minDualImprovement"}, {"0.00001"},
+      {"--lowerBoundComputationInterval"}, {"1"},
+      {"--primalComputationInterval"}, {"5"},
+      {"--roundingReparametrization"}, {"uniform"},
+      //{"--overwriteDbRecord"}, // do zrobienia: possibly deactivate this. Then we do not overwrite
+      {"--databaseFile"}, {"graph_matching.db"}
+   };
+
+   std::vector<std::string> mcf_options = options;
+   mcf_options.push_back("--standardReparametrization");
+   mcf_options.push_back("uniform");
+
+   std::vector<std::string> mp_options = options;
+   mp_options.push_back("--standardReparametrization");
+   mp_options.push_back("uniform");
+
+   std::vector<std::string> gm_options = options;
+   gm_options.push_back("--standardReparametrization");
+   gm_options.push_back("anisotropic");
+
+
    std::vector<std::string> graphMatchingDatasets;
    //for(auto& d : graphMatchingHotelDatasets) {graphMatchingDatasets.push_back(d);}
    //for(auto& d : graphMatchingHouseDatasets) {graphMatchingDatasets.push_back(d);}
@@ -321,41 +329,41 @@ int main()
    //InitTikzFiles(graphMatchingDatasets);
    // do zrobienia: renamce dataset of Hassan instances
 
-   RunSolver<FMC_MP_BOTH_SIDES,SqliteVisitor>(TORRESANI_MP_BOTH_SIDES_INPUT,graphMatchingHotelDatasets,options,"hotel","AMP-B");
-   RunSolver<FMC_MP_BOTH_SIDES,SqliteVisitor>(TORRESANI_MP_BOTH_SIDES_INPUT,graphMatchingHouseDatasets,options,"house","AMP-B");
-   //RunSolver<FMC_MP_BOTH_SIDES,SqliteVisitor>(TORRESANI_MP_BOTH_SIDES_INPUT,graphMatchingHassanDatasets,options,"house","AMP-B");
+   RunSolver<FMC_MP_BOTH_SIDES,SqliteVisitor>(TORRESANI_MP_BOTH_SIDES_INPUT,graphMatchingHotelDatasets,mp_options,"hotel","AMP-B");
+   RunSolver<FMC_MP_BOTH_SIDES,SqliteVisitor>(TORRESANI_MP_BOTH_SIDES_INPUT,graphMatchingHouseDatasets,mp_options,"house","AMP-B");
+   //RunSolver<FMC_MP_BOTH_SIDES,SqliteVisitor>(TORRESANI_MP_BOTH_SIDES_INPUT,graphMatchingHassanDatasets,mp_options,"Hassan","AMP-B");
 
-   RunSolver<FMC_MP_LEFT,SqliteVisitor>(TORRESANI_MP_LEFT_INPUT,graphMatchingHotelDatasets,options,"hotel","AMP-O");
-   RunSolver<FMC_MP_LEFT,SqliteVisitor>(TORRESANI_MP_LEFT_INPUT,graphMatchingHouseDatasets,options,"house","AMP-O");
-   //RunSolver<FMC_MP_LEFT,SqliteVisitor>(TORRESANI_MP_LEFT_INPUT,graphMatchingHassanDatasets,options,"house","AMP-O");
+   RunSolver<FMC_MP_LEFT,SqliteVisitor>(TORRESANI_MP_LEFT_INPUT,graphMatchingHotelDatasets,mp_options,"hotel","AMP-O");
+   RunSolver<FMC_MP_LEFT,SqliteVisitor>(TORRESANI_MP_LEFT_INPUT,graphMatchingHouseDatasets,mp_options,"house","AMP-O");
+   //RunSolver<FMC_MP_LEFT,SqliteVisitor>(TORRESANI_MP_LEFT_INPUT,graphMatchingHassanDatasets,mp_options,"Hassan","AMP-O");
 
-   RunSolver<FMC_MP_RIGHT,SqliteVisitor>(TORRESANI_MP_RIGHT_INPUT,graphMatchingHotelDatasets,options,"hotel","AMP-I");
-   RunSolver<FMC_MP_RIGHT,SqliteVisitor>(TORRESANI_MP_RIGHT_INPUT,graphMatchingHouseDatasets,options,"house","AMP-I");
-   //RunSolver<FMC_MP_RIGHT,SqliteVisitor>(TORRESANI_MP_RIGHT_INPUT,graphMatchingHassanDatasets,options,"house","AMP-I");
+   RunSolver<FMC_MP_RIGHT,SqliteVisitor>(TORRESANI_MP_RIGHT_INPUT,graphMatchingHotelDatasets,mp_options,"hotel","AMP-I");
+   RunSolver<FMC_MP_RIGHT,SqliteVisitor>(TORRESANI_MP_RIGHT_INPUT,graphMatchingHouseDatasets,mp_options,"house","AMP-I");
+   //RunSolver<FMC_MP_RIGHT,SqliteVisitor>(TORRESANI_MP_RIGHT_INPUT,graphMatchingHassanDatasets,mp_options,"Hassan","AMP-I");
 
-   RunSolver<FMC_MCF_BOTH_SIDES,SqliteVisitor>(TORRESANI_MCF_BOTH_SIDES_INPUT,graphMatchingHotelDatasets,options,"hotel","AMCF-B");
-   RunSolver<FMC_MCF_BOTH_SIDES,SqliteVisitor>(TORRESANI_MCF_BOTH_SIDES_INPUT,graphMatchingHouseDatasets,options,"house","AMCF-B");
-   //RunSolver<FMC_MCF_BOTH_SIDES,SqliteVisitor>(TORRESANI_MCF_BOTH_SIDES_INPUT,graphMatchingHassanDatasets,options,"house","AMCF-B");
+   RunSolver<FMC_MCF_BOTH_SIDES,SqliteVisitor>(TORRESANI_MCF_BOTH_SIDES_INPUT,graphMatchingHotelDatasets,mcf_options,"hotel","AMCF-B");
+   RunSolver<FMC_MCF_BOTH_SIDES,SqliteVisitor>(TORRESANI_MCF_BOTH_SIDES_INPUT,graphMatchingHouseDatasets,mcf_options,"house","AMCF-B");
+   //RunSolver<FMC_MCF_BOTH_SIDES,SqliteVisitor>(TORRESANI_MCF_BOTH_SIDES_INPUT,graphMatchingHassanDatasets,mcf_options,"Hassan","AMCF-B");
 
-   RunSolver<FMC_MCF_LEFT,SqliteVisitor>(TORRESANI_MCF_LEFT_INPUT,graphMatchingHotelDatasets,options,"hotel","AMCF-O");
-   RunSolver<FMC_MCF_LEFT,SqliteVisitor>(TORRESANI_MCF_LEFT_INPUT,graphMatchingHouseDatasets,options,"house","AMCF-O");
-   //RunSolver<FMC_MCF_LEFT,SqliteVisitor>(TORRESANI_MCF_LEFT_INPUT,graphMatchingHassanDatasets,options,"house","AMCF-O");
+   RunSolver<FMC_MCF_LEFT,SqliteVisitor>(TORRESANI_MCF_LEFT_INPUT,graphMatchingHotelDatasets,mcf_options,"hotel","AMCF-O");
+   RunSolver<FMC_MCF_LEFT,SqliteVisitor>(TORRESANI_MCF_LEFT_INPUT,graphMatchingHouseDatasets,mcf_options,"house","AMCF-O");
+   //RunSolver<FMC_MCF_LEFT,SqliteVisitor>(TORRESANI_MCF_LEFT_INPUT,graphMatchingHassanDatasets,mcf_options,"Hassan","AMCF-O");
 
-   RunSolver<FMC_MCF_RIGHT,SqliteVisitor>(TORRESANI_MCF_RIGHT_INPUT,graphMatchingHotelDatasets,options,"hotel","AMCF-I");
-   RunSolver<FMC_MCF_RIGHT,SqliteVisitor>(TORRESANI_MCF_RIGHT_INPUT,graphMatchingHouseDatasets,options,"house","AMCF-I");
-   //RunSolver<FMC_MCF_RIGHT,SqliteVisitor>(TORRESANI_MCF_RIGHT_INPUT,graphMatchingHassanDatasets,options,"house","AMCF-I");
+   RunSolver<FMC_MCF_RIGHT,SqliteVisitor>(TORRESANI_MCF_RIGHT_INPUT,graphMatchingHotelDatasets,mcf_options,"hotel","AMCF-I");
+   RunSolver<FMC_MCF_RIGHT,SqliteVisitor>(TORRESANI_MCF_RIGHT_INPUT,graphMatchingHouseDatasets,mcf_options,"house","AMCF-I");
+   //RunSolver<FMC_MCF_RIGHT,SqliteVisitor>(TORRESANI_MCF_RIGHT_INPUT,graphMatchingHassanDatasets,mcf_options,"Hassan","AMCF-I");
    
-   RunSolver<FMC_GM_LEFT,SqliteVisitor>(TORRESANI_GM_LEFT_INPUT,graphMatchingHotelDatasets,options,"hotel","GM-O");
-   RunSolver<FMC_GM_LEFT,SqliteVisitor>(TORRESANI_GM_LEFT_INPUT,graphMatchingHouseDatasets,options,"house","GM-O");
-   //RunSolver<FMC_GM_LEFT,SqliteVisitor>(TORRESANI_GM_LEFT_INPUT,graphMatchingHassanDatasets,options,"house","GM-O");
+   RunSolver<FMC_GM_LEFT,SqliteVisitor>(TORRESANI_GM_LEFT_INPUT,graphMatchingHotelDatasets,gm_options,"hotel","GM-O");
+   RunSolver<FMC_GM_LEFT,SqliteVisitor>(TORRESANI_GM_LEFT_INPUT,graphMatchingHouseDatasets,gm_options,"house","GM-O");
+   //RunSolver<FMC_GM_LEFT,SqliteVisitor>(TORRESANI_GM_LEFT_INPUT,graphMatchingHassanDatasets,gm_options,"Hassan","GM-O");
    
-   RunSolver<FMC_GM_RIGHT,SqliteVisitor>(TORRESANI_GM_RIGHT_INPUT,graphMatchingHotelDatasets,options,"hotel","GM-I");
-   RunSolver<FMC_GM_RIGHT,SqliteVisitor>(TORRESANI_GM_RIGHT_INPUT,graphMatchingHouseDatasets,options,"house","GM-I");
-   //RunSolver<FMC_GM_RIGHT,SqliteVisitor>(TORRESANI_GM_RIGHT_INPUT,graphMatchingHassanDatasets,options,"house","GM-I");
+   RunSolver<FMC_GM_RIGHT,SqliteVisitor>(TORRESANI_GM_RIGHT_INPUT,graphMatchingHotelDatasets,gm_options,"hotel","GM-I");
+   RunSolver<FMC_GM_RIGHT,SqliteVisitor>(TORRESANI_GM_RIGHT_INPUT,graphMatchingHouseDatasets,gm_options,"house","GM-I");
+   //RunSolver<FMC_GM_RIGHT,SqliteVisitor>(TORRESANI_GM_RIGHT_INPUT,graphMatchingHassanDatasets,gm_options,"Hassan","GM-I");
 
-   //RunSolver<FMC_MP_LEFT,SqliteVisitor>(UAI_MP_INPUT,graphMatchingWormsDatasets,options,"worms","AMP-O");
-   //RunSolver<FMC_MCF_LEFT,SqliteVisitor>(UAI_MCF_INPUT,graphMatchingWormsDatasets,options,"worms","AMCF-o");
-   //RunSolver<FMC_GM_LEFT,SqliteVisitor>(UAI_GM_INPUT,graphMatchingWormsDatasets,options,"worms","GM-O");
+   RunSolver<FMC_MP_LEFT,SqliteVisitor>(UAI_MP_INPUT,graphMatchingWormsDatasets,mp_options,"worms","AMP-O");
+   RunSolver<FMC_MCF_LEFT,SqliteVisitor>(UAI_MCF_INPUT,graphMatchingWormsDatasets,mcf_options,"worms","AMCF-O");
+   RunSolver<FMC_GM_LEFT,SqliteVisitor>(UAI_GM_INPUT,graphMatchingWormsDatasets,gm_options,"worms","GM-O");
 
    //FinishTikzFiles(graphMatchingDatasets);
 }

@@ -1,11 +1,11 @@
 \documentclass{standalone}
 \usepackage{booktabs}
+\usepackage{multirow}
 \begin{document}
 
-\begin{table}
 {% set solvers =  c.execute("SELECT id,algorithmName FROM Solvers ORDER BY id").fetchall() -%}
 {% set no_algorithms = solvers|length -%}
-\begin{tabular}{l{{ "c" * (solvers|length) }}}
+\begin{tabular}{|l{{ "c" * (solvers|length) }}|}
 \hline
 
 Instance 
@@ -14,27 +14,64 @@ Instance
 {% endfor-%}
 \\ \hline
 
-{% for dataset_row in c.execute("SELECT id,name FROM Datasets;") %}
-   \multicolumn{ {{ 1 + no_algorithms }} }{ c }{ {{ dataset_row[1] }} } \\ \hline
+{% for dataset_row in conn.cursor().execute("SELECT id,name FROM Datasets;") %}
+   \multicolumn{ {{ 1 + no_algorithms }} }{| c |}{ \textbf{ {{ tex_escape(dataset_row[1]) }} } } \\ \hline
    {% for instance_row in conn.cursor().execute("SELECT id,name FROM Instances WHERE dataset_id = '" + dataset_row[0]|string + "';") %}
-      \multirow{3}{*}{ {{ instance_row[1] }} }
-      {% for solver_row in conn.cursor().execute("SELECT lowerBound, solver_id FROM LowerBoundView WHERE instance_id = '" + instance_row[0]|string + "' ORDER BY solver_id;") %}
-         & {{ solver_row[0] }} 
+      {% set minMaxBound = conn.cursor().execute("SELECT lowerBound,upperBound,runtime FROM MinMaxBoundInstancesView WHERE instance_id = '" + instance_row[0]|string + "';").fetchone() -%}
+      \multirow{3}{*}{ {{ tex_escape(instance_row[1]) }} }
+      {% for solver in solvers -%}
+         {% set solver_row = conn.cursor().execute("SELECT lowerBound, solver_id FROM LowerBoundView WHERE instance_id = '" + instance_row[0]|string + "' AND solver_id = '" + solver[0]|string + "' ORDER BY solver_id;").fetchone() %}
+         & 
+         {% if solver_row is not none %}
+         {% if solver_row[0] >= minMaxBound[0] %}
+            \textbf{ {{ "%0.2f" | format(solver_row[0]|float)  }} }
+         {% else %}
+            {{ "%0.2f" | format(solver_row[0])  }}
+         {% endif %}
+         {% else -%}
+            $\dagger$
+         {% endif -%}
       {% endfor %}
+
       \\ 
-      {% for solver_row in conn.cursor().execute("SELECT upperBound, solver_id FROM UpperBoundView WHERE instance_id = '" + instance_row[0]|string + "' ORDER BY solver_id;") %}
-         & {{ solver_row[0] }} 
+
+      {% for solver in solvers -%}
+         {% set solver_row = conn.cursor().execute("SELECT upperBound, solver_id FROM UpperBoundView WHERE instance_id = '" + instance_row[0]|string + "' AND solver_id = '" + solver[0]|string + "' ORDER BY solver_id;").fetchone() %}
+         & 
+         {% if solver_row is not none %}
+         {% if solver_row[0] <= minMaxBound[1] %}
+            \textbf{ {{ "%0.2f" | format(solver_row[0]|float)  }} }
+         {% else %}
+            {{ "%0.2f" | format(solver_row[0]|float)  }}
+         {% endif %}
+         {% else -%}
+            $\dagger$
+         {% endif -%}
       {% endfor %}
-      \\ 
-      {% for solver_row in conn.cursor().execute("SELECT runtime, solver_id FROM RuntimeView WHERE instance_id = '" + instance_row[0]|string + "' ORDER BY solver_id;") %}
-         & {{ solver_row[0]/1000 }} 
+
+      \\
+
+      {% for solver in solvers -%}
+         {% set solver_row = conn.cursor().execute("SELECT runtime, solver_id FROM RuntimeView WHERE instance_id = '" + instance_row[0]|string + "' AND solver_id = '" + solver[0]|string + "' ORDER BY solver_id;").fetchone() %}
+         & 
+         {% if solver_row is not none %}
+         {% if solver_row[0] <= minMaxBound[2] %}
+            \textbf{ {{ "%0.2f" | format(solver_row[0]/1000|float)  }} }
+         {% else %}
+            {{ "%0.2f" | format(solver_row[0]/1000|float)  }}
+         {% endif %}
+         {% else -%}
+            $\dagger$
+         {% endif -%}
       {% endfor %}
+
+
       \\ \hline
    {% endfor %}
 {% endfor %}
 
 \end{tabular}
-\end{table}
+%\caption{Per instance table of lower bound/upper bound/runtime in seconds grouped by datasets}
 
 \end{document}
  

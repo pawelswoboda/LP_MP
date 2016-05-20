@@ -35,7 +35,7 @@ namespace LP_MP {
             posConstraint_(),
             minDualImprovementArg_("","minDualImprovement","minimum dual improvement between iterations of LP_MP",false,0.0,&posConstraint_,cmd),
             standardReparametrizationArg_("","standardReparametrization","mode of reparametrization: {anisotropic,uniform}",false,"anisotropic","{anisotropic|uniform}",cmd),
-            roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution: {anisotropic|uniform}",false,"anisotropic","{anisotropic|uniform}",cmd),
+            roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution: {anisotropic|uniform}",false,"uniform","{anisotropic|uniform}",cmd),
             protocolateFileArg_("","protocolate","file into which to protocolate progress of algorithm, obsolete, not implemented yet, as with silent option",false,"","file name",cmd),
             silentArg_("","silent","suppress output on stdout, not implemented yet. Implement via logging mechanism, search for suitable package.",cmd,false),
             pd_(pd)
@@ -89,23 +89,32 @@ namespace LP_MP {
          const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - beginTime_).count();
 
          if(LP_STATE == LPVisitorReturnType::ReparametrizeUniform || LP_STATE == LPVisitorReturnType::ReparametrizeAnisotropic) {
-            // do nothing
+            // output nothing
          } else if(LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundUniform || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic) {
-               std::cout << "iteration = " << curIter_ << ", lower bound = " << lp->BestLowerBound() << ", time elapsed = " << timeElapsed << " milliseconds\n";
+            std::cout << "iteration = " << curIter_ << ", lower bound = " << lp->BestLowerBound() << ", time elapsed = " << timeElapsed << " milliseconds\n";
          } else if(LP_STATE == LPVisitorReturnType::ReparametrizePrimalUniform || LP_STATE == LPVisitorReturnType::ReparametrizePrimalAnisotropic) {
-               std::cout << "iteration = " << curIter_ << ", upper bound = " << lp->BestPrimalBound() << ", time elapsed = " << timeElapsed << " milliseconds\n";
+            std::cout << "iteration = " << curIter_ << ", upper bound = " << lp->BestPrimalBound() << ", time elapsed = " << timeElapsed << " milliseconds\n";
          } else if(LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic) {
-               std::cout << "iteration = " << curIter_ << ", lower bound = " << lp->BestLowerBound() << ", upper bound = " << lp->BestPrimalBound() << ", time elapsed = " << timeElapsed << " milliseconds\n";
+            std::cout << "iteration = " << curIter_ << ", lower bound = " << lp->BestLowerBound() << ", upper bound = " << lp->BestPrimalBound() << ", time elapsed = " << timeElapsed << " milliseconds\n";
          } else if(LP_STATE == LPVisitorReturnType::Break) {
-               auto endTime = std::chrono::steady_clock::now();
-               std::cout << "Optimization took " << std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations\n";
-               return LPVisitorReturnType::Break;
+            auto endTime = std::chrono::steady_clock::now();
+            std::cout << "Optimization took " << std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations\n";
+            return LPVisitorReturnType::Break;
          } else if(LP_STATE == LPVisitorReturnType::Error) {
          } else {
             assert(false);
          }
 
+         curIter_++;
+         remainingIter_--;
 
+         if(LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic
+               || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic
+               || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundUniform
+               || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform) {
+            prevDualBound_ = curDualBound_;
+            curDualBound_ = lp->BestLowerBound();
+         }
          // check if optimization has to be terminated
          if(remainingIter_ == 0) {
             return LPVisitorReturnType::Break;
@@ -125,10 +134,10 @@ namespace LP_MP {
                std::cout << "Solver uses " << memoryUsed << " MB memory, aborting optimization\n";
             }
          }
-         //if(minDualImprovement_ > 0 && lowerBoundDiff < minDualImprovement_) {
-         //   std::cout << "Dual improvement smaller than " << minDualImprovement_ << "\n";
-         //   remainingIter_ = std::min(1,remainingIter_);
-         //}
+         if(minDualImprovement_ > 0 && curDualBound_ - prevDualBound_ < minDualImprovement_) {
+            std::cout << "Dual improvement smaller than " << minDualImprovement_ << "\n";
+            remainingIter_ = std::min(INDEX(1),remainingIter_);
+         }
 
          if(remainingIter_ == 1) {
             if(roundingReparametrization_ == "anisotropic") {
@@ -146,25 +155,31 @@ namespace LP_MP {
             } else if(roundingReparametrization_ == "uniform") {
                return LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform;
             } else {
-               assert(false);
+               throw std::runtime_error("unknown reparametrization mode");
             }
          } else if(curIter_ % primalComputationInterval_ == 0) {
             if(roundingReparametrization_ == "anisotropic") {
                return LPVisitorReturnType::ReparametrizePrimalAnisotropic;
             } else if(roundingReparametrization_ == "uniform") {
                return LPVisitorReturnType::ReparametrizePrimalUniform;
+            } else {
+               throw std::runtime_error("unknown reparametrization mode");
             }
          } else if(curIter_ % lowerBoundComputationInterval_ == 0) {
-            if(roundingReparametrization_ == "anisotropic") {
+            if(standardReparametrization_ == "anisotropic") {
                return LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic;
             } else if(roundingReparametrization_ == "uniform") {
                return LPVisitorReturnType::ReparametrizeLowerBoundUniform;
+            } else {
+               throw std::runtime_error("unknown reparametrization mode");
             }
          } else {
-            if(roundingReparametrization_ == "anisotropic") {
+            if(standardReparametrization_ == "anisotropic") {
                return LPVisitorReturnType::ReparametrizeAnisotropic;
             } else if(roundingReparametrization_ == "uniform") {
                return LPVisitorReturnType::ReparametrizeUniform;
+            } else {
+               throw std::runtime_error("unknown reparametrization mode");
             }
          }
 
@@ -336,39 +351,39 @@ namespace LP_MP {
       template<LPVisitorReturnType LP_STATE>
       LPVisitorReturnType visit(LP* lp)
       {
-         assert(false);
-         /*
+         const auto ret = BaseVisitorType::template visit<LP_STATE>(lp);
+         // do zrobienia: introduce tighten reparametrization
          if(tighten_) {
-            if(LP_STATE == LPVisitorReturnType::ReparametrizeAndComputePrimal || LP_STATE == LPVisitorReturnType::Reparametrize ) {
-               if(tightenInNextIteration_) {
-                  tightenInNextIteration_ = false;
-                  resumeInNextIteration_ = true;
+            if(LP_STATE != LPVisitorReturnType::Break) {
+               if(this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_ || tightenIteration_ <= 0) {
+               //if(tightenInNextIteration_) {
+               //   tightenInNextIteration_ = false;
+               //   resumeInNextIteration_ = true;
                   Tighten();
                   lastTightenIteration_ = this->GetIter();
                   lp->Init(); // reinitialize factors, as they might have changed
                   std::cout << "New number of factors = " << lp->GetNumberOfFactors() << ", tightening took " << tightenTime_ << "ms\n";
-                  if(repamModeBeforeTightening_ == LPReparametrizationMode::Anisotropic) {
-                     return LPVisitorReturnType::SetAnisotropicReparametrization;
-                  } else if(repamModeBeforeTightening_ == LPReparametrizationMode::Rounding) {
-                     return LPVisitorReturnType::SetRoundingReparametrization;
-                  } else {
-                     assert(false); // has there been introduced a new reparametrization?
-                  }
-               } else if(resumeInNextIteration_) {
-                  resumeInNextIteration_ = false;
-                  return retBeforeTightening_;
-               } else if(this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_) {
-                  tightenInNextIteration_ = true;
-                  retBeforeTightening_ = BaseVisitorType::template visit<LP_STATE>(lp);
-                  repamModeBeforeTightening_ = lp->GetRepamMode();
-                  return LPVisitorReturnType::SetRoundingReparametrization;
+                  //if(repamModeBeforeTightening_ == LPReparametrizationMode::Anisotropic) {
+                  //   return LPVisitorReturnType::SetAnisotropicReparametrization;
+                  //} else if(repamModeBeforeTightening_ == LPReparametrizationMode::Rounding) {
+                  //   return LPVisitorReturnType::SetRoundingReparametrization;
+                  //} else {
+                  //   assert(false); // has there been introduced a new reparametrization?
+                  //}
+               //} else if(resumeInNextIteration_) {
+               //   resumeInNextIteration_ = false;
+               //   return retBeforeTightening_;
+               //} else if(this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_) {
+               //   tightenInNextIteration_ = true;
+               //   retBeforeTightening_ = BaseVisitorType::template visit<LP_STATE>(lp);
+               //   repamModeBeforeTightening_ = lp->GetRepamMode();
+               //   return LPVisitorReturnType::SetRoundingReparametrization;
                }
                // if no sufficient dual increase was achieved
             } else if(LP_STATE == LPVisitorReturnType::Break) {
                std::cout << "Tightening took " << tightenTime_ << " milliseconds\n";
             }
          }
-         const auto ret = BaseVisitorType::template visit<LP_STATE>(lp);
          // if dual improvement too small
          //{
          //   if(tighten_) {
@@ -378,9 +393,8 @@ namespace LP_MP {
          //      // record guaranteed dual improvement
          //   }
          //}
-         */
 
-         //return ret;
+         return ret;
       }
       INDEX Tighten()
       {

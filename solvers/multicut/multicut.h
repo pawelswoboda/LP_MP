@@ -24,7 +24,7 @@ namespace LP_MP {
 
 // do zrobienia: possibly rename unary to edge factor
 
-template<MessageSending MESSAGE_SENDING>
+template<MessageSendingType MESSAGE_SENDING>
 struct FMC_MULTICUT {
    constexpr static const char* name = "Multicut";
 
@@ -43,7 +43,7 @@ struct FMC_MULTICUT {
 };
 
 // It would be nice to be able to derive from FMC_MULTICUT. This is not possible due to deviating FMCs
-template<MessageSending MESSAGE_SENDING>
+template<MessageSendingType MESSAGE_SENDING>
 struct FMC_ODD_WHEEL_MULTICUT : public FMC_MULTICUT<MESSAGE_SENDING> {
    constexpr static const char* name = "Multicut with odd wheel constraints";
 

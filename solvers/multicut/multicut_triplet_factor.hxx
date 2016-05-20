@@ -289,8 +289,8 @@ public:
 
 
 // message between unary factor and triplet factor
-enum class MessageSending { SRMP, MPLP }; // do zrobienia: place this possibly more global, also applies to pairwise factors in MRFs
-template<MessageSending MST = MessageSending::SRMP>
+//enum class MessageSending { SRMP, MPLP }; // do zrobienia: place this possibly more global, also applies to pairwise factors in MRFs
+template<MessageSendingType MST = MessageSendingType::SRMP>
 class MulticutUnaryTripletMessage
 {
 public:
@@ -301,12 +301,12 @@ public:
    }; 
    ~MulticutUnaryTripletMessage()
    {
-      static_assert(MST == MessageSending::SRMP,"");
+      static_assert(MST == MessageSendingType::SRMP,"");
    }
 
    constexpr static INDEX size() { return 1; }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2, MessageSending MST_TMP = MST>
+   template<typename RIGHT_FACTOR, typename G1, typename G2, MessageSendingType MST_TMP = MST>
    //typename std::enable_if<MST_TMP == MessageSending::SRMP,void>::type
    void
    ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg) 
@@ -315,7 +315,7 @@ public:
       msg[0] -= std::min(std::min(rightPot[(i_+1)%3], rightPot[(i_+2)%3]), rightPot[3]) - std::min(rightPot[i_],0.0);
    }
 
-   template<typename LEFT_FACTOR, typename G1, typename G3, MessageSending MST_TMP = MST>
+   template<typename LEFT_FACTOR, typename G1, typename G3, MessageSendingType MST_TMP = MST>
    //typename std::enable_if<MST_TMP == MessageSending::SRMP,void>::type
    void
    SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega)
