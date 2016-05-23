@@ -678,14 +678,17 @@ public:
       auto* t = BaseConstructor::GetTripletFactor(tripletIndices[0], tripletIndices[1], tripletIndices[2]);
       std::array<INDEX,3> ti = tripletIndices;
       std::array<std::array<INDEX,2>,3> te{{{ti[0],ti[1]},{ti[0],ti[2]},{ti[1],ti[2]}}};
-      std::array<std::array<INDEX,2>,3> tspE{{{std::min(n1,centerNode), std::max(n1,centerNode)}, {std::min(n2,centerNode),std::max(n2,centerNode)}, {n1,n2}}};
-      Permutation<3> p(te,tspE);
-      p.Invert();
+      //std::array<std::array<INDEX,2>,3> tspE{{{std::min(n1,centerNode), std::max(n1,centerNode)}, {std::min(n2,centerNode),std::max(n2,centerNode)}, {n1,n2}}};
+      std::array<std::array<INDEX,2>,3> tspE{{{n1,n2}, {std::min(n1,centerNode), std::max(n1,centerNode)}, {std::min(n2,centerNode),std::max(n2,centerNode)}}};
+      //Permutation<3> p(te,tspE);
+      Permutation<3> p(tspE,te);
       std::cout << "triplet      edges: " << "(" << te[0][0] << "," << te[0][1] << "), " << "(" << te[1][0] << "," << te[1][1] << "), " << "(" << te[2][0] << "," << te[2][1] << ")" << "\n";
       std::cout << "tripletSpoke edges: " << "(" << tspE[0][0] << "," << tspE[0][1] << "), " << "(" << tspE[1][0] << "," << tspE[1][1] << "), " << "(" << tspE[2][0] << "," << tspE[2][1] << ")" << "\n";
       std::cout << "permutation for covering message: " << INDEX(p[0]) << INDEX(p[1]) << INDEX(p[2]) << "\n";
       std::cout << "attention: not using permutation currently\n";
-      auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(Permutation<3>({0,1,2})), t, tps, MulticutTripletPlusSpokeCoverMessage::size());
+      auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(n1,n2,centerNode,spokeNode), t, tps, MulticutTripletPlusSpokeCoverMessage::size());
+      //auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(p), t, tps, MulticutTripletPlusSpokeCoverMessage::size());
+      //auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(Permutation<3>({0,1,2})), t, tps, MulticutTripletPlusSpokeCoverMessage::size());
       //auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(Permutation<3>({n1,n2,centerNode},{tripletIndices[0],tripletIndices[1],tripletIndices[2]})), 
       //                                                    t, tps, MulticutTripletPlusSpokeCoverMessage::size());
       BaseConstructor::pd_.GetLP()->AddMessage(m);
@@ -731,18 +734,20 @@ public:
       }
       assert(sharedTripletEdgeTriplet < 3);
 
-      auto* m = new TripletPlusSpokeMessageContainer(MulticutTripletPlusSpokeMessage(sharedTripletEdgeTriplet,spokeEdgeTriplet,sharedTripletEdgeTripletPlusSpoke),t,tps,MulticutTripletPlusSpokeMessage::size());
+      auto* m = new TripletPlusSpokeMessageContainer(MulticutTripletPlusSpokeMessage(n1,n2,centerNode,spokeNode,tripletIndices[0],tripletIndices[1],tripletIndices[2]),t,tps,MulticutTripletPlusSpokeMessage::size());
+      //auto* m = new TripletPlusSpokeMessageContainer(MulticutTripletPlusSpokeMessage(sharedTripletEdgeTriplet,spokeEdgeTriplet,sharedTripletEdgeTripletPlusSpoke),t,tps,MulticutTripletPlusSpokeMessage::size());
       BaseConstructor::pd_.GetLP()->AddMessage(m);
       return m;
    }
 
    // rename to EnforceOddWheel. No single odd wheel factor is added
-   INDEX AddOddWheelFactor(const INDEX centerNode, std::vector<INDEX> cycle)
+   INDEX EnforceOddWheel(const INDEX centerNode, std::vector<INDEX> cycle)
    {
       CycleNormalForm(cycle);
       std::cout << "Enforce odd wheel with center node " << centerNode << " and cycle nodes ";
       for(auto i : cycle) std::cout << i << ",";
       std::cout << "\n";
+      for(auto i : cycle) { assert(i != centerNode); }
    
       INDEX tripletPlusSpokesAdded = 0;
       // we enforce the odd wheel constraint by quadrangulating the odd wheel. This results in triplets and triplets with an additional spoke.
@@ -863,8 +868,8 @@ public:
                if(HasUniqueValues(pathNormalized)) { // possibly already add the subpath that is unique and do not search for it later. Indicate this with a std::vector<bool>
                   //assert(HasUniqueValues(pathNormalized)); // if not, a shorter subpath has been found. This subpath will be detected or has been deteced and has been added
                   CycleNormalForm(pathNormalized);
-                  //CycleNormalForm called unnecesarily in AddOddWheelFactor
-                  oddWheelsAdded += AddOddWheelFactor(i,pathNormalized);
+                  //CycleNormalForm called unnecesarily in EnforceOddWheel
+                  oddWheelsAdded += EnforceOddWheel(i,pathNormalized);
                }
             }
          }
@@ -877,7 +882,7 @@ public:
    INDEX Tighten(const REAL minDualIncrease, const INDEX maxCuttingPlanesToAdd)
    {
       //std::cout << "remove this\n\n\n";
-      //AddOddWheelFactor(1, std::vector<INDEX>{0,2,3});
+      //EnforOddWheel(1, std::vector<INDEX>{0,2,3});
       //return 0;
       const INDEX tripletsAdded = BaseConstructor::Tighten(minDualIncrease, maxCuttingPlanesToAdd);
       if(tripletsAdded > 0 ) {

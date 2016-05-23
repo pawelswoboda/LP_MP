@@ -2,41 +2,51 @@
 #define LP_MP_ASCII_PLOT_VISITOR_HXX
 
 #include "standard_visitor.hxx"
-#include <curses.h>
-#include <form.h>
-
+#include <ncurses.h>
+//#include <form.h>
 
 namespace LP_MP {
 
 // visitor deriving from StandardVisitor and printing convergence plots via curses and using ascii art
-class AsciiPlotVisitor : public StandardVisitor {
+// also templatize for visitor class to make tightening visitor possible
+template<class PROBLEM_DECOMPOSITION>
+class AsciiPlotVisitor : public StandardVisitor<PROBLEM_DECOMPOSITION> {
 public:
-   TikzVisitor(TCLAP::CmdLine& cmd) 
-      : StandardVisitor(cmd)
+   using BaseVisitor = StandardVisitor<PROBLEM_DECOMPOSITION>;
+   AsciiPlotVisitor(TCLAP::CmdLine& cmd, PROBLEM_DECOMPOSITION& pd) 
+      : BaseVisitor(cmd,pd)
    {}
 
    LPVisitorReturnType begin(const LP* lp)
    {
-      auto ret StandardVisitor::begin(lp);
-      const REAL lowerBound = StandardVisitor::GetDualBound();
-      const REAL upperBound = lp->BestPrimalBound(); // note: LP does not compute initial primal bound right now. Implement this
+      auto ret = BaseVisitor::begin(lp);
+      //const REAL lowerBound = StandardVisitor::GetDualBound();
+      //const REAL upperBound = lp->BestPrimalBound(); // note: LP does not compute initial primal bound right now. Implement this
       std::cout << "note: LP does not compute initial primal bound right now. Implement this\n";
       return ret;
    }
 
    template<LPVisitorReturnType LP_STATE>
-   LPVisitorReturnType visit(const LP* lp)
+   LPVisitorReturnType visit(LP* lp)
    {
-      auto ret_state = StandardVisitor::visit<LP_STATE>(lp);
-      if(LP_STATE == LPVisitorReturnType::ReparametrizeAndComputePrimal) {
-         const REAL lowerBound = StandardVisitor::GetDualBound();
-         const REAL upperBound = lp->BestPrimalBound();
+      auto ret_state = BaseVisitor::template visit<LP_STATE>(lp);
+      //if(LP_STATE == LPVisitorReturnType::ReparametrizeAndComputePrimal) {
+         //const REAL lowerBound = StandardVisitor::GetDualBound();
+         //const REAL upperBound = lp->BestPrimalBound();
 
-      }
+      //}
       return ret_state; 
    }
 
 private:
+   typedef double (*yfunction)(double x);
+   struct _viewwin {
+      double xmin, xmax;
+      double ymin, ymax;
+      double xscl, yscl;
+   };
+   typedef struct _viewwin viewwin;
+
    double estimateSlope(yfunction func, double x, double accuracy) const
    {
       double y1 = func(x - accuracy);

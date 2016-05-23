@@ -7,6 +7,18 @@
 #include "tclap/CmdLine.h"
 #include <chrono>
 
+/*
+ minimal visitor class:
+class Visitor {
+public:
+   Visitor(TCLAP::CmdLine& cmd, PROBLEM_DECOMPOSITION& pd);
+   LPVisitorReturnType begin(const LP* lp);
+   template<LPVisitorReturnType LP_STATE>
+   LPVisitorReturnType visit(LP* lp)
+
+};
+*/
+
 namespace LP_MP {
    class PositiveRealConstraint : public TCLAP::Constraint<REAL>
    {
@@ -355,7 +367,8 @@ namespace LP_MP {
          // do zrobienia: introduce tighten reparametrization
          if(tighten_) {
             if(LP_STATE != LPVisitorReturnType::Break) {
-               if(this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_ || tightenIteration_ <= 0) {
+               // do zrobienia: if one specifies tightenIteration = 0, this code does not work. 
+               if(this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_) {
                //if(tightenInNextIteration_) {
                //   tightenInNextIteration_ = false;
                //   resumeInNextIteration_ = true;

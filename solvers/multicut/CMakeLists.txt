@@ -1,6 +1,7 @@
 SET(SOURCE_FILES 
    multicut_srmp.cpp multicut_mplp.cpp
    multicut_opengm_srmp.cpp multicut_opengm_mplp.cpp
+   multicut_opengm_srmp_ascii_plot.cpp
    )
 
 # note: HDF5 is only required for the opengm versions. Do not require HDF5 per default
