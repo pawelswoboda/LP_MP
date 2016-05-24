@@ -201,27 +201,25 @@ public:
       //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
    }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size()>::type
-   Tighten(const REAL minDualIncrease, const INDEX maxConstraints) {}
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size(),INDEX>::type
+   Tighten(const REAL minDualIncrease, const INDEX maxConstraints) { return 0; }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanTighten<PROBLEM_CONSTRUCTOR_NO>()>::type
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
    Tighten(const REAL minDualIncrease, const INDEX maxConstraints)
    {
       return Tighten<PROBLEM_CONSTRUCTOR_NO+1>(minDualIncrease,maxConstraints);
    }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanTighten<PROBLEM_CONSTRUCTOR_NO>()>::type
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
    Tighten(const REAL minDualIncrease, const INDEX maxConstraints)
    {
       std::cout << "Tighten for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
-      const INDEX noCuttingPlanedAdded = std::get<PROBLEM_CONSTRUCTOR_NO>(problem_constructor_).Tighten(minDualIncrease,maxConstraints);
-      return Tighten<PROBLEM_CONSTRUCTOR_NO+1>(minDualIncrease,maxConstraints);
+      const INDEX noCuttingPlaneAdded = std::get<PROBLEM_CONSTRUCTOR_NO>(problem_constructor_).Tighten(minDualIncrease,maxConstraints);
+      return noCuttingPlaneAdded + Tighten<PROBLEM_CONSTRUCTOR_NO+1>(minDualIncrease,maxConstraints);
    }
    INDEX Tighten(const REAL minDualIncrease, const INDEX maxConstraints) // minDualIncrease says how small minimally must be the increase guaranteed by added constraints, while maxConstraints gives maximum number of constraints to add
    {
-      Tighten<0>(minDualIncrease, maxConstraints);
-      // return number of added constraints
-      return 1;
+      return Tighten<0>(minDualIncrease, maxConstraints);
    }
 
    // do zrobienia: remove PC_LIST from templates and directly use ProblemDecompositionList as above

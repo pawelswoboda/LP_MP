@@ -27,6 +27,13 @@ namespace LP_MP {
          std::string shortID() const { return "positive real number"; };
          bool check(const REAL& value) const { return value >= 0.0; };
    };
+   class OpenUnitIntervalConstraint: public TCLAP::Constraint<REAL>
+   {
+      public:
+         std::string description() const { return "0<x<1 real constraint"; };
+         std::string shortID() const { return "positive real number smaller 1"; };
+         bool check(const REAL& value) const { return value > 0.0 && value < 1.0; };
+   };
 
    // standard visitor class for LP_MP solver, when no custom visitor is given
    // do zrobienia: add xor arguments primalBoundComputationInterval, dualBoundComputationInterval with boundComputationInterval
@@ -339,7 +346,9 @@ namespace LP_MP {
             tightenIntervalArg_("","tightenInterval","number of iterations between tightenings",false,std::numeric_limits<INDEX>::max(),"positive integer", cmd),
             tightenConstraintsMaxArg_("","tightenConstraintsMax","maximal number of constraints to be added during tightening",false,20,"positive integer", cmd),
             posConstraint_(),
-            tightenMinDualIncreaseArg_("","tightenMinDualIncrease","minimum increase which additional constraint must guarantee",false,0.0,&posConstraint_, cmd)
+            tightenMinDualIncreaseArg_("","tightenMinDualIncrease","minimum increase which additional constraint must guarantee",false,0.0,&posConstraint_, cmd),
+            unitIntervalConstraint_(),
+            tightenMinDualDecreaseFactorArg_("","tightenMinDualDecreaseFactor","factor by which to decrease minimum dual increase during tightening",false,0.5,&unitIntervalConstraint_, cmd)
       {}
 
       LPVisitorReturnType begin(const LP* lp) // called, after problem is constructed. 
@@ -350,6 +359,7 @@ namespace LP_MP {
             tightenInterval_ = tightenIntervalArg_.getValue();
             tightenConstraintsMax_ = tightenConstraintsMaxArg_.getValue();
             tightenMinDualIncrease_ = tightenMinDualIncreaseArg_.getValue();
+            tightenMinDualDecreaseFactor_ = tightenMinDualDecreaseFactorArg_.getValue();
          } catch (TCLAP::ArgException &e) {
             std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
             exit(1);
@@ -369,50 +379,31 @@ namespace LP_MP {
             if(LP_STATE != LPVisitorReturnType::Break) {
                // do zrobienia: if one specifies tightenIteration = 0, this code does not work. 
                if(this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_) {
-               //if(tightenInNextIteration_) {
-               //   tightenInNextIteration_ = false;
-               //   resumeInNextIteration_ = true;
-                  Tighten();
+                  const INDEX noConstraintsAdded = Tighten();
+                  if(noConstraintsAdded <= tightenConstraintsMax_/2) {
+                     std::cout << "Added only " << noConstraintsAdded << " constraints\n";
+                     std::cout << "Decrease minimal dual increase in tightening, current minimal increase = " << tightenMinDualIncrease_ << "\n";
+                     tightenMinDualIncrease_ *= tightenMinDualDecreaseFactor_;
+                  }
+                  if(noConstraintsAdded <= tightenConstraintsMax_/4) {
+                     std::cout << "Tighten again\n";
+                     Tighten();
+                  }
                   lastTightenIteration_ = this->GetIter();
                   lp->Init(); // reinitialize factors, as they might have changed
                   std::cout << "New number of factors = " << lp->GetNumberOfFactors() << ", tightening took " << tightenTime_ << "ms\n";
-                  //if(repamModeBeforeTightening_ == LPReparametrizationMode::Anisotropic) {
-                  //   return LPVisitorReturnType::SetAnisotropicReparametrization;
-                  //} else if(repamModeBeforeTightening_ == LPReparametrizationMode::Rounding) {
-                  //   return LPVisitorReturnType::SetRoundingReparametrization;
-                  //} else {
-                  //   assert(false); // has there been introduced a new reparametrization?
-                  //}
-               //} else if(resumeInNextIteration_) {
-               //   resumeInNextIteration_ = false;
-               //   return retBeforeTightening_;
-               //} else if(this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_) {
-               //   tightenInNextIteration_ = true;
-               //   retBeforeTightening_ = BaseVisitorType::template visit<LP_STATE>(lp);
-               //   repamModeBeforeTightening_ = lp->GetRepamMode();
-               //   return LPVisitorReturnType::SetRoundingReparametrization;
                }
-               // if no sufficient dual increase was achieved
             } else if(LP_STATE == LPVisitorReturnType::Break) {
                std::cout << "Tightening took " << tightenTime_ << " milliseconds\n";
             }
          }
-         // if dual improvement too small
-         //{
-         //   if(tighten_) {
-         //      tightenInNextIteration_ = true;
-         //      return LPVisitorReturnType::SetAnisotropicReparametrization; 
-         //      // perform one forward and backward pass with rounding reparametrization and then tighten
-         //      // record guaranteed dual improvement
-         //   }
-         //}
 
          return ret;
       }
       INDEX Tighten()
       {
          auto tightenBeginTime = std::chrono::steady_clock::now();
-         INDEX constraintsAdded = BaseVisitorType::pd_.Tighten(tightenMinDualIncrease_, tightenConstraintsMax_);
+         const INDEX constraintsAdded = BaseVisitorType::pd_.Tighten(tightenMinDualIncrease_, tightenConstraintsMax_);
          auto tightenEndTime = std::chrono::steady_clock::now();
          tightenTime_ += std::chrono::duration_cast<std::chrono::milliseconds>(tightenEndTime - tightenBeginTime).count();
          return constraintsAdded;
@@ -425,6 +416,8 @@ namespace LP_MP {
       TCLAP::ValueArg<INDEX> tightenConstraintsMaxArg_; // How many constraints to add in tightening maximally
       PositiveRealConstraint posConstraint_;
       TCLAP::ValueArg<REAL> tightenMinDualIncreaseArg_; // only include constraints which guarantee increase larger than specified value
+      OpenUnitIntervalConstraint unitIntervalConstraint_;
+      TCLAP::ValueArg<REAL> tightenMinDualDecreaseFactorArg_; 
 
       bool tighten_;
       bool tightenInNextIteration_ = false;
@@ -437,6 +430,7 @@ namespace LP_MP {
       INDEX tightenInterval_;
       INDEX tightenConstraintsMax_;
       REAL tightenMinDualIncrease_;
+      REAL tightenMinDualDecreaseFactor_;
       
       INDEX tightenTime_ = 0;
 

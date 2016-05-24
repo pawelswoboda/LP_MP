@@ -1,6 +1,7 @@
 SET(SOURCE_FILES 
    multicut_srmp.cpp multicut_mplp.cpp
-   multicut_opengm_srmp.cpp multicut_opengm_mplp.cpp
+   multicut_opengm_mplp.cpp
+   multicut_opengm_srmp_cycle.cpp multicut_opengm_srmp_cycle_odd_wheel.cpp
    multicut_opengm_srmp_ascii_plot.cpp
    )
 

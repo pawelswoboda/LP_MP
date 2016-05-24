@@ -473,7 +473,9 @@ MulticutConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd)
    // search for cycles to add such that coordinate ascent will be possible
    INDEX Tighten(const REAL minDualIncrease, const INDEX maxCuttingPlanesToAdd)
    {
-      return FindNegativeCycles(minDualIncrease,maxCuttingPlanesToAdd);
+      const INDEX tripletsAdded = FindNegativeCycles(minDualIncrease,maxCuttingPlanesToAdd);
+      std::cout << "Added " << tripletsAdded << " triplet(s)\n";
+      return tripletsAdded;
    }
 
    // returns number of triplets added
@@ -682,10 +684,9 @@ public:
       std::array<std::array<INDEX,2>,3> tspE{{{n1,n2}, {std::min(n1,centerNode), std::max(n1,centerNode)}, {std::min(n2,centerNode),std::max(n2,centerNode)}}};
       //Permutation<3> p(te,tspE);
       Permutation<3> p(tspE,te);
-      std::cout << "triplet      edges: " << "(" << te[0][0] << "," << te[0][1] << "), " << "(" << te[1][0] << "," << te[1][1] << "), " << "(" << te[2][0] << "," << te[2][1] << ")" << "\n";
-      std::cout << "tripletSpoke edges: " << "(" << tspE[0][0] << "," << tspE[0][1] << "), " << "(" << tspE[1][0] << "," << tspE[1][1] << "), " << "(" << tspE[2][0] << "," << tspE[2][1] << ")" << "\n";
-      std::cout << "permutation for covering message: " << INDEX(p[0]) << INDEX(p[1]) << INDEX(p[2]) << "\n";
-      std::cout << "attention: not using permutation currently\n";
+      //std::cout << "triplet      edges: " << "(" << te[0][0] << "," << te[0][1] << "), " << "(" << te[1][0] << "," << te[1][1] << "), " << "(" << te[2][0] << "," << te[2][1] << ")" << "\n";
+      //std::cout << "tripletSpoke edges: " << "(" << tspE[0][0] << "," << tspE[0][1] << "), " << "(" << tspE[1][0] << "," << tspE[1][1] << "), " << "(" << tspE[2][0] << "," << tspE[2][1] << ")" << "\n";
+      //std::cout << "permutation for covering message: " << INDEX(p[0]) << INDEX(p[1]) << INDEX(p[2]) << "\n";
       auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(n1,n2,centerNode,spokeNode), t, tps, MulticutTripletPlusSpokeCoverMessage::size());
       //auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(p), t, tps, MulticutTripletPlusSpokeCoverMessage::size());
       //auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(Permutation<3>({0,1,2})), t, tps, MulticutTripletPlusSpokeCoverMessage::size());
@@ -744,9 +745,9 @@ public:
    INDEX EnforceOddWheel(const INDEX centerNode, std::vector<INDEX> cycle)
    {
       CycleNormalForm(cycle);
-      std::cout << "Enforce odd wheel with center node " << centerNode << " and cycle nodes ";
-      for(auto i : cycle) std::cout << i << ",";
-      std::cout << "\n";
+      //std::cout << "Enforce odd wheel with center node " << centerNode << " and cycle nodes ";
+      //for(auto i : cycle) std::cout << i << ",";
+      //std::cout << "\n";
       for(auto i : cycle) { assert(i != centerNode); }
    
       INDEX tripletPlusSpokesAdded = 0;
@@ -785,7 +786,6 @@ public:
       return tripletPlusSpokesAdded;
    }
 
-   // do zrobienia: include minDualIncrease
    INDEX FindOddWheels(const REAL minDualIncrease, const INDEX maxCuttingPlanesToAdd)
    {
       INDEX oddWheelsAdded = 0;
@@ -795,6 +795,7 @@ public:
       for(INDEX i=0; i<BaseConstructor::noNodes_; ++i) {
          // get all triplet factors attached to node i and build bipartite subgraph with doubled edges as described in Nowozin's thesis
          // make a hash of this. Give hints to load etc.
+         // do zrobienia: use hash map
          std::map<INDEX,INDEX> origToCompressedNode; // compresses node indices
          std::vector<INDEX> compressedToOrigNode; // compressed nodes to original
          for(INDEX j=0; j<tripletByIndices_[i].size(); ++j) {
@@ -826,14 +827,20 @@ public:
             // check if 110 or 101 are among the minimal labelings. where the first edge is the outer cycle edge
             // the corresponding labeling numbers are
             INDEX l1, l2;
+            INDEX l3, l4; // the other labelings
+            assert(t->GetFactor()->size() == 4);
             if(i < i1 && i < i2) { // the cycle edge is the last one
                l1 = 0; l2 = 1;
+               l3 = 2; l4 = 3;
             } else if (i > i1 && i > i2) { // the cycle edge is the first one
                l1 = 1; l2 = 2;
+               l3 = 0; l4 = 3;
             } else { // i1 < i < i2, the cycle edge is the second one
                l1 = 0; l2 = 2;
+               l3 = 1; l4 = 3;
             }
-            if( std::min((*t)[l1], (*t)[l2]) <= t->GetFactor()->LowerBound(*t) + eps ) {
+            //if( std::min((*t)[l1], (*t)[l2]) <= t->GetFactor()->LowerBound(*t) + eps ) {
+            if( std::min((*t)[l1], (*t)[l2]) <= std::min(0.0,std::min((*t)[l3],(*t)[l4])) - minDualIncrease) {
                const INDEX i1c = origToCompressedNode[i1];
                const INDEX i2c = origToCompressedNode[i2];
                assert(i1c != i2c);
@@ -851,11 +858,11 @@ public:
                //std::cout << "find path from " << j << " to " << j+noNodes << " and add corresponding wheel\n";
                auto path = mp.FindPath(j,noCompressedNodes+j,g);
                auto pathNormalized = std::get<1>(path);
-               std::cout << "found compressed path ";
-               for(INDEX k=0; k<pathNormalized.size(); ++k) {
-                  std::cout << pathNormalized[k] << ", ";
-               }
-               std::cout << "\n";
+               //std::cout << "found compressed path ";
+               //for(INDEX k=0; k<pathNormalized.size(); ++k) {
+               //   std::cout << pathNormalized[k] << ", ";
+               //}
+               //std::cout << "\n";
                for(INDEX k=0; k<pathNormalized.size()-1; ++k) {
                   //assert(compressedToOrigNode.find(pathNormalized[k]%noCompressedNodes) != compressedToOrigNode.end());
                   pathNormalized[k] = compressedToOrigNode[pathNormalized[k]%noCompressedNodes];
@@ -870,6 +877,9 @@ public:
                   CycleNormalForm(pathNormalized);
                   //CycleNormalForm called unnecesarily in EnforceOddWheel
                   oddWheelsAdded += EnforceOddWheel(i,pathNormalized);
+               } else {
+                  std::cout << "kwaskwas: add subcycles\n";
+                  assert(false); //
                }
             }
          }
@@ -881,19 +891,24 @@ public:
 
    INDEX Tighten(const REAL minDualIncrease, const INDEX maxCuttingPlanesToAdd)
    {
-      //std::cout << "remove this\n\n\n";
-      //EnforOddWheel(1, std::vector<INDEX>{0,2,3});
-      //return 0;
       const INDEX tripletsAdded = BaseConstructor::Tighten(minDualIncrease, maxCuttingPlanesToAdd);
-      if(tripletsAdded > 0 ) {
-         std::cout << "Added " << tripletsAdded << " triplet(s)\n";
+      if(tripletsAdded >= maxCuttingPlanesToAdd ) {
          return tripletsAdded;
       } else {
          const INDEX oddWheelsAdded = FindOddWheels(minDualIncrease, maxCuttingPlanesToAdd - tripletsAdded);
-         std::cout << "Added " << oddWheelsAdded << " factor(s) for odd wheel constraints\n";
+         std::cout << "Added " << oddWheelsAdded << " factors for odd wheel constraints\n";
          return tripletsAdded + oddWheelsAdded;
       }
-      return 0;
+      /*
+      if(minDualIncrease <= 1e-14) {
+         const INDEX oddWheelsAdded = FindOddWheels(minDualIncrease*1e12, maxCuttingPlanesToAdd);
+         std::cout << "Added " << oddWheelsAdded << " factors for odd wheel constraints\n";
+         return tripletsAdded + oddWheelsAdded;
+      }
+      return tripletsAdded;
+      */
+
+      assert(false);
    }
 
 
