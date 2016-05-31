@@ -22,9 +22,6 @@ public:
       return te;
    }
 
-   template<typename REPAM_ARRAY>
-   void MaximizePotential(const REPAM_ARRAY& repam) {};
-
    constexpr static INDEX size() { return 4; }
 
    template<typename REPAM_ARRAY>

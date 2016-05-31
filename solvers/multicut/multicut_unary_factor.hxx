@@ -12,8 +12,6 @@ class MulticutUnaryFactor
 public:
    MulticutUnaryFactor(const double cost) {};
    template<typename REPAM_ARRAY>
-   void MaximizePotential(const REPAM_ARRAY& repam) {};
-   template<typename REPAM_ARRAY>
    void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    {
       assert(repam.size() == 1);
@@ -40,6 +38,7 @@ public:
    template<typename REPAM_ARRAY>
    REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
    {
+      return 100000000.0; // for now
       assert(repam.size() == 1);
       return primal[0]*repam[0];
    }

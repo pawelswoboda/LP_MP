@@ -34,8 +34,6 @@ public:
 
    constexpr static INDEX size() { return 9; }
    template<typename REPAM_ARRAY>
-   void MaximizePotential(const REPAM_ARRAY& repam) {};
-   template<typename REPAM_ARRAY>
    REAL LowerBound(const REPAM_ARRAY& repam) const
    {
       REAL x = 0.0;

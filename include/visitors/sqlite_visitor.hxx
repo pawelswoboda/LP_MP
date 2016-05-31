@@ -21,13 +21,15 @@ struct IterationStatistics {
 // this visitor connects to given sqlite database and writes or updates the runtime and iteration data of the algorithm.
 // do zrobienia: transaction support to avoid concurrent writing to database?
 // do zrobienia: error handling
-template<class PROBLEM_DECOMPOSITION>
-class SqliteVisitor : public StandardVisitor<PROBLEM_DECOMPOSITION> {
+template<class PROBLEM_DECOMPOSITION, template<typename> class BASE_VISITOR = StandardVisitor>
+class SqliteVisitor : public BASE_VISITOR<PROBLEM_DECOMPOSITION> {
+
+   using BaseVisitor = BASE_VISITOR<PROBLEM_DECOMPOSITION>;
 
 public:
    SqliteVisitor(TCLAP::CmdLine& cmd, PROBLEM_DECOMPOSITION& pd) 
       :
-         StandardVisitor<PROBLEM_DECOMPOSITION>(cmd,pd),
+         BaseVisitor(cmd,pd),
          pd_(pd),
          databaseFileArg_("","databaseFile","sqlite database into which to protocolate runtime/iteration vs. primal/dual energy",true,"","file name",cmd),
          datasetNameArg_("","datasetName","name of dataset the input file belongs to",true,"","string",cmd),
@@ -278,7 +280,7 @@ public:
 
    LPVisitorReturnType begin(const LP* lp) // called, after problem is constructed. 
    {
-      const auto ret = StandardVisitor<PROBLEM_DECOMPOSITION>::begin(lp);
+      const auto ret = BaseVisitor::begin(lp);
       try {
          databaseFile_ = databaseFileArg_.getValue();
          datasetName_ = datasetNameArg_.getValue();
@@ -314,13 +316,13 @@ public:
    template<LPVisitorReturnType LP_STATE>
    LPVisitorReturnType visit(LP* lp)
    {
-      auto ret_state = this->template StandardVisitor<PROBLEM_DECOMPOSITION>::template visit<LP_STATE>(lp);
+      auto ret_state = this->BaseVisitor::template visit<LP_STATE>(lp);
       
       if(!(LP_STATE == LPVisitorReturnType::Error || LP_STATE == LPVisitorReturnType::Break)) {
          const REAL lowerBound = lp->BestLowerBound();
          const REAL upperBound = lp->BestPrimalBound();
-         const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - StandardVisitor<PROBLEM_DECOMPOSITION>::GetBeginTime()).count();
-         const INDEX curIter = StandardVisitor<PROBLEM_DECOMPOSITION>::GetIter();
+         const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - BaseVisitor::GetBeginTime()).count();
+         const INDEX curIter = BaseVisitor::GetIter();
          iterationStatistics_.push_back({curIter,timeElapsed,lowerBound,upperBound});
       }
       if(LP_STATE == LPVisitorReturnType::Break) {

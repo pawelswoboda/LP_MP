@@ -11,6 +11,7 @@
 //#include "multicut_triplet_odd_wheel_message.hxx"
 //#include "multicut_unary_odd_wheel_message.hxx"
 #include "multicut_odd_wheel.hxx"
+#include "lifted_multicut_factors_messages.hxx"
 #include "multicut_constructor.hxx"
 
 #include "parse_rules.h"
@@ -24,9 +25,10 @@ namespace LP_MP {
 
 // do zrobienia: possibly rename unary to edge factor
 
-template<MessageSendingType MESSAGE_SENDING>
+//template<MessageSendingType MESSAGE_SENDING>
 struct FMC_MULTICUT {
-   constexpr static const char* name = "Multicut";
+   constexpr static const char* name = "Multicut with odd cycle constraints";
+   constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
    typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_MULTICUT, 0, true> MulticutUnaryFactorContainer;
    typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
@@ -44,8 +46,8 @@ struct FMC_MULTICUT {
 
 // It would be nice to be able to derive from FMC_MULTICUT. This is not possible due to deviating FMCs
 template<MessageSendingType MESSAGE_SENDING>
-struct FMC_ODD_WHEEL_MULTICUT : public FMC_MULTICUT<MESSAGE_SENDING> {
-   constexpr static const char* name = "Multicut with odd wheel constraints";
+struct FMC_ODD_WHEEL_MULTICUT {
+   constexpr static const char* name = "Multicut with odd cycle and wheel constraints";
 
    typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
    typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
@@ -81,6 +83,31 @@ struct FMC_ODD_WHEEL_MULTICUT : public FMC_MULTICUT<MESSAGE_SENDING> {
 
    using multicut = MulticutOddWheelConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,2,0,1,3,2,3>;
    using ProblemDecompositionList = meta::list<multicut>;
+};
+
+struct FMC_LIFTED_MULTICUT_ODD_CYCLE {
+   constexpr static const char* name = "Lifted Multicut";
+   constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
+
+   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_LIFTED_MULTICUT_ODD_CYCLE, 0, true> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_LIFTED_MULTICUT_ODD_CYCLE, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_LIFTED_MULTICUT_ODD_CYCLE, 2> MulticutGlobalFactorContainer;
+   
+
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, -1, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, -1, 0, FMC_LIFTED_MULTICUT_ODD_CYCLE, 1> MulticutUnaryGlobalMessageContainer;
+
+   typedef FactorContainer<LiftedMulticutCutFactor, ExplicitRepamStorage, FMC_LIFTED_MULTICUT_ODD_CYCLE, 3> LiftedMulticutCutFactorContainer;
+   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 3, -1, -1, CutEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 2 > CutEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 3, -1, -1, LiftedEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 3 > LiftedEdgeLiftedMulticutFactorMessageContainer;
+
+
+   using FactorList = meta::list<MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer, LiftedMulticutCutFactorContainer >;
+   using MessageList = meta::list<MulticutUnaryTripletMessageContainer, MulticutUnaryGlobalMessageContainer, CutEdgeLiftedMulticutFactorMessageContainer, LiftedEdgeLiftedMulticutFactorMessageContainer>;
+
+   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT_ODD_CYCLE,0,1,2,0,1>;
+   using LiftedMulticutConstructor = LiftedMulticutConstructor<BaseMulticutConstructor,3,2,3>;
+   using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 };
 
 namespace MulticutOpenGmInput {
@@ -218,6 +245,24 @@ namespace MulticutTextInput {
                     pegtl::star<pegtl::sor<mand_whitespace, pegtl::eol>>,
                     pegtl::eof> {};
 
+   struct lifted_line : pegtl::seq<opt_whitespace, pegtl::string<'L','I','F','T','E','D'>, opt_whitespace> {};
+   struct lifted_edge_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace, positive_integer, opt_whitespace, real_number, opt_whitespace > {};
+
+   struct LiftedMulticutGrammar : pegtl::must<
+                    init_line, pegtl::eol,
+                    numberOfVariables_line, pegtl::eol,
+                    pegtl::star<edge_line, pegtl::eol>,
+                    pegtl::opt<edge_line>,
+                    pegtl::star<pegtl::sor<mand_whitespace, pegtl::eol>>,
+                    // now come lifted edges //
+                    lifted_line, pegtl::eol,
+                    pegtl::star<lifted_edge_line, pegtl::eol>,
+                    pegtl::opt<lifted_edge_line>,
+                    pegtl::star<pegtl::sor<mand_whitespace, pegtl::eol>>,
+                    pegtl::eof> {};
+
+
+   // do zrobienia: remove this structure
    struct MulticutInput {
       INDEX numberOfVariables_;
       std::vector<std::tuple<INDEX,INDEX,REAL>> edges_;
@@ -249,7 +294,7 @@ namespace MulticutTextInput {
       }
    };
    template<typename FMC> struct action<FMC, edge_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 2);
          assert(real_stack.size() == 1);
@@ -264,16 +309,18 @@ namespace MulticutTextInput {
          }
          assert(i1 < i2);
          assert(i2 < mcInput.numberOfVariables_);
-         mcInput.edges_.push_back(std::make_tuple(i1,i2,cost));
+         //mcInput.edges_.push_back(std::make_tuple(i1,i2,cost));
+         auto& mc = pd.template GetProblemConstructor<0>();
+         mc.AddUnaryFactor( i1,i2,cost );
       }
    };
    template<typename FMC> struct action<FMC, pegtl::eof> {
       static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput& mcInput)
       {
-         auto& mc = pd.template GetProblemConstructor<0>();
-         for(const auto& it : mcInput.edges_) {
-            mc.AddUnaryFactor( std::get<0>(it), std::get<1>(it), std::get<2>(it) );
-         }
+         //auto& mc = pd.template GetProblemConstructor<0>();
+         //for(const auto& it : mcInput.edges_) {
+         //   mc.AddUnaryFactor( std::get<0>(it), std::get<1>(it), std::get<2>(it) );
+         //}
          //mc.Tighten(0.0,mcInput.numberOfVariables_); // initial tightening
          // only for odd wheel example
          //mc.AddTripletFactor(0,1,2);
@@ -291,6 +338,29 @@ namespace MulticutTextInput {
       struct actionSpecialization {
          template<typename RULE> struct type : public action<FMC,RULE> {};
       };
+
+
+   template<typename FMC> struct action<FMC, lifted_edge_line > {
+      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      {
+         assert(integer_stack.size() == 2);
+         assert(real_stack.size() == 1);
+         INDEX i2 = integer_stack.top();
+         integer_stack.pop();
+         INDEX i1 = integer_stack.top();
+         integer_stack.pop();
+         const REAL cost = real_stack.top();
+         real_stack.pop();
+         if(i1 > i2) {
+            std::swap(i1,i2);
+         }
+         assert(i1 < i2);
+         assert(i2 < mcInput.numberOfVariables_);
+         auto& mc = pd.template GetProblemConstructor<0>();
+         mc.AddLiftedUnaryFactor( i1,i2,cost );
+      }
+   };
+
       
    template<typename FMC>
    bool ParseProblem(const std::string filename, ProblemDecomposition<FMC>& pd)
@@ -304,6 +374,19 @@ namespace MulticutTextInput {
 
       return problem.parse< grammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, mcInput);
    }
+
+   template<typename FMC>
+   bool ParseLiftedProblem(const std::string filename, ProblemDecomposition<FMC>& pd)
+   {
+      std::stack<SIGNED_INDEX> integer_stack;
+      std::stack<REAL> real_stack;
+      MulticutInput mcInput;
+      std::cout << "parsing " << filename << "\n";
+
+      pegtl::file_parser problem(filename);
+      return problem.parse< LiftedMulticutGrammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, mcInput);
+   }
+
 
 } // end namespace MulticutTextInput
 

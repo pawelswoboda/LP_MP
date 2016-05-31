@@ -262,7 +262,7 @@ private:
 
 inline void LP::Init()
 {
-   std::cout << "Determining factor ordering." << std::endl;
+   //std::cout << "Determining factor ordering." << std::endl;
    SortFactors();
 
    // initialize three arrays of primal solutions corresponding to factors, one computed in the forward pass, one computed in the backward pass, and one with the best solution obtained so far
@@ -593,7 +593,7 @@ private:
 
 inline void LP::Init()
 {
-   std::cout << "Determining factor ordering." << std::endl;
+   //std::cout << "Determining factor ordering." << std::endl;
    SortFactors();
 
    // initialize three arrays of primal solutions corresponding to factors, one computed in the forward pass, one computed in the backward pass, and one with the best solution obtained so far
@@ -772,51 +772,6 @@ SIGNED_INDEX LP::Solve(VISITOR& v)
             s = v.template visit<LPVisitorReturnType::Error>(this);
             return -1;
             break;
-
-
-
-
-            /*
-         case LPVisitorReturnType::SetAnisotropicReparametrization:
-            if(repamMode_ != LPReparametrizationMode::Anisotropic) {
-               ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_);
-               ComputeAnisotropicWeights(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_);
-               repamMode_ = LPReparametrizationMode::Anisotropic;
-            }
-            s = v.template visit<LPVisitorReturnType::SetAnisotropicReparametrization>(this);
-            break;
-         case LPVisitorReturnType::SetRoundingReparametrization:
-            if(repamMode_ != LPReparametrizationMode::Rounding) {
-               ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_);
-               ComputeUniformWeights(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_);
-               repamMode_ = LPReparametrizationMode::Rounding;
-            }
-            s = v.template visit<LPVisitorReturnType::SetRoundingReparametrization>(this);
-            break;
-         case LPVisitorReturnType::Reparametrize:
-            //std::cout << "reparametrize in " << (repamMode_ == LPReparametrizationMode::Rounding ? " rounding " : " anisotropic ") << "mode\n";
-            ComputePass(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_.begin());
-            ComputePass(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_.begin());
-            s = v.template visit<LPVisitorReturnType::Reparametrize>(this);
-            break;
-         case LPVisitorReturnType::ReparametrizeAndComputePrimal:
-            //std::cout << "reparametrize in " << (repamMode_ == LPReparametrizationMode::Rounding ? " rounding " : " anisotropic ") << "mode\n";
-            forwardPrimal_.Initialize();
-            assert(forwardPrimal_.size() == forwardOrdering_.size());
-            ComputePassAndPrimal(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_.begin(), forwardPrimal_.begin(), bestForwardPrimal_.begin(), bestForwardPrimalCost_); 
-            backwardPrimal_.Initialize();
-            assert(backwardPrimal_.size() == forwardOrdering_.size());
-            ComputePassAndPrimal(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_.begin(), backwardPrimal_.rbegin(), bestBackwardPrimal_.rbegin(), bestBackwardPrimalCost_); 
-            s = v.template visit<LPVisitorReturnType::ReparametrizeAndComputePrimal>(this);
-            break;
-         case LPVisitorReturnType::Break:
-            s = v.template visit<LPVisitorReturnType::Break>(this);
-            return 0;
-            break;
-         case LPVisitorReturnType::Error:
-            return -1;
-            break;
-            */
       }
    }
 }

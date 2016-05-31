@@ -58,80 +58,14 @@ public:
    {
       ReadCommandLine();
 
-      // set precision for reading numbers out of file
-      std::cout.precision(9); 
-
-      /*
-      std::ifstream fs{inputFile_};
-      if(!fs.is_open()) { 
-         throw std::runtime_error("Could not open file " + inputFile_);
-      }
-
-      // do zrobienia: support files mapped to memory, as PEGTL is able to do this
-      std::string data;
-      for(std::string line; std::getline(fs,line);) {
-         data.append(line).append("\n");
-      }
-      */
-      
-      //const bool success = f(data,*this);
-
       const bool success = f(inputFile_,*this);
       assert(success);
       if(!success) throw std::runtime_error("could not parse problem file");
-      std::cout << "loading file succeeded\n";
+
+      //spdlog::get("logger")->info("loading file " + inputFile_ + " succeeded");
       return;
    }
 
-   // do zrobienia: obsolete
-   void ReadFile(const std::string filename) 
-   {
-      // set precision for reading numbers out of file
-      std::cout.precision(9); 
-
-      std::ifstream fs{filename};
-      if(!fs.is_open()) { 
-         throw std::runtime_error("Could not open file " + filename);
-      }
-
-      // implementation with custom function. Possibly templatize ProblemDecomposition such that custom Loading function is given
-      // first read the whole file into a string
-      // do zrobienia: map the file into memory and then parse.
-      /*
-      std::string data;
-      for(std::string line; std::getline(fs,line);) {
-         data.append(line).append("\n");
-      }
-      bool success = FMC::ParseProblem(data,*this);
-      assert(success);
-      */
-
-      // read each line and pass it to the correct problem constructor
-      INDEX current_problem_no = ProblemDecompositionList::size();
-      for(std::string line; std::getline(fs,line);) {
-         if(line.find("problem ") == 0) {
-            line.erase(0,8); // remove string "problem "
-            current_problem_no = std::stol(line);
-            if(current_problem_no >= std::tuple_size<decltype(problem_constructor_)>()) {
-               throw std::runtime_error("current problem number must be smaller than " + std::to_string(std::tuple_size<decltype(problem_constructor_)>()));
-            }
-         }
-         /*
-         std::regex problem_no_regex {"problem\\s*(\\d+)"};
-         std::smatch problem_no_match;
-         if(std::regex_search(line, problem_no_match, problem_no_regex)) {// get problem number
-            current_problem_no = std::stol(problem_no_match[0]);
-            std::cout << "read problem no = " << current_problem_no << "\n";
-            assert( current_problem_no < std::tuple_size<decltype(problem_constructor_)>() );
-         }
-         */
-         else {
-            ReadLine<0>(current_problem_no, line);
-         }
-      }
-
-      fs.close();
-   }
 
    template<INDEX PROBLEM_CONSTRUCTOR_NO, typename PC_LIST = ProblemDecompositionList>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO == PC_LIST::size()>::type
@@ -176,8 +110,6 @@ public:
       if(!fs.is_open()) { 
          throw std::runtime_error("Could not open output file " + filename);
       }
-      std::cout << "write solutions to " << filename << "\n";
-      std::cout << "not implemented\n";
       //auto primalSolution = lp_->GetBestPrimal();
       //WritePrimal<0>(primalSolution.begin(),fs);
       fs.close();
@@ -213,7 +145,7 @@ public:
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
    Tighten(const REAL minDualIncrease, const INDEX maxConstraints)
    {
-      std::cout << "Tighten for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
+      spdlog::get("logger")->info() << "Tighten for pc no " << PROBLEM_CONSTRUCTOR_NO;
       const INDEX noCuttingPlaneAdded = std::get<PROBLEM_CONSTRUCTOR_NO>(problem_constructor_).Tighten(minDualIncrease,maxConstraints);
       return noCuttingPlaneAdded + Tighten<PROBLEM_CONSTRUCTOR_NO+1>(minDualIncrease,maxConstraints);
    }

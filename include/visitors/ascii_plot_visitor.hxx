@@ -2,17 +2,25 @@
 #define LP_MP_ASCII_PLOT_VISITOR_HXX
 
 #include "standard_visitor.hxx"
+namespace ncurses {
 #include <ncurses.h>
+}
 //#include <form.h>
 
 namespace LP_MP {
 
 // visitor deriving from StandardVisitor and printing convergence plots via curses and using ascii art
 // also templatize for visitor class to make tightening visitor possible
-template<class PROBLEM_DECOMPOSITION>
-class AsciiPlotVisitor : public StandardVisitor<PROBLEM_DECOMPOSITION> {
+template<class PROBLEM_DECOMPOSITION, class BASE_VISITOR = StandardVisitor<PROBLEM_DECOMPOSITION>>
+class AsciiPlotVisitor : public BASE_VISITOR {
 public:
-   using BaseVisitor = StandardVisitor<PROBLEM_DECOMPOSITION>;
+   using BaseVisitor = BASE_VISITOR;
+   // for collecting upper and lower bound per iteration
+   struct Point {
+      INDEX x;
+      REAL y;
+   };
+
    AsciiPlotVisitor(TCLAP::CmdLine& cmd, PROBLEM_DECOMPOSITION& pd) 
       : BaseVisitor(cmd,pd)
    {}
@@ -20,9 +28,26 @@ public:
    LPVisitorReturnType begin(const LP* lp)
    {
       auto ret = BaseVisitor::begin(lp);
-      //const REAL lowerBound = StandardVisitor::GetDualBound();
+      //const REAL lowerBound = StandardVisitor::GetLowerBound();
       //const REAL upperBound = lp->BestPrimalBound(); // note: LP does not compute initial primal bound right now. Implement this
-      std::cout << "note: LP does not compute initial primal bound right now. Implement this\n";
+      spdlog::get("logger")->info() << "note: LP does not compute initial primal bound right now. Implement this\n";
+      ncurses::initscr(); 
+      ncurses::start_color();
+      ncurses::init_pair(1, COLOR_GREEN, COLOR_BLACK);
+      ncurses::init_pair(2, COLOR_YELLOW, COLOR_BLACK);
+      ncurses::clear();
+      ncurses::refresh();
+
+      view.ymin = BaseVisitor::GetLowerBound(); // do zrobienia: should be stored in LP
+      view.ymax = lp->BestPrimalBound(); view.ymax = -60000;
+      view.xmin = 0;
+      view.xmax = 100;
+      drawAxes(ncurses::stdscr,&view);
+      ncurses::refresh();
+
+      lowerBoundHistory_.push_back({BaseVisitor::GetIter(), BaseVisitor::GetLowerBound()});
+      upperBoundHistory_.push_back({BaseVisitor::GetIter(), lp->BestPrimalBound()});
+
       return ret;
    }
 
@@ -30,11 +55,25 @@ public:
    LPVisitorReturnType visit(LP* lp)
    {
       auto ret_state = BaseVisitor::template visit<LP_STATE>(lp);
-      //if(LP_STATE == LPVisitorReturnType::ReparametrizeAndComputePrimal) {
-         //const REAL lowerBound = StandardVisitor::GetDualBound();
-         //const REAL upperBound = lp->BestPrimalBound();
+      const INDEX iter = BaseVisitor::GetIter();
+      const REAL lowerBound = BaseVisitor::GetLowerBound();
+      const REAL upperBound = lp->BestPrimalBound();
+      lowerBoundHistory_.push_back({iter,lowerBound});
+      upperBoundHistory_.push_back({iter,upperBound});
 
-      //}
+      // redraw graph with larger x-axis, if it does not fit into current plot
+      if(iter >= view.xmax) {
+         view.xmax *= 10;
+         ncurses::erase();
+         drawAxes(ncurses::stdscr, &view);
+         drawGraph(ncurses::stdscr, &view, lowerBoundHistory_);
+         drawGraph(ncurses::stdscr, &view, upperBoundHistory_);
+         ncurses::refresh();
+      }
+
+      double d = 1;
+      plotPoint(ncurses::stdscr, &view, REAL(BaseVisitor::GetIter()), lowerBound, 0x2800, nullptr, nullptr);
+      ncurses::refresh();
       return ret_state; 
    }
 
@@ -71,7 +110,7 @@ private:
       else                return '|';
    }
 
-   void plotPoint(WINDOW *win, const viewwin *view, double x, double y, char ch, int *scrY, int *scrX)
+   void plotPoint(ncurses::WINDOW *win, const viewwin *view, double x, double y, char ch, int *scrY, int *scrX)
    {
       /* Displays a point on the screen at a location determined by graph coordinates.
          win       - ncurses window for drawing (can be NULL to only set scrY and scrX w/o drawing)
@@ -83,15 +122,27 @@ private:
       int xm, ym; getmaxyx(win, ym, xm);
       int xp = scale(x, view->xmin, view->xmax, 0, xm);
       int yp = scale(y, view->ymin, view->ymax, ym, 0);
+      spdlog::get("logger")->debug() << "print point (" << std::to_string(xp) << "," << std::to_string(yp) << ") with char " << ch ;
 
       if (scrX) *scrX = xp;
       if (scrY) *scrY = yp;
 
-      if (win) mvwaddch(win, yp, xp, ch);
+      assert(win);
+      //if (win) 
+      mvwaddch(win, yp, xp, ch);
+      ncurses::refresh();
    }
 
+   void getViewStep(ncurses::WINDOW *win, const viewwin *view, double *xstep, double *ystep)
+   {
+      // Gets the 'value' of one character on either or both axes.
 
-   void drawAxes(WINDOW *win, const viewwin *view)
+      int xm, ym; getmaxyx(win, ym, xm);
+      if (xstep) *xstep = (view->xmax - view->xmin) / (xm + 1);
+      if (ystep) *ystep = (view->ymax - view->ymin) / (ym + 1);
+   }
+
+   void drawAxes(ncurses::WINDOW *win, const viewwin *view)
    {
       // This function is what draws the axes on the screen.
 
@@ -104,18 +155,20 @@ private:
       int i; for (i=0; i<=xm; i++) {
          double plotx = view->xmin + xstep * i;
          int tick = fabs(fmod(plotx, view->xscl)) < xstep;
+         spdlog::get("logger")->info() << "print vertical point (" << std::to_string(y0) << "," << std::to_string(i) << ")";
          mvwaddch(win, y0, i, tick ? '+':'-');
       }
       for (i=0; i<=ym; i++) {
          double ploty = view->ymin + ystep * i;
          int tick = fabs(fmod(ploty, view->yscl)) < ystep;
+         spdlog::get("logger")->info() << "print horizontal point (" << std::to_string(i) << "," << std::to_string(x0) << ")";
          mvwaddch(win, i, x0, tick ? '+':'|');
       }
 
       mvwaddch(win, y0, x0, '+');
    }
 
-   void drawGraph(WINDOW *win, const viewwin *view, yfunction yfunc, int enableSlopeChars)
+   void drawGraph(ncurses::WINDOW *win, const viewwin *view, const std::vector<Point>& graph)
    {
       /* Draws a graph on the screen without axes.
          win              - ncurses window for drawing
@@ -124,12 +177,10 @@ private:
          enableSlopeChars - whether or not to call slopeChar to determine characters
          */
       int xm, ym; getmaxyx(win, ym, xm);
-      double step; getViewStep(win, view, &step, NULL);
-      double x; for (x = view->xmin; x <= view->xmax; x += step)
-      {
-         double y = yfunc(x);
-         double d = estimateSlope(yfunc, x, step/2);
-         plotPoint(win, view, x, y, enableSlopeChars ? slopeChar(d):'#', NULL, NULL);
+      for(INDEX i=0; i<graph.size(); ++i) {
+         double y = graph[i].y;
+         //double d = estimateSlope(yfunc, x, step/2);
+         plotPoint(win, view, graph[i].x, y, 0x2800, NULL, NULL);
       }
    }
 
@@ -140,6 +191,10 @@ private:
 
    double xMin, xMax;
    double yMin, yMax;
+   viewwin view; //do zrobienia: make better
+   // history of upper and lower bound, needed, when we redraw the window and for choosing slopes
+   std::vector<Point> lowerBoundHistory_;
+   std::vector<Point> upperBoundHistory_;
 };
 
 } // end namespace LP_MP
