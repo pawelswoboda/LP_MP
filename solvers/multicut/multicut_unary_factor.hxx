@@ -38,6 +38,7 @@ public:
    template<typename REPAM_ARRAY>
    REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
    {
+      std::cout << "remove in EvaluatePrimal unary factor\n";
       return 100000000.0; // for now
       assert(repam.size() == 1);
       return primal[0]*repam[0];

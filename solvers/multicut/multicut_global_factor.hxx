@@ -118,6 +118,15 @@ private:
    const INDEX i_; // index of the affected variable in the cycle factor.
 };
 
+class LiftedMulticutGlobalFactor : MulticutGlobalFactor{
+public:
+private:
+   enum class EdgeType {Base,Lifted,Tightening};
+   struct LiftedMulticutEdge {INDEX i; INDEX j; EdgeType t;}
+   std::vector
+    std::vector<Edge> liftedEdges_;
+};
+
 } // end namespace LP_MP
 
 #endif // LP_MP_MULTICUT_GLOBAL_FACTOR

@@ -71,7 +71,23 @@ public:
    REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
    {
       assert(repam.size() == size());
-      return 1000000.0;
+      INDEX noCutEdgesOne = 0;
+      REAL x = 0.0;
+      for(INDEX i=0; i<noCutEdges_; ++i) {
+         noCutEdgesOne += primal[i];
+         x += primal[i]*repam[i];
+      }
+      INDEX noLiftedEdgesOne = 0;
+      for(INDEX i=0; i<noLiftedEdges_; ++i) {
+         noLiftedEdgesOne += primal[i + noCutEdges_];
+         x += primal[i+noCutEdges_]*repam[i+noCutEdges_];
+      }
+      if(noCutEdgesOne < noCutEdges_ || noLiftedEdgesOne == noLiftedEdges_) {
+         return x;
+      } else {
+         return std::numeric_limits<REAL>::max();
+      }
+      assert(false); 
    }
 
    // do zrobienia: use own reparametrization storage and make it bigger here as well.
