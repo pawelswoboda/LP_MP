@@ -10,7 +10,6 @@ public:
    LiftedMulticutCutFactor(const INDEX noCutEdges) 
       : noCutEdges_(noCutEdges),
       noLiftedEdges_(0),
-      cutEdgeValHeap_(noCutEdges_,0),
       maxCutEdgeVal_(0.0),
       cutEdgeContrib_(0.0),
       liftedEdgeContrib_(0.0),
@@ -25,7 +24,7 @@ public:
    {
       assert(noCutEdges_ > 0);
       assert(noLiftedEdges_ > 0);
-      //return cutEdgeContrib_ + liftedEdgeContrib_ + std::max(0.0,std::min(liftedEdgeForcedContrib_,-maxCutEdgeVal_));
+      return cutEdgeContrib_ + liftedEdgeContrib_ + std::max(0.0,std::min(liftedEdgeForcedContrib_,-maxCutEdgeVal_));
 
 
       std::cout << "lifted factor repam: ";
@@ -100,6 +99,7 @@ public:
          }
          return repam[edgeIndex] + std::max(0.0,std::min(liftedEdgeForcedContrib_,-maxCutEdgeValExcl));
       }
+      assert(false);
 
       //const INDEX edgeIndex = c;
       //const REAL zeroAssignment = cutEdgeContrib - std::min(0.0,repam[edgeIndex]) + liftedEdgeContrib; // no constraints need to be considered, as all are automatically satisfied
@@ -170,6 +170,7 @@ public:
       return oneAssignment - zeroAssignment;
    }
 
+   // statistics with which evaluation is fast.
    REAL& CutEdgeContrib() { return cutEdgeContrib_; }
    REAL& LiftedEdgeContrib() { return liftedEdgeContrib_; }
    REAL& LiftedEdgeForcedContrib() { return liftedEdgeForcedContrib_; }
@@ -185,7 +186,6 @@ private:
    INDEX noCutEdges_; // number of cut edges in the original graph
 
    // hold these quantities explicitly to avoid having to recompute them after every update -> constant time operations
-   std::vector<INDEX> cutEdgeValHeap_; // max-heap for quickly obtaining maximum/second maximum element and updating in lg-n time
    REAL maxCutEdgeVal_;
    REAL cutEdgeContrib_;
    REAL liftedEdgeContrib_;
