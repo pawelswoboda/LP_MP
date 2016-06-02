@@ -8,45 +8,48 @@
 #include <stdexcept>
 #include <algorithm>
 
-namespace discrete_tomo{
+namespace LP_MP {
+  namespace discrete_tomo{
 
-  template<class T,class Value,class Index = int>
-  class MinConv
-  {
-  public:
+    template<class T,class Value,class Index = int>
+    class MinConv
+    {
+    public:
 
-    MinConv(T &a,T &b, Index n, Index m,Index t) : a_(a),b_(b)
-    { init(n,m,t); };
-    MinConv(T &a,T &b) : a_(a),b_(b){};
+      MinConv(T &a,T &b, Index n, Index m,Index t) : a_(a),b_(b)
+      { init(n,m,t); };
+      MinConv(T &a,T &b) : a_(a),b_(b){};
 
-    void init(Index,Index,Index);
-    Value getConv(Index k){ return c_[k]; };
-    Index getIdxA(Index k){ return outA_[k]; };
-    Index getIdxB(Index k){ return outB_[k]; };
+      void init(Index,Index,Index);
+      Value getConv(Index k){ return c_[k]; };
+      Value getMin(){ return minimum_; };
+      Index getIdxA(Index k){ return outA_[k]; };
+      Index getIdxB(Index k){ return outB_[k]; };
 
-    void CalcConv(std::function<Index(Index,Index)>);
+      void CalcConv(std::function<Index(Index,Index)>,bool onlyMin = false);
     
-  private:
-    T &a_;
-    T &b_;
-    std::vector<Index> idxa_;
-    std::vector<Index> idxb_;
-    std::vector<Index> outA_;
-    std::vector<Index> outB_;
-    std::vector<Value> c_;
-    std::vector<Index> cp_;
-    Value inf = std::numeric_limits<Value>::infinity();
+    private:
+      T &a_;
+      T &b_;
+      std::vector<Index> idxa_;
+      std::vector<Index> idxb_;
+      std::vector<Index> outA_;
+      std::vector<Index> outB_;
+      std::vector<Value> c_;
+      std::vector<Index> cp_;
+      Value minimum_ = std::numeric_limits<Value>::infinity();
+      Value inf = std::numeric_limits<Value>::infinity();
     
-    void sort(const T&,Index,std::vector<Index>&);
-  };
+      void sort(const T&,Index,std::vector<Index>&);
+    };
 
-  // idx stores the sorted indices according to T
-  template<class T,class Value,class Index>
-  void MinConv<T,Value,Index>::sort(const T &V,Index n,std::vector<Index> &idx){
-    idx.resize(n);
-    std::iota(idx.begin(),idx.end(),0);
-    auto compare = [&](Index i,Index j){ return (V(i) < V(j)); };
-    std::sort(idx.begin(),idx.end(),compare);
+    // idx stores the sorted indices according to T
+    template<class T,class Value,class Index>
+    void MinConv<T,Value,Index>::sort(const T &V,Index n,std::vector<Index> &idx){
+      idx.resize(n);
+      std::iota(idx.begin(),idx.end(),0);
+      auto compare = [&](Index i,Index j){ return (V(i) < V(j)); };
+std::sort(idx.begin(),idx.end(),compare);
   }
 
   // initialize the size of a,b and c
@@ -69,7 +72,7 @@ namespace discrete_tomo{
   */
   template<class T,class Value,class Index>
   void
-  MinConv<T,Value,Index>::CalcConv(std::function<Index(Index,Index)> op)
+  MinConv<T,Value,Index>::CalcConv(std::function<Index(Index,Index)> op,bool onlyMin)
   {
     // access function to the sorted matrix      
     auto M = [this](Index i,Index j){
@@ -147,7 +150,11 @@ namespace discrete_tomo{
        	queue.pop();
 	
 	if( c_[mink] > minV || cp_[mink] == 0 ){ 
-	  c_[mink] = minV; open--; 
+	  c_[mink] = minV; open--;
+	  if( mink != c_.size() && minV < minimum_ ){
+	    minimum_ = minV;
+	    if( onlyMin ){ break; }
+	  }
 	  outA_[mink] = idxa_[i];
 	  outB_[mink] = idxb_[j];
 	  cp_[mink] = 1;
@@ -180,7 +187,7 @@ namespace discrete_tomo{
       }
       
     }
-  
+}
 }
 
 #endif

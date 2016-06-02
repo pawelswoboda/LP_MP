@@ -32,6 +32,7 @@ namespace LP_MP{
     
     void setRHS(INDEX b){ root_ = true; rhs_ = b; }
     void setNOISE(std::function<REAL (REAL)> n){ noise_ = true; weights_ = n;  }
+    REAL eval(INDEX,INDEX,INDEX);
     
   private:
 
@@ -45,6 +46,11 @@ namespace LP_MP{
         
   };
 
+  REAL DiscreteTomographyFactorCounting::eval(INDEX left,INDEX right,INDEX up){
+    REAL val = std::numeric_limits<REAL>::max();
+    
+  }
+  
   DiscreteTomographyFactorCounting::DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX a,INDEX b, INDEX c, INDEX d)
     : numberOfLabels_(numberOfLabels),a_(a),b_(b),c_(c),d_(d){
     assert(0 <= a_); assert(a_ <= b_); assert(b_ <= c_); assert(c_ <= d_);
