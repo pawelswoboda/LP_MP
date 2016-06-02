@@ -30,15 +30,14 @@ namespace LP_MP{
     void setFUNC(std::function<REAL (INDEX)> unary){ unary_ = unary; }
   private:
     std::function<REAL (INDEX)> unary_;
-    INDEX a_;
-    INDEX b_;
+    INDEX a_,b_;
   };
 
   DiscreteTomographyFactorCounting::DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX a,INDEX b)
     : numberOfLabels_(numberOfLabels){
     assert(numberOfLabels > 1);
     assert(a_ <= b_);
-    nodeSize_ = pow(numberOfLabels_,2)*((b_-a_+1)*numberOfLabels_+1);
+    nodeSize_ = pow(numberOfLabels_,2)*((b_-a_+1)*(numberOfLabels_-1)+1);
   }
 
   template<typename REPAM_ARRAY>

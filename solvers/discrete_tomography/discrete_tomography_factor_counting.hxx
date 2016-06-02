@@ -50,9 +50,9 @@ namespace LP_MP{
     assert(0 <= a_); assert(a_ <= b_); assert(b_ <= c_); assert(c_ <= d_);
     assert(numberOfLabels > 1);
     
-    upSize_ = pow(numberOfLabels_,2)*((d_-a_+1)*numberOfLabels_+1);
-    leftSize_ = pow(numberOfLabels_,2)*((b_-a_+1)*numberOfLabels_+1);
-    rightSize_ = pow(numberOfLabels_,2)*((d_-c_+1)*numberOfLabels_+1);
+    upSize_ = pow(numberOfLabels_,2)*((d_-a_+1)*(numberOfLabels_-1)+1);
+    leftSize_ = pow(numberOfLabels_,2)*((b_-a_+1)*(numberOfLabels_-1)+1);
+    rightSize_ = pow(numberOfLabels_,2)*((d_-c_+1)*(numberOfLabels_-1)+1);
     
     regSize_ = pow(numberOfLabels_,2);
   }
@@ -80,12 +80,12 @@ namespace LP_MP{
       auto z_reg = repam[upSize_ + leftSize_ + rightSize_ + b + c*numberOfLabels_];
 
       MinConv mc(z_left,z_right,
-		 ((b_-a_+1)*numberOfLabels_+1),((c_-d_+1)*numberOfLabels_+1),((d_-a_+1)*numberOfLabels_+1));
+		 ((b_-a_+1)*(numberOfLabels_-1)+1),((c_-d_+1)*(numberOfLabels_-1)+1),((d_-a_+1)*(numberOfLabels_-1)+1));
       mc.CalcConv(op);
 
       REAL m_new = 0;
       if( noise_ && root_ ){
-	for( INDEX j=0;j<((d_-a_+1)*numberOfLabels_+1);j++ ){
+	for( INDEX j=0;j<((d_-a_+1)*(numberOfLabels_-1)+1);j++ ){
 	  m_new = mc.getConv(j)+z_up(j)+z_reg+weights_(std::abs(rhs_-j));
 	  if( m > m_new ){
 	    m = m_new;
@@ -99,7 +99,7 @@ namespace LP_MP{
 	}	
       }
       else{
-	for( INDEX j=0;j<((d_-a_+1)*numberOfLabels_+1);j++ ){
+	for( INDEX j=0;j<((d_-a_+1)*(numberOfLabels_-1)+1);j++ ){
 	  m_new = mc.getConv(j)+z_up(j)+z_reg;
 	  if( m > m_new ){
 	    m = m_new;
