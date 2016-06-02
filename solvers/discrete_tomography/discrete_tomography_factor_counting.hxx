@@ -2,10 +2,13 @@
 #define LPMP_DTOMOGRAPHY_FACTOR_COUNTING_HXX
 
 #include "LP_MP.h"
+#include "minConv.hxx"
 #include <math.h> 
 
 namespace LP_MP{
 
+  using MinConv = discrete_tomo::MinConv<std::function<REAL(INDEX)>,REAL,INDEX>;
+  
   class DiscreteTomographyFactorCounting{
 
   public:
@@ -28,7 +31,7 @@ namespace LP_MP{
     // custom public methods 
     
     void setRHS(INDEX b){ root_ = true; rhs_ = b; }
-    void setNOISE(std::function<REAL (REAL)> n){ weights_ = n;  }
+    void setNOISE(std::function<REAL (REAL)> n){ noise_ = true; weights_ = n;  }
     
   private:
 
@@ -37,13 +40,9 @@ namespace LP_MP{
     INDEX upSize_,leftSize_,rightSize_,regSize_;
     INDEX rhs_;
     bool root_ = false;
+    bool noise_ = false;
     std::function<REAL (REAL)> weights_ = NULL;
-    
-    
-    bool checkConstraint(INDEX,INDEX,INDEX) const; // z_{a:b} + z_{c:d} = z_{a:d}
-    INDEX getLabelPair(INDEX,INDEX) const;
-    REAL getNoise(INDEX,INDEX,INDEX) const;
-    
+        
   };
 
   DiscreteTomographyFactorCounting::DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX a,INDEX b, INDEX c, INDEX d)
@@ -51,67 +50,67 @@ namespace LP_MP{
     assert(0 <= a_); assert(a_ <= b_); assert(b_ <= c_); assert(c_ <= d_);
     assert(numberOfLabels > 1);
     
-    upSize_ = pow(numberOfLabels_,3)*(d_-a_+1);
-    leftSize_ = pow(numberOfLabels_,3)*(b_-a_+1);
-    rightSize_ = pow(numberOfLabels_,3)*(c_-b_+1);
+    upSize_ = pow(numberOfLabels_,2)*((d_-a_+1)*numberOfLabels_+1);
+    leftSize_ = pow(numberOfLabels_,2)*((b_-a_+1)*numberOfLabels_+1);
+    rightSize_ = pow(numberOfLabels_,2)*((d_-c_+1)*numberOfLabels_+1);
+    
     regSize_ = pow(numberOfLabels_,2);
   }
 
   template<typename REPAM_ARRAY>
   REAL DiscreteTomographyFactorCounting::LowerBound(const REPAM_ARRAY& repam) const{
     assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
+    assert( !noise_ || root_ );
     REAL m = std::numeric_limits<REAL>::max();
-    for( INDEX u=0;u < upSize_;u++ ){
-      for( INDEX l=0;l < leftSize_;l++ ){
-	for( INDEX r=0;r < rightSize_;r++ ){
-	  if( !checkConstraint(u,l,r) && !root_ ){ continue; }
-	  INDEX noise = 0;
-	  if( root_ ){
-	    noise = getNoise(u,l,r);
+
+    auto op = [](INDEX i,INDEX j){ return i+j;  };
+    for( INDEX i=0;i<pow(numberOfLabels_,4);i++ ){
+      INDEX idx = i;
+      INDEX a = idx % numberOfLabels_;
+      idx = ( idx - a )/numberOfLabels_;
+      INDEX b = idx % numberOfLabels_;
+      idx = ( idx - b )/numberOfLabels_;
+      INDEX c = idx % numberOfLabels_;
+      idx = ( idx - c )/numberOfLabels_;
+      INDEX d = idx % numberOfLabels_;
+
+      auto z_up = [&](INDEX k){ return repam[c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+      auto z_left = [&](INDEX k){ return repam[upSize_ + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+      auto z_right = [&](INDEX k){ return repam[upSize_ + leftSize_ + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+      auto z_reg = repam[upSize_ + leftSize_ + rightSize_ + b + c*numberOfLabels_];
+
+      MinConv mc(z_left,z_right,
+		 ((b_-a_+1)*numberOfLabels_+1),((c_-d_+1)*numberOfLabels_+1),((d_-a_+1)*numberOfLabels_+1));
+      mc.CalcConv(op);
+
+      REAL m_new = 0;
+      if( noise_ && root_ ){
+	for( INDEX j=0;j<((d_-a_+1)*numberOfLabels_+1);j++ ){
+	  m_new = mc.getConv(j)+z_up(j)+z_reg+weights_(std::abs(rhs_-j));
+	  if( m > m_new ){
+	    m = m_new;
 	  }
-	  m = std::min(m,noise
-		       + repam[u]
-		       + repam[upSize_ + l] 
-		       + repam[upSize_ + leftSize_ + r]
-		       + repam[upSize_ + leftSize_ + rightSize_ + getLabelPair(l,r)] );
 	}
       }
+      else if( !noise_ && root_ ){
+	m_new = mc.getConv(rhs_)+z_up(rhs_)+z_reg;
+	if( m > m_new ){
+	  m = m_new;
+	}	
+      }
+      else{
+	for( INDEX j=0;j<((d_-a_+1)*numberOfLabels_+1);j++ ){
+	  m_new = mc.getConv(j)+z_up(j)+z_reg;
+	  if( m > m_new ){
+	    m = m_new;
+	  }
+	}
+      }
+      
     }
     return m;
   }
-
-  REAL DiscreteTomographyFactorCounting::getNoise(INDEX u,INDEX l,INDEX r) const{
-    if( weights_ == NULL ){ return 0; }
-    else{
-      auto exF = [&](INDEX i){
-	i = (i-(i % numberOfLabels_))/numberOfLabels_;
-	return (i-(i % numberOfLabels_))/numberOfLabels_;
-      };
-      INDEX uz = exF(u );
-      INDEX lz = exF(l);
-      INDEX rz = exF(r);
-      REAL n = std::abs((REAL)uz - (REAL)lz - (REAL)rz);
-      return weights_(n);
-    }
-  }
-  
-  INDEX DiscreteTomographyFactorCounting::getLabelPair(INDEX l,INDEX r) const{
-    INDEX lb = l % numberOfLabels_;
-    INDEX ra = ((r - (r % numberOfLabels_))/numberOfLabels_) % numberOfLabels_;
-    return lb + ra;
-  }
-  
-  bool DiscreteTomographyFactorCounting::checkConstraint(INDEX up,INDEX left,INDEX right) const{
-    auto exF = [&](INDEX i){
-      i = (i-(i % numberOfLabels_))/numberOfLabels_;
-      return (i-(i % numberOfLabels_))/numberOfLabels_;
-    };
-    INDEX uz = exF(up);
-    INDEX lz = exF(left);
-    INDEX rz = exF(right);
-    return (lz + rz == uz);
-  }
-  
+    
   template<typename REPAM_ARRAY>
   INDEX DiscreteTomographyFactorCounting::ComputeOptimalLabeling(const REPAM_ARRAY& repam) const{
     return 0;
