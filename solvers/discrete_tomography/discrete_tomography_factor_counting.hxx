@@ -8,10 +8,14 @@
 namespace LP_MP{
 
   using MinConv = discrete_tomo::MinConv<std::function<REAL(INDEX)>,REAL,INDEX>;
+
+  
   
   class DiscreteTomographyFactorCounting{
 
   public:
+
+    enum class NODE {left,right,up,reg};
     
     //DiscreteTomographyFactorCounting(); //--required
     DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX,INDEX,INDEX,INDEX);
@@ -32,6 +36,7 @@ namespace LP_MP{
     
     void setRHS(INDEX b){ root_ = true; rhs_ = b; }
     void setNOISE(std::function<REAL (REAL)> n){ noise_ = true; weights_ = n;  }
+    INDEX getSize(NODE);
     REAL eval(INDEX,INDEX,INDEX);
     
   private:
@@ -46,9 +51,50 @@ namespace LP_MP{
         
   };
 
-  REAL DiscreteTomographyFactorCounting::eval(INDEX left,INDEX right,INDEX up){
-    REAL val = std::numeric_limits<REAL>::max();
+  INDEX DiscreteTomographyFactorCounting::getSize(NODE n){
+    if( n == NODE::left ){ return leftSize_;  }
+    if( n == NODE::right ){ return rightSize_;  }
+    if( n == NODE::up ){ return upSize_;  }
+    if( n == NODE::reg ){ return regSize_;  }
+  }
+  
+  REAL DiscreteTomographyFactorCounting::eval(INDEX up,INDEX left,INDEX right){
+    REAL val = 0;
+    assert( 0 <= left ); assert( 0 <= right ); assert( 0 <= up );
+    assert( left < leftSize_ );
+    assert( right < rightSize_ );
+    assert( up < upSize_ );
     
+    // i = x_a + x_b*numberOfLabels_ + z_ab*numberOfLabels_^2
+    auto getZ = [&](INDEX i){
+      i = (i - (i % numberOfLabels_))/numberOfLabels_;
+      i = (i - (i % numberOfLabels_))/numberOfLabels_;
+      return i;
+    };
+
+    INDEX z_up = getZ(up);
+    INDEX z_left = getZ(left);
+    INDEX z_right = getZ(right);
+    if( z_up != z_left + z_right ){
+      return std::numeric_limits<REAL>::max();
+    }
+
+    INDEX xua = up % numberOfLabels_;
+    INDEX xub = ((up - (up % numberOfLabels_))/numberOfLabels_) % numberOfLabels_;
+    INDEX xla = left % numberOfLabels_;
+    INDEX xrb = ((right - (right % numberOfLabels_))/numberOfLabels_) % numberOfLabels_;
+    if( xua != xla || xub != xrb ){
+      return std::numeric_limits<REAL>::max();
+    }
+    
+    if( root_ && noise_ ){
+      val =  weights_(std::abs(rhs_ - z_up));
+    }
+    else if( root_ && !noise_ ){
+      val = (z_up == rhs_ ? 0 : std::numeric_limits<REAL>::max());
+    }
+    
+    return val;    
   }
   
   DiscreteTomographyFactorCounting::DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX a,INDEX b, INDEX c, INDEX d)
