@@ -17,10 +17,10 @@ namespace LP_MP {
 
     public:
 
-      DiscreteTomographyMessageCounting(INDEX numberOfLabels,INDEX numberOfVars,DIRECTION);
+      DiscreteTomographyMessageCounting(INDEX numberOfLabels,INDEX,DIRECTION);
 
-      // RIGHT -> TOP Ternary
-      // LEFT  -> BOTTOM Ternary
+      // RIGHT -> Unary
+      // LEFT  -> Ternary
 
       /* repam.GetFactor()->&f  */
       
@@ -48,15 +48,11 @@ namespace LP_MP {
       void RepamRight(G& repam, const REAL msg, const INDEX msg_dim);
 
       //void ComputeRightFromLeftPrimal(const bool leftPrimal, MulticutTripletFactor::LabelingType& rightPrimal);
-
-
-      void setRHS(INDEX rhs){ isRhs_ = true; rhs_ = rhs; };
+    
     private:
       const INDEX numberOfLabels_;
       INDEX msgSize_;
       INDEX leftSize_,rightSize_,upSize_,regSize_;
-      INDEX rhs_;
-      bool isRhs_ = false;
     
     };
 
@@ -73,15 +69,11 @@ namespace LP_MP {
       assert(repam_right.size() == (f_left.getSize(f_left::up) + f_left.getSize(f_left::left) +
 				    f_left.getSize(f_left::right) + f_left.getSize(f_left::reg)));
 
-     
+      op = [&](INDEX i,INDEX j){ return i+j;  };
       INDEX up_size = f_left.getSize(f_left::up)/pow(numberOfLabels_,2);
       INDEX right_size = f_left.getSize(f_left::right)/pow(numberOfLabels_,2);
       INDEX left_size = f_left.getSize(f_left::left)/pow(numberOfLabels_,2);
 
-      if( isRhs_ && up_size > rhs_ + 1 ){ up_size = rhs_ + 1;  };
-
-      op = [&](INDEX i,INDEX j){ return (i+j < up_size) ? i+j : up_size;  }; // 0 <= i+j < up_size
-      
       for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
 	INDEX idx = i;
 	INDEX a = idx % numberOfLabels_;
@@ -120,20 +112,10 @@ namespace LP_MP {
 	assert(repam_right.size() == (f_right.getSize(f_right::up) + f_right.getSize(f_right::left) +
 				      f_right.getSize(f_right::right) + f_right.getSize(f_right::reg)));
 
-	INDEX left_size = f_right.getSize(f_right::left)/pow(numberOfLabels_,2);
-	INDEX right_size = f_right.getSize(f_right::right)/pow(numberOfLabels_,2);
+	op = [&](INDEX i,INDEX j){ return i-j < 0 ? f_right.getSize(f_right::left) : i-j;  };
 	INDEX up_size = f_right.getSize(f_right::up)/pow(numberOfLabels_,2);
-	
-	if( isRhs_ && left_size > rhs_ + 1 ){ left_size = rhs_ + 1;  };
-
-	op = [&](INDEX i,INDEX j){ // 0 <= i-j < left_size
-	  if( i < j ){ // i-j < 0
-	    return left_size;
-	  }
-	  else{
-	    return (i-j < left_size) ? i-j : left_size;
-	  }
-	};
+	INDEX right_size = f_right.getSize(f_right::right)/pow(numberOfLabels_,2);
+	INDEX left_size = f_right.getSize(f_right::left)/pow(numberOfLabels_,2);
 	
 	for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
 	  INDEX idx = i;
@@ -167,21 +149,10 @@ namespace LP_MP {
 	assert(repam_right.size() == (f_right.getSize(f_right::up) + f_right.getSize(f_right::left) +
 				      f_right.getSize(f_right::right) + f_right.getSize(f_right::reg)));
 
-	INDEX left_size = f_right.getSize(f_right::left)/pow(numberOfLabels_,2);
-	INDEX right_size = f_right.getSize(f_right::right)/pow(numberOfLabels_,2);
+	op = [&](INDEX i,INDEX j){ return i-j < 0 ? f_right.getSize(f_right::right) : i-j;  };
 	INDEX up_size = f_right.getSize(f_right::up)/pow(numberOfLabels_,2);
-
-	if( isRhs_ && right_size > rhs_ + 1 ){ right_size = rhs_ + 1;  };
-
-	op = [&](INDEX i,INDEX j){ // 0 <= i-j < right_size
-	  if( i < j ){ 
-	    return right_size;
-	  }
-	  else{
-	    return (i-j < right_size) ? i-j : right_size;
-	  }
-	};
-	
+	INDEX right_size = f_right.getSize(f_right::right)/pow(numberOfLabels_,2);
+	INDEX left_size = f_right.getSize(f_right::left)/pow(numberOfLabels_,2);
 	
 	for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
 	  INDEX idx = i;

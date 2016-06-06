@@ -8,13 +8,14 @@
 namespace LP_MP{
 
   using MinConv = discrete_tomo::MinConv<std::function<REAL(INDEX)>,REAL,INDEX>;
-  
-  class DiscreteTomographyFactorCounting{
+
+  template<UNARY_FUNC unary>
+  class DiscreteTomographyFactorUnary{
 
   public:
     
     //DiscreteTomographyFactorCounting(); //--required
-    DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX a,INDEX b);
+    DiscreteTomographyFactorUnary(INDEX numberOfLabels,INDEX numberOfVars);
     
     template<typename REPAM_ARRAY>
     INDEX ComputeOptimalLabeling(const REPAM_ARRAY& repam) const; //--required
@@ -27,27 +28,50 @@ namespace LP_MP{
 
     void WritePrimal(const PrimalSolutionStorage::Element, std::ofstream& fs) const; //--required
 
-    void setFUNC(std::function<REAL (INDEX)> unary){ unary_ = unary; }
+    //void setFUNC(std::function<REAL (INDEX)> unary){ unary_ = unary; }
+    REAL eval(INDEX i);
+    INDEX getSize(){ return nodeSize_; }
+    
   private:
-    std::function<REAL (INDEX)> unary_;
-    INDEX a_,b_;
+    const INDEX numberOfVars_,numebrOfLabels_,nodeSize_;
   };
 
-  DiscreteTomographyFactorCounting::DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX a,INDEX b)
-    : numberOfLabels_(numberOfLabels){
+  template<typename unary>
+  DiscreteTomographyFactorUnary::DiscreteTomographyFactorUnary(INDEX numberOfLabels,INDEX numberOfVars)
+    : numberOfLabels_(numberOfLabels),numberOfVars_(numberOfVars),nodeSize_(pow(numberOfLabels_,2)*(numberOfVars_*(numberOfLabels_-1)+1)){
     assert(numberOfLabels > 1);
-    assert(a_ <= b_);
-    nodeSize_ = pow(numberOfLabels_,2)*((b_-a_+1)*(numberOfLabels_-1)+1);
+    assert(numberOfVars >= 1);
   }
 
+  template<typename unary>
+  REAL DiscreteTomographyFactorUnary::eval(INDEX i){
+    assert(i<nodeSize_);
+    if(numberOfVars_ == 1){
+      INDEX idx = i;
+      INDEX a = idx % numberOfLabels_;
+      idx = (idx - a)/numberOfLabels_;
+      INDEX b = idx % numberOfLabels_;
+      idx = (idx - b)/numberOfLabels_;
+      INDEX z = idx;
+      if( a == b && b == z ){
+	return unary(a);
+      }
+      else { return std::numeric_limits<REAL>::max(); };
+    }
+    else{
+      return 0;
+    }
+  }
+  
+  template<typename unary>
   template<typename REPAM_ARRAY>
-  REAL DiscreteTomographyFactorCounting::LowerBound(const REPAM_ARRAY& repam) const{
+  REAL DiscreteTomographyFactorUnary::LowerBound(const REPAM_ARRAY& repam) const{
     assert(repam.size()==nodeSize_);
     REAL m = std::numeric_limits<REAL>::max();
     REAL m_new = 0;
-    if( a_ == b_ ){
+    if( numberOfVars_ == 1 ){
       for( INDEX i=0;i<numberOfLabels_;i++ ){
-	m_new = repam[i + i*numberOfLabels_ + i*pow(numberOfLabels_,2)] + unary_(i);
+	m_new = repam[i + i*numberOfLabels_ + i*pow(numberOfLabels_,2)] + unary(i);
 	if( m > m_new ){ m = m_new;  }
       }
     }
@@ -59,17 +83,20 @@ namespace LP_MP{
     return m;
   }
 
+  template<UNARY_FUNC unary>
   template<typename REPAM_ARRAY>
-  INDEX DiscreteTomographyFactorCounting::ComputeOptimalLabeling(const REPAM_ARRAY& repam) const{
+  INDEX DiscreteTomographyFactorUnary::ComputeOptimalLabeling(const REPAM_ARRAY& repam) const{
     return 0;
   }
 
+  template<UNARY_FUNC unary>
   template<typename REPAM_ARRAY>
-  REAL DiscreteTomographyFactorCounting::EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const {
+  REAL DiscreteTomographyFactorUnary::EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const {
     return 0;
   }
 
-  void DiscreteTomographyFactorCounting::WritePrimal(const PrimalSolutionStorage::Element, std::ofstream& fs) const {
+  template<UNARY_FUNC unary>
+  void DiscreteTomographyFactorUnary::WritePrimal(const PrimalSolutionStorage::Element, std::ofstream& fs) const {
     
   }
   
