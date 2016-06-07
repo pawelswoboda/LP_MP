@@ -220,7 +220,7 @@ namespace LP_MP {
     void DiscreteTomographyMessageCounting::RepamLeft(G& repam, const REAL msg, const INDEX msg_dim){
 
       auto f = repam.GetFactor();
-      assert( repam.size() == (f.getSize(f::left) + f.getSize(f::right) + f.getSize(f::up) + f.getSize(f::reg))); // <-- wie kann man das machen?
+      assert( repam.size() == (f.getSize(f::left) + f.getSize(f::right) + f.getSize(f::up) + f.getSize(f::reg)));
 
       assert(msg_dim < f.getSize(f::up));
       repam[msg_dim] += msg;

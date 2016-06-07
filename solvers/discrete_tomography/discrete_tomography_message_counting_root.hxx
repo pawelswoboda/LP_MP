@@ -10,14 +10,11 @@ namespace LP_MP {
     
     using MinConv = MinConv<std::function<REAL(INDEX)>,REAL,INDEX>;
 
-    enum class DIRECTION {left,right};
-
-    template<DIRECTION DR>
-    class DiscreteTomographyMessageCounting{
+    class DiscreteTomographyMessageCountingRoot{
 
     public:
 
-      DiscreteTomographyMessageCounting(INDEX numberOfLabels,INDEX,DIRECTION);
+      DiscreteTomographyMessageCountingRoot(INDEX numberOfLabels,INDEX numberOfVars);
 
       // RIGHT -> Unary
       // LEFT  -> Ternary
@@ -27,7 +24,7 @@ namespace LP_MP {
       template<typename RIGHT_FACTOR, typename G1, typename G2>
       void ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg);
 
-      template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G3>
+      template<typename LEFT_FACTOR, typename G1, typename G3>
       void SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega);
 
       /*------*/
@@ -49,146 +46,87 @@ namespace LP_MP {
 
       //void ComputeRightFromLeftPrimal(const bool leftPrimal, MulticutTripletFactor::LabelingType& rightPrimal);
     
+      void setRHS(INDEX rhs){ isRhs_ = true; rhs_ = rhs; }
+      void setHCS(bool hcs){ hardCS_ = hcs; };
+      
+      
     private:
       const INDEX numberOfLabels_;
       INDEX msgSize_;
       INDEX leftSize_,rightSize_,upSize_,regSize_;
+      INDEX rhs_;
+      bool isRhs_ = false, hardCS_ = false;
     
     };
 
-    template<DIRECTION DR>
-    DiscreteTomographyMessageCounting::DiscreteTomographyMessageCounting(INDEX numberOfLabels);
-    : numberOfLabels_(numberOfLabels) {
+    DiscreteTomographyMessageCountingRoot::DiscreteTomographyMessageCountingRoot(INDEX numberOfLabels,INDEX numberOfVars);
+    : numberOfLabels_(numberOfLabels), numberOfVars_(numberOfVars) {
       assert(numberOfLabels_ > 1);
+      assert(numberOfVars_ > 1)
     }
 
-    template<DIRECTION DR>
-    template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G3>
-    void DiscreteTomographyMessageCounting::SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
+    template<typename LEFT_FACTOR, typename G1, typename G3>
+    void DiscreteTomographyMessageCountingRoot::SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
       assert(msg.size() == f_left.getSize(f_left::up));
-      assert(repam_right.size() == (f_left.getSize(f_left::up) + f_left.getSize(f_left::left) +
+      assert(repam_left.size() == (f_left.getSize(f_left::up) + f_left.getSize(f_left::left) +
 				    f_left.getSize(f_left::right) + f_left.getSize(f_left::reg)));
 
-      op = [&](INDEX i,INDEX j){ return i+j;  };
       INDEX up_size = f_left.getSize(f_left::up)/pow(numberOfLabels_,2);
       INDEX right_size = f_left.getSize(f_left::right)/pow(numberOfLabels_,2);
       INDEX left_size = f_left.getSize(f_left::left)/pow(numberOfLabels_,2);
 
+      if( isRhs_ && up_size > rhs_ + 1){ up_size = rhs_ + 1; }
+      op = [&](INDEX i,INDEX j){ return (i+j < up_size ) ? i+j : up_size;  };
+      
       for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
-	INDEX idx = i;
-	INDEX a = idx % numberOfLabels_;
-	idx = ( idx - a )/numberOfLabels_;
-	INDEX b = idx % numberOfLabels_;
-	idx = ( idx - b )/numberOfLabels_;
-	INDEX c = idx % numberOfLabels_;
-	idx = ( idx - c )/numberOfLabels_;
-	INDEX d = idx % numberOfLabels_;
+        INDEX idx = i;
+        INDEX a = idx % numberOfLabels_;
+        idx = ( idx - a )/numberOfLabels_;
+        INDEX b = idx % numberOfLabels_;
+        idx = ( idx - b )/numberOfLabels_;
+        INDEX c = idx % numberOfLabels_;
+        idx = ( idx - c )/numberOfLabels_;
+        INDEX d = idx % numberOfLabels_;
 
-	//auto z_up = [&](INDEX k){ return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-	auto z_left = [&](INDEX k){ return repam_right[f_right.getSize(f_right::up) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-	auto z_right = [&](INDEX k){ return repam_right[f_right.getSize(f_right::up) + f_right.getSize(f_right::left) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-	auto z_reg = repam_right[f_right.getSize(f_right::up) + f_right.getSize(f_right::left) + f_right.getSize(f_right::right) + b + c*numberOfLabels_];
-		  
-	MinConv mc(z_left,z_right,left_size,right_size,up_size);
-	mc.CalcConv(op);
+        //auto z_up = [&](INDEX k){ return repam_left[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+        auto z_left = [&](INDEX k){ return repam_left[f_left.getSize(f_left::up) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+        auto z_right = [&](INDEX k){ return repam_left[f_left.getSize(f_left::up) + f_left.getSize(f_left::left) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+        auto z_reg = repam_left[f_left.getSize(f_left::up) + f_left.getSize(f_left::left) + f_left.getSize(f_left::right) + b + c*numberOfLabels_];
+            
+        MinConv mc(z_left,z_right,left_size,right_size,up_size);
+        mc.CalcConv(op);
 
-	for(INDEX k=0;k<up_size;k++){
-	  assert(f_up.eval(k,mc.getIdxA(k),mc.getIdxB(k)) < std::numeric_limits<REAL>::max() );
-	  REAL val = mc.getConv(k);
-	  INDEX kidx = a + numberOfLabels_*d + k*pow(numberOfLabels_,2);
-	  assert(kidx < (up_size*pow(numberOfLabels_,2)));
-	  msg[kidx] -= omega*val; // Messages are negated 
-	}
-	
+        for(INDEX k=0;k<up_size;k++){
+          REAL val = mc.getConv(k);
+          INDEX kidx = a + numberOfLabels_*d + k*pow(numberOfLabels_,2);
+          assert(kidx < (up_size*pow(numberOfLabels_,2)));
+          msg[kidx] -= omega*val;
+        }
       }
     }
     
-    template<DIRECTION DR>
     template<typename RIGHT_FACTOR, typename G1, typename G2>
-    void DiscreteTomographyMessageCounting::ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
-
-      if( DR == DIRECTION::left ){
-	assert(msg.size() == f_right.getSize(f_right::left));
-	assert(repam_right.size() == (f_right.getSize(f_right::up) + f_right.getSize(f_right::left) +
-				      f_right.getSize(f_right::right) + f_right.getSize(f_right::reg)));
-
-	op = [&](INDEX i,INDEX j){ return i-j < 0 ? f_right.getSize(f_right::left) : i-j;  };
-	INDEX up_size = f_right.getSize(f_right::up)/pow(numberOfLabels_,2);
-	INDEX right_size = f_right.getSize(f_right::right)/pow(numberOfLabels_,2);
-	INDEX left_size = f_right.getSize(f_right::left)/pow(numberOfLabels_,2);
-	
-	for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
-	  INDEX idx = i;
-	  INDEX a = idx % numberOfLabels_;
-	  idx = ( idx - a )/numberOfLabels_;
-	  INDEX b = idx % numberOfLabels_;
-	  idx = ( idx - b )/numberOfLabels_;
-	  INDEX c = idx % numberOfLabels_;
-	  idx = ( idx - c )/numberOfLabels_;
-	  INDEX d = idx % numberOfLabels_;
-
-	  auto z_up = [&](INDEX k){ return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-	  //auto z_left = [&](INDEX k){ return repam_right[f_right.getSize(f_right::up) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-	  auto z_right = [&](INDEX k){ return repam_right[f_right.getSize(f_right::up) + f_right.getSize(f_right::left) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-	  auto z_reg = repam_right[f_right.getSize(f_right::up) + f_right.getSize(f_right::left) + f_right.getSize(f_right::right) + b + c*numberOfLabels_];
-	  
-	  MinConv mc(z_up,z_right,up_size,right_size,left_size);
-	  mc.CalcConv(op);
-
-	  for(INDEX k=0;k<left_size;k++){
-	    assert(f_right.eval(mc.getIdxA(k),k,mc.getIdxB(k)) < std::numeric_limits<REAL>::max() );
-	    REAL val = mc.getConv(k);
-	    INDEX kidx = a + numberOfLabels_*b + k*pow(numberOfLabels_,2);
-	    assert(kidx < (left_size*pow(numberOfLabels_,2)));
-	    msg[kidx] -= val; // Messages are negated 
-	  }
-	}
+    void DiscreteTomographyMessageCountingRoot::ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
+      assert(f_right.getSize() == repam_right.size());
+      assert(f_right.getSize() == msg.size());
+    
+      if( hardCS_ ){
+        assert(isRhs_); assert(rhs_ >= 0); assert(rhs_ < (f_right.getSize()/pow(numberOfLabels_,2)));
+        for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
+          INDEX a = i % numberOfLabels_;
+          INDEX b = ((i - a)/numberOfLabels_) % numberOfLabels_;
+          msg[a + numberOfLabels_*b + i*pow(numberOfLabels_,2)] -= repam_right[a + numberOfLabels_*b + i*pow(numberOfLabels_,2)];
+        }
       }
       else{
-	assert(msg.size() == f_right.getSize(f_right::right));
-	assert(repam_right.size() == (f_right.getSize(f_right::up) + f_right.getSize(f_right::left) +
-				      f_right.getSize(f_right::right) + f_right.getSize(f_right::reg)));
-
-	op = [&](INDEX i,INDEX j){ return i-j < 0 ? f_right.getSize(f_right::right) : i-j;  };
-	INDEX up_size = f_right.getSize(f_right::up)/pow(numberOfLabels_,2);
-	INDEX right_size = f_right.getSize(f_right::right)/pow(numberOfLabels_,2);
-	INDEX left_size = f_right.getSize(f_right::left)/pow(numberOfLabels_,2);
-	
-	for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
-	  INDEX idx = i;
-	  INDEX a = idx % numberOfLabels_;
-	  idx = ( idx - a )/numberOfLabels_;
-	  INDEX b = idx % numberOfLabels_;
-	  idx = ( idx - b )/numberOfLabels_;
-	  INDEX c = idx % numberOfLabels_;
-	  idx = ( idx - c )/numberOfLabels_;
-	  INDEX d = idx % numberOfLabels_;
-
-	  auto z_up = [&](INDEX k){ return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-	  auto z_left = [&](INDEX k){ return repam_right[f_right.getSize(f_right::up) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-	  //auto z_right = [&](INDEX k){ return repam_right[f_right.getSize(f_right::up) + f_right.getSize(f_right::left) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-	  auto z_reg = repam_right[f_right.getSize(f_right::up) + f_right.getSize(f_right::left) + f_right.getSize(f_right::right) + b + c*numberOfLabels_];
-
-	  
-	  
-	  MinConv mc(z_up,z_left,up_size,left_size,right_size);
-	  mc.CalcConv(op);
-
-	  for(INDEX k=0;k<right_size;k++){
-	    assert(f_right.eval(mc.getIdxA(k),mc.getIdxB(k),k) < std::numeric_limits<REAL>::max() );
-	    REAL val = mc.getConv(k);
-	    INDEX kidx = c + numberOfLabels_*d + k*pow(numberOfLabels_,2);
-	    assert(kidx < (right_size*pow(numberOfLabels_,2)));
-	    msg[kidx] -= val; // Messages are negated 
-	  }
-	}
+        
       }
-            
+      
     }
 
     template<DIRECTION DR>
     template<typename G>
-    void DiscreteTomographyMessageCounting::RepamLeft(G& repam, const REAL msg, const INDEX msg_dim){
+    void DiscreteTomographyMessageCountingRoot::RepamLeft(G& repam, const REAL msg, const INDEX msg_dim){
 
       auto f = repam.GetFactor();
       assert( repam.size() == (f.getSize(f::left) + f.getSize(f::right) + f.getSize(f::up) + f.getSize(f::reg))); // <-- wie kann man das machen?
@@ -200,7 +138,7 @@ namespace LP_MP {
 
     template<DIRECTION DR>    
     template<typename G>
-    void DiscreteTomographyMessageCounting::RepamRight(G& repam, const REAL msg, const INDEX msg_dim){
+    void DiscreteTomographyMessageCountingRoot::RepamRight(G& repam, const REAL msg, const INDEX msg_dim){
 
       auto f = repam.GetFactor();
       assert( repam.size() == (f.getSize(f::left) + f.getSize(f::right) + f.getSize(f::up) + f.getSize(f::reg))); // <-- wie kann man das machen?
