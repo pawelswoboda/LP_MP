@@ -10,11 +10,11 @@ namespace LP_MP {
     
     using MinConv = MinConv<std::function<REAL(INDEX)>,REAL,INDEX>;
 
-    class DiscreteTomographyMessageCounting{
+    class DiscreteTomographyMessageCountingPairwise{
 
     public:
 
-      DiscreteTomographyMessageCounting(INDEX numberOfLabels,INDEX numberOfVars,DIRECTION);
+      DiscreteTomographyMessageCountingPairwise(INDEX numberOfLabels);
 
       // RIGHT -> TOP Ternary
       // LEFT  -> Pairwise
@@ -49,21 +49,20 @@ namespace LP_MP {
 
       void setRHS(INDEX rhs){ isRhs_ = true; rhs_ = rhs; };
     private:
-      const INDEX numberOfLabels_,numberOfVars_;
+      const INDEX numberOfLabels_;
       INDEX leftSize_,rightSize_,upSize_,regSize_;
       INDEX rhs_;
       bool isRhs_ = false;
     
     };
 
-    DiscreteTomographyMessageCounting::DiscreteTomographyMessageCounting(INDEX numberOfLabels,INDEX numberOfVars);
-    : numberOfLabels_(numberOfLabels),numberOfVars_(numberOfVars) {
+    DiscreteTomographyMessageCountingPairwise::DiscreteTomographyMessageCountingPairwise(INDEX numberOfLabels);
+    : numberOfLabels_(numberOfLabels) {
       assert(numberOfLabels_ > 1);
-      assert(numberOfVars_ > 1);
     }
 
     template<typename LEFT_FACTOR, typename G1, typename G3>
-    void DiscreteTomographyMessageCounting::SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
+    void DiscreteTomographyMessageCountingPairwise::SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
       assert(msg.size() == pow(numberOfLabels_,2));
       assert(repam_right.size() == pow(numberOfLabels_,2));
 
@@ -73,7 +72,7 @@ namespace LP_MP {
     }
     
     template<typename RIGHT_FACTOR, typename G1, typename G2>
-    void DiscreteTomographyMessageCounting::ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
+    void DiscreteTomographyMessageCountingPairwise::ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
 
       assert(msg.size() == pow(numberOfLabels_,2));
       assert(repam_right.size() == (f_right.getSize(f_right::up) + f_right.getSize(f_right::left) +
@@ -114,7 +113,7 @@ namespace LP_MP {
     }
 
     template<typename G>
-    void DiscreteTomographyMessageCounting::RepamLeft(G& repam, const REAL msg, const INDEX msg_dim){
+    void DiscreteTomographyMessageCountingPairwise::RepamLeft(G& repam, const REAL msg, const INDEX msg_dim){
 
       auto f = repam.GetFactor();
       assert( repam.size() == pow(numberOfLabels_,2));
@@ -125,7 +124,7 @@ namespace LP_MP {
     }
 
     template<typename G>
-    void DiscreteTomographyMessageCounting::RepamRight(G& repam, const REAL msg, const INDEX msg_dim){
+    void DiscreteTomographyMessageCountingPairwise::RepamRight(G& repam, const REAL msg, const INDEX msg_dim){
 
       auto f = repam.GetFactor();
       assert( repam.size() == (f.getSize(f::up) + f.getSize(f::left) + f.getSize(f::right) + f.getSize(f::reg))); // <-- wie kann man das machen?
