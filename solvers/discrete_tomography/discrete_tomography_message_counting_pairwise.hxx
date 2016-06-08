@@ -46,14 +46,8 @@ namespace LP_MP {
 
       //void ComputeRightFromLeftPrimal(const bool leftPrimal, MulticutTripletFactor::LabelingType& rightPrimal);
 
-
-      void setRHS(INDEX rhs){ isRhs_ = true; rhs_ = rhs; };
     private:
-      const INDEX numberOfLabels_;
-      INDEX leftSize_,rightSize_,upSize_,regSize_;
-      INDEX rhs_;
-      bool isRhs_ = false;
-    
+      const INDEX numberOfLabels_;    
     };
 
     DiscreteTomographyMessageCountingPairwise::DiscreteTomographyMessageCountingPairwise(INDEX numberOfLabels);
@@ -82,8 +76,6 @@ namespace LP_MP {
       INDEX right_size = f_right.getSize(f_right::right)/pow(numberOfLabels_,2);
       INDEX up_size = f_right.getSize(f_right::up)/pow(numberOfLabels_,2);
 	
-      if( isRhs_ && left_size > rhs_ + 1 ){ left_size = rhs_ + 1;  };
-
       op = [&](INDEX i,INDEX j){ return i+j; };
 	
       for(INDEX i=0;i<pow(numberOfLabels_,2);i++){

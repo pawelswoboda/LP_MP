@@ -1,13 +1,22 @@
 #ifndef LP_MP_TOMOGRAPHY_H
 #define LP_MP_TOMOGRAPHY_H
 
+#include <iostream>
+#include <fstream>
+#include "LP_MP.h"
+#include "factors/simplex_factor.hxx"
+#include "messages/simplex_marginalization_message.hxx"
+#include "problem_constructors/mrf_problem_construction.hxx"
+
+#include "discrete_tomography_factor_counting.hxx"
+#include "discrete_tomography_message_counting.hxx"
+#include "discrete_tomography_message_counting_pairwise.hxx"
+
 #include "parse_rules.h"
 
 /*
   This file defines the FMC (factors,messages,...) for the tomography solver
 */
-
-
 
 namespace LP_MP{
 
@@ -15,10 +24,10 @@ namespace LP_MP{
   typedef PairwiseLoop<0> LeftLoopType;
   typedef PairwiseLoop<1> RightLoopType;
 
-  typedef MultiplexMargMessage<UnaryLoopType,LeftLoopType,true,false,false,true> LeftMargMessage;
-  typedef MultiplexMargMessage<UnaryLoopType,RightLoopType,true,false,false,true> RightMargMessage;
+  typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,false,false,true> LeftMargMessage;
+  typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false,false,true> RightMargMessage;
 
-  typedef MultiplexFactor<std::vector<REAL>, const_ones_array, const_one> Simplex;
+  typedef SimplexFactor<> Simplex;
 
 
   struct FMC_DT {
@@ -27,11 +36,12 @@ namespace LP_MP{
     typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 1, false, false > PairwiseFactor;
     typedef FactorContainer<DiscreteTomographyCountingFactor, ExplicitRepamStorage, FMC_DT, 2, false, false> DiscreteTomographyCountingFactorContainer;
    
-    typedef MessageContainer<LeftMargMessage, StandardMessageStorage, FMC_DT, 1 > UnaryPairwiseMessageLeft;
-    typedef MessageContainer<RightMargMessage, StandardMessageStorage, FMC_DT, 2 > UnaryPairwiseMessageRight;
-    typedef MessageContainer<DiscreteTomographyCountingMessage<Direction::Left>, FMC_DT, 3> DiscreteTomographyCountingMessageLeft;
-    typedef MessageContainer<DiscreteTomographyCountingMessage<Direction::Right>, FMC_DT, 4> DiscreteTomographyCountingMessageRight;
-    typedef MessageContainer<DiscreteTomographyCountingPairwiseMessage, FMC_DT, 5> DiscreteTomographyCountingCountingPairwiseMessageContainer;
+    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 0 > UnaryPairwiseMessageLeft;
+    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 1 > UnaryPairwiseMessageLeft;
+    
+    typedef MessageContainer<DiscreteTomographyCountingMessage<Direction::Left>, 2, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT, 2> DiscreteTomographyCountingMessageLeft;
+    typedef MessageContainer<DiscreteTomographyCountingMessage<Direction::Right>, 2, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT, 3> DiscreteTomographyCountingMessageRight;
+    typedef MessageContainer<DiscreteTomographyCountingPairwiseMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_DT, 4> TomographyCountingCountingPairwiseMessageContainer;
 
 
     using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer >;
@@ -94,6 +104,10 @@ namespace LP_MP{
 	pd.GetProblemConstructor<1>().AddProjection(projectionVar,projectionCost);
       }
     };
+
+    bool ParseLiftedProblem(const std::string filename&, ProblemDecomposition<FMC_DT>& pd) {
+      return true;
+    }
 
   }
 #endif // LP_MP_TOMOGRAPHY_H
