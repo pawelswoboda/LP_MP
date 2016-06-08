@@ -1,5 +1,5 @@
-#ifndef LP_MP_xxx
-#define LP_MP_xxx
+#ifndef LP_MP_DT_TREE_CONSTRUCTOR
+#define LP_MP_DT_TREE_CONSTRUCTOR
 
 namespace LP_MP {
 
@@ -11,15 +11,16 @@ namespace LP_MP {
 	   INDEX DISCRETE_TOMOGRAPHY_COUNTING_PAIRWISE_MESSAGE_NO>
   class DiscreteTomographyTreeConstructor {
   public:
-    using MrfConstructorType = typename meta::at_c<FMC::ProblemDecompositionList,MRF_PROBLEM_CONSTRUCTOR_NO>;
-    using DiscreteTomographyCountingFactorContainer = typename meta::at_c<FMC::FactorList,DISCRETE_TOMOGRAPHY_COUNTING_FACTOR_NO>;
-    using DiscreteTomographyCountingMessageLeft = typename meta::at_c<typename FMC::MessageList, DISCRETE_TOMOGRAPHY_MESSAGE_LEFT>::MessageContainerType;
-    using DiscreteTomographyCountingMessageRight = typename meta::at_c<typename FMC::MessageList, DISCRETE_TOMOGRAPHY_MESSAGE_RIGHT>::MessageContainerType;
-    using DiscreteTomographyCountingPairwiseMessageContainer = typename meta::at_c<typename FMC::MessageList, DISCRETE_TOMOGRAPHY_COUNTGIN_PAIRWISE_MESSAGE_NO>::MessageContainerType;
-
-    // struct Tree {
-    //  std::vector<INDEX> projectionVar_;
-    //};
+    using MrfConstructorType =
+      typename meta::at_c<typename FMC::ProblemDecompositionList,MRF_PROBLEM_CONSTRUCTOR_NO>;
+    using DiscreteTomographyCountingFactorContainer =
+      typename meta::at_c<typename FMC::FactorList,DISCRETE_TOMOGRAPHY_COUNTING_FACTOR_NO>;
+    using DiscreteTomographyCountingMessageLeft =
+      typename meta::at_c<typename FMC::MessageList, DISCRETE_TOMOGRAPHY_MESSAGE_LEFT>::MessageContainerType;
+    using DiscreteTomographyCountingMessageRight =
+      typename meta::at_c<typename FMC::MessageList, DISCRETE_TOMOGRAPHY_MESSAGE_RIGHT>::MessageContainerType;
+    using DiscreteTomographyCountingPairwiseMessageContainer =
+      typename meta::at_c<typename FMC::MessageList, DISCRETE_TOMOGRAPHY_COUNTING_PAIRWISE_MESSAGE_NO>::MessageContainerType;
 
     DiscreteTomographyTreeConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd) {}
     
@@ -27,14 +28,14 @@ namespace LP_MP {
 
     void AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost)
     {      
-      auto& mrfConstructor = pd_.GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+      auto& mrfConstructor = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
 
       for(INDEX i=0;i<projectionVar.size()-1;++i) {
 	const INDEX i1 = std::min(projectionVar[i],projectionVar[i+1]);
 	const INDEX i2 = std::max(projectionVar[i],projectionVar[i+1]);
 
 	if(!mrfConstructor.HasPairwiseFactor(i1,i2)) {
-	  mrfConstructor.AddPairwiseFactor(i1,i2,std::vector<REAL>(noLabels_*noLabels,0.0));
+	  mrfConstructor.AddPairwiseFactor(i1,i2,std::vector<REAL>(pow(noLabels_,2),0.0));
 	}
       }
       
@@ -45,7 +46,7 @@ namespace LP_MP {
 
       auto stack = std::deque<treeIdx>();
       auto queue = std::deque<treeIdx>();
-      auto factors = std::vector<DiscreteCountingFactorContainer*>();
+      auto factors = std::vector<DiscreteTomographyCountingFactorContainer*>();
     
       for( INDEX i=0;i<projectionVar.size();++i){
 	queue.push_back(treeIdx(projectionVar[i],projectionVar[i],1,0));
@@ -78,7 +79,11 @@ namespace LP_MP {
 	
 	  // factors
 	  DiscreteTomographyFactorCounting t(noLabels_,idxL.n,idxR.n,summationCost.size());
-	  INDEX repamSize = t.getSize(t::up) + t.getSize(t::left) + t.getSize(t::right) + t.getSize(t::reg);
+	  INDEX repamSize =
+	    t.getSize(DiscreteTomographyFactorCounting::NODE::up) +
+	    t.getSize(DiscreteTomographyFactorCounting::NODE::left) +
+	    t.getSize(DiscreteTomographyFactorCounting::NODE::right) +
+	    t.getSize(DiscreteTomographyFactorCounting::NODE::reg);
 	  std::vector<REAL> repam(repamSize,0.0);
 	   
 	  if( idxL.n + idxR.n != projectionVar.size() ){
@@ -87,7 +92,7 @@ namespace LP_MP {
 	  else{
 	    assert(PointerToQueue->size() == 0);
 	    
-	    for(INDEX i=0;i<summationCost.size()){
+	    for(INDEX i=0;i<summationCost.size();i++){
 	      for(INDEX j=0;j<pow(noLabels_,2);j++){
 		repam[j+i*pow(noLabels_,2)]=summationCost[i];
 	      }
@@ -95,16 +100,17 @@ namespace LP_MP {
 	  }
 
 	  if( idxL.n == 1 ){
-	    for(INDEX i=0;i<t.getSize(t::left);i++){
+	    for(INDEX i=0;i<t.getSize(DiscreteTomographyFactorCounting::NODE::left);i++){
 	      if( (i % (1 + noLabels_ + pow(noLabels_,2))) != 0 ){
-		repam[t.getSize(t::up) + i] = std::numeric_limits<REAL>::max();
+		repam[t.getSize(DiscreteTomographyFactorCounting::NODE::up) + i] = std::numeric_limits<REAL>::max();
 	      }
 	    }
 	  }
 	  if( idxR.n == 1 ){
-	    for(INDEX i=0;i<t.getSize(t::right);i++){
+	    for(INDEX i=0;i<t.getSize(DiscreteTomographyFactorCounting::NODE::right);i++){
 	      if( (i % (1 + noLabels_ + pow(noLabels_,2))) != 0 ){
-		repam[t.getSize(t::up) + t.getSize(t::left) + i] = std::numeric_limits<REAL>::max();
+		repam[t.getSize(DiscreteTomographyFactorCounting::NODE::up) +
+		  t.getSize(DiscreteTomographyFactorCounting::NODE::left) + i] = std::numeric_limits<REAL>::max();
 	      }
 	    }
 	  }
@@ -129,8 +135,8 @@ namespace LP_MP {
 	  if(idxR.n != 1){
 	    auto *m_right = new DiscreteTomographyCountingMessageRight(DiscreteTomographyMessageCounting<DIRECTION::right>(noLabels_,idxR.n),
 								       factors[idxR.id],factors.back(),
-								       pow(noLabels_,2)*std::min(summationCost.size(),(idxR.n*(noLabels_-1)+1));
-								       pd_.GetLP()->AddMessage(m_right));
+								       pow(noLabels_,2)*std::min(summationCost.size(),(idxR.n*(noLabels_-1)+1)));
+	    pd_.GetLP()->AddMessage(m_right);
 	  }
 	}
 	std::swap(PointerToStack,PointerToQueue);	
@@ -143,7 +149,7 @@ namespace LP_MP {
     //std::vector<Tree> treeIndices_;
     INDEX noLabels_ = 0;
     ProblemDecomposition<FMC>& pd_;
-  }
+  };
 
 }
 

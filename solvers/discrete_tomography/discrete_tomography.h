@@ -11,6 +11,7 @@
 #include "discrete_tomography_factor_counting.hxx"
 #include "discrete_tomography_message_counting.hxx"
 #include "discrete_tomography_message_counting_pairwise.hxx"
+#include "discrete_tomography_tree_constructor.hxx"
 
 #include "parse_rules.h"
 
@@ -34,27 +35,28 @@ namespace LP_MP{
 
     typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 0, true, true > UnaryFactor;
     typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 1, false, false > PairwiseFactor;
-    typedef FactorContainer<DiscreteTomographyCountingFactor, ExplicitRepamStorage, FMC_DT, 2, false, false> DiscreteTomographyCountingFactorContainer;
+    typedef FactorContainer<DiscreteTomographyFactorCounting, ExplicitRepamStorage, FMC_DT, 2, false, false> DiscreteTomographyCountingFactorContainer;
    
     typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 0 > UnaryPairwiseMessageLeft;
-    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 1 > UnaryPairwiseMessageLeft;
+    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 1 > UnaryPairwiseMessageRight;
     
-    typedef MessageContainer<DiscreteTomographyCountingMessage<Direction::Left>, 2, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT, 2> DiscreteTomographyCountingMessageLeft;
-    typedef MessageContainer<DiscreteTomographyCountingMessage<Direction::Right>, 2, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT, 3> DiscreteTomographyCountingMessageRight;
-    typedef MessageContainer<DiscreteTomographyCountingPairwiseMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_DT, 4> TomographyCountingCountingPairwiseMessageContainer;
-
+    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::left>, 2, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT, 2>
+      DiscreteTomographyCountingMessageLeft;
+    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::right>, 2, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT, 3>
+      DiscreteTomographyCountingMessageRight;
+    typedef MessageContainer<DiscreteTomographyMessageCountingPairwise, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_DT, 4>
+      DiscreteTomographyCountingPairwiseMessageContainer;
 
     using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer >;
     using MessageList = meta::list<
-      MessageListItem< UnaryPairwiseMessageLeft,  0, 1, std::vector, FixedSizeMessageContainer<1>::type >,
-      MessageListItem< UnaryPairwiseMessageRight, 0, 1, std::vector, FixedSizeMessageContainer<1>::type >,
-      MessageListItem< DiscreteTomographyCountingMessageLeft, 2, 2,  std::vector, std::vector >,
-      MessageListItem< DiscreteTomographyCountingMessageRight, 2, 2,  std::vector, std::vector >,
-      MessageListItem< DiscreteTomographyCountingPairwiseMessageContainer, 1, 2,  std::vector, FixedSizeMessageContainer<1>::type >
-      >;
+      UnaryPairwiseMessageLeft,
+      UnaryPairwiseMessageRight,
+      DiscreteTomographyCountingMessageLeft,
+      DiscreteTomographyCountingMessageRight,
+      DiscreteTomographyCountingPairwiseMessageContainer>;
 
-    using mrf = MRFProblemConstructor<FMC_DT,0,1,0,1>;
-    using dt = DiscreteTomographyConstructor<FMC_DT,mrf,2,3,4,5>;
+    using mrf = StandardMrfConstructor<FMC_DT,0,1,0,1>;
+    using dt = DiscreteTomographyTreeConstructor<FMC_DT,0,2,3,4,5>;
     using ProblemDecompositionList = meta::list<mrf,dt>;
 	  
   };
@@ -63,33 +65,40 @@ namespace LP_MP{
 
 
     struct ProjectionPreamble : pegtl::string<'P','R','O','J','E','C','T','I','O','N','S'> {};
-    struct ProjectionVector : pegtl::seq<pegtl::string<'('>,opt_whitespace, real_number, opt_whitespace, pegtl::star< pegtl::string<','>,opt_whitespace, real_number,opt_whitespace >, opt_whitespace, pegtl::string<')'>
-      struct ProjectionLine : pegtl::seq<opt_whitespace,pegtl::plus<positive_integer,opt_whitespace,pegtl::string<'+'>,opt_whitespace>,positive_integer,opt_whitespace,pegtl::string<'='>,opt_whitespace,ProjectionsVector,opt_whitespace> {};
+    struct ProjectionVector : pegtl::seq< pegtl::string<'('>, opt_whitespace, real_number, opt_whitespace, pegtl::star< pegtl::string<','>, opt_whitespace, real_number,opt_whitespace >, opt_whitespace, pegtl::string<')'> > {};
+    struct ProjectionLine : pegtl::seq<opt_whitespace,pegtl::plus<positive_integer,opt_whitespace,pegtl::string<'+'>,opt_whitespace>,positive_integer,opt_whitespace,pegtl::string<'='>,opt_whitespace,ProjectionVector,opt_whitespace> {};
 
-    struct grammar : pegtl::seq< ....
+    struct grammar : pegtl::seq<
+      // add mrf grammar here
       pegtl::star<opt_whitespace,pegtl::eol>,
       ProjectionPreamble,
       pegtl::star<opt_whitespace,pegtl::eol,ProjectionLine>,
       pegtl::eof> {};
 
+    template<typename Rule>
+      struct action : pegtl::nothing<Rule> {};
+
+    template<>
     struct action<real_number> {
       static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack)
       {
 	realStack.push(std::stod(in.string()));
       }
     };
+    template<>
     struct action<positive_integer> {
       static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack)
       {
 	integerStack.push(std::stoi(in.string()));
       }
     };
-    
+
+    template<>
     struct action<ProjectionLine> {
       static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack)
       {
 	std::vector<INDEX> projectionVar;
-	while(!integerStack.empty) {
+	while(!integerStack.empty()) {
 	  projectionVar.push_back(integerStack.top());
 	  integerStack.pop();
 	}
@@ -101,7 +110,8 @@ namespace LP_MP{
 	  realStack.pop(); 
 	}
 	std::reverse(projectionCost.begin(), projectionCost.end());
-	pd.GetProblemConstructor<1>().AddProjection(projectionVar,projectionCost);
+	auto& dt = pd.template GetProblemConstructor<1>();
+	//.AddProjection(projectionVar,projectionCost);
       }
     };
 
