@@ -13,7 +13,14 @@ LP::~LP()
 
 INDEX LP::AddFactor(FactorTypeAdapter* f) 
 { 
+   INDEX primalOffset;
+   if(f_.size() ==0) {
+      primalOffset = 0;
+   } else {
+      primalOffset = f_.back()->GetPrimalOffset() + f->size();
+   }
    f_.push_back(f);
+   f->SetPrimalOffset(primalOffset);
    return f_.size() - 1;
 }
 

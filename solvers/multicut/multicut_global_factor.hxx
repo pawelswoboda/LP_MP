@@ -118,6 +118,7 @@ private:
    const INDEX i_; // index of the affected variable in the cycle factor.
 };
 
+/*
 class LiftedMulticutGlobalFactor : MulticutGlobalFactor{
 public:
 private:
@@ -126,6 +127,7 @@ private:
    std::vector
     std::vector<Edge> liftedEdges_;
 };
+*/
 
 } // end namespace LP_MP
 

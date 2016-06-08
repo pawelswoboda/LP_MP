@@ -555,6 +555,33 @@ MulticutConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd)
       return tripletsAdded;
    }
 
+   bool CheckPrimalConsistency(const std::vector<bool>& primal) const
+   {
+      assert(false);
+      UnionFind uf(noNodes_);
+      for(const auto& e : unaryFactors_) {
+         UnaryFactorContainer* f = e.second; 
+         if(primal[f->GetPrimalOffset()] == false) {
+            // connect components 
+            const INDEX i = std::get<0>(e.first);
+            const INDEX j = std::get<1>(e.first);
+            uf.merge(i,j);
+         }
+      }
+      for(const auto& e : unaryFactors_) {
+         UnaryFactorContainer* f = e.second; 
+         if(primal[f->GetPrimalOffset()] == true) {
+            const INDEX i = std::get<0>(e.first);
+            const INDEX j = std::get<1>(e.first);
+            // there may not be a path from i1 to i2 consisting of edges with primal value false only
+            if(uf.connected(i,j)) {
+               return false;
+            }
+         }
+      }
+
+      return true;
+   }
 
 protected:
    GlobalFactorContainer* globalFactor_;
@@ -860,6 +887,11 @@ public:
       assert(false);
    }
 
+   bool CheckPrimalConsistency(const std::vector<bool>& primal) const 
+   {
+
+   }
+
 
 private:
    //std::map<std::tuple<INDEX,std::vector<INDEX>>, OddWheelFactorContainer*> oddWheelFactors_; // first entry denotes center node, then come cycle nodes with smallest node first, as computed by CycleNormalForm
@@ -1117,6 +1149,31 @@ public:
       }
 
       return factorsAdded;
+   }
+
+   // check if all lifted edges are primally consistent by asserting that a path of zero values exists in the ground graph whenever lifted edge is zero
+   bool CheckPrimalConsistency(const std::vector<bool>& primal) const
+   {
+      const bool multicutConsistent = MULTICUT_CONSTRUCTOR::CheckPrimalConsistency();
+      if(!multicutConsistent) {
+         return false;
+      }
+      
+      //collect connectivity information with union find w.r.t. base edges
+      UnionFind uf(MULTICUT_CONSTRUCTOR::noNodes_);
+      for(const auto& e : baseEdges_) {
+         if(primal[e.f->GetPrimalOffset()] == false) {
+            uf.merge(e.i,e.j);
+         }
+      }
+      for(const auto& e : liftedEdges_) {
+        if(primal[e.f->GetPrimalOffset()] == false) {
+           if(!uf.connected(e.i,e.j)) {
+              return false;
+           }
+        }
+      }
+      return true;
    }
 
    private:

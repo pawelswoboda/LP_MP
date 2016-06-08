@@ -39,7 +39,7 @@ public:
       ncurses::refresh();
 
       view.ymin = BaseVisitor::GetLowerBound(); // do zrobienia: should be stored in LP
-      view.ymax = lp->BestPrimalBound(); view.ymax = -60000;
+      view.ymax = lp->BestPrimalBound();  view.ymax = -30000;
       view.xmin = 0;
       view.xmax = 100;
       drawAxes(ncurses::stdscr,&view);
@@ -72,7 +72,7 @@ public:
       }
 
       double d = 1;
-      plotPoint(ncurses::stdscr, &view, REAL(BaseVisitor::GetIter()), lowerBound, 0x2800, nullptr, nullptr);
+      plotPoint(ncurses::stdscr, &view, REAL(BaseVisitor::GetIter()), lowerBound, '*', nullptr, nullptr);
       ncurses::refresh();
       return ret_state; 
    }
@@ -180,7 +180,7 @@ private:
       for(INDEX i=0; i<graph.size(); ++i) {
          double y = graph[i].y;
          //double d = estimateSlope(yfunc, x, step/2);
-         plotPoint(win, view, graph[i].x, y, 0x2800, NULL, NULL);
+         plotPoint(win, view, graph[i].x, y, '*', NULL, NULL);
       }
    }
 

@@ -22,14 +22,12 @@
 
 // this file contains definitions of various graph matching solvers and grammars.
 // solvers:
-// FMC_MP implements graph matching with the uniqueness constraints implemented via messages,
+// FMC_MP implements graph matching with the uniqueness constraints implemented via messages.
 // FMC_MCF implements graph matching with a global min cost flow factor.
 // FMC_GM amounts to TRWS with infinity on diagonals
-// grammars:
-// TorresaniEtAlInput contains the grammar used by the dual decomposition algorithm of Torresani, Kolmogorov and Rother
-// UAIInput contains the grammar in uai MRF format plus constraints section
-
-// do zrobienia: possibly put everything in global namespace GraphMatching
+// input grammars:
+// TorresaniEtAlInput contains the grammar used by the dual decomposition algorithm of Torresani, Kolmogorov and Rother.
+// UAIInput contains the grammar in uai MRF format plus constraints section.
 
 using namespace LP_MP;
 
@@ -45,7 +43,6 @@ typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false,fal
 typedef PairwiseTripletLoop<0,1> PairwiseTripletLoopType12;
 typedef PairwiseTripletLoop<0,2> PairwiseTripletLoopType13;
 typedef PairwiseTripletLoop<1,2> PairwiseTripletLoopType23;
-// do zrobienia: not enough messages sent below
 typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType12,false,false,false,true> PairwiseTriplet12Message;
 typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType13,false,false,false,true> PairwiseTriplet13Message;
 typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType23,false,false,false,true> PairwiseTriplet23Message;
@@ -57,15 +54,11 @@ template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left
 struct FMC_MP {
    using FMC_MP_PARAM = FMC_MP<PAIRWISE_CONSTRUCTION>;
    constexpr static const char* name =
-      PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "\\textbf{AMP-O}"
-      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "\\textbf{AMP-I}"
-      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "\\textbf{AMP-B}"
+      PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "AMP-O"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "AMP-I"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "AMP-B"
       : "unknown variant"));
-      //PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "Graph Matching via Message Passing, left variant"
-      //: (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "Graph Matching via Message Passing, right variant"
-      //: (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "Graph Matching via Message Passing, both sides variant"
-      //: "unknown variant"));
-
+      
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 0, false, true > UnaryFactor; // set to true if labeling by unaries is desired
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 1, false, false > PairwiseFactor;
    typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_MP_PARAM, 2, true, false> McfLabelingFactor;
@@ -83,14 +76,11 @@ struct FMC_MP {
    using mrfRight = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
    using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
    using ProblemDecompositionList = meta::list<assignment, mrfLeft, mrfRight, mcfLabeling>;
-   //using mrf = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
-   //using ProblemDecompositionList = meta::list<assignment, mrf>;
 };
 
 // graph matching with assignment via minimum cost flow solver
 
 // first good option: construct pairwise potentials on both sides, only send messages from unary to assignment (no receiving) and adjust all factors.
-
 // another good algorithm can be obtained by just using the left side, only receiving messages from unaries (no sending) and adjusting all factors.
 // For both algorithms: In maximal perturbation problem capacities have to be set [-1,-inf] for edges = 1 and [0,inf] for edges = 0
 
@@ -98,18 +88,13 @@ template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left
 struct FMC_MCF {
    using FMC_MCF_PARAM = FMC_MCF<PAIRWISE_CONSTRUCTION>;
    constexpr static const char* name =
-      PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "\\textbf{AMCF-O}"
-      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "\\textbf{AMCF-I}"
-      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "\\textbf{AMCF-B}"
+      PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "AMCF-O"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "AMCF-I"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "AMCF-B"
       : "unknown variant"));
-      //PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "Graph Matching via Combinatorial Min Cost Flow Solver, left variant"
-      //: (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "Graph Matching via Combinatorial Min Cost Flow Solver, right variant"
-      //: (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "Graph Matching via Combinatorial Min Cost Flow Solver, both sides variant"
-      //: "unknown variant"));
-
+      
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
-   // unary factor is theoretically not needed. The edges of the assignment problem could serve as unary potentials.
    typedef FactorContainer<MinCostFlowFactorLemon, MinCostFlowReparametrizationStorageLemon, FMC_MCF_PARAM, 0, true, true> MinCostFlowAssignmentFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 1 > UnaryFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 2 > PairwiseFactor;
@@ -117,7 +102,6 @@ struct FMC_MCF {
 
    typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
    typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
-   // possibly remove the rational numbers at the end
    typedef MessageContainer<UnaryToAssignmentMessage<McfCoveringFactor>, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
 
    typedef MessageContainer<PairwiseTriplet12Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 3> PairwiseTriplet12MessageContainer;
@@ -151,13 +135,10 @@ template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left
 struct FMC_GM {
    using FMC_GM_PARAM = FMC_GM<PAIRWISE_CONSTRUCTION>;
    constexpr static const char* name =
-      PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "\\textbf{GM-O}"
-      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "\\textbf{GM-I}"
+      PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "GM-O"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "GM-I"
       : "unknown variant");
-      //PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "Graph Matching via TRW-S, left variant"
-      //: (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "Graph Matching via TRW-S, right variant"
-      //: "unknown variant");
-
+      
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, false, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 1, false, false > PairwiseFactor;
    typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_GM_PARAM, 2, true, false> McfLabelingFactor;

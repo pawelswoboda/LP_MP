@@ -95,6 +95,7 @@ public:
    ~MinCostFlowFactorLemon()
    {
       // delete minCostFlow_; deleted in repam storage: not very clean!
+      // do zrobienia: memory leak
       //delete graph_; // one has to delete the graph at the end! However add copy constructor
    }
 
@@ -370,7 +371,7 @@ public:
 private:
    // note: this is also given to the reparametrization storage and hence points to the reparametrized potential. Use shared_ptr?
    MinCostFlowSolverType* minCostFlow_;
-   GraphType* graph_; // memory leak for this one!
+   GraphType* graph_ = nullptr; // memory leak for this one!
    INDEX noNodes_;
    INDEX noEdges_;
    std::vector<GraphType::Node> nodes_;
@@ -420,7 +421,7 @@ private:
    // do zrobienia: what about shared_ptr?
    MinCostFlowSolverType* minCostFlow_; //possibly not needed here.
    std::vector<REAL> repam_;
-   std::vector<REAL> maximumPerturbation_;
+   //std::vector<REAL> maximumPerturbation_;
 };
 
 } // end namespace LP_MP

@@ -191,52 +191,6 @@ private:
    const INDEX leftVar_, rightVar_; // variables affected 
 };
 
-// do zrobienia: obsolete, remove
-/*
-template<typename G1, typename G2>
-void EqualityMessage::MakeRightFactorUniform(const G1& rightPot, G2& msg, const REAL omega)
-{
-   assert(msg.size() == 1);
-   assert(rightVar_ < rightPot.size());
-   
-   // possibly do it differently: search for two second smallest entries and then select first or second one depending upon whether it is rightVar_ or not. Faster?
-   REAL min_val = std::numeric_limits<REAL>::max();
-   for(INDEX i=0; i<rightPot.size(); ++i) {
-      if(i!=rightVar_) {
-         min_val = std::min(min_val, rightPot[i]);
-      }
-   }
-   // can be replaced by
-   //min_val = *std::min_element(rightPot.cbegin(), rightPot.cbegin()+rightVar_);
-   //min_val = std::min(*std::min_element(rightPot.cbegin() + rightVar+1, rightPot.cend()), min_val);
-   // faster?
-
-   REAL omega_ = std::min(15.0*omega,1.0);
-   REAL new_msg = msg[0] + (min_val - rightPot[rightVar_]);
-   REAL old_msg = msg[0];
-   msg[0] = (1.0-omega_)*old_msg + omega_*new_msg;
-}
-
-template<typename G1, typename G2>
-void EqualityMessage::MakeLeftFactorUniform(const G1& leftPot, G2& msg, const REAL omega)
-{
-   assert(msg.size() == 1);
-   assert(leftVar_ < leftPot.size());
-   
-   REAL min_val = std::numeric_limits<REAL>::max();
-   for(INDEX i=0; i<leftPot.size(); ++i) {
-      if(i!=leftVar_) {
-         min_val = std::min(min_val, leftPot[i]);
-      }
-   }
-
-   REAL omega_ = std::min(15.0*omega,1.0);
-   REAL new_msg = msg[0] - (min_val - leftPot[leftVar_]);
-   REAL old_msg = msg[0];
-   msg[0] = (1.0-omega_)*old_msg + omega_*new_msg;
-}
-*/
-
 } // end namespace LP_MP
 
 #endif // LP_MP_EQUALITY_MESSAGE

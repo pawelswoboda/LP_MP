@@ -67,23 +67,6 @@ public:
    }
 
 
-   template<INDEX PROBLEM_CONSTRUCTOR_NO, typename PC_LIST = ProblemDecompositionList>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO == PC_LIST::size()>::type
-   ReadLine(const INDEX problem_no, const std::string& line)
-   {
-      throw std::runtime_error("problem number " + std::to_string(problem_no) + " too large or problem number not specified");
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO, typename PC_LIST = ProblemDecompositionList>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < PC_LIST::size()>::type
-   ReadLine(const INDEX problem_no, const std::string& line)
-   {
-      if(problem_no == PROBLEM_CONSTRUCTOR_NO) {
-         GetProblemConstructor<PROBLEM_CONSTRUCTOR_NO>().ReadLine(*this,line);
-      } else {
-         ReadLine<PROBLEM_CONSTRUCTOR_NO+1>(problem_no, line);
-      }
-   }
-
    // do zrobienia: does not work anymore with custom input grammars.
    template<INDEX PROBLEM_CONSTRUCTOR_NO, typename PRIMAL_SOLUTION_ITERATOR, typename PC_LIST = ProblemDecompositionList>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO == PC_LIST::size()>::type
@@ -153,6 +136,42 @@ public:
    {
       return Tighten<0>(minDualIncrease, maxConstraints);
    }
+
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency,CheckPrimalConsistency);
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   constexpr static bool
+   CanCheckPrimalConsistency()
+   {
+      // do zrobienia: this is not nice. CanTighten should only be called with valid PROBLEM_CONSTRUCTOR_NO
+      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
+      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
+      else return HasCheckPrimalConsistency<meta::at_c<ProblemDecompositionList,n>, bool, std::vector<bool>>();
+      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
+   }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size(),INDEX>::type
+   CheckPrimalConsistency(const std::vector<bool>& primal) { return true; }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanCheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
+   CheckPrimalConsistency(const std::vector<bool>& primal)
+   {
+      return CheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO+1>(primal);
+   }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanCheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
+   CheckPrimalConsistency(std::vector<bool>& primal)
+   {
+      if(std::get<PROBLEM_CONSTRUCTOR_NO>(problem_constructor_).CheckPrimalConsistency(primal)) {
+         return CheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO+1>(primal);
+      } 
+      return false;
+   }
+   bool CheckPrimalConsistency(const std::vector<bool>& primal) // minDualIncrease says how small minimally must be the increase guaranteed by added constraints, while maxConstraints gives maximum number of constraints to add
+   {
+      return CheckPrimalConsistency<0>(primal);
+   }
+
+
 
    // do zrobienia: remove PC_LIST from templates and directly use ProblemDecompositionList as above
    template<INDEX PROBLEM_CONSTRUCTOR_NO, typename PC_LIST = ProblemDecompositionList>

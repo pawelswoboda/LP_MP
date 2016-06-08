@@ -299,10 +299,10 @@ template<typename MESSAGE_TYPE,
          INDEX LEFT_FACTOR_NO, INDEX RIGHT_FACTOR_NO, SIGNED_INDEX NO_OF_LEFT_FACTORS, SIGNED_INDEX NO_OF_RIGHT_FACTORS,
          SIGNED_INDEX MESSAGE_SIZE, 
          typename FACTOR_MESSAGE_TRAIT, 
-         INDEX MESSAGE_NO,
+         INDEX MESSAGE_NO
          // do zrobienia: remove these
-         typename SEND_MESSAGE_TO_RIGHT_WEIGHT = RationalNumberTemplate<0,1>,
-         typename SEND_MESSAGE_TO_LEFT_WEIGHT = RationalNumberTemplate<0,1>
+         //typename SEND_MESSAGE_TO_RIGHT_WEIGHT = RationalNumberTemplate<0,1>,
+         //typename SEND_MESSAGE_TO_LEFT_WEIGHT = RationalNumberTemplate<0,1>
          >
 class MessageContainer : public MessageStorageSelector<MESSAGE_SIZE,true>::type, public MessageTypeAdapter
 {
@@ -310,7 +310,7 @@ public:
    static constexpr INDEX leftFactorNumber = LEFT_FACTOR_NO;
    static constexpr INDEX rightFactorNumber = RIGHT_FACTOR_NO;
 
-   typedef MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, MESSAGE_SIZE, FACTOR_MESSAGE_TRAIT, MESSAGE_NO, SEND_MESSAGE_TO_RIGHT_WEIGHT, SEND_MESSAGE_TO_LEFT_WEIGHT> MessageContainerType;
+   typedef MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, MESSAGE_SIZE, FACTOR_MESSAGE_TRAIT, MESSAGE_NO> MessageContainerType;
    typedef MESSAGE_TYPE MessageType;
    typedef typename MessageStorageSelector<MESSAGE_SIZE,true>::type MessageStorageType; // do zrobienia: true is just for now. In general, message need not hold actual message, except when some factor is reparametrized implicitly
 
@@ -634,8 +634,8 @@ public:
    RightFactorContainer* GetRightFactor() const final { return rightFactor_; }
 
    INDEX GetMessageNumber() const final { return MESSAGE_NO; } 
-   REAL GetMessageWeightToRight() const final { return SEND_MESSAGE_TO_RIGHT_WEIGHT::value; }
-   REAL GetMessageWeightToLeft() const final { return SEND_MESSAGE_TO_LEFT_WEIGHT::value;  }
+   //REAL GetMessageWeightToRight() const final { return SEND_MESSAGE_TO_RIGHT_WEIGHT::value; }
+   //REAL GetMessageWeightToLeft() const final { return SEND_MESSAGE_TO_LEFT_WEIGHT::value;  }
    
    // class for storing a callback upon new assignment of message: update left and right factors
    // convention is as follows: original message is for right factor. Inverted message is for left one
@@ -981,40 +981,38 @@ public:
    MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element& primal)
    {
       static_assert(COMPUTE_PRIMAL_SOLUTION_TMP == COMPUTE_PRIMAL_SOLUTION,"");
-      factor_.MaximizePotentialAndComputePrimal(*this, primal);
+      factor_.MaximizePotentialAndComputePrimal(*this, primal + primalOffset_);
    }
 
-   template<typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE>
+   /*
+   template<typename MESSAGE_DISPATCHER_TYPE>
    typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanComputePrimalThroughMessage() == true>::type 
-   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element& primal, ITERATOR primalSolutionStorageIt) const
+   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element primal) const
    {
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it, ++primalSolutionStorageIt) {
-         MESSAGE_DISPATCHER_TYPE::ComputePrimalThroughMessage(*(*it), primal, *primalSolutionStorageIt);
+      for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it) {
+         MESSAGE_DISPATCHER_TYPE::ComputePrimalThroughMessage(*(*it), primal);
       }
    }
-   template<typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE>
+   template<typename MESSAGE_DISPATCHER_TYPE>
    typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanComputePrimalThroughMessage() == false>::type 
-   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element& primal, ITERATOR ) const {}
+   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element primal) const {}
 
-   template<typename ITERATOR, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element& primal, ITERATOR) const {}
-   template<typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element& primal, ITERATOR primalSolutionStorageIt) const 
+   template<typename... MESSAGE_DISPATCHER_TYPES_REST>
+   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element primal) const {}
+   template<typename MESSAGE_DISPATCHER_TYPE, typename... MESSAGE_DISPATCHER_TYPES_REST>
+   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element primal) const 
    {
-      ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE{}, primal, primalSolutionStorageIt);
+      ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE{}, primal);
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      primalSolutionStorageIt += std::get<n>(msg_).size(); // do zrobienia: we increase iterator twice: in ...Impl function and here. Possibly, give reference to iterator and let increase be done in ...Impl function. Same for {Receive|Send}Messages.
-      ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, primal, primalSolutionStorageIt);
+      ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, primal);
    }
-   // first argument is pointer to already computed primal solution of current factor.
-   // second argument is vector of pointers to (possible partially computed) primal solutions of connected factors, as ordered by messages
    // do zrobienia: rename PropagatePrimalThroughMessages
-   void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element& primal, std::vector<typename PrimalSolutionStorage::Element>& primalVec) const final
+   void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element primal) const final
    {
-      assert(primalVec.size() == GetNoMessages());
-      ComputePrimalThroughMessages(MESSAGE_DISPATCHER_TYPELIST{}, primal, primalVec.begin());
+      ComputePrimalThroughMessages(MESSAGE_DISPATCHER_TYPELIST{}, primal);
    }
+   */
    
 
    // SFINAE-based selection whether we will perform message updates for receiving   
@@ -1335,9 +1333,12 @@ public:
 
    const FactorType* GetFactor() const { return &factor_; }
    FactorType* GetFactor() { return &factor_; }
+   void SetPrimalOffset(const INDEX n) final { primalOffset_ = n; } // this function is used in AddFactor in LP class
+   INDEX GetPrimalOffset() const final { return primalOffset_; } // do zrobienia: possibly make this function pure virtual in base class
 
 protected:
    FactorType factor_; // the factor operation
+   INDEX primalOffset_;
 
    // compile time metaprogramming to transform Factor-Message information into lists of which messages this factor must hold
    // first get lists with left and right message types
@@ -1406,7 +1407,7 @@ protected:
 public:
    REAL EvaluatePrimal(typename PrimalSolutionStorage::Element primalIt) const final
    {
-      return factor_.EvaluatePrimal(*this,primalIt);
+      return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
    }
 
    template<bool WRITE_PRIMAL_SOLUTION_TMP = WRITE_PRIMAL_SOLUTION>
