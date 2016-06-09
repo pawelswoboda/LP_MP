@@ -32,6 +32,7 @@ namespace LP_MP{
 
 
   struct FMC_DT {
+    static constexpr char* name = "Discrete Tomography";
 
     typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 0, true, true > UnaryFactor;
     typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 1, false, false > PairwiseFactor;
@@ -56,7 +57,7 @@ namespace LP_MP{
       DiscreteTomographyCountingPairwiseMessageContainer>;
 
     using mrf = StandardMrfConstructor<FMC_DT,0,1,0,1>;
-    using dt = DiscreteTomographyTreeConstructor<FMC_DT,0,2,3,4,5>;
+    using dt = DiscreteTomographyTreeConstructor<FMC_DT,0,2,2,3,4>;
     using ProblemDecompositionList = meta::list<mrf,dt>;
 	  
   };
@@ -115,9 +116,11 @@ namespace LP_MP{
       }
     };
 
-    bool ParseLiftedProblem(const std::string filename&, ProblemDecomposition<FMC_DT>& pd) {
+    bool ParseProblem(const std::string& filename, ProblemDecomposition<FMC_DT>& pd) {
       return true;
     }
 
   }
+
+} // end namespace LP_MP
 #endif // LP_MP_TOMOGRAPHY_H

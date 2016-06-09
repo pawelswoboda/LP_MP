@@ -29,7 +29,7 @@ public:
    SimplexFactor() {}
 
    template<typename REPAM_ARRAY>
-   static void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element& primal)
+   static void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    {
       //std::cout << "Address of first element of primal in simplex factor: " << &(*primal) << "\n";
       for(INDEX i=0; i<repam.size(); ++i) { // ensure that primal has been initialized correctly to true

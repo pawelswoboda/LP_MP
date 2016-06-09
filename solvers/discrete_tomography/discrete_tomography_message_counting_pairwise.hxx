@@ -7,7 +7,7 @@
 
 namespace LP_MP {
     
-  //using MinConv = MinConv<std::function<REAL(INDEX)>,REAL,INDEX>;
+  //using MinConv = MinConv<REAL,INDEX>;
 
   class DiscreteTomographyMessageCountingPairwise{
 
@@ -95,7 +95,7 @@ namespace LP_MP {
 	auto z_right = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
 	  	  
 	MinConv mc(z_left,z_right,left_size,right_size,up_size);
-	mc.CalcConv(op);
+	mc.CalcConv(op,z_left,z_right);
 
 	for(INDEX k=0;k<up_size;k++){
 	  assert( k == (mc.getIdxA(k) + mc.getIdxB(k)));
@@ -122,17 +122,17 @@ namespace LP_MP {
   void DiscreteTomographyMessageCountingPairwise::RepamRight(G& repam, const REAL msg, const INDEX msg_dim){
 
     auto f = repam.GetFactor();
-    assert( repam.size() == (f.getSize(DiscreteTomographyFactorCounting::NODE::up) +
-			     f.getSize(DiscreteTomographyFactorCounting::NODE::left) +
-			     f.getSize(DiscreteTomographyFactorCounting::NODE::right) +
-			     f.getSize(DiscreteTomographyFactorCounting::NODE::reg))
+    assert( repam.size() == (f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+			     f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+			     f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+			     f->getSize(DiscreteTomographyFactorCounting::NODE::reg))
 	    );
     
     assert(msg_dim < pow(numberOfLabels_,2));
-    repam[f.getSize(DiscreteTomographyFactorCounting::NODE::up) +
-	  f.getSize(DiscreteTomographyFactorCounting::NODE::left) +
-	  f.getSize(DiscreteTomographyFactorCounting::NODE::right) +
-	  f.getSize(DiscreteTomographyFactorCounting::NODE::reg) +
+    repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+	  f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+	  f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+	  f->getSize(DiscreteTomographyFactorCounting::NODE::reg) +
 	  msg_dim] +=  msg;
   }
     

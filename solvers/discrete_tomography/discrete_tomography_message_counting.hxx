@@ -94,7 +94,7 @@ namespace LP_MP {
       REAL reg = repam_left[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
 		  
       MinConv mc(z_left,z_right,left_size,right_size,up_size);
-      mc.CalcConv(op);
+      mc.CalcConv(op,z_left,z_right);
 
       for(INDEX k=0;k<up_size;k++){
 	assert(k == (mc.getIdxA(k) + mc.getIdxB(k)));
@@ -150,7 +150,7 @@ namespace LP_MP {
 	REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
 	  
 	MinConv mc(z_up,z_right,up_size,right_size,left_size);
-	mc.CalcConv(op);
+	mc.CalcConv(op,z_up,z_right);
 
 	for(INDEX k=0;k<left_size;k++){
 	  assert(k == (mc.getIdxA(k) - mc.getIdxB(k)));
@@ -192,7 +192,7 @@ namespace LP_MP {
 	REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
 	  
 	MinConv mc(z_up,z_left,up_size,left_size,right_size);
-	mc.CalcConv(op);
+	mc.CalcConv(op,z_up,z_left);
 
 	for(INDEX k=0;k<right_size;k++){
 	  assert(k == (mc.getIdxA(k) - mc.getIdxB(k)));
@@ -211,12 +211,12 @@ namespace LP_MP {
   void DiscreteTomographyMessageCounting<DR>::RepamLeft(G& repam, const REAL msg, const INDEX msg_dim){
 
     auto f = repam.GetFactor();
-    assert( repam.size() == (f.getSize(DiscreteTomographyFactorCounting::NODE::left) +
-			     f.getSize(DiscreteTomographyFactorCounting::NODE::right) +
-			     f.getSize(DiscreteTomographyFactorCounting::NODE::up) +
-			     f.getSize(DiscreteTomographyFactorCounting::NODE::reg)));
+    assert( repam.size() == (f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+			     f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+			     f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+			     f->getSize(DiscreteTomographyFactorCounting::NODE::reg)));
 
-    assert(msg_dim < f.getSize(DiscreteTomographyFactorCounting::NODE::up));
+    assert(msg_dim < f->getSize(DiscreteTomographyFactorCounting::NODE::up));
     repam[msg_dim] += msg;
       
   }
@@ -226,18 +226,18 @@ namespace LP_MP {
   void DiscreteTomographyMessageCounting<DR>::RepamRight(G& repam, const REAL msg, const INDEX msg_dim){
 
     auto f = repam.GetFactor();
-    assert( repam.size() == (f.getSize(DiscreteTomographyFactorCounting::NODE::left) +
-			     f.getSize(DiscreteTomographyFactorCounting::NODE::right) +
-			     f.getSize(DiscreteTomographyFactorCounting::NODE::up) +
-			     f.getSize(DiscreteTomographyFactorCounting::NODE::reg)));
+    assert( repam.size() == (f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+			     f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+			     f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+			     f->getSize(DiscreteTomographyFactorCounting::NODE::reg)));
 
     if( DR == DIRECTION::left ){
-      assert(msg_dim < f.getSize(DiscreteTomographyFactorCounting::NODE::left));
-      repam[f.getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] +=  msg;
+      assert(msg_dim < f->getSize(DiscreteTomographyFactorCounting::NODE::left));
+      repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] +=  msg;
     }
     else{
-      assert(msg_dim < f.getSize(DiscreteTomographyFactorCounting::NODE::right));
-      repam[f.getSize(DiscreteTomographyFactorCounting::NODE::up) + f.getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] += msg;
+      assert(msg_dim < f->getSize(DiscreteTomographyFactorCounting::NODE::right));
+      repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] += msg;
     }
   }
     

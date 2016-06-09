@@ -7,7 +7,7 @@
 
 namespace LP_MP{
 
-  using MinConv = discrete_tomo::MinConv<std::function<REAL(INDEX)>,REAL,INDEX>;
+  using MinConv = discrete_tomo::MinConv<REAL,INDEX>;
   
   class DiscreteTomographyFactorCounting{
 
@@ -23,6 +23,11 @@ namespace LP_MP{
     template<typename REPAM_ARRAY>
     REAL LowerBound(const REPAM_ARRAY& repam) const; //--required
 
+    template<typename REPAM_ARRAY>
+    void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, PrimalSolutionStorage::Element primal) const {
+
+    }
+    
     template<typename REPAM_ARRAY>
     REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const; //--required
 
@@ -106,7 +111,7 @@ namespace LP_MP{
       REAL reg = repam[upSize_ + leftSize_ + rightSize_ + b + c*numberOfLabels_];
 
       MinConv mc(z_left,z_right,z_left_size,z_right_size,z_up_size);
-      mc.CalcConv(op);
+      mc.CalcConv(op,z_left,z_right);
 
       REAL m_new = 0;
       for( INDEX j=0;j<z_up_size;j++ ){
