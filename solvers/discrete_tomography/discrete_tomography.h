@@ -64,39 +64,202 @@ namespace LP_MP{
 
   namespace DiscreteTomographyTextInput {
 
+    struct init_line : pegtl::seq< opt_whitespace, pegtl::string<'M','A','R','K','O','V'>, opt_whitespace > {};
+    struct numberOfVariables_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace > {};
+    // vector of integers denoting how many labels each variable has
+    struct cardinality_line : pegtl::seq< opt_whitespace, positive_integer, pegtl::star< opt_whitespace, positive_integer>, opt_whitespace> {};
+    struct numberOfCliques : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace> {};
+    // first is the number of variables in the clique, then the actual variables.
+    struct cliqueScope_line : pegtl::seq< opt_whitespace, positive_integer, pegtl::plus< opt_whitespace, positive_integer>, opt_whitespace, pegtl::eol> {};
+    struct cliqueScopes : pegtl::star<cliqueScope_line> {};
+    // a function table is begun by number of entries and then a list of real numbers. Here we record all the values in the real stack
+    struct functionTables : pegtl::seq<pegtl::star<pegtl::sor<mand_whitespace, pegtl::eol>>, real_number, pegtl::plus<pegtl::star<pegtl::sor<mand_whitespace, pegtl::eol>>, real_number>> {};
 
     struct ProjectionPreamble : pegtl::string<'P','R','O','J','E','C','T','I','O','N','S'> {};
-    struct ProjectionVector : pegtl::seq< pegtl::string<'('>, opt_whitespace, real_number, opt_whitespace, pegtl::star< pegtl::string<','>, opt_whitespace, real_number,opt_whitespace >, opt_whitespace, pegtl::string<')'> > {};
-    struct ProjectionLine : pegtl::seq<opt_whitespace,pegtl::plus<positive_integer,opt_whitespace,pegtl::string<'+'>,opt_whitespace>,positive_integer,opt_whitespace,pegtl::string<'='>,opt_whitespace,ProjectionVector,opt_whitespace> {};
+    struct ProjectionVector : pegtl::seq< pegtl::string<'('>, opt_whitespace, real_number, opt_whitespace, pegtl::star< pegtl::string<','>, opt_whitespace, real_number, opt_whitespace >, opt_whitespace, pegtl::string<')'> > {};
+    struct ProjectionLine : pegtl::seq<positive_integer,pegtl::plus<opt_whitespace,pegtl::string<'+'>,opt_whitespace,positive_integer>,opt_whitespace,pegtl::string<'='>,opt_whitespace,ProjectionVector> {};
 
+   
     struct grammar : pegtl::seq<
-      // add mrf grammar here
+      // mrf grammar
+      init_line, pegtl::eol,
+      numberOfVariables_line, pegtl::eol,
+      cardinality_line, pegtl::eol,
+      numberOfCliques, pegtl::eol,
+      cliqueScopes,
+      functionTables,
+      pegtl::star<pegtl::sor<mand_whitespace,pegtl::eol>>,
       pegtl::star<opt_whitespace,pegtl::eol>,
+      // projection grammar
       ProjectionPreamble,
-      pegtl::star<opt_whitespace,pegtl::eol,ProjectionLine>,
+      pegtl::star<pegtl::sor<pegtl::seq<opt_whitespace,pegtl::eol>,ProjectionLine>>,
       pegtl::eof> {};
 
+    struct MRFInput {
+      INDEX numberOfVariables_;
+      INDEX numberOfCliques_;
+      std::vector<INDEX> cardinality_;
+      std::vector<std::vector<INDEX>> cliqueScope_;
+      std::vector<std::vector<REAL>> functionTable_;
+    };
+    
     template<typename Rule>
       struct action : pegtl::nothing<Rule> {};
 
+
+    
     template<>
-    struct action<real_number> {
-      static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack)
+      struct action<real_number> {
+      static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
       {
 	realStack.push(std::stod(in.string()));
       }
     };
     template<>
-    struct action<positive_integer> {
-      static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack)
+      struct action<positive_integer> {
+      static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
       {
-	integerStack.push(std::stoi(in.string()));
+	integerStack.push(std::stoul(in.string()));
+      }
+    };
+
+
+    template<>
+      struct action< numberOfVariables_line > {
+      static void apply(const pegtl::input & in, ProblemDecomposition<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+      {
+	mrfInput.numberOfVariables_ = integer_stack.top();
+	integer_stack.pop();
+      }
+    };
+    template<>
+      struct action< numberOfCliques > {
+      static void apply(const pegtl::input & in, ProblemDecomposition<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+      {
+	mrfInput.numberOfCliques_ = integer_stack.top();
+	integer_stack.pop();
+      }
+    };
+    template<>
+      struct action< cardinality_line > {
+      static void apply(const pegtl::input & in, ProblemDecomposition<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+      {
+	assert(integer_stack.size() ==mrfInput.numberOfVariables_);
+	while(!integer_stack.empty()) {
+	  mrfInput.cardinality_.push_back(integer_stack.top());
+	  integer_stack.pop();
+	}
+	std::reverse(mrfInput.cardinality_.begin(), mrfInput.cardinality_.end());
+	assert(real_stack.empty());
+	assert(integer_stack.empty());
+      }
+    };
+    template<>
+      struct action< cliqueScope_line > {
+      static void apply(const pegtl::input & in, ProblemDecomposition<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+      {
+	mrfInput.cliqueScope_.push_back(std::vector<INDEX>(0));
+	while(integer_stack.size() > 1) {
+	  mrfInput.cliqueScope_.back().push_back(integer_stack.top());
+	  integer_stack.pop();
+	}
+	std::reverse(mrfInput.cliqueScope_.back().begin(), mrfInput.cliqueScope_.back().end());
+	const INDEX cliqueSize = integer_stack.top();
+	integer_stack.pop();
+	assert(mrfInput.cliqueScope_.back().size() == cliqueSize);
+      }
+    };
+    // reconstruct the function tables
+    template<>
+      struct action< functionTables > {
+      static void apply(const pegtl::input & in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+      {
+	// first read in real stack into array
+	std::vector<REAL> values;
+	while(!real_stack.empty()) {
+	  values.push_back(real_stack.top());
+	  real_stack.pop();
+	}
+	std::reverse(values.begin(), values.end());
+
+	// now iterate over function tables. first read in number of values of function table, then add them to the function table.
+	INDEX functionTableIdx = 0; // at which index does current function table start?
+	while( functionTableIdx<values.size() ) {
+	  // assert that this functionTableSize is actually a real variable
+	  const INDEX functionTableSize = values[functionTableIdx];
+	  assert(functionTableIdx+functionTableSize < values.size());
+	  const INDEX potentialNumber = mrfInput.functionTable_.size();
+	  const INDEX cardinality = mrfInput.cliqueScope_[potentialNumber].size();
+
+	  mrfInput.functionTable_.push_back(std::vector<REAL>(functionTableSize,0.0));
+	  if(cardinality == 1) { // unary factor
+	    assert(functionTableSize == mrfInput.cardinality_[ mrfInput.cliqueScope_[potentialNumber][0] ]);
+	    for(INDEX label=0; label<functionTableSize; ++label) {
+	      mrfInput.functionTable_.back().operator[](label) = values[functionTableIdx+1+label];
+	      //std::cout << values[functionTableIdx+1+label] << ", ";
+	    }
+	    //std::cout << "\n";
+	  } else if(cardinality == 2) { // pairwise factor
+	    const INDEX var1 = mrfInput.cliqueScope_[potentialNumber][0];
+	    const INDEX var2 = mrfInput.cliqueScope_[potentialNumber][1];
+	    assert(functionTableSize == mrfInput.cardinality_[var1] * mrfInput.cardinality_[var2]);
+	    for(INDEX label1=0; label1<mrfInput.cardinality_[var1]; ++label1) {
+	      for(INDEX label2=0; label2<mrfInput.cardinality_[var2]; ++label2) {
+		// note: we must transpose the matrix, that we have read in
+		mrfInput.functionTable_.back().operator[](label1 + label2*mrfInput.cardinality_[var1]) = values[functionTableIdx + 1 + label2 + label1*mrfInput.cardinality_[var2]];
+	      }
+	    }
+	  } else {
+	    assert(false);
+	    throw std::runtime_error("Only unary and pairwise potentials supported now");
+	  }
+	  functionTableIdx += functionTableSize+1;
+	}
+      
+	// construct mrf
+	auto& mrf = pd.template GetProblemConstructor<0>();
+
+	// first input the unaries, as pairwise potentials need them to be able to link to them
+	for(INDEX i=0; i<mrfInput.numberOfCliques_; ++i) {
+	  if(mrfInput.cliqueScope_[i].size() == 1) {
+	    const INDEX var = mrfInput.cliqueScope_[i][0];
+	    assert(mrfInput.functionTable_[i].size() == mrfInput.cardinality_[var]);
+	    mrf.AddUnaryFactor(var,mrfInput.functionTable_[i]);
+	  } else if(mrfInput.cliqueScope_[i].size() > 2) {
+	    throw std::runtime_error("only pairwise models are accepted currently");
+	  }
+	}
+	// now the pairwise potentials. 
+	for(INDEX i=0; i<mrfInput.numberOfCliques_; ++i) {
+	  if(mrfInput.cliqueScope_[i].size() == 2) {
+	    const INDEX var1 = mrfInput.cliqueScope_[i][0];
+	    const INDEX var2 = mrfInput.cliqueScope_[i][1];
+	    assert(var1<var2);
+	    assert(mrfInput.functionTable_[i].size() == mrfInput.cardinality_[var1]*mrfInput.cardinality_[var2]);
+	    mrf.AddPairwiseFactor(var1,var2,mrfInput.functionTable_[i]); // or do we have to transpose the values?
+	  }
+	}
+	assert(integer_stack.empty());
+	assert(real_stack.empty());
       }
     };
 
     template<>
-    struct action<ProjectionLine> {
-      static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack)
+      struct action<ProjectionPreamble> {
+            static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
+	    {
+	      for(INDEX i=0; i<mrfInput.numberOfVariables_-1; ++i) {
+		assert(mrfInput.cardinality_[i] == mrfInput.cardinality_[i+1]);
+	      }
+	      pd.template GetProblemConstructor<1>().SetNumberOfLabels(mrfInput.cardinality_[0]);
+	      assert(integerStack.empty());
+	      assert(realStack.empty());
+	    }
+    };
+
+    template<>
+      struct action<ProjectionLine> {
+      static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
       {
 	std::vector<INDEX> projectionVar;
 	while(!integerStack.empty()) {
@@ -111,13 +274,19 @@ namespace LP_MP{
 	  realStack.pop(); 
 	}
 	std::reverse(projectionCost.begin(), projectionCost.end());
-	auto& dt = pd.template GetProblemConstructor<1>();
-	//.AddProjection(projectionVar,projectionCost);
+	pd.template GetProblemConstructor<1>().AddProjection(projectionVar,projectionCost);
       }
     };
 
     bool ParseProblem(const std::string& filename, ProblemDecomposition<FMC_DT>& pd) {
-      return true;
+      std::stack<SIGNED_INDEX> integerStack;
+      std::stack<REAL> realStack;
+      MRFInput mrfInput;
+
+      pegtl::file_parser problem(filename);
+      std::cout << "parsing " << filename << "\n";
+    
+      return problem.parse< grammar, action>(pd, integerStack, realStack, mrfInput);
     }
 
   }

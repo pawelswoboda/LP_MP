@@ -66,9 +66,12 @@ namespace LP_MP {
 	else {
 	  treeIdx idxL = (*PointerToQueue)[0];
 	  treeIdx idxR = (*PointerToQueue)[1];
-	  PointerToStack->pop_front();
-	  PointerToStack->pop_front();
-	
+	  PointerToQueue->pop_front();
+	  PointerToQueue->pop_front();
+
+	  assert(idxL.n > 0);
+	  assert(idxR.n > 0);
+	  
 	  PointerToStack->push_back(treeIdx(idxL.a,
 					    idxR.b,
 					    idxL.n+idxR.n,
@@ -86,11 +89,11 @@ namespace LP_MP {
 	    t.getSize(DiscreteTomographyFactorCounting::NODE::reg);
 	  std::vector<REAL> repam(repamSize,0.0);
 	   
-	  if( idxL.n + idxR.n != projectionVar.size() ){
-	    assert(PointerToQueue->size() > 0);
-	  }
-	  else{
+	  if( idxL.n + idxR.n == projectionVar.size() ){
+	    
 	    assert(PointerToQueue->size() == 0);
+	    assert(PointerToStack->size() == 1);
+	    PointerToStack->pop_front();
 	    
 	    for(INDEX i=0;i<summationCost.size();i++){
 	      for(INDEX j=0;j<pow(noLabels_,2);j++){
@@ -98,17 +101,20 @@ namespace LP_MP {
 	      }
 	    }
 	  }
+	  else {
+	    assert( (PointerToQueue->size() > 0) || (PointerToStack->size() != 1) );
+	  }
 
 	  if( idxL.n == 1 ){
 	    for(INDEX i=0;i<t.getSize(DiscreteTomographyFactorCounting::NODE::left);i++){
-	      if( (i % (1 + noLabels_ + pow(noLabels_,2))) != 0 ){
+	      if( (i % (1 + noLabels_ + (INDEX) pow(noLabels_,2))) != 0 ){
 		repam[t.getSize(DiscreteTomographyFactorCounting::NODE::up) + i] = std::numeric_limits<REAL>::max();
 	      }
 	    }
 	  }
 	  if( idxR.n == 1 ){
 	    for(INDEX i=0;i<t.getSize(DiscreteTomographyFactorCounting::NODE::right);i++){
-	      if( (i % (1 + noLabels_ + pow(noLabels_,2))) != 0 ){
+	      if( (i % (1 + noLabels_ + (INDEX) pow(noLabels_,2))) != 0 ){
 		repam[t.getSize(DiscreteTomographyFactorCounting::NODE::up) +
 		  t.getSize(DiscreteTomographyFactorCounting::NODE::left) + i] = std::numeric_limits<REAL>::max();
 	      }
@@ -119,7 +125,7 @@ namespace LP_MP {
 	  pd_.GetLP()->AddFactor(f);
 	  factors.push_back(f);
 	  	  
-	  auto *reg = mrfConstructor.GetPairwiseFactor(idxL.b,idxR.a);
+	  auto *reg = mrfConstructor.GetPairwiseFactor(mrfConstructor.GetPairwiseFactorId(idxL.b,idxR.a));
 
 	  // messages
 	  auto *m_pairwise = new DiscreteTomographyCountingPairwiseMessageContainer(DiscreteTomographyMessageCountingPairwise(noLabels_),
@@ -129,17 +135,19 @@ namespace LP_MP {
 	  if(idxL.n != 1){
 	    auto *m_left = new DiscreteTomographyCountingMessageLeft(DiscreteTomographyMessageCounting<DIRECTION::left>(noLabels_,idxL.n),
 								     factors[idxL.id],factors.back(),
-								     pow(noLabels_,2)*std::min(summationCost.size(),idxL.n*(noLabels_-1)+1));
+								     pow(noLabels_,2)*std::min((INDEX) summationCost.size(),(INDEX)(idxL.n*(noLabels_-1)+1)));
 	    pd_.GetLP()->AddMessage(m_left);
 	  }
 	  if(idxR.n != 1){
 	    auto *m_right = new DiscreteTomographyCountingMessageRight(DiscreteTomographyMessageCounting<DIRECTION::right>(noLabels_,idxR.n),
 								       factors[idxR.id],factors.back(),
-								       pow(noLabels_,2)*std::min(summationCost.size(),(idxR.n*(noLabels_-1)+1)));
+								       pow(noLabels_,2)*std::min((INDEX) summationCost.size(),(INDEX) (idxR.n*(noLabels_-1)+1)));
 	    pd_.GetLP()->AddMessage(m_right);
 	  }
 	}
-	std::swap(PointerToStack,PointerToQueue);	
+	if( (*PointerToQueue).size() == 0 ){
+	  std::swap(PointerToStack,PointerToQueue);
+	}
       }
 	
       

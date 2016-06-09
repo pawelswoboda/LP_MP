@@ -22,8 +22,8 @@ namespace LP_MP {
       void init(Index,Index,Index);
       Value getConv(Index k){ return c_[k]; };
       Value getMin(){ return minimum_; };
-      Index getIdxA(Index k){ return outA_[k]; };
-      Index getIdxB(Index k){ return outB_[k]; };
+      Index getIdxA(Index k){ assert(0 <= k);assert(k < outA_.size()); return outA_[k]; };
+      Index getIdxB(Index k){ assert(0 <= k);assert(k < outB_.size()); return outB_[k]; };
 
       template<class T1,class T2,class T3>
       void CalcConv(T1 op,T2 a,T3 b,bool onlyMin = false);
@@ -151,12 +151,17 @@ namespace LP_MP {
 	Index mink = op(idxa_[i],idxb_[j]);//idxa_[i]+idxb_[j]
        	queue.pop();
 	
-	if( c_[mink] > minV || cp_[mink] == 0 ){ 
+	if( (c_[mink] > minV || cp_[mink] == 0) && (mink < cp_.size()) ){
 	  c_[mink] = minV; open--;
+	  
 	  if( mink != c_.size() && minV < minimum_ ){
 	    minimum_ = minV;
 	    if( onlyMin ){ break; }
 	  }
+	  
+	  assert(mink < outA_.size());
+	  assert(mink < outB_.size());
+	  
 	  outA_[mink] = idxa_[i];
 	  outB_[mink] = idxb_[j];
 	  cp_[mink] = 1;

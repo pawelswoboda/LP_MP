@@ -74,8 +74,8 @@ namespace LP_MP{
   DiscreteTomographyFactorCounting::DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX numberOfVarsLeft,INDEX numberOfVarsRight,INDEX SumBound)
     : numberOfLabels_(numberOfLabels),numberOfVarsLeft_(numberOfVarsLeft),numberOfVarsRight_(numberOfVarsRight),SumBound_(SumBound) {
     assert(numberOfLabels_ > 1);
-    assert(numberOfVarsLeft_ > 1);
-    assert(numberOfVarsRight_ > 1);
+    assert(numberOfVarsLeft_ > 0);
+    assert(numberOfVarsRight_ > 0);
     assert(SumBound_ > 0);
     
     upSize_ = pow(numberOfLabels_,2)*std::min(((numberOfVarsLeft_+numberOfVarsRight_)*(numberOfLabels_-1)+1),SumBound);
@@ -115,6 +115,7 @@ namespace LP_MP{
 
       REAL m_new = 0;
       for( INDEX j=0;j<z_up_size;j++ ){
+	//std::cout << j << " " << mc.getIdxA(j) << " " << mc.getIdxB(j) << std::endl;
 	assert(j == mc.getIdxA(j) + mc.getIdxB(j));
 	m_new = mc.getConv(j)+z_up(j)+reg;
 	if( m > m_new ){

@@ -60,8 +60,8 @@ namespace LP_MP {
 
   template<DIRECTION DR>
   template<typename LEFT_FACTOR, typename G1, typename G3>
-  void DiscreteTomographyMessageCounting<DR>::SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
-    assert(msg.size() == (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::left));
+  void DiscreteTomographyMessageCounting<DR>::SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){    
+    assert(msg.size() == (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up));
     assert(repam_left.size() == ((*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up) +
 				 (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::left) +
 				 (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::right) +

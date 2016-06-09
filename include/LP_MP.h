@@ -41,7 +41,7 @@ public:
          size += (*factorIt)->size();
       }
       this->resize(size,true);
-      this->shrink_to_fit();
+      //this->shrink_to_fit();
       std::cout << "primal size = " << this->size() << "\n";
    }
 

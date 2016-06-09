@@ -132,7 +132,6 @@ namespace LP_MP {
     repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
 	  f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
 	  f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
-	  f->getSize(DiscreteTomographyFactorCounting::NODE::reg) +
 	  msg_dim] +=  msg;
   }
     
