@@ -77,7 +77,7 @@ namespace LP_MP {
     INDEX right_size =(*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right)/pow(numberOfLabels_,2);
     INDEX up_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up)/pow(numberOfLabels_,2);
 	
-    auto op = [&](INDEX i,INDEX j){ return i+j; };
+    auto op = [&](INDEX i,INDEX j){ return (i+j < up_size) ? i+j : up_size; };
 	
     for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
       REAL m = std::numeric_limits<REAL>::max();

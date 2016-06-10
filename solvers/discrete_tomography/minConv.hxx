@@ -52,7 +52,6 @@ namespace LP_MP {
       std::sort(idx.begin(),idx.end(),compare);
     }
 
-    // initialize the size of a,b and c
     template<class Value,class Index>
     template<class T1,class T2>
     MinConv<Value,Index>::MinConv(T1 a, T2 b, Index n, Index m,Index t){
@@ -150,18 +149,17 @@ namespace LP_MP {
 	Value minV = M(i,j);
 	Index mink = op(idxa_[i],idxb_[j]);//idxa_[i]+idxb_[j]
        	queue.pop();
+
+	assert(0 <= mink); assert( mink < cp_.size() ); // operation seems to be wrong
 	
-	if( (c_[mink] > minV || cp_[mink] == 0) && (mink < cp_.size()) ){
+	if( c_[mink] > minV || cp_[mink] == 0 ){
 	  c_[mink] = minV; open--;
 	  
-	  if( mink != c_.size() && minV < minimum_ ){
+	  if( mink != c_.size()-1 && minV < minimum_ ){
 	    minimum_ = minV;
 	    if( onlyMin ){ break; }
 	  }
-	  
-	  assert(mink < outA_.size());
-	  assert(mink < outB_.size());
-	  
+	  	  
 	  outA_[mink] = idxa_[i];
 	  outB_[mink] = idxb_[j];
 	  cp_[mink] = 1;
