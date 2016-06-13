@@ -89,11 +89,10 @@ namespace LP_MP {
 	Index i = 0; Index j = 0;
       };
       
-      std::function<bool(indices,indices)> compare = [&](indices x,indices y){
+      auto compare = [&](indices x,indices y){
 	return M(x.i,x.j) > M(y.i,y.j);
       };
-      std::priority_queue<indices,std::vector<indices>,
-			  std::function<bool(indices,indices)> > queue(compare);
+      std::priority_queue<indices,std::vector<indices>,decltype(compare) > queue(compare);
       std::vector<Index> cover(m+n,0);
 
       queue.push(indices(0,0));
