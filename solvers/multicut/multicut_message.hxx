@@ -9,7 +9,7 @@ namespace LP_MP {
  
 // left factor must be MulticutUnaryFactor and right factor must be MulticutTripletFactor
 // possibly templatize for index i_
-// templatize for either SRMP- or MPLP-type message passing, i.e. uanry factors are active or triplet factors are active
+// templatize for either SRMP- or MPLP-type message passing, i.e. unary factors are active or triplet factors are active
 enum class MessageSending { SRMP, MPLP }; // do zrobienia: place this possibly more global, also applies to pairwise factors in MRFs
 template<MessageSending MST = MessageSending::SRMP>
 class MulticutUnaryTripletMessage

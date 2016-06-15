@@ -333,7 +333,7 @@ public:
       //std::cout << "done\n";
       // check now whether the flow reparametrization update does not violate the capacity constraints, i.e. whether max_cap is achieved somewhere
       for(INDEX e=0; e<arcs_.size(); ++e) {
-         assert(minCostFlowRepamUpdate.flow(arcs_[e]) != max_cap && minCostFlowRepamUpdate.flow(arcs_[e]) != - max_cap);
+         //assert(minCostFlowRepamUpdate.flow(arcs_[e]) != max_cap && minCostFlowRepamUpdate.flow(arcs_[e]) != - max_cap);
       }
 
       std::vector<REAL> repam_cost;

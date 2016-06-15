@@ -17,8 +17,9 @@ INDEX LP::AddFactor(FactorTypeAdapter* f)
    if(f_.size() ==0) {
       primalOffset = 0;
    } else {
-      primalOffset = f_.back()->GetPrimalOffset() + f->size();
+      primalOffset = f_.back()->GetPrimalOffset() + f_.back()->size();
    }
+   //std::cout << "primal offset = " << primalOffset << "\n";
    f_.push_back(f);
    f->SetPrimalOffset(primalOffset);
    return f_.size() - 1;

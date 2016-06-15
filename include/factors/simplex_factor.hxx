@@ -72,13 +72,7 @@ public:
       if(noActive == 1) {
          return cost;
       } else {
-         if(repam.size() < 100) {
-            for(INDEX i=0; i<repam.size(); ++i) {
-               std::cout << primal[i] << ",";
-            }
-            std::cout << "\n";
-            assert(false); // this should not happen. If yes, primal propagation has done something wrong
-         }
+         // most probably something is not working in primal propagation
          return std::numeric_limits<REAL>::max();
       }
    }
