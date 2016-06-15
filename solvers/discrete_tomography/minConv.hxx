@@ -77,6 +77,13 @@ namespace LP_MP {
     {
       // access function to the sorted matrix      
       auto M = [&](Index i,Index j){
+	assert( a(idxa_[i]) < std::numeric_limits<REAL>::max() || b(idxb_[j]) > -std::numeric_limits<REAL>::max() );
+	assert( a(idxa_[i]) > -std::numeric_limits<REAL>::max() || b(idxb_[j]) < std::numeric_limits<REAL>::max() );
+	assert( b(idxb_[j]) < std::numeric_limits<REAL>::max() || a(idxa_[i]) > -std::numeric_limits<REAL>::max() );
+	assert( b(idxb_[j]) > -std::numeric_limits<REAL>::max() || a(idxa_[i]) < std::numeric_limits<REAL>::max() );
+	assert( !std::isnan(a(idxa_[i])) );
+	assert( !std::isnan(b(idxb_[j])) );
+	//printf(" %.3e .. %.3e \n",a(idxa_[i]),b(idxb_[j]));
 	return a(idxa_[i]) + b(idxb_[j]);
       };
 
@@ -100,6 +107,9 @@ namespace LP_MP {
 
       /* START define cover operations */
       auto remCover = [&](Index i,Index j){
+	//std::cout << "RemCover: (" << i;
+	//std::cout << "," << j << ") = " << op(idxa_[i],idxb_[j]);
+	//std::cout << std::endl;
 	if( cover[i] > 0 )
 	  { cover[i]--; }
 	if( cover[n+j] > 0 )
@@ -110,6 +120,9 @@ namespace LP_MP {
 	  cover[i]++; 
 	  cover[n+j]++;
 	  queue.push(indices(i,j));
+	  //std::cout << "AddCover: (" << i;
+	  //std::cout << "," << j << ") = " << op(idxa_[i],idxb_[j]);
+	  //std::cout << std::endl;
 	}
       };
           
@@ -122,6 +135,7 @@ namespace LP_MP {
 	      addCover(i+inc,j);
 	      break;
 	    }
+	    if( cover[i+inc] > 0 ){ break; }
 	    inc++;
 	  }
 	}
@@ -136,22 +150,37 @@ namespace LP_MP {
 	      addCover(i,j+inc);
 	      break;
 	    }
+	    if( cover[n+j+inc] > 0 ){ break; }
 	    inc++;
 	  }
 	}
       };
       /* END define cover operations */
-    
+      
+      //std::cout << "START" << std::endl;
+/*
+      for(Index i=0;i<n;i++){
+	for(Index j=0;j<m;j++){
+	  printf("%03d .. ",op(idxa_[i],idxb_[j]));  
+	}
+	printf("\n");
+    }
+*/      
       while( open > 0 && !queue.empty() ){
 	indices it = queue.top();
 	Index i=it.i, j=it.j;
+	assert( i < n ); assert( j < m );
+	
 	Value minV = M(i,j);
+	assert(!std::isnan(minV));
 	Index mink = op(idxa_[i],idxb_[j]);//idxa_[i]+idxb_[j]
        	queue.pop();
 
 	assert(0 <= mink); assert( mink < cp_.size() ); // operation seems to be wrong
 	
 	if( c_[mink] > minV || cp_[mink] == 0 ){
+	  assert(cp_[mink] == 0);
+
 	  c_[mink] = minV; open--;
 	  
 	  if( mink != c_.size()-1 && minV < minimum_ ){
@@ -189,7 +218,7 @@ namespace LP_MP {
 	    addCoverJ(i,j);
 	  }
       }
-      
+      assert(open == 1 || open == 0);
     }
   }
 }
