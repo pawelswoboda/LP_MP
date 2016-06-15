@@ -77,14 +77,15 @@ namespace LP_MP {
     {
       // access function to the sorted matrix      
       auto M = [&](Index i,Index j){
-	assert( a(idxa_[i]) < std::numeric_limits<REAL>::max() || b(idxb_[j]) > -std::numeric_limits<REAL>::max() );
-	assert( a(idxa_[i]) > -std::numeric_limits<REAL>::max() || b(idxb_[j]) < std::numeric_limits<REAL>::max() );
-	assert( b(idxb_[j]) < std::numeric_limits<REAL>::max() || a(idxa_[i]) > -std::numeric_limits<REAL>::max() );
-	assert( b(idxb_[j]) > -std::numeric_limits<REAL>::max() || a(idxa_[i]) < std::numeric_limits<REAL>::max() );
+	//assert( a(idxa_[i]) < std::numeric_limits<REAL>::max() || b(idxb_[j]) > -std::numeric_limits<REAL>::max() );
+	//assert( a(idxa_[i]) > -std::numeric_limits<REAL>::max() || b(idxb_[j]) < std::numeric_limits<REAL>::max() );
+	//assert( b(idxb_[j]) < std::numeric_limits<REAL>::max() || a(idxa_[i]) > -std::numeric_limits<REAL>::max() );
+	//assert( b(idxb_[j]) > -std::numeric_limits<REAL>::max() || a(idxa_[i]) < std::numeric_limits<REAL>::max() );
 	assert( !std::isnan(a(idxa_[i])) );
 	assert( !std::isnan(b(idxb_[j])) );
-	//printf(" %.3e .. %.3e \n",a(idxa_[i]),b(idxb_[j]));
-	return a(idxa_[i]) + b(idxb_[j]);
+	Value ai = ( a(idxa_[i]) > -std::numeric_limits<REAL>::max() ) ?  a(idxa_[i]) : std::numeric_limits<REAL>::max();
+	Value bj = ( b(idxb_[j]) > -std::numeric_limits<REAL>::max() ) ?  b(idxb_[j]) : std::numeric_limits<REAL>::max();
+	return ai + bj;
       };
 
       Index n = idxa_.size();

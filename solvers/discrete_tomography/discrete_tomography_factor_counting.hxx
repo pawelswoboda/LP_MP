@@ -103,11 +103,16 @@ namespace LP_MP{
       idx = ( idx - c )/numberOfLabels_;
       INDEX d = idx % numberOfLabels_;
 
-      auto z_up = [&](INDEX k){ return repam[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+      auto z_up = [&](INDEX k){
+	REAL ret = repam[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];
+	return (ret > -std::numeric_limits<REAL>::max()) ? ret : std::numeric_limits<REAL>::max();
+      };
       auto z_left = [&](INDEX k){ return repam[upSize_ + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
       auto z_right = [&](INDEX k){ return repam[upSize_ + leftSize_ + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+ 
       REAL reg = repam[upSize_ + leftSize_ + rightSize_ + b + c*numberOfLabels_];
-
+      if( reg <= -std::numeric_limits<REAL>::max() ){ reg = std::numeric_limits<REAL>::max(); }
+      
       MinConv mc(z_left,z_right,z_left_size,z_right_size,z_up_size);
       mc.CalcConv(op,z_left,z_right);
 
@@ -121,6 +126,7 @@ namespace LP_MP{
 	}
       }
     }
+    assert( m > -std::numeric_limits<REAL>::max() );
     return m;
   }
 
