@@ -48,7 +48,7 @@ namespace LP_MP {
     //void ComputeRightFromLeftPrimal(const bool leftPrimal, MulticutTripletFactor::LabelingType& rightPrimal);
 
   private:
-    const INDEX numberOfLabels_,numberOfVars_;
+    const INDEX numberOfLabels_,numberOfVars_; 
   };
 
   template<DIRECTION DR>
@@ -73,7 +73,8 @@ namespace LP_MP {
     INDEX left_size = (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::left)/pow(numberOfLabels_,2);
 
     auto op = [&](INDEX i,INDEX j){ return (i+j < up_size) ? i+j : up_size;  }; // 0 <= i+j < up_size
-      
+
+    std::vector<REAL> msg_v(up_size*pow(numberOfLabels_,2),std::numeric_limits<REAL>::infinity());
     for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
       INDEX idx = i;
       INDEX a = idx % numberOfLabels_;
@@ -84,15 +85,15 @@ namespace LP_MP {
       idx = ( idx - c )/numberOfLabels_;
       INDEX d = idx % numberOfLabels_;
 
-      //auto z_up = [&](INDEX k){
-      //  return repam_left[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+      auto z_up = [&](INDEX k){
+        return repam_left[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
       auto z_left = [&](INDEX k){
 	return repam_left[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
       auto z_right = [&](INDEX k){
 	return repam_left[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
       
       REAL reg = repam_left[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
-      if( reg <= -std::numeric_limits<REAL>::max() ){ reg = std::numeric_limits<REAL>::max(); }
+      assert(reg > -std::numeric_limits<REAL>::max());
       
       MinConv mc(z_left,z_right,left_size,right_size,up_size);
       mc.CalcConv(op,z_left,z_right);
@@ -137,7 +138,8 @@ namespace LP_MP {
 	  return (i-j < left_size) ? i-j : left_size;
 	}
       };
-	
+
+      std::vector<REAL> msg_v(left_size*pow(numberOfLabels_,2),std::numeric_limits<REAL>::infinity());
       for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
 	INDEX idx = i;
 	INDEX a = idx % numberOfLabels_;
@@ -150,11 +152,13 @@ namespace LP_MP {
 
 	auto z_up = [&](INDEX k){
 	  return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+	auto z_left = [&](INDEX k){
+	  return repam_right[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
 	auto z_right = [&](INDEX k){
 	  return repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
 	
 	REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
-	if( reg <= -std::numeric_limits<REAL>::max() ){ reg = std::numeric_limits<REAL>::max(); }
+	assert(reg > -std::numeric_limits<REAL>::max());
 	
 	MinConv mc(z_up,z_right,up_size,right_size,left_size);
 	mc.CalcConv(op,z_up,z_right);
@@ -163,14 +167,18 @@ namespace LP_MP {
 	  assert(k == (mc.getIdxA(k) - mc.getIdxB(k)));
 	  //printf(" --> c[k]=%.3e ... reg %.3e\n",mc.getConv(k),reg);
 	  assert(!std::isnan(reg));
-	  REAL val = mc.getConv(k) + reg;
+
+	  REAL val = mc.getConv(k) + z_left(k) + reg;
 	  INDEX kidx = a + numberOfLabels_*b + k*pow(numberOfLabels_,2);
+
 	  assert(kidx < (left_size*pow(numberOfLabels_,2)));
-	  assert(!std::isnan(msg[kidx]));
 	  assert(!std::isnan(val));
-	  if( msg[kidx] < std::numeric_limits<REAL>::max() &&
-	      msg[kidx] > -std::numeric_limits<REAL>::max()){ msg[kidx] -= val; assert(!std::isnan(msg[kidx]));}
+	  msg_v[kidx] = std::min(msg_v[kidx],val);
 	}
+      }
+      for(INDEX i=0;i<msg_v.size();i++){
+	assert(msg_v[i] > -1.0e-02);
+	msg[i] -= msg_v[i];
       }
     }
     else{
@@ -185,7 +193,7 @@ namespace LP_MP {
 	}
       };
 	
-	
+      std::vector<REAL> msg_v(right_size*pow(numberOfLabels_,2),std::numeric_limits<REAL>::infinity());
       for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
 	INDEX idx = i;
 	INDEX a = idx % numberOfLabels_;
@@ -199,10 +207,12 @@ namespace LP_MP {
 	auto z_up = [&](INDEX k){
 	  return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
 	auto z_left = [&](INDEX k){
-	  return repam_right[up_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+	  return repam_right[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+	auto z_right = [&](INDEX k){
+	  return repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
 	
 	REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
-	if( reg <= -std::numeric_limits<REAL>::max() ){ reg = std::numeric_limits<REAL>::max(); }
+	assert(reg > -std::numeric_limits<REAL>::max());
 	
 	MinConv mc(z_up,z_left,up_size,left_size,right_size);
 	mc.CalcConv(op,z_up,z_left);
@@ -210,14 +220,18 @@ namespace LP_MP {
 	for(INDEX k=0;k<right_size;k++){
 	  assert(k == op(mc.getIdxA(k),mc.getIdxB(k)));//(mc.getIdxA(k) - mc.getIdxB(k)));
 	  assert(!std::isnan(reg));
-	  REAL val = mc.getConv(k) + reg;
+
+	  REAL val = mc.getConv(k) + z_right(k) + reg;
 	  INDEX kidx = c + numberOfLabels_*d + k*pow(numberOfLabels_,2);
+
 	  assert(kidx < (right_size*pow(numberOfLabels_,2)));
-	  assert(!std::isnan(msg[kidx]));
 	  assert(!std::isnan(val));
-	  if( msg[kidx] < std::numeric_limits<REAL>::max() &&
-	      msg[kidx] > -std::numeric_limits<REAL>::max() ){ msg[kidx] -= val; assert(!std::isnan(msg[kidx]));}
+	  msg_v[kidx] = std::min(msg_v[kidx],val);
 	}
+      }
+      for(INDEX i=0;i<msg_v.size();i++){
+	assert(msg_v[i] > -1.0e-02);
+	msg[i] -= msg_v[i];
       }
     }
             
@@ -254,23 +268,25 @@ namespace LP_MP {
     if( DR == DIRECTION::left ){
       assert(msg_dim < f->getSize(DiscreteTomographyFactorCounting::NODE::left));
       assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] > -std::numeric_limits<REAL>::max());
-      if( msg < std::numeric_limits<REAL>::max() &&
-	  msg > -std::numeric_limits<REAL>::max() ){
-	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] +=  msg;
+      if( msg > -std::numeric_limits<REAL>::max() &&
+	  msg < std::numeric_limits<REAL>::max() ){
+	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] +=  msg; 
+	assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] > -std::numeric_limits<REAL>::max());
       }
       else{
-	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] = std::numeric_limits<REAL>::max();
+	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] = std::numeric_limits<REAL>::infinity();
       }
     }
     else{
       assert(msg_dim < f->getSize(DiscreteTomographyFactorCounting::NODE::right));
       assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] > -std::numeric_limits<REAL>::max());
-      if( msg < std::numeric_limits<REAL>::max() &&
-	  msg > -std::numeric_limits<REAL>::max() ){
-	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] += msg;
+      if( msg > -std::numeric_limits<REAL>::max() &&
+	  msg < std::numeric_limits<REAL>::max()){
+	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] += msg; 
+	assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] > -std::numeric_limits<REAL>::max());
       }
       else{
-	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] = std::numeric_limits<REAL>::max();
+	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] = std::numeric_limits<REAL>::infinity();
       }
     }
   }

@@ -35,7 +35,9 @@ namespace LP_MP{
     // custom public methods 
     
     INDEX getSize(NODE);
-    REAL eval(INDEX,INDEX,INDEX);
+
+    template<typename REPAM_ARRAY>
+    REAL eval(INDEX,INDEX,INDEX,const REPAM_ARRAY& repam);
     
   private:
 
@@ -43,10 +45,12 @@ namespace LP_MP{
     INDEX upSize_,leftSize_,rightSize_,regSize_;
   };
 
-  REAL DiscreteTomographyFactorCounting::eval(INDEX up,INDEX left,INDEX right){
+  template<typename REPAM_ARRAY>
+  REAL DiscreteTomographyFactorCounting::eval(INDEX up,INDEX left,INDEX right,const REPAM_ARRAY& repam){
     assert(up < upSize_);
     assert(left < leftSize_);
     assert(right < rightSize_);
+    assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
 
     auto xa = [&](INDEX idx){ return idx % numberOfLabels_;  };
     auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
@@ -55,7 +59,11 @@ namespace LP_MP{
     if( xa(up) == xa(left) &&
 	xb(up) == xb(right)&&
 	z(left) + z(right) == z(up) )
-      { return 0; }
+      { return
+	  repam[up] +
+	  repam[upSize_ + left] +
+	  repam[upSize_ + leftSize_ + right] +
+	  repam[upSize_ + leftSize_ + rightSize_ + xb(left) + xa(right)*pow(numberOfLabels_,2)]; }
     else
       { return std::numeric_limits<REAL>::max(); }
     
@@ -86,7 +94,7 @@ namespace LP_MP{
   template<typename REPAM_ARRAY>
   REAL DiscreteTomographyFactorCounting::LowerBound(const REPAM_ARRAY& repam) const{
     assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
-    REAL m = std::numeric_limits<REAL>::max();
+    REAL m = std::numeric_limits<REAL>::infinity();
 
     INDEX z_up_size = upSize_/pow(numberOfLabels_,2);
     INDEX z_left_size = leftSize_/pow(numberOfLabels_,2);
@@ -185,20 +193,9 @@ namespace LP_MP{
     
   }
   
-  /*
-    template<typename REPAM_ARRAY>
-    INDEX DiscreteTomographyFactorCounting::ComputeOptimalLabeling(const REPAM_ARRAY& repam) const{
-    assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
-
-    return 0;
-    }
-  */
-
   template<typename REPAM_ARRAY>
   REAL DiscreteTomographyFactorCounting::EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const {
     assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
-
-    
     
     return 0;
   }

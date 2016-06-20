@@ -108,7 +108,7 @@ namespace LP_MP {
 	  if( idxL.n == 1 ){
 	    for(INDEX i=0;i<t.getSize(DiscreteTomographyFactorCounting::NODE::left);i++){
 	      if( (i % (1 + noLabels_ + (INDEX) pow(noLabels_,2))) != 0 ){
-		repam[t.getSize(DiscreteTomographyFactorCounting::NODE::up) + i] = std::numeric_limits<REAL>::max();
+		repam[t.getSize(DiscreteTomographyFactorCounting::NODE::up) + i] = std::numeric_limits<REAL>::infinity();//max();
 	      }
 	    }
 	  }
@@ -116,7 +116,7 @@ namespace LP_MP {
 	    for(INDEX i=0;i<t.getSize(DiscreteTomographyFactorCounting::NODE::right);i++){
 	      if( (i % (1 + noLabels_ + (INDEX) pow(noLabels_,2))) != 0 ){
 		repam[t.getSize(DiscreteTomographyFactorCounting::NODE::up) +
-		  t.getSize(DiscreteTomographyFactorCounting::NODE::left) + i] = std::numeric_limits<REAL>::max();
+		      t.getSize(DiscreteTomographyFactorCounting::NODE::left) + i] = std::numeric_limits<REAL>::infinity();//max();
 	      }
 	    }
 	  }
