@@ -30,11 +30,12 @@
 
 namespace LP_MP {
 
-
    // do zrobinia: 
    // - we minimize instead of maximizing. Replace max by min everywhere? Currently, negative potentials are taken.
    // - inefficient data structures are used sometimes. Replace std::vector by std::array, wherever possible.
    // - LP_MP tightening takes fixed epsilon, and searches for violated inequalities regarding this value. Sontag et al code does not do this, but searches for violated inequalities over all epsilon. Change this as well.
+   // - use hash instead of std::map
+   // - graph data for cycle search are held in manually allocated memory. Replace by std containers
 
 template<typename MRF_CONSTRUCTOR>
 class Cycle 
@@ -73,10 +74,10 @@ public:
    int TightenCycle(
          ADD_TRIPLET_FUNCTION addTripletFun,
          const int nclus_to_add,  
+         const REAL epsilon,
          std::vector<int>& projection_imap_var,
          std::vector<std::vector<int> >& partition_imap,
          std::vector<std::list<int> >& cycle_set,
-         REAL & promised_bound,
          const int method);
 
 
@@ -1957,10 +1958,10 @@ int
 Cycle<MRF_CONSTRUCTOR>::TightenCycle(
       ADD_TRIPLET_FUNCTION addTripletFun,
       const int nclus_to_add,  
+      const REAL epsilon,
       std::vector<int>& projection_imap_var,
       std::vector<std::vector<int> >& partition_imap,
       std::vector<std::list<int> >& cycle_set,
-      REAL & promised_bound,
       const int method) 
 {
    std::map<std::vector<int>, bool > triplet_set;
@@ -1989,11 +1990,14 @@ Cycle<MRF_CONSTRUCTOR>::TightenCycle(
       return 0;
    }
 
+   // add cycles with bound > epsilon
+   FindCycles(cycle_set, epsilon, nclus_to_add, projection_adjacency_list);
+   /*
    //std::vector<std::list<int> > cycle_set;
    REAL optimal_R = find_optimal_R(projection_adjacency_list, array_of_sij, array_of_sij_size);
    if (DEBUG_MODE) std::cout << "R_optimal = " << optimal_R << std::endl;
 
-   promised_bound = optimal_R;
+   //promised_bound = optimal_R;
 
    // Look for cycles. Some will be discarded.
    clock_t start_time = clock();
@@ -2017,10 +2021,11 @@ Cycle<MRF_CONSTRUCTOR>::TightenCycle(
      std::cout << " -- FindCycles. Took " << total_time << " seconds" << std::endl;
      std::cout << " Added " << cycle_set.size() << " cycles." << std::endl;
   } 
+  */
 
   
   // Add all cycles that we've found to the relaxation!
-  start_time = clock();
+  //start_time = clock();
   for (int z = 0; z < cycle_set.size() && nClustersAdded < nclus_to_add; z++) {
 
      // Check to see if there are any duplicate nodes, and, if so, shortcut
@@ -2042,11 +2047,11 @@ Cycle<MRF_CONSTRUCTOR>::TightenCycle(
      nClustersAdded += add_cycle(addTripletFun, cycle_set[z], projection_imap_var, partition_imap, triplet_set, num_projection_nodes);
   }
 
-  end_time = clock();
-  total_time = (REAL)(end_time - start_time)/CLOCKS_PER_SEC;
-  if (DEBUG_MODE) {
-     std::cout << " -- shortcut + add_cycles. Took " << total_time << " seconds" << std::endl;
-  } 
+  //end_time = clock();
+  //total_time = (REAL)(end_time - start_time)/CLOCKS_PER_SEC;
+  //if (DEBUG_MODE) {
+  //   std::cout << " -- shortcut + add_cycles. Took " << total_time << " seconds" << std::endl;
+  //} 
   
   delete_projection_graph(gm_.GetNumberOfVariables(), projection_map, projection_imap_var, projection_adjacency_list, array_of_sij);
   return nClustersAdded;

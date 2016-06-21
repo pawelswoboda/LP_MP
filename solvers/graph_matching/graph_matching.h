@@ -46,9 +46,9 @@ typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false,fal
 typedef PairwiseTripletLoop<0,1> PairwiseTripletLoopType12;
 typedef PairwiseTripletLoop<0,2> PairwiseTripletLoopType13;
 typedef PairwiseTripletLoop<1,2> PairwiseTripletLoopType23;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType12,false,false,false,true> PairwiseTriplet12Message;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType13,false,false,false,true> PairwiseTriplet13Message;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType23,false,false,false,true> PairwiseTriplet23Message;
+typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType12,true,false,false,true> PairwiseTriplet12Message;
+typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType13,true,false,false,true> PairwiseTriplet13Message;
+typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType23,true,false,false,true> PairwiseTriplet23Message;
 
 typedef SimplexFactor<> Simplex;
 

@@ -405,7 +405,6 @@ public:
       //std::function<void(const SIGNED_INDEX,const SIGNED_INDEX, const SIGNED_INDEX, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>)> addTriplet = &MrfConstructorType::AddTighteningTriplet;
 
       std::map<std::vector<int>, bool > tripletSet;
-      double promisedBound;
       Cycle<decltype(*this)> cycle(*this);
 
       std::cout << this->GetNumberOfVariables() << "\n";
@@ -421,12 +420,12 @@ public:
          std::vector<int> projection_imap;
          std::vector<std::vector<int> > partition_imap;
          std::vector<std::list<int> > cycle_set;
-         const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, projection_imap, partition_imap, cycle_set, promisedBound, 1);
+         const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, epsilon, projection_imap, partition_imap, cycle_set, 1);
          std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (k projection graph)\n";
          noTripletsAdded += noTripletsAddedByCycle;
 
          if(noTripletsAdded < noTripletsToAdd) {
-            const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, projection_imap, partition_imap, cycle_set, promisedBound, 2);
+            const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, epsilon, projection_imap, partition_imap, cycle_set, 2);
             std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (full projection graph)\n";
             noTripletsAdded += noTripletsAddedByCycle;
          }

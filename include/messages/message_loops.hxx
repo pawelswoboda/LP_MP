@@ -247,13 +247,14 @@ public:
    constexpr static INDEX commonIdx1 = COMMON_IDX1;
    constexpr static INDEX commonIdx2 = COMMON_IDX2;
    // the complementary index
-   constexpr static INDEX tripletIdx = commonIdx1 == 0 && commonIdx2 == 1 ? 2 : (commonIdx1 == 0 && commonIdx2 == 2 ? 1 : 0);
+   constexpr static INDEX tripletIdx = 3 - commonIdx1 - commonIdx2;
 
    //PairwiseLoop(const INDEX first_dim, const INDEX second_dim) : iter_limit_( {{first_dim, second_dim}} ) { }
    PairwiseTripletLoop(ITER_LIMIT iter_limit) : iter_limit_( iter_limit ) { }
    PairwiseTripletLoop() {} // e.g. for non-type template for constant limits -> loop unrolling etc.
    ~PairwiseTripletLoop() {
       static_assert(0 <= COMMON_IDX1 && COMMON_IDX1 < COMMON_IDX2 && COMMON_IDX2 <= 2, "first two template arguments must be in {0,1,2}");
+      static_assert(tripletIdx != COMMON_IDX1 && tripletIdx != COMMON_IDX2,"");
    }
 
    template<typename Lambda1, typename Lambda2, typename Lambda3> 
@@ -278,6 +279,7 @@ public:
       i[COMMON_IDX1] = msg_index%iter_limit_[commonIdx1];
       i[COMMON_IDX2] = msg_index/iter_limit_[commonIdx1];
       for(i[tripletIdx]=0; i[tripletIdx]<iter_limit_[tripletIdx]; ++i[tripletIdx]) {
+         // do zrobienia: possibly update value of triplet label with fewer instructions by reusing previous triplet label. Same for other loop type.
          f(TripletLabel(i));
       }
    }
