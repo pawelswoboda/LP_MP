@@ -80,7 +80,7 @@ namespace LP_MP {
     auto op = [&](INDEX i,INDEX j){ return (i+j < up_size) ? i+j : up_size; };
 	
     for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
-      REAL m = std::numeric_limits<REAL>::max();
+      REAL m = std::numeric_limits<REAL>::infinity();
       INDEX b = i % numberOfLabels_;
       INDEX c = ((i-b)/numberOfLabels_) % numberOfLabels_;
       
@@ -99,11 +99,13 @@ namespace LP_MP {
 
 	for(INDEX k=0;k<up_size;k++){
 	  assert( k == (mc.getIdxA(k) + mc.getIdxB(k)));
-	  REAL val = mc.getConv(k) + reg;
+	  
+	  REAL val = mc.getConv(k) + z_up(k);
 	  if( m > val ){ m = val; }
 	}
-	msg[i] -= m;
       }
+      assert( (m + reg) > -1.0e-02);
+      msg[i] -= (m + reg);
     }    
   }
 
@@ -114,8 +116,11 @@ namespace LP_MP {
     assert( repam.size() == pow(numberOfLabels_,2));
 
     assert(msg_dim < pow(numberOfLabels_,2));
-    repam[msg_dim] += msg;
-      
+    assert(repam[msg_dim] > -std::numeric_limits<REAL>::max());
+    if( msg > -std::numeric_limits<REAL>::max() &&
+	msg < std::numeric_limits<REAL>::max()){ repam[msg_dim] += msg; } 
+    else{ repam[msg_dim] = std::numeric_limits<REAL>::infinity(); }
+    assert(repam[msg_dim] > -1.0e-02);
   }
 
   template<typename G>
@@ -129,10 +134,28 @@ namespace LP_MP {
 	    );
     
     assert(msg_dim < pow(numberOfLabels_,2));
-    repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
-	  f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
-	  f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
-	  msg_dim] +=  msg;
+    assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+		 f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+		 f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+		 msg_dim] > -std::numeric_limits<REAL>::max());
+    if( msg > -std::numeric_limits<REAL>::max() &&
+	msg < std::numeric_limits<REAL>::max())
+      {
+	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+	      f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+	      f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+	      msg_dim] +=  msg;
+	assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+		     f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+		     f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+		     msg_dim] > -std::numeric_limits<REAL>::max());
+      }
+    else{
+      repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+	    f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+	    f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+	    msg_dim] = std::numeric_limits<REAL>::infinity();
+    }
   }
     
 }
