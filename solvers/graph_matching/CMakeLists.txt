@@ -3,6 +3,7 @@ SET(SOURCE_FILES
    graph_matching_via_mcf_left.cpp graph_matching_via_mcf_right.cpp graph_matching_via_mcf_both_sides.cpp 
    graph_matching_via_gm_left.cpp graph_matching_via_gm_right.cpp 
    graph_matching_via_mp_uai.cpp graph_matching_via_mcf_uai.cpp graph_matching_via_gm_uai.cpp
+   graph_matching_via_mp_tightening_uai.cpp graph_matching_via_mcf_tightening_uai.cpp graph_matching_via_gm_tightening_uai.cpp
    graph_matching_sqlite_test.cpp
    graph_matching_via_mcf_uai_plot.cpp
    graph_matching_via_mp_uai_plot.cpp

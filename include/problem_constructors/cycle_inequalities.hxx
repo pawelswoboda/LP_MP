@@ -20,16 +20,21 @@
 #include <queue>
 
 #include "marray.hxx" // check how to replace this
-//#include "help_functions.hxx"
 #include "tolerance.hxx"
 
 #define DEBUG_MODE 1
 
 #define Inf 9999999999.9
-#define CYCLE_THRESH .00001  // TODO: Figure out how to set this
-#define CLUSTER_THR .0000001
+//#define CYCLE_THRESH .00001  // TODO: Figure out how to set this
+//#define CLUSTER_THR .0000001
 
 namespace LP_MP {
+
+
+   // do zrobinia: 
+   // - we minimize instead of maximizing. Replace max by min everywhere? Currently, negative potentials are taken.
+   // - inefficient data structures are used sometimes. Replace std::vector by std::array, wherever possible.
+   // - LP_MP tightening takes fixed epsilon, and searches for violated inequalities regarding this value. Sontag et al code does not do this, but searches for violated inequalities over all epsilon. Change this as well.
 
 template<typename MRF_CONSTRUCTOR>
 class Cycle 
@@ -59,10 +64,9 @@ public:
    template<typename ADD_TRIPLET_FUNCTION>
    int TightenTriplet(
          ADD_TRIPLET_FUNCTION addTripletFun,
-         int nclus_to_add_min, 
          int nclus_to_add_max, 
-         std::map<std::vector<int>, bool >& triplet_set, 
-         double & promised_bound);
+         const REAL epsilon,
+         std::map<std::vector<int>, bool >& triplet_set);
 
    // UAI 2012
    template<typename ADD_TRIPLET_FUNCTION>
@@ -79,7 +83,7 @@ public:
 private:
    // UAI 2008
    REAL maximizeIndependently(const std::vector<marray::View<REAL,true> > & beliefs) const;
-   REAL maximizeCycle(const std::vector<marray::View<REAL,true> > & beliefs, std::vector<std::set<SIGNED_INDEX> >& cyclePi) const;
+   REAL maximizeCycle(const std::vector<marray::View<REAL,true> > & beliefs) const;//, std::vector<std::set<SIGNED_INDEX> >& cyclePi) const;
 
    // UAI 2012
    static bool edge_sorting(std::list<int> i, std::list<int> j);
@@ -223,7 +227,86 @@ REAL getValCycle(std::vector<MulDimArr*> & beliefs, std::vector<bool> & b_transp
 */
 
 // Choose partition such that all labelings which have value > independent bound are included in the partiton cyclePi
+template<typename MRF_CONSTRUCTOR>
+REAL
+Cycle<MRF_CONSTRUCTOR>::maximizeCycle(const std::vector<marray::View<REAL,true> > & beliefs) const
+{
+   double max_val = -std::numeric_limits<REAL>::max();//-Inf;
+
+   // Fix value of the first variable
+   int first_var_size = beliefs[0].shape(0);
+   int second_var_size = beliefs[0].shape(1);
+   for(int vo=0; vo < first_var_size; vo++)
+   {
+      //std::vector<int> inds; inds.push_back(-1); inds.push_back(-1); // do zrobienia: std::array
+      std::array<SIGNED_INDEX,2> inds;
+      inds[0] = vo;
+
+      // Do first edge (construct initial field)
+      std::vector<REAL> field;
+      for(int v2=0; v2 < second_var_size; v2++)
+      {
+         inds[1] = v2;
+         field.push_back(beliefs[0](inds[0],inds[1]));
+      }
+
+      // Go over rest of edges, except last (which has to be treated specially)
+      for(int i=1; i < beliefs.size()-1; i++)
+      {
+         std::vector<REAL> new_field;
+         for(int v2=0; v2 < beliefs[i].shape(1); v2++) //->m_base_sizes[b_transpose[i]?0:1]; v2++)
+         {
+            //inds.clear(); inds.push_back(-1); inds.push_back(-1); // do zrobienia: std::array
+            inds[0] = -1; inds[1] = -1;
+            inds[1] = v2;
+            //inds[b_transpose[i]?0:1] = v2;
+
+            // Take max
+            double tmp_max_val = -Inf;
+            for(int v1=0; v1 < field.size(); v1++)
+            {
+               //inds[b_transpose[i]?1:0] = v1;
+               inds[0] = v1;
+               tmp_max_val = std::max(tmp_max_val, field[v1] + beliefs[i](inds[0],inds[1]));//->GetVal(inds));
+            }
+            new_field.push_back(tmp_max_val);
+         }
+         // do zrobienia: std::swap
+         field.clear(); // necessary?
+         field = new_field;
+      }
+
+      // Do last edge (fix endpoint value to vo)
+      //inds.clear(); inds.push_back(-1); inds.push_back(-1); // do zrobienia: std::array
+      inds[0] = -1;
+      inds[1] = -1;
+      //inds[b_transpose[b_transpose.size()-1]?0:1] = vo;
+      inds[1] = vo;
+
+      // Take max
+      double tmp_max_val = -Inf;
+      for(int v1=0; v1 < field.size(); v1++)
+      {
+         //inds[b_transpose[b_transpose.size()-1]?1:0] = v1;
+         inds[0] = v1;
+         tmp_max_val = std::max(tmp_max_val, field[v1] + beliefs[beliefs.size()-1](inds[0],inds[1]));//->GetVal(inds));
+      }
+
+      max_val = std::max(max_val, tmp_max_val);
+   }
+   return max_val;
+}
+
+/////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
 // do zrobienia: add eps
+// do zrobienia> templatize for beliefs array, such that std::array is possible
+// do zrobienia: use special functions for cycle of length 3 or 4
+/*
 template<typename MRF_CONSTRUCTOR>
 REAL
 Cycle<MRF_CONSTRUCTOR>::maximizeCycle(const std::vector<marray::View<REAL,true> > & beliefs, std::vector<std::set<SIGNED_INDEX> >& cyclePi) const
@@ -238,10 +321,10 @@ Cycle<MRF_CONSTRUCTOR>::maximizeCycle(const std::vector<marray::View<REAL,true> 
    const int first_var_size = beliefs[0].shape(0);
    const int second_var_size = beliefs[0].shape(1);
    for(int vo=0; vo < first_var_size; vo++) {
-      std::vector<SIGNED_INDEX> cycleLabelingTmp(beliefs.size());
+      std::vector<SIGNED_INDEX> cycleLabelingTmp(beliefs.size()); // do zrobienia: better array type
 
       // Do first edge (construct initial field)
-      std::vector<std::vector<REAL> > field(1);
+      std::vector<std::vector<REAL> > field(1); // do zrobieni: template array type
       for(int v2=0; v2 < second_var_size; v2++) {
          field[0].push_back(beliefs[0](vo,v2));
       }
@@ -277,6 +360,9 @@ Cycle<MRF_CONSTRUCTOR>::maximizeCycle(const std::vector<marray::View<REAL,true> 
       if(max_val < tmp_max_val) {
          max_val = std::max(max_val, tmp_max_val);
       }
+      }
+      return max_val;
+      {
 
       if(bound_indep > eps + tmp_max_val) {
          cyclePi[0].insert(vo);
@@ -330,6 +416,7 @@ Cycle<MRF_CONSTRUCTOR>::maximizeCycle(const std::vector<marray::View<REAL,true> 
    }
    return bound_indep - max_val;
 }
+*/
 
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -342,10 +429,9 @@ int
 Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
          //std::function<void(const SIGNED_INDEX,const SIGNED_INDEX, const SIGNED_INDEX, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>)> addTripletFun,
          ADD_TRIPLET_FUNCTION addTripletFun,
-         int nclus_to_add_min, 
          int nclus_to_add_max, 
-         std::map<std::vector<int>, bool >& triplet_set, 
-         double & promised_bound) 
+         const REAL epsilon,
+         std::map<std::vector<int>, bool >& triplet_set) 
 {
    int nClustersAdded = 0;
    int nNewClusters = 0;
@@ -370,7 +456,6 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
    }
 
    // Sort the adjacency list, for fast intersections later
-   //for(int i=0; i < sizeof(adjacency_list)/sizeof(std::vector<int>); i++) {
    for(int i=0; i < adjacency_list.size(); i++) {
       std::sort(adjacency_list[i].begin(), adjacency_list[i].end());
    }
@@ -429,7 +514,7 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
         if(!(j<k))
            continue;
 
-        std::vector<int> inds(3); inds[0] = i; inds[1] = j; inds[2] = k;
+        std::vector<int> inds(3); inds[0] = i; inds[1] = j; inds[2] = k; // do zrobienia: replace by std::array
         newCluster[index].i = inds[0];
         newCluster[index].j = inds[1];
         newCluster[index].k = inds[2];
@@ -440,7 +525,7 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
         newCluster[index].ki_intersect_loc = gm_.GetPairwiseFactorId(inds[0],inds[2]);
 
         // Construct the beliefs for each edge, which will be maximized below
-        std::vector<marray::Marray<REAL> > beliefs(3);
+        std::vector<marray::Marray<REAL> > beliefs(3); // do zrobienia: std::array
 
         SIGNED_INDEX shape_ij[] = {SIGNED_INDEX(gm_.GetNumberOfLabels(inds[0])), SIGNED_INDEX(gm_.GetNumberOfLabels(inds[1]))};
         beliefs[0] = marray::Marray<REAL>(shape_ij, shape_ij+2);
@@ -448,7 +533,7 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
         //gm_.CopyPairwiseValues( newCluster[index].ij_intersect_loc, beliefs[0].begin() );
         for(INDEX label_i=0; label_i<gm_.GetNumberOfLabels(i); ++label_i) {
            for(INDEX label_j=0; label_j<gm_.GetNumberOfLabels(j); ++label_j) {
-              beliefs[0](label_i,label_j) = gm_.GetPairwiseValue(newCluster[index].ij_intersect_loc, label_i, label_j);
+              beliefs[0](label_i,label_j) = -gm_.GetPairwiseValue(newCluster[index].ij_intersect_loc, label_i, label_j);
            }
         }
 
@@ -458,7 +543,7 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
         //gm_.CopyPairwiseValues( newCluster[index].jk_intersect_loc, beliefs[1].begin() );
         for(INDEX label_j=0; label_j<gm_.GetNumberOfLabels(j); ++label_j) {
            for(INDEX label_k=0; label_k<gm_.GetNumberOfLabels(k); ++label_k) {
-              beliefs[1](label_j,label_k) = gm_.GetPairwiseValue(newCluster[index].jk_intersect_loc, label_j, label_k);
+              beliefs[1](label_j,label_k) = -gm_.GetPairwiseValue(newCluster[index].jk_intersect_loc, label_j, label_k);
            }
         }
 
@@ -468,11 +553,11 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
         //gm_.CopyPairwiseValues( newCluster[index].ki_intersect_loc, beliefs[2].begin() );
         for(INDEX label_i=0; label_i<gm_.GetNumberOfLabels(i); ++label_i) {
            for(INDEX label_k=0; label_k<gm_.GetNumberOfLabels(k); ++label_k) {
-              beliefs[2](label_i,label_k) = gm_.GetPairwiseValue(newCluster[index].ki_intersect_loc, label_i, label_k);
+              beliefs[2](label_i,label_k) = -gm_.GetPairwiseValue(newCluster[index].ki_intersect_loc, label_i, label_k);
            }
         }
 
-        std::vector<marray::View<REAL,true> > b(3);
+        std::vector<marray::View<REAL,true> > b(3); // do zrobienia: std::array
         b[0] = beliefs[0];
         b[1] = beliefs[1];
         b[2] = beliefs[2];
@@ -480,26 +565,13 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
         //b[0].transpose();
         //b[1].transpose();
 
-        std::vector<std::set<SIGNED_INDEX> > cyclePi;
-        newCluster[index].bound = maximizeCycle(b,cyclePi);
-        newCluster[index].labels = cyclePi;
-
-        // do zrobienia: check if this can be done as well
-        //double bound_indep = maximizeIndependently(b);
-           // Before doing expensive joint maximization, see if we can quickly find optimal assignment
-           //std::vector<int> tripAssignment; tripAssignment.push_back(-1); tripAssignment.push_back(-1); tripAssignment.push_back(-1);
-           //tripAssignment[0] = mplp.m_decoded_res[i]; tripAssignment[1] = mplp.m_decoded_res[j]; tripAssignment[2] = mplp.m_decoded_res[k];
-           //double bound_quick = getValCycle(beliefs, b_transpose, tripAssignment);
-           //if(bound_indep == bound_quick)
-           //{
-           //   newCluster[index].bound = 0;
-           //} else {
-              // Do expensive joint maximization
-              //newCluster[index].bound = bound_indep - maximizeCycle(b);
-           //}
-
-           index++;
-        }
+        //std::vector<std::set<SIGNED_INDEX> > cyclePi;
+        const REAL boundIndep = maximizeIndependently(b);
+        const REAL boundCycle = maximizeCycle(b);
+        newCluster[index].bound = boundIndep - boundCycle;
+        assert(newCluster[index].bound >=  - eps);
+        index++;
+     }
   }
 
   // TODO opt: have a class for a cluster, so we can have different types and sort by bound,
@@ -507,35 +579,30 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
   //       Make the sorting and adding independent of the type of graph...
 			
   // Sort the clusters by the bound
-  std::sort(newCluster.begin(), newCluster.end(), [](const TripletCluster& c1, const TripletCluster& c2) {return c1.bound < c2.bound;});
+  std::sort(newCluster.begin(), newCluster.end());
 
   if(DEBUG_MODE)
      std::cout << " -- Considered " << nNewClusters << " clusters, smallest bound " << newCluster[std::max(nNewClusters-nclus_to_add_max, 0)].bound << ", largest bound " << newCluster[nNewClusters-1].bound << std::endl;
 
-  promised_bound = newCluster[nNewClusters-1].bound;
-
   // Add the top nclus_to_add clusters to the relaxation
-  for(int clusterId = nNewClusters-1; clusterId >= 0 && nClustersAdded < nclus_to_add_max && (nClustersAdded < nclus_to_add_min || ((newCluster[clusterId].bound >= newCluster[nNewClusters-1].bound/5) && newCluster[clusterId].bound >= CLUSTER_THR)) ; clusterId--) {
+  for(int clusterId = nNewClusters-1; clusterId >= 0 && nClustersAdded < nclus_to_add_max; clusterId--) {
+     std::cout << newCluster[clusterId].bound << " = bound\n";
 
      // Now add cluster ijk
-     std::vector<int> ijk_inds;
+     std::vector<int> ijk_inds; // do zrobienia: std::array
      ijk_inds.push_back(newCluster[clusterId].i); ijk_inds.push_back(newCluster[clusterId].j); ijk_inds.push_back(newCluster[clusterId].k);
 
-     std::vector<std::vector<SIGNED_INDEX> > pi(3);
-     for(size_t i=0; i<3; i++) {
-        int pi_counter = newCluster[clusterId].labels[i].size() == gm_.GetNumberOfLabels(ijk_inds[i]) ? 0 : 1;
-        pi[i].resize( gm_.GetNumberOfLabels(ijk_inds[i]),0 );
-        for(typename std::set<SIGNED_INDEX>::iterator it=newCluster[clusterId].labels[i].begin(); it!=newCluster[clusterId].labels[i].end(); ++it) {
-            pi[i][*it] = pi_counter++; 
+     bool tripletAdded = addTripletFun(ijk_inds[0], ijk_inds[1], ijk_inds[2]);
+     if(tripletAdded) {
+        nClustersAdded++;
+        if(DEBUG_MODE) {
+           std::cout << "Cluster added on nodes " << newCluster[clusterId].i << ", " << newCluster[clusterId].j << ", " << newCluster[clusterId].k << std::endl;
         }
      }
-     addTripletFun(ijk_inds[0], ijk_inds[1], ijk_inds[2], pi[0], pi[1], pi[2]);
 
-     if(DEBUG_MODE)
-        std::cout << "Cluster added on nodes " << newCluster[clusterId].i << ", " << newCluster[clusterId].j << ", " << newCluster[clusterId].k << std::endl;
-           //<< "; labeling = (" << newCluster[clusterId].labeling[0] << "," << newCluster[clusterId].labeling[1] << "," << newCluster[clusterId].labeling[2] << ")" << std::endl;
-
-     nClustersAdded++;
+     if(newCluster[clusterId].bound < epsilon) {
+        break;
+     }
   }
 
   return nClustersAdded;
@@ -612,14 +679,14 @@ Cycle<MRF_CONSTRUCTOR>::find_smn(
       if (whole_i[i] == whole_j[j]) {
         std::vector<int> inds; inds.push_back(i); inds.push_back(j);
         //REAL temp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-         REAL temp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
+         REAL temp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
 
         if (smn < temp_val) smn = temp_val;
       }
       else {
         std::vector<int> inds; inds.push_back(i); inds.push_back(j);
         //REAL temp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-         REAL temp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
+         REAL temp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
         if (sec_max < temp_val) sec_max = temp_val;
       }
     }
@@ -668,7 +735,7 @@ Cycle<MRF_CONSTRUCTOR>::find_smn_state_i(
 		whole_j[partition_j[j]] = 1;
 		std::vector<int> inds; inds.push_back(single_i); inds.push_back(partition_j[j]);
 		//REAL tmp = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-		REAL tmp = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
+		REAL tmp = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
 		if (max < tmp) max = tmp;
 	}
 
@@ -677,7 +744,7 @@ Cycle<MRF_CONSTRUCTOR>::find_smn_state_i(
 			//bruteforce max_{pi(x_i)=pi(x_j)=0}bij(x_i,x_j)
 			std::vector<int> inds; inds.push_back(single_i); inds.push_back(j);
 			//REAL tmp = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-         REAL tmp = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
+         REAL tmp = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
 			if (sec_max < tmp) sec_max = tmp; 
 
 			if (max < max_i_bij_not_xi[single_i][j]) max = max_i_bij_not_xi[single_i][j];
@@ -722,7 +789,7 @@ Cycle<MRF_CONSTRUCTOR>::find_smn_state_j(
 		whole_i[partition_i[i]] = 1;
 		std::vector<int> inds; inds.push_back(partition_i[i]); inds.push_back(single_j);
 		//REAL tmp = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-		REAL tmp = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
+		REAL tmp = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
 		if (max < tmp) max = tmp;
 	}
 
@@ -731,7 +798,7 @@ Cycle<MRF_CONSTRUCTOR>::find_smn_state_j(
 			//bruteforce max_{pi(x_i)=pi(x_j)=0}bij(x_i,x_j)
 			std::vector<int> inds; inds.push_back(i); inds.push_back(single_j);
          //REAL tmp = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-         REAL tmp = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
+         REAL tmp = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
 			if (sec_max < tmp) sec_max = tmp; 
 
 			if (max < max_j_bij_not_xj[i][single_j]) max = max_j_bij_not_xj[i][single_j];
@@ -781,7 +848,7 @@ Cycle<MRF_CONSTRUCTOR>::find_partition(
     for (int j = 0; j < size_j; j++) {
       std::vector<int> inds; inds.push_back(i); inds.push_back(j);
       //REAL temp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-      REAL temp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
+      REAL temp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
       sorted_edge_set.push_back(std::pair<std::pair<int, int>, REAL>(std::make_pair(std::make_pair(i, j), temp_val)));
     }
   }
@@ -844,7 +911,6 @@ Cycle<MRF_CONSTRUCTOR>::find_partition(
   //int min = gm_[factorId].shape(0) + 1;//mplp.m_var_sizes[index_i] + 1; 
   int min = size_i + 1;//mplp.m_var_sizes[index_i] + 1; 
   Node* head = NULL;
-  //for (int i = 0; i < mplp.m_var_sizes[index_i]; i++) {
   for (int i = 0; i < size_i; i++) {
     Node* t = find(x_i[i]);
     if ((size_i == 2 || t->bit == 3) && min > t->i_size) {
@@ -852,7 +918,6 @@ Cycle<MRF_CONSTRUCTOR>::find_partition(
       head = t;
     }
   }
-  //for (int i = 0; i < mplp.m_var_sizes[index_i]; i++) {
   for (int i = 0; i < size_i; i++) {
     Node* t = find(x_i[i]);
     if (head == t)
@@ -861,7 +926,6 @@ Cycle<MRF_CONSTRUCTOR>::find_partition(
 
   //min = gm_[factorId].shape(1) + 1;//mplp.m_var_sizes[index_j] + 1;
   min = size_j + 1;//mplp.m_var_sizes[index_j] + 1;
-  //for (int j = 0; j < mplp.m_var_sizes[index_j]; j++) {
   for (int j = 0; j < size_j; j++) {
     Node* t = find(x_j[j]);
     if ((size_j == 2 || t->bit == 3) && min > t->j_size) {
@@ -1008,7 +1072,7 @@ Cycle<MRF_CONSTRUCTOR>::create_expanded_projection_graph(
            for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
 
               std::vector<int> inds; inds.push_back(state1); inds.push_back(state2);
-              REAL tmp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
 
               if(tmp_val > largest_val) {
                  largest_val = tmp_val;
@@ -1021,7 +1085,7 @@ Cycle<MRF_CONSTRUCTOR>::create_expanded_projection_graph(
            for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
 
               std::vector<int> inds; inds.push_back(state1); inds.push_back(state2);
-              REAL tmp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
 
               if(tmp_val > sec_largest_val && state2 != largest_ind) {
                  sec_largest_val = tmp_val;
@@ -1045,7 +1109,7 @@ Cycle<MRF_CONSTRUCTOR>::create_expanded_projection_graph(
            for(int state2=0; state2 < gm_.GetNumberOfLabels(i); state2++) {
 
               std::vector<int> inds; inds.push_back(state2); inds.push_back(state1);
-              REAL tmp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
 
               if(tmp_val > largest_val) {
                  largest_val = tmp_val;
@@ -1058,7 +1122,7 @@ Cycle<MRF_CONSTRUCTOR>::create_expanded_projection_graph(
            for(int state2=0; state2 < gm_.GetNumberOfLabels(i); state2++) {
 
               std::vector<int> inds; inds.push_back(state2); inds.push_back(state1);
-              REAL tmp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
 
               if(tmp_val > sec_largest_val && state2 != largest_ind) {
                  sec_largest_val = tmp_val;
@@ -1121,7 +1185,7 @@ Cycle<MRF_CONSTRUCTOR>::create_expanded_projection_graph(
                  int xi = it_i->first[0]; int xj = it_j->first[0];
                  std::vector<int> inds; inds.push_back(xi); inds.push_back(xj);
                  //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-                 REAL tmp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+                 REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
                  smn = std::max(tmp_val, max_ij_bij_not_xi_xj(xi,xj)) - std::max(max_i_bij_not_xi[xi][xj], max_j_bij_not_xj[xi][xj]);
               }
               else if (it_i->first.size() == 1) {
@@ -1219,7 +1283,6 @@ Cycle<MRF_CONSTRUCTOR>::create_k_projection_graph(
   
   // Iterate over all of the edges (we do this by looking at the edge intersection sets)
   std::set<REAL> set_of_sij;
-  //for(std::mapType::const_iterator it = mplp.m_intersect_std::map.begin(); it != mplp.m_intersect_std::map.end(); ++it) {
   for(size_t factorId=0; factorId<gm_.GetNumberOfPairwiseFactors(); factorId++) {
         // Get the two nodes i & j and the edge intersection set. Put in right order.
         const int i = std::get<0>(gm_.GetPairwiseVariables(factorId));// gm_.variableOfFactor(factorId,0);
@@ -1253,7 +1316,7 @@ Cycle<MRF_CONSTRUCTOR>::create_k_projection_graph(
 
               std::vector<int> inds; inds.push_back(state1); inds.push_back(state2);
               //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-              REAL tmp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
 
               if(tmp_val > largest_val) {
                  largest_val = tmp_val;
@@ -1267,7 +1330,7 @@ Cycle<MRF_CONSTRUCTOR>::create_k_projection_graph(
 
               std::vector<int> inds; inds.push_back(state1); inds.push_back(state2);
               //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-              REAL tmp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
 
               if(tmp_val > sec_largest_val && state2 != largest_ind) {
                  sec_largest_val = tmp_val;
@@ -1290,7 +1353,7 @@ Cycle<MRF_CONSTRUCTOR>::create_k_projection_graph(
 
               std::vector<int> inds; inds.push_back(state2); inds.push_back(state1);
               //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-              REAL tmp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
 
               if(tmp_val > largest_val) {
                  largest_val = tmp_val;
@@ -1304,7 +1367,7 @@ Cycle<MRF_CONSTRUCTOR>::create_k_projection_graph(
 
               std::vector<int> inds; inds.push_back(state2); inds.push_back(state1);
               //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-              REAL tmp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
 
               if(tmp_val > sec_largest_val && state2 != largest_ind) {
                  sec_largest_val = tmp_val;
@@ -1359,7 +1422,7 @@ Cycle<MRF_CONSTRUCTOR>::create_k_projection_graph(
 
               std::vector<int> inds; inds.push_back(xi); inds.push_back(xj);
               //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-              REAL tmp_val = gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
 
               // Compute s_mn for this edge
               REAL val_s = std::max(tmp_val, max_ij_bij_not_xi_xj(xi,xj)) - std::max(max_i_bij_not_xi(xi,xj), max_j_bij_not_xj(xi,xj));
@@ -1403,7 +1466,6 @@ Cycle<MRF_CONSTRUCTOR>::find_optimal_R(adj_type &projection_adjacency_list, REAL
 
   // do zrobienia: czy to prawidlowo?
   while(bin_search_lower_bound <= bin_search_upper_bound) {
-  //while(bin_search_lower_bound < bin_search_upper_bound) {
 				
     // Compute mid-point
     int R_pos = floor((bin_search_lower_bound + bin_search_upper_bound)/2);
@@ -1486,7 +1548,7 @@ Cycle<MRF_CONSTRUCTOR>::random_permutation(int n) {
 // NOTE: this function depends on the random seed becase it creates a random spanning tree.
 template<typename MRF_CONSTRUCTOR>
 void 
-Cycle<MRF_CONSTRUCTOR>::FindCycles(std::vector<std::list<int> > &cycle_set, REAL optimal_R, int ncycles_to_add, adj_type &projection_adjacency_list) {
+Cycle<MRF_CONSTRUCTOR>::FindCycles(std::vector<std::list<int> > &cycle_set, const REAL optimal_R, const int ncycles_to_add, adj_type &projection_adjacency_list) {
 
   REAL R = optimal_R;
   int num_projection_nodes = projection_adjacency_list.size();
@@ -1871,10 +1933,11 @@ Cycle<MRF_CONSTRUCTOR>::add_cycle(
     //std::sort(ijk_inds.begin(), ijk_inds.end());
     assert(ijk_inds[0] < ijk_inds[1] && ijk_inds[1] < ijk_inds[2]);
 
-    addTripletFun(ijk_inds[0], ijk_inds[1], ijk_inds[2], pi_c[clusterId][0], pi_c[clusterId][1], pi_c[clusterId][2]);
+    if(addTripletFun(ijk_inds[0], ijk_inds[1], ijk_inds[2])) {//, pi_c[clusterId][0], pi_c[clusterId][1], pi_c[clusterId][2])) {
+       nClustersAdded++;
+    }
     // TODO: log which clusters are chosen...
 		
-    nClustersAdded++;
   }
   
   return nClustersAdded;
@@ -1900,55 +1963,55 @@ Cycle<MRF_CONSTRUCTOR>::TightenCycle(
       const int method) 
 {
    std::map<std::vector<int>, bool > triplet_set;
-		
-  int nClustersAdded = 0;
-  //int nNewClusters;
 
-  if (DEBUG_MODE) std::cout << "Finding the most violated cycle...." << std::endl;
+   int nClustersAdded = 0;
+   //int nNewClusters;
 
-  // This std::map allows us to quickly look up the edge weights
-  std::map<std::pair<int, int>, REAL> projection_edge_weights;
-  int num_projection_nodes;
-  std::vector<std::vector<int> > projection_map;
-  //std::vector<int> projection_imap_var;  
-  std::vector<std::vector<std::pair<int, REAL> > > projection_adjacency_list;
-  //std::vector<std::vector<int> > partition_imap;
-  REAL* array_of_sij; int array_of_sij_size;
+   if (DEBUG_MODE) std::cout << "Finding the most violated cycle...." << std::endl;
 
-  // Define the projection graph and all edge weights
-  if(method == 2)
-    num_projection_nodes = create_expanded_projection_graph(projection_imap_var, projection_adjacency_list, projection_edge_weights, array_of_sij, array_of_sij_size, partition_imap);
-  else if(method == 1)
-    create_k_projection_graph(projection_map, num_projection_nodes, projection_imap_var, partition_imap, projection_edge_weights, projection_adjacency_list, array_of_sij, array_of_sij_size);
-  else {
-     std::cout << "ERROR: method not defined." << std::endl;
-    return 0;
-  }
+   // This std::map allows us to quickly look up the edge weights
+   std::map<std::pair<int, int>, REAL> projection_edge_weights;
+   int num_projection_nodes;
+   std::vector<std::vector<int> > projection_map;
+   //std::vector<int> projection_imap_var;  
+   std::vector<std::vector<std::pair<int, REAL> > > projection_adjacency_list;
+   //std::vector<std::vector<int> > partition_imap;
+   REAL* array_of_sij; int array_of_sij_size;
 
-  //std::vector<std::list<int> > cycle_set;
-  REAL optimal_R = find_optimal_R(projection_adjacency_list, array_of_sij, array_of_sij_size);
-  if (DEBUG_MODE) std::cout << "R_optimal = " << optimal_R << std::endl;
+   // Define the projection graph and all edge weights
+   if(method == 2)
+      num_projection_nodes = create_expanded_projection_graph(projection_imap_var, projection_adjacency_list, projection_edge_weights, array_of_sij, array_of_sij_size, partition_imap);
+   else if(method == 1)
+      create_k_projection_graph(projection_map, num_projection_nodes, projection_imap_var, partition_imap, projection_edge_weights, projection_adjacency_list, array_of_sij, array_of_sij_size);
+   else {
+      std::cout << "ERROR: method not defined." << std::endl;
+      return 0;
+   }
 
-  promised_bound = optimal_R;
-  
-  // Look for cycles. Some will be discarded.
-  clock_t start_time = clock();
-  
-  if (optimal_R > 0) {
-    // TODO: this is almost certainly doing more computation than necessary. Might want to change
-    // nclus_to_add*10 to nclus_to_add, and comment out all but the top 3.
-    FindCycles(cycle_set, optimal_R, nclus_to_add*10, projection_adjacency_list);
-    FindCycles(cycle_set, optimal_R/2, nclus_to_add*10, projection_adjacency_list);
-    FindCycles(cycle_set, optimal_R/4, nclus_to_add*10, projection_adjacency_list);
-    FindCycles(cycle_set, optimal_R/8, nclus_to_add*10, projection_adjacency_list);
-    FindCycles(cycle_set, optimal_R/16, nclus_to_add*10, projection_adjacency_list);
-    FindCycles(cycle_set, optimal_R/32, nclus_to_add*10, projection_adjacency_list);
-    FindCycles(cycle_set, optimal_R/64, nclus_to_add*10, projection_adjacency_list);
-    FindCycles(cycle_set, optimal_R/128, nclus_to_add*10, projection_adjacency_list);
-  }
+   //std::vector<std::list<int> > cycle_set;
+   REAL optimal_R = find_optimal_R(projection_adjacency_list, array_of_sij, array_of_sij_size);
+   if (DEBUG_MODE) std::cout << "R_optimal = " << optimal_R << std::endl;
 
-  clock_t end_time = clock();
-  REAL total_time = (REAL)(end_time - start_time)/CLOCKS_PER_SEC;
+   promised_bound = optimal_R;
+
+   // Look for cycles. Some will be discarded.
+   clock_t start_time = clock();
+
+   if (optimal_R > 0) {
+      // TODO: this is almost certainly doing more computation than necessary. Might want to change
+      // nclus_to_add*10 to nclus_to_add, and comment out all but the top 3.
+      FindCycles(cycle_set, optimal_R, nclus_to_add*10, projection_adjacency_list);
+      FindCycles(cycle_set, optimal_R/2, nclus_to_add*10, projection_adjacency_list);
+      FindCycles(cycle_set, optimal_R/4, nclus_to_add*10, projection_adjacency_list);
+      FindCycles(cycle_set, optimal_R/8, nclus_to_add*10, projection_adjacency_list);
+      FindCycles(cycle_set, optimal_R/16, nclus_to_add*10, projection_adjacency_list);
+      FindCycles(cycle_set, optimal_R/32, nclus_to_add*10, projection_adjacency_list);
+      FindCycles(cycle_set, optimal_R/64, nclus_to_add*10, projection_adjacency_list);
+      FindCycles(cycle_set, optimal_R/128, nclus_to_add*10, projection_adjacency_list);
+   }
+
+   clock_t end_time = clock();
+   REAL total_time = (REAL)(end_time - start_time)/CLOCKS_PER_SEC;
   if (DEBUG_MODE) {
      std::cout << " -- FindCycles. Took " << total_time << " seconds" << std::endl;
      std::cout << " Added " << cycle_set.size() << " cycles." << std::endl;

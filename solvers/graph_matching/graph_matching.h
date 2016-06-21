@@ -25,6 +25,7 @@
 // FMC_MP implements graph matching with the uniqueness constraints implemented via messages.
 // FMC_MCF implements graph matching with a global min cost flow factor.
 // FMC_GM amounts to TRWS with infinity on diagonals
+// + tightening version of all three solvers using violated cycle tightening of Sontag
 // input grammars:
 // TorresaniEtAlInput contains the grammar used by the dual decomposition algorithm of Torresani, Kolmogorov and Rother.
 // UAIInput contains the grammar in uai MRF format plus constraints section.
@@ -78,6 +79,52 @@ struct FMC_MP {
    using ProblemDecompositionList = meta::list<assignment, mrfLeft, mrfRight, mcfLabeling>;
 };
 
+// graph matching with assignment via message passing + tightening triplets
+template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left>
+struct FMC_MP_T {
+   using FMC_MP_PARAM = FMC_MP_T<PAIRWISE_CONSTRUCTION>;
+   constexpr static const char* name =
+      PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "AMP-O-T"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "AMP-I-T"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "AMP-B-T"
+      : "unknown variant"));
+      
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 0, false, true > UnaryFactor; // set to true if labeling by unaries is desired
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 1, false, false > PairwiseFactor;
+   typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_MP_PARAM, 2, true, false> McfLabelingFactor;
+
+   typedef MessageContainer<EqualityMessage, 0, 0, variableMessageNumber, variableMessageNumber, 1, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
+   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeft;
+   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_MP_PARAM, 3 > UnaryMcfLabelingMessage;
+
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 3 > EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 4> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 5> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 6> PairwiseTriplet23MessageContainer;
+
+   using FactorList = meta::list< UnaryFactor, PairwiseFactor, McfLabelingFactor, EmptyTripletFactor >;
+   using MessageList = meta::list< 
+      AssignmentConstraintMessage,
+      UnaryPairwiseMessageLeft,
+      UnaryPairwiseMessageRight,
+      UnaryMcfLabelingMessage,
+      PairwiseTriplet12MessageContainer, 
+      PairwiseTriplet13MessageContainer, 
+      PairwiseTriplet23MessageContainer 
+         >;
+
+   using assignment = AssignmentViaMessagePassingProblemConstructor<FMC_MP_PARAM,0,0>;
+   using mrf = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
+   using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,4,5,6>;
+   using mrfLeft = tighteningMrf;
+   using mrfRight = tighteningMrf;
+   using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
+   using ProblemDecompositionList = meta::list<assignment, mrfLeft, mrfRight, mcfLabeling>;
+};
+
+
+
 // graph matching with assignment via minimum cost flow solver
 
 // first good option: construct pairwise potentials on both sides, only send messages from unary to assignment (no receiving) and adjust all factors.
@@ -91,6 +138,40 @@ struct FMC_MCF {
       PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "AMCF-O"
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "AMCF-I"
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "AMCF-B"
+      : "unknown variant"));
+      
+   constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
+
+   typedef FactorContainer<MinCostFlowFactorLemon, MinCostFlowReparametrizationStorageLemon, FMC_MCF_PARAM, 0, true, true> MinCostFlowAssignmentFactor;
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 1 > UnaryFactor;
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 2 > PairwiseFactor;
+
+   typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
+   typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<UnaryToAssignmentMessage<McfCoveringFactor>, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
+
+   using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor>;
+   using MessageList = meta::list<
+       UnaryPairwiseMessageLeft,  
+       UnaryPairwiseMessageRight, 
+       UnaryToAssignmentMessageContainer
+      >;
+
+   using assignment = AssignmentViaMinCostFlowConstructor<FMC_MCF_PARAM,0>;
+   using mrf = StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>;
+   using mrfLeft = mrf;
+   using mrfRight = mrf;
+   using ProblemDecompositionList = meta::list<assignment,mrfLeft,mrfRight>;
+};
+
+// + tightening
+template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left>
+struct FMC_MCF_T {
+   using FMC_MCF_PARAM = FMC_MCF_T<PAIRWISE_CONSTRUCTION>;
+   constexpr static const char* name =
+      PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "AMCF-O-T"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "AMCF-I-T"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "AMCF-B-T"
       : "unknown variant"));
       
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
@@ -119,15 +200,13 @@ struct FMC_MCF {
       >;
 
    using assignment = AssignmentViaMinCostFlowConstructor<FMC_MCF_PARAM,0>;
-   //using mrf = MRFProblemConstructor<FMC_MCF_PARAM,1,2,0,1>;
    using mrf = StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>;
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,3,4,5>;
    using mrfLeft = tighteningMrf;
    using mrfRight = tighteningMrf;
-   //using mrfLeft = MRFProblemConstructor<FMC_MCF_PARAM,1,2,0,1,3,3,4,5>;
-   //using mrfRight = MRFProblemConstructor<FMC_MCF_PARAM,1,2,0,1,3,3,4,5>;
    using ProblemDecompositionList = meta::list<assignment,mrfLeft,mrfRight>;
 };
+
 
 // naive version where the assignment is enforced through inf on pairwise diagonals. One has to insert all possible diagonals then.
 // this results in a dense standard pairwise graphical model
@@ -154,6 +233,46 @@ struct FMC_GM {
    using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_GM_PARAM,0,2,2>;
    using ProblemDecompositionList = meta::list<mrf,mcfLabeling>;
 };
+
+// + tightening triplets
+template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left> // note: both sides makes no sense here
+struct FMC_GM_T {
+   using FMC_GM_PARAM = FMC_GM_T<PAIRWISE_CONSTRUCTION>;
+   constexpr static const char* name =
+      PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "GM-O-T"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "GM-I-T"
+      : "unknown variant");
+      
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, false, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 1, false, false > PairwiseFactor;
+   typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_GM_PARAM, 2, true, false> McfLabelingFactor;
+
+   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
+   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_GM_PARAM, 2 > UnaryMcfLabelingMessage;
+
+   // tightening
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 3 > EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 3> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 4> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 5> PairwiseTriplet23MessageContainer;
+
+   using FactorList = meta::list< UnaryFactor, PairwiseFactor, McfLabelingFactor, EmptyTripletFactor >;
+   using MessageList = meta::list<
+      UnaryPairwiseMessageLeft,
+      UnaryPairwiseMessageRight,
+      UnaryMcfLabelingMessage,
+      PairwiseTriplet12MessageContainer, 
+      PairwiseTriplet13MessageContainer, 
+      PairwiseTriplet23MessageContainer 
+         >;
+
+   using mrf = StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>;
+   using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,3,4,5>;
+   using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_GM_PARAM,0,2,2>;
+   using ProblemDecompositionList = meta::list<tighteningMrf,mcfLabeling>;
+};
+
 
 // helper function for extracting types from FMC
 template<template <PairwiseConstruction> class FMC, PairwiseConstruction PC>

@@ -373,7 +373,7 @@ public:
    }
 
    // do zrobienia: use references for pi
-   void AddTighteningTriplet(const SIGNED_INDEX var1, const SIGNED_INDEX var2, const SIGNED_INDEX var3, const std::vector<SIGNED_INDEX> pi1, const std::vector<SIGNED_INDEX> pi2, const std::vector<SIGNED_INDEX> pi3)
+   bool AddTighteningTriplet(const SIGNED_INDEX var1, const SIGNED_INDEX var2, const SIGNED_INDEX var3)//, const std::vector<SIGNED_INDEX> pi1, const std::vector<SIGNED_INDEX> pi2, const std::vector<SIGNED_INDEX> pi3)
    {
       assert(var1 < var2 && var2 < var3 && var3 < this->GetNumberOfVariables());
       if(tripletMap_.find(std::make_tuple(var1,var2,var3)) == tripletMap_.end()) {
@@ -389,12 +389,17 @@ public:
             AddEmptyPairwiseFactor(var2,var3);
          }
 
-         AddTripletFactor(var1,var2,var3, std::vector<REAL>(0));
+         const INDEX tripletSize = this->GetNumberOfLabels(var1) *  this->GetNumberOfLabels(var2) * this->GetNumberOfLabels(var3);
+         AddTripletFactor(var1,var2,var3, std::vector<REAL>(tripletSize));
+         return true;
+      } else {
+         return false;
       }
    }
 
-   void Tighten()
+   INDEX Tighten(const REAL epsilon, const INDEX noTripletsToAdd)
    {
+      assert(noTripletsToAdd > 0);
       std::cout << "Tighten mrf with cycle inequalities\n";
       // do zrobienia: templatize addTriplet function to avoid this declaration
       //std::function<void(const SIGNED_INDEX,const SIGNED_INDEX, const SIGNED_INDEX, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>)> addTriplet = &MrfConstructorType::AddTighteningTriplet;
@@ -407,20 +412,32 @@ public:
       std::cout << this->GetNumberOfPairwiseFactors() << "\n";
       std::cout << this << "\n";
 
-      auto fp = std::bind(&MrfConstructorType::AddTighteningTriplet, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6);
-      cycle.TightenTriplet(fp, 
-            5,20,tripletSet,promisedBound);
+      auto fp = [this](const INDEX v1, const INDEX v2, const INDEX v3) { return this->AddTighteningTriplet(v1,v2,v3); }; // do zrobienia: do not give this via template, as Cycle already has gm_ object.
+      INDEX noTripletsAdded = cycle.TightenTriplet(fp, noTripletsToAdd,epsilon,tripletSet);
+      std::cout << "Added " << noTripletsAdded << " < " << noTripletsToAdd << " triplets by triplet searching\n";
+      std::cout << "return already\n";
+      return noTripletsAdded;
+      if(noTripletsAdded < noTripletsToAdd) {
+         std::vector<int> projection_imap;
+         std::vector<std::vector<int> > partition_imap;
+         std::vector<std::list<int> > cycle_set;
+         const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, projection_imap, partition_imap, cycle_set, promisedBound, 1);
+         std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (k projection graph)\n";
+         noTripletsAdded += noTripletsAddedByCycle;
 
-      std::vector<int> projection_imap;
-      std::vector<std::vector<int> > partition_imap;
-      std::vector<std::list<int> > cycle_set;
-      cycle.TightenCycle(fp, 5, projection_imap, partition_imap, cycle_set, promisedBound, 1);
-            
-      std::cout << this->GetNumberOfVariables() << "\n";
-      std::cout << this->GetNumberOfPairwiseFactors() << "\n";
-      std::cout << this->GetNumberOfTripletFactors() << "\n";
-      std::cout << this << "\n";
-      exit(1);
+         if(noTripletsAdded < noTripletsToAdd) {
+            const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, projection_imap, partition_imap, cycle_set, promisedBound, 2);
+            std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (full projection graph)\n";
+            noTripletsAdded += noTripletsAddedByCycle;
+         }
+
+         std::cout << this->GetNumberOfVariables() << "\n";
+         std::cout << this->GetNumberOfPairwiseFactors() << "\n";
+         std::cout << this->GetNumberOfTripletFactors() << "\n";
+         std::cout << this << "\n";
+      }
+
+      return noTripletsAdded;
    }
 
 
