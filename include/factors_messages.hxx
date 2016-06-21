@@ -184,11 +184,11 @@ struct MessageDispatcher
    {
       return FuncGetter<MSG_CONTAINER>::CanComputePrimalThroughMessage();
    }
-   static void ComputePrimalThroughMessage(MSG_CONTAINER& t, typename PrimalSolutionStorage::Element primalSolution, typename PrimalSolutionStorage::Element primalSolutionToBeComputed) 
-   // note that argument 2 and 3 need to be swapped, depending on which function getter is employed
+
+   static void ComputePrimalThroughMessage(MSG_CONTAINER& t, typename PrimalSolutionStorage::Element primal) 
    {
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetComputePrimalThroughMessageFunc();
-      return (t.*staticMemberFunc)(primalSolution, primalSolutionToBeComputed);
+      return (t.*staticMemberFunc)(primal);
    }
 };
 
@@ -506,14 +506,18 @@ public:
       return FunctionExistence::HasComputeLeftFromRightPrimal<MessageType,void,typename PrimalSolutionStorage::Element,typename PrimalSolutionStorage::Element>();
    }
 
-   void ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element leftPrimal, typename PrimalSolutionStorage::Element rightPrimal) 
+   void ComputeRightFromLeftPrimal(typename PrimalSolutionStorage::Element primal) 
    {
-      msg_op_.ComputeRightFromLeftPrimal(leftPrimal, rightPrimal);
+      assert(false); 
+      msg_op_.ComputeRightFromLeftPrimal(primal + leftFactor_->GetPrimalOffset(), primal + rightFactor_->GetPrimalOffset());
+      rightFactor_->ComputePrimalThroughMessages(primal);
    }
 
-   void ComputeLeftFromRightPrimal(const PrimalSolutionStorage::Element rightPrimal, typename PrimalSolutionStorage::Element leftPrimal)
+   void ComputeLeftFromRightPrimal(typename PrimalSolutionStorage::Element primal)
    {
-      msg_op_.ComputeLeftFromRightPrimal(leftPrimal, rightPrimal);
+      assert(false);
+      msg_op_.ComputeLeftFromRightPrimal(primal + leftFactor_->GetPrimalOffset(), primal + rightFactor_->GetPrimalOffset());
+      leftFactor_->ComputePrimalThroughMessages(primal);
    }
 
    constexpr static bool
@@ -847,8 +851,6 @@ public:
    using RepamStorageType = REPAM_STORAGE_TYPE<FactorContainerType>;
    friend class REPAM_STORAGE_TYPE<FactorContainerType>;
 
-   bool CanComputePrimalSolution() const final { return COMPUTE_PRIMAL_SOLUTION; }
-   
    // do zrobienia: templatize cosntructor to allow for more general initialization of reparametrization storage and factor
    template<typename ...ARGS>
    FactorContainer(const FactorType& factor, ARGS... args) : RepamStorageType(factor,args...), factor_(factor) {
@@ -974,17 +976,24 @@ public:
       MaximizePotential();
    }
 
-   // if primal solution is to be computed by this factor, we store the solution in primal and give back the dual cost
+   // if primal solution is to be computed by this factor, we store the solution in primal
    // kwaskwaskwas do zrobienia: primal cost need not be valid anymore
    template<bool COMPUTE_PRIMAL_SOLUTION_TMP = COMPUTE_PRIMAL_SOLUTION>
    typename std::enable_if<COMPUTE_PRIMAL_SOLUTION_TMP == true>::type 
-   MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element& primal)
+   MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal)
    {
       static_assert(COMPUTE_PRIMAL_SOLUTION_TMP == COMPUTE_PRIMAL_SOLUTION,"");
       factor_.MaximizePotentialAndComputePrimal(*this, primal + primalOffset_);
+      // now prapagate primal
+      ComputePrimalThroughMessages(primal);
    }
 
-   /*
+   void PropagatePrimalThroughMessages(typename PrimalSolutionStorage::Element primal)
+   {
+
+   }
+
+   
    template<typename MESSAGE_DISPATCHER_TYPE>
    typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanComputePrimalThroughMessage() == true>::type 
    ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element primal) const
@@ -1008,11 +1017,11 @@ public:
       ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, primal);
    }
    // do zrobienia: rename PropagatePrimalThroughMessages
-   void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element primal) const final
+   void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element primal) const
    {
       ComputePrimalThroughMessages(MESSAGE_DISPATCHER_TYPELIST{}, primal);
    }
-   */
+   
    
 
    // SFINAE-based selection whether we will perform message updates for receiving   

@@ -73,7 +73,7 @@ public:
          return cost;
       } else {
          // most probably something is not working in primal propagation
-         return std::numeric_limits<REAL>::max();
+         return std::numeric_limits<REAL>::infinity();
       }
    }
 

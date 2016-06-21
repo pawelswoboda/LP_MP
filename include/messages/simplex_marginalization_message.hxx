@@ -189,7 +189,7 @@ public:
    // initally, the primal is set to all true vector. The left and right whiten out the vector, and exactly one entry should remain true
    template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = PROPAGATE_PRIMAL_TO_LEFT>
    typename std::enable_if<PROPAGATE_PRIMAL_TO_LEFT_TMP,void>::type
-   ComputeLeftFromRightPrimal(typename PrimalSolutionStorage::Element& left, const typename PrimalSolutionStorage::Element& right) 
+   ComputeLeftFromRightPrimal(typename PrimalSolutionStorage::Element left, const typename PrimalSolutionStorage::Element right) 
    {
       static_assert(PROPAGATE_PRIMAL_TO_LEFT_TMP == PROPAGATE_PRIMAL_TO_LEFT,"");
       // note that we can assume that left simplex has been initialized to all ones. Zero out impossible configurations
@@ -198,7 +198,7 @@ public:
 
    template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = PROPAGATE_PRIMAL_TO_RIGHT>
    typename std::enable_if<PROPAGATE_PRIMAL_TO_RIGHT_TMP,void>::type
-   ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element& left, typename PrimalSolutionStorage::Element& right)
+   ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right)
    {
       static_assert(PROPAGATE_PRIMAL_TO_RIGHT_TMP == PROPAGATE_PRIMAL_TO_RIGHT,"");
       loopRight_.PropagateLabel(left,right);

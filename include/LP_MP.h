@@ -136,11 +136,10 @@ public:
    virtual REAL LowerBound() const = 0;
    virtual std::vector<REAL> GetReparametrizedPotential() const = 0;
    //virtual PrimalSolutionStorageAdapter* AllocatePrimalSolutionStorage() const = 0;
-   virtual bool CanComputePrimalSolution() const = 0;
+   //virtual bool CanComputePrimalSolution() const = 0;
    // the offset in the primal storage
    virtual void SetPrimalOffset(const INDEX) = 0;
    virtual INDEX GetPrimalOffset() const = 0;
-   //virtual void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element& primalSolution, std::vector<typename PrimalSolutionStorage::Element>& connectedPrimalSolution) const = 0;
    // do zrobienia: this function is not needed. Evaluation can be performed automatically
    virtual REAL EvaluatePrimal(typename PrimalSolutionStorage::Element primalSolution) const = 0;
    // do zrobienia: this is not needed as well and could be automated. Possibly it is good to keep this to enable solution rewriting.
@@ -268,8 +267,6 @@ private:
 
    template<typename FACTOR_ITERATOR>
       void InitializePrimalVector(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PrimalSolutionStorage& v);
-   template<typename FACTOR_ITERATOR, typename PRIMAL_STORAGE_ITERATOR>
-      void ComputePrimalThroughMessages(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_STORAGE_ITERATOR primalIt);
    template<typename FACTOR_ITERATOR, typename PRIMAL_ITERATOR>
       bool CheckPrimalConsistency(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_ITERATOR primalIt) const;
 
@@ -361,7 +358,6 @@ void LP::ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR fa
    //for(; factorItTmp!=factorEndIt; ++factorItTmp, ++omegaIt, ++primalItTmp) {
    //   UpdateFactor(*factorItTmp, *omegaIt, *primalItTmp);
    //}
-   ComputePrimalThroughMessages(factorIt, factorEndIt, primalIt);
    const REAL currentPrimalCost = EvaluatePrimal(factorIt,factorEndIt,primalIt);
    if(currentPrimalCost < bestPrimalCost || bestPrimalCost >= std::numeric_limits<REAL>::max()) { // the second case occurs whenever we have some infeasible primal solution. Possibly, the newer solution, although infeasible, are not as infeasible as the old one.
       bestPrimalCost = currentPrimalCost;
@@ -470,53 +466,6 @@ SIGNED_INDEX LP::Solve(VISITOR& v)
             break;
       }
    }
-}
-
-// do zrobienia: maybe const possible for argument v
-// note: this function propagates primals in bfs-manner beginning from factors, for which primal was computed in the update pass.
-// Especially, the propagation in the factor message network must enable this and ensure, that no primal conflict can occur
-template<typename FACTOR_ITERATOR, typename PRIMAL_STORAGE_ITERATOR>
-void LP::ComputePrimalThroughMessages(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_STORAGE_ITERATOR primalIt)
-{
-   // do zrobienia: this function is not needed anymore. Rather, perform the following primal propagation: Whenever a factor computes its primal, go in dfs-fashion through all factors starting at the current one, and propagate unaries.
-/*
-   std::map<FactorTypeAdapter*, INDEX> factorToIndex;
-   std::map<INDEX, FactorTypeAdapter*> indexToFactor; // do zrobienia: this should equal forwardFactors_. Modify BuildIndexMaps
-   BuildIndexMaps(factorIt,factorEndIt,factorToIndex,indexToFactor);
-
-   std::vector<bool> visited(factorEndIt - factorIt, false);
-
-   std::queue<INDEX> q;
-   for(INDEX i=0; factorIt+i!=factorEndIt; ++i) {
-      const FactorTypeAdapter* f = *(factorIt+i);
-      if(f->CanComputePrimalSolution()) {
-         q.push(i); // we assume that the corresponding primal solutions in v have been computed
-      }
-   }
-   assert(q.size() > 0); // otherwise primal solution cannot be propagated
-
-   while(!q.empty()) {
-      const INDEX i = q.front();
-      q.pop();
-      if(visited[i] == true) { continue; }
-      else { visited[i] = true; }
-
-      FactorTypeAdapter* const f = *(factorIt+i);
-      // build vector of PrimalSolutionStorageAdapter* such that the factors referenced by the current factors messages are in there
-      std::vector<typename PrimalSolutionStorage::Element> cur_primal_adjacent;
-      cur_primal_adjacent.reserve(f->GetNoMessages());
-      for(MessageIterator it=f->begin(); it!=f->end(); ++it) {
-         const INDEX j = factorToIndex[it.GetConnectedFactor()]; // do zrobienia: is this the right dereferencing operator definition? Possibly change in LP_MP.h
-         assert(false);
-         //cur_primal_adjacent.push_back(*(primalIt+j));
-         q.push(j);
-      }
-      assert(false);
-      f->ComputePrimalThroughMessages(primalIt);
-   }
-
-   assert(std::count(visited.begin(), visited.end(),false) == 0); // primal solutions have been computed for every factor
-   */
 }
 
 // Here we check whether messages do not
