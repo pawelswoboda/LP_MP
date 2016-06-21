@@ -21,11 +21,13 @@
 #include <vector>
 
 // this file contains definitions of various graph matching solvers and grammars.
+//
 // solvers:
 // FMC_MP implements graph matching with the uniqueness constraints implemented via messages.
 // FMC_MCF implements graph matching with a global min cost flow factor.
 // FMC_GM amounts to TRWS with infinity on diagonals
-// + tightening version of all three solvers using violated cycle tightening of Sontag
+// iFMC_${MODEL}_T implements tightening version of all three solvers using violated cycle tightening of Sontag
+//
 // input grammars:
 // TorresaniEtAlInput contains the grammar used by the dual decomposition algorithm of Torresani, Kolmogorov and Rother.
 // UAIInput contains the grammar in uai MRF format plus constraints section.
@@ -243,7 +245,7 @@ struct FMC_GM_T {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "GM-I-T"
       : "unknown variant");
       
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, false, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, false, false > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 1, false, false > PairwiseFactor;
    typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_GM_PARAM, 2, true, false> McfLabelingFactor;
 
@@ -489,7 +491,7 @@ namespace TorresaniEtAlInput {
    
 
    // specializations for FMC_MP, FMC_MCF and FMC_GM. Here construction of the model takes place
-   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MP>(FMC{}), pegtl::eof>::type > {
+   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MP>(FMC{}) || FmcTypeCheck<FMC_MP_T>(FMC{}), pegtl::eof>::type > {
       static void apply(const pegtl::input& in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          std::cout << "Parsed problem, now construct mp version\n";
@@ -544,7 +546,7 @@ namespace TorresaniEtAlInput {
       }
    };
 
-   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MCF>(FMC{}),pegtl::eof>::type> {
+   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MCF>(FMC{}) || FmcTypeCheck<FMC_MCF_T>(FMC{}),pegtl::eof>::type> {
       static void
       apply(const pegtl::input& in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
@@ -612,7 +614,7 @@ namespace TorresaniEtAlInput {
       }
    };
 
-   template<typename FMC> struct action< FMC, typename std::enable_if<FmcTypeCheck<FMC_GM>(FMC{}), pegtl::eof>::type > {
+   template<typename FMC> struct action< FMC, typename std::enable_if<FmcTypeCheck<FMC_GM>(FMC{}) || FmcTypeCheck<FMC_GM_T>(FMC{}), pegtl::eof>::type > {
       static void apply(const pegtl::input& in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          constexpr PairwiseConstruction pc = FmcConstruction(FMC {});
@@ -918,7 +920,7 @@ namespace UAIInput {
       return graph;
    }
 
-   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_GM>(FMC{}),pegtl::eof>::type> {
+   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_GM>(FMC{}) || FmcTypeCheck<FMC_GM_T>(FMC{}),pegtl::eof>::type> {
       static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left,"");
@@ -976,7 +978,7 @@ namespace UAIInput {
       }
    };
 
-   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MP>(FMC{}),pegtl::eof>::type> {
+   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MP>(FMC{}) || FmcTypeCheck<FMC_MP_T>(FMC{}),pegtl::eof>::type> {
       static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left,"");
@@ -1056,7 +1058,7 @@ namespace UAIInput {
       }
    };
 
-   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MCF>(FMC{}),pegtl::eof>::type> {
+   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MCF>(FMC{}) || FmcTypeCheck<FMC_MCF_T>(FMC{}),pegtl::eof>::type> {
       static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left,"");

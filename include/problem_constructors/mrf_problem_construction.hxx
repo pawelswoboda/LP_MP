@@ -400,7 +400,7 @@ public:
    INDEX Tighten(const REAL epsilon, const INDEX noTripletsToAdd)
    {
       assert(noTripletsToAdd > 0);
-      std::cout << "Tighten mrf with cycle inequalities\n";
+      std::cout << "Tighten mrf with cycle inequalities, epsilon = " << epsilon << ", no triplets to add = " << noTripletsToAdd << "\n";
       // do zrobienia: templatize addTriplet function to avoid this declaration
       //std::function<void(const SIGNED_INDEX,const SIGNED_INDEX, const SIGNED_INDEX, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>)> addTriplet = &MrfConstructorType::AddTighteningTriplet;
 
@@ -415,8 +415,8 @@ public:
       auto fp = [this](const INDEX v1, const INDEX v2, const INDEX v3) { return this->AddTighteningTriplet(v1,v2,v3); }; // do zrobienia: do not give this via template, as Cycle already has gm_ object.
       INDEX noTripletsAdded = cycle.TightenTriplet(fp, noTripletsToAdd,epsilon,tripletSet);
       std::cout << "Added " << noTripletsAdded << " < " << noTripletsToAdd << " triplets by triplet searching\n";
-      std::cout << "return already\n";
-      return noTripletsAdded;
+      //std::cout << "return already\n";
+      //return noTripletsAdded;
       if(noTripletsAdded < noTripletsToAdd) {
          std::vector<int> projection_imap;
          std::vector<std::vector<int> > partition_imap;

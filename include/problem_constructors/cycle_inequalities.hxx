@@ -601,6 +601,7 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
      }
 
      if(newCluster[clusterId].bound < epsilon) {
+        std::cout << "cluster with too small improvement found, abort\n";
         break;
      }
   }
