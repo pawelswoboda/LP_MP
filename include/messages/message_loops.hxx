@@ -301,17 +301,19 @@ public:
       return i[COMMON_IDX1] + i[COMMON_IDX2]*iter_limit_[COMMON_IDX1];
    }
 
-   void PropagateLabel(const typename PrimalSolutionStorage::Element& labelled, typename PrimalSolutionStorage::Element& to_label) const
+   void PropagateLabel(const typename PrimalSolutionStorage::Element labelled, typename PrimalSolutionStorage::Element to_label) const
    {
-      assert(false);
-      exit(1);
-      /*
       std::array<INDEX,3> i;
-      i[commonIdx1] = l % iter_limit_[commonIdx1];
-      i[commonIdx1] = l / iter_limit_[commonIdx1];
-      i[tripletIdx] = 0;
-      return TripletLabel(i);
-      */
+
+      for(i[COMMON_IDX1]=0; i[COMMON_IDX1]<iter_limit_[COMMON_IDX1]; ++i[COMMON_IDX1]) {
+         for(i[COMMON_IDX2]=0; i[COMMON_IDX2]<iter_limit_[COMMON_IDX2]; ++i[COMMON_IDX2]) {
+            if( labelled[ PairwiseLabel(i) ] == false) {
+               for(i[tripletIdx]=0; i[tripletIdx]<iter_limit_[tripletIdx]; ++i[tripletIdx]) {
+                  to_label[ TripletLabel(i) ] = false;
+               }
+            }
+         }
+      }
    }
 
 
