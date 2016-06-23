@@ -27,7 +27,7 @@ class MessageIterator;
 // here we store the primal solution as a std::vector<bool>
 // Each factor is allocated factor.size() entries. Offsets are stored in an auxiliary std::vector<INDEX>.
 // Do zrobienia: offsets could be stored once for multiple primal solutions. Then iterator based on offsets would be more complicated, though.
-//using PrimalSolutionStorage = std::vector<bool>;
+/*
 class PrimalSolutionStorage : public std::vector<bool> {
 public:
    using Element = std::vector<bool>::iterator;
@@ -50,73 +50,34 @@ public:
       std::fill(this->begin(), this->end(), true);
    }
 };
+*/
 
-/*
-class PrimalSolutionStorage {
+// do zrobienia: better use some custom vector with packing. Essentially only 3 values are needed: true, false, unknown, which can be stored with 2 bits
+static constexpr unsigned char unknownState = 3;
+class PrimalSolutionStorage : public std::vector<unsigned char> {
 public:
-   // revert to bool
-   using Element = std::vector<bool>::iterator;
-   using ConstElement = std::vector<bool>::const_iterator;
+   using Element = std::vector<unsigned char>::iterator;
 
    PrimalSolutionStorage() {}
+   template<typename FACTOR_ITERATOR>
+   PrimalSolutionStorage(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd)
+   {
+      INDEX size = 0;
+      for(;factorIt != factorItEnd; ++factorIt) {
+         size += (*factorIt)->size();
+      }
+      this->resize(size,unknownState);
+      //this->shrink_to_fit();
+      std::cout << "primal size = " << this->size() << "\n";
+   }
 
    void Initialize()
    {
-      std::fill(primal_.begin(), primal_.end(), true);
+      std::fill(this->begin(), this->end(), unknownState);
    }
-   // we must make a deep copy for the offset variables, as they point directly to entried of primal_
-   void operator=(const PrimalSolutionStorage& rhs)
-   {
-      *this = PrimalSolutionStorage(rhs);
-   }
-   PrimalSolutionStorage(const PrimalSolutionStorage& rhs)
-   {
-      primal_ = rhs.primal_;
-      offset_.resize(rhs.offset_.size());
-      for(INDEX i=0; i<offset_.size(); ++i) {
-         offset_[i] = primal_.begin() + (offset_[i] - offset_[0]);
-      }
-   }
-   template<typename FACTOR_ITERATOR>
-   PrimalSolutionStorage(FACTOR_ITERATOR factorItBegin, FACTOR_ITERATOR factorItEnd)
-   {
-      Init(factorItBegin, factorItEnd);
-   }
-   template<typename FACTOR_ITERATOR>
-   void Init(FACTOR_ITERATOR factorItBegin, FACTOR_ITERATOR factorItEnd)  
-   {
-      primal_.clear();
-      offset_.clear();
 
-      auto factorItTmp = factorItBegin;
-      INDEX size = 0;
-      while(factorItTmp != factorItEnd) {
-         size += (*factorItTmp)->size();
-         ++factorItTmp;
-      }
-      primal_.resize(size,true);
-      offset_.reserve(factorItEnd - factorItBegin);
-      INDEX offset = 0;
-      while(factorItBegin != factorItEnd) {
-         offset_.push_back(primal_.begin() + offset);
-         offset += (*factorItBegin)->size();
-         ++factorItBegin;
-      }
-   }
-   INDEX size() const { return offset_.size(); }
-   Element operator[](const INDEX i) { assert(i < offset_.size()); return offset_[i]; }
-   ConstElement operator[](const INDEX i) const { assert(i < offset_.size()); return offset_[i]; }
-   std::vector<Element>::iterator begin() { return offset_.begin(); }
-   std::vector<Element>::iterator end() { return offset_.end(); }
-   std::vector<Element>::reverse_iterator rbegin() { return offset_.rbegin(); }
-   std::vector<Element>::reverse_iterator rend() { return offset_.rend(); }
+};  
 
-private:
-   std::vector<bool> primal_;
-   std::vector<Element> offset_; // order of factors
-   std::vector<std::vector<Element>> adjacentOffset_; // adjacent factors for every factor for which ReceiveRestrictedMessages can be called.
-};
-*/
 
 
 // pure virtual base class for factors used by LP class

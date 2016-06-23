@@ -88,15 +88,17 @@ public:
    // for primal computation as in TRW-S, we need to compute restricted messages as well
    template<typename RIGHT_FACTOR, typename G1, typename G2, bool LSA = LEFT_SIDE_ACTIVE>
    typename std::enable_if<LSA,void>::type
-   ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, const typename PrimalSolutionStorage::Element& rightPrimal) 
+   ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, const typename PrimalSolutionStorage::Element rightPrimal) 
    {
+      //assert(false);
       static_assert(LSA == LEFT_SIDE_ACTIVE,"");
       OptimizeRestricted(rightPot, msg, r, loopRight_, rightPrimal);
    }
    template<typename LEFT_FACTOR, typename G1, typename G2, bool RSA = RIGHT_SIDE_ACTIVE>
    typename std::enable_if<RSA,void>::type 
-   ReceiveRestrictedMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg, const typename PrimalSolutionStorage::Element& leftPrimal)
+   ReceiveRestrictedMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg, const typename PrimalSolutionStorage::Element leftPrimal)
    { 
+      //assert(false);
       static_assert(RSA == RIGHT_SIDE_ACTIVE,"");
       OptimizeRestricted(leftPot, msg, l, loopLeft_, leftPrimal);
    }
@@ -232,7 +234,7 @@ private:
       REAL delta;
       l.loop( 
             [&](const INDEX outer_idx){ 
-            delta = std::numeric_limits<REAL>::max(); 
+            delta = std::numeric_limits<REAL>::infinity(); 
             }, 
             [&](const INDEX full_idx, const INDEX outer_idx){ 
             delta = std::min(delta, pot[ full_idx ]);
@@ -245,20 +247,25 @@ private:
 
 
    template<class FACTOR_TYPE, typename G1, typename G2, class LOOP>
-   void OptimizeRestricted(const G1& pot, G2& msg, FACTOR_TYPE* fac, LOOP& l, const typename PrimalSolutionStorage::Element& primal)
+   void OptimizeRestricted(const G1& pot, G2& msg, FACTOR_TYPE* fac, LOOP& l, const typename PrimalSolutionStorage::Element primal)
    {
-      // only take into account those entries where primal is true
+      // only take into account those entries which are not false
       REAL delta;
       l.loop(
             [&](const INDEX outer_idx) {
-            delta = std::numeric_limits<REAL>::max();
+            delta = std::numeric_limits<REAL>::infinity();
             },
             [&](const INDEX full_idx, const INDEX outer_idx){ 
-            if(primal[ full_idx ] == true) {
+            if(primal[ full_idx ] == unknownState || primal[ full_idx ] == true) { // i.e. may be true or unknown. do zrobienia: if true, then go back, set delta to infinity for all other coordinates and this coordinate let be -infinity
             delta = std::min(delta, pot[ full_idx ]);
-            }
+            } 
+            //if(primal[ full_idx ] == true) {
+            //assert(false); // need to implement the above described behaviour
+            //delta = -std::numeric_limits<REAL>::infinity();
+            //}
             },
             [&](const INDEX outer_idx){ 
+            assert(delta < std::numeric_limits<REAL>::infinity());
             assert( outer_idx < msg.size() );
             msg[ outer_idx ] -= delta;
             } );

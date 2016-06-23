@@ -25,17 +25,14 @@
 #define DEBUG_MODE 1
 
 #define Inf 9999999999.9
-//#define CYCLE_THRESH .00001  // TODO: Figure out how to set this
-//#define CLUSTER_THR .0000001
 
 namespace LP_MP {
 
    // do zrobinia: 
    // - we minimize instead of maximizing. Replace max by min everywhere? Currently, negative potentials are taken.
-   // - inefficient data structures are used sometimes. Replace std::vector by std::array, wherever possible.
    // - LP_MP tightening takes fixed epsilon, and searches for violated inequalities regarding this value. Sontag et al code does not do this, but searches for violated inequalities over all epsilon. Change this as well.
    // - use hash instead of std::map
-   // - graph data for cycle search are held in manually allocated memory. Replace by std containers
+   // - graph data for cycle search are held in manually allocated memory. Replace by std containers whenever possible. Possibility of memory leaks in code
 
 template<typename MRF_CONSTRUCTOR>
 class Cycle 
@@ -87,6 +84,8 @@ private:
    REAL maximizeIndependently(const BELIEF_ARRAY & beliefs) const;
    template<typename BELIEF_ARRAY>
    REAL maximizeCycle(const BELIEF_ARRAY& beliefs) const;//, std::vector<std::set<SIGNED_INDEX> >& cyclePi) const;
+   template<typename BELIEF_ARRAY>
+   REAL maximizeTriangle(const BELIEF_ARRAY& beliefs) const;
 
    // UAI 2012
    static bool edge_sorting(std::list<int> i, std::list<int> j);
@@ -113,6 +112,7 @@ private:
       REAL* &array_of_sij,
       int& array_of_sij_size);
    REAL find_optimal_R(adj_type &projection_adjacency_list, REAL* &array_of_sij, int array_of_sij_size);
+   // do zrobienia: not nice: use C++ random shuffle
    int* random_permutation(int n);
    void FindCycles(std::vector<std::list<int> > &cycle_set, REAL optimal_R, int ncycles_to_add, adj_type &projection_adjacency_list);
    void shortcut(std::list<int> &cycle, std::vector<int> &projection_imap_var, std::map<std::pair<int, int>, REAL>& projection_edge_weights, int& num_projection_nodes);
@@ -229,6 +229,31 @@ REAL getValCycle(std::vector<MulDimArr*> & beliefs, std::vector<bool> & b_transp
 	return sum;
 }
 */
+
+// faster alternative to maximizeCycle for three elements
+template<typename MRF_CONSTRUCTOR>
+template<typename BELIEF_ARRAY>
+REAL 
+Cycle<MRF_CONSTRUCTOR>::maximizeTriangle(const BELIEF_ARRAY& beliefs) const
+{
+   assert(beliefs.size() == 3);
+   REAL max_val = -std::numeric_limits<REAL>::infinity();
+
+   // Fix value of the first variable
+   const INDEX dim1 = beliefs[0].shape(0);
+   const INDEX dim2 = beliefs[0].shape(1);
+   const INDEX dim3 = beliefs[1].shape(1);
+   assert(beliefs[0].shape(1) == beliefs[1].shape(0) && beliefs[1].shape(1) == beliefs[2].shape(0) && beliefs[2].shape(1) == beliefs[0].shape(0));
+   for(INDEX i1=0; i1<dim1; ++i1) {
+      for(INDEX i2=0; i2<dim2; ++i2) {
+         for(INDEX i3=0; i3<dim3; ++i3) {
+            max_val = std::max(max_val, beliefs[0](i1,i2) + beliefs[1](i2,i3) + beliefs[2](i3,i1));
+         }
+      }
+   }
+   return max_val;
+}
+
 
 // Choose partition such that all labelings which have value > independent bound are included in the partiton cyclePi
 template<typename MRF_CONSTRUCTOR>
@@ -494,6 +519,7 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
   int index=0;
 			
   // Iterate over all of the edge intersection sets
+  // do zrobienia: parallelize
   for(size_t factorId=0; factorId<gm_.GetNumberOfPairwiseFactors(); factorId++) {
      auto vars = gm_.GetPairwiseVariables(factorId);
      // Get the two nodes i & j
@@ -567,7 +593,8 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
 
         //std::vector<std::set<SIGNED_INDEX> > cyclePi;
         const REAL boundIndep = maximizeIndependently(b);
-        const REAL boundCycle = maximizeCycle(b);
+        //const REAL boundCycle = maximizeCycle(b);
+        const REAL boundCycle = maximizeTriangle(b);
         newCluster[index].bound = boundIndep - boundCycle;
         assert(newCluster[index].bound >=  - eps);
         index++;

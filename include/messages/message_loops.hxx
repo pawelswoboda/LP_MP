@@ -198,42 +198,17 @@ public:
    }
 
    // labelled is corresponds to the loop f1, to_label to f2
-   void PropagateLabel(const typename PrimalSolutionStorage::Element& labelled, typename PrimalSolutionStorage::Element& to_label) const
+   void PropagateLabel(const typename PrimalSolutionStorage::Element labelled, typename PrimalSolutionStorage::Element to_label) const
    {
-      // if labelled[i] == false, set to 0 all corresponding entries in to_label
+      // if labelled[i] == false, set to false all corresponding entries in to_label
       std::array<INDEX,2> i;
-      /*
-      INDEX s=0;
-      INDEX noLabelled = 0;
-      INDEX noTruesBefore = 0;
-      for(INDEX j=0; j<iter_limit_[0]*iter_limit_[1]; ++j) {
-         if(to_label[j] == true) {
-            noTruesBefore++;
-         }
-      }
-      assert(noTruesBefore == iter_limit_[0] || noTruesBefore == iter_limit_[1] || noTruesBefore == iter_limit_[0]*iter_limit_[1]);
-      */
-
       for(i[COMMON_IDX]=0; i[COMMON_IDX]<iter_limit_[COMMON_IDX]; ++i[COMMON_IDX]) {
          if( labelled[ i[COMMON_IDX] ] == false) {
             for(i[1-COMMON_IDX]=0; i[1-COMMON_IDX]<iter_limit_[1-COMMON_IDX]; ++i[1-COMMON_IDX]) {
                to_label[ Label(i[0],i[1]) ] = false;
             }
          } 
-         //else {
-         //   noLabelled++;
-         //}
       }
-      /*
-      INDEX noTrues = 0;
-      for(INDEX j=0; j<iter_limit_[0]*iter_limit_[1]; ++j) {
-         if(to_label[j] == true) {
-            noTrues++;
-         }
-      }
-      assert(noLabelled == 1);
-      assert(noTrues == 1 || noTrues == iter_limit_[0] || noTrues == iter_limit_[1]);
-      */
    }
 
 private:
