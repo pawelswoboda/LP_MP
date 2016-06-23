@@ -976,18 +976,22 @@ public:
    void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal) final
    {
       if(CanComputePrimal()) { // do zrobienia: for now
-         // do zrobienia: check, if restricted messages will be received at all. Otherwise, no tmpRepam computation is needed
-         std::vector<REAL> tmpRepam(this->size()); // temporary structure where repam is stored before it is reverted back.
-         for(INDEX i=0; i<tmpRepam.size(); ++i) {
-            tmpRepam[i] = this->operator[](i);
+         std::vector<REAL> tmpRepam; // temporary structure where repam is stored before it is reverted back.
+         if(CanReceiveRestrictedMessages()) {
+            tmpRepam.resize(this->size()); // temporary structure where repam is stored before it is reverted back.
+            for(INDEX i=0; i<tmpRepam.size(); ++i) {
+               tmpRepam[i] = this->operator[](i);
+            }
          }
          // first we compute restricted incoming messages, on which to compute the primal
          ReceiveRestrictedMessages(primal);
          // now we compute primal
          MaximizePotentialAndComputePrimal(primal);
-         // do zrobienia: check, if restricted messages were received at all
-         for(INDEX i=0; i<tmpRepam.size(); ++i) {
-            this->operator[](i) = tmpRepam[i];
+
+         if(CanReceiveRestrictedMessages()) {
+            for(INDEX i=0; i<tmpRepam.size(); ++i) {
+               this->operator[](i) = tmpRepam[i];
+            }
          }
       }
 
@@ -1020,18 +1024,16 @@ public:
    MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal)
    {
       assert(false); // this should not occur at all
-      MaximizePotential();
    }
 
    // if primal solution is to be computed by this factor, we store the solution in primal
-   // kwaskwaskwas do zrobienia: primal cost need not be valid anymore
    template<bool COMPUTE_PRIMAL_SOLUTION_TMP = COMPUTE_PRIMAL_SOLUTION>
    typename std::enable_if<COMPUTE_PRIMAL_SOLUTION_TMP == true>::type 
    MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal)
    {
       static_assert(COMPUTE_PRIMAL_SOLUTION_TMP == COMPUTE_PRIMAL_SOLUTION,"");
       factor_.MaximizePotentialAndComputePrimal(*this, primal + primalOffset_);
-      // now prapagate primal
+      // now prapagate primal to adjacent factors
       ComputePrimalThroughMessages(primal);
    }
 
@@ -1172,6 +1174,24 @@ public:
          || MESSAGE_DISPATCHER_TYPE::template CanCallSendMessage<REPAM_ARRAY>()
          ? 1 : 0;
       return no + NumberOfSendMessagesCalls<REPAM_ARRAY,ITERATOR>(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
+   }
+
+   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   constexpr static bool CanReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) 
+   { return false; }
+   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   constexpr static bool CanReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t) 
+   {
+      constexpr bool canReceive = MESSAGE_DISPATCHER_TYPE::CanCallReceiveRestrictedMessage();
+      if(canReceive == true) {
+         return true;
+      } else {
+         return CanReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
+      }
+   }
+   constexpr static bool CanReceiveRestrictedMessages() 
+   {
+      return CanReceiveRestrictedMessages(MESSAGE_DISPATCHER_TYPELIST{});
    }
 
    // SFINAE-based seletion whether we will do batch or individual message updates for sending
