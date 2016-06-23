@@ -88,7 +88,7 @@ namespace LP_MP {
 	    t.getSize(DiscreteTomographyFactorCounting::NODE::right) +
 	    t.getSize(DiscreteTomographyFactorCounting::NODE::reg);
 	  std::vector<REAL> repam(repamSize,0.0);
-	   
+
 	  if( idxL.n + idxR.n == projectionVar.size() ){
 	    
 	    assert(PointerToQueue->size() == 0);

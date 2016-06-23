@@ -49,10 +49,10 @@ INCLUDE_DIRECTORIES (${HDF5_INCLUDE_DIR})
 set (LINK_LIBS ${LINK_LIBS} ${HDF5_C_STATIC_LIBRARY})
 
 # Options
-OPTION(BUILD_GRAPH_MATCHING "Build graph matching" ON)
-OPTION(BUILD_MULTICUT "Build multicut" ON)
-OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" ON)
-OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" OFF)
+OPTION(BUILD_GRAPH_MATCHING "Build graph matching" OFF)
+OPTION(BUILD_MULTICUT "Build multicut" OFF)
+OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" OFF)
+OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" ON)
 OPTION(BUILD_EVALUATION "Build evaluation" OFF)
 
 

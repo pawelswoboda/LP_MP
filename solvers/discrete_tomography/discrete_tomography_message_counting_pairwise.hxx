@@ -56,17 +56,18 @@ namespace LP_MP {
 
   template<typename LEFT_FACTOR, typename G1, typename G3>
   void DiscreteTomographyMessageCountingPairwise::SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
+    //printf("START\n");
     assert(msg.size() == pow(numberOfLabels_,2));
     assert(repam_left.size() == pow(numberOfLabels_,2));
 
     for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
+      //printf("send reg(%d) --> count: %.3e * %.3e\n",i,omega,repam_left[i]);
       msg[i] -= omega*repam_left[i];
     }     
   }
     
   template<typename RIGHT_FACTOR, typename G1, typename G2>
   void DiscreteTomographyMessageCountingPairwise::ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
-
     assert(msg.size() == pow(numberOfLabels_,2));
     assert(repam_right.size() == ((*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up) +
 				  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left) +
@@ -118,6 +119,7 @@ namespace LP_MP {
     assert(msg_dim < pow(numberOfLabels_,2));
     assert(repam[msg_dim] > -std::numeric_limits<REAL>::max());
     if( std::isfinite(msg) ){ repam[msg_dim] += msg; } 
+    
     else{ repam[msg_dim] = std::numeric_limits<REAL>::infinity(); }
     assert(repam[msg_dim] > -1.0e-02);
   }
@@ -138,6 +140,11 @@ namespace LP_MP {
 		 f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
 		 msg_dim] > -std::numeric_limits<REAL>::max());
     if( std::isfinite(msg) )
+      repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+      f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+      f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+      msg_dim] >= std::numeric_limits<REAL>::max());*/
+    
       {
 	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
 	      f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
