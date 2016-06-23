@@ -65,7 +65,7 @@ namespace LP_MP{
 	  repam[upSize_ + leftSize_ + right] +
 	  repam[upSize_ + leftSize_ + rightSize_ + xb(left) + xa(right)*pow(numberOfLabels_,2)]; }
     else
-      { return std::numeric_limits<REAL>::max(); }
+      { return std::numeric_limits<REAL>::infinity(); }
     
   }
   
@@ -126,12 +126,9 @@ namespace LP_MP{
 
       REAL m_new = 0;
       for( INDEX j=0;j<z_up_size;j++ ){
-	//std::cout << j << " " << mc.getIdxA(j) << " " << mc.getIdxB(j) << std::endl;
 	assert(j == op(mc.getIdxA(j),mc.getIdxB(j)));
 	m_new = mc.getConv(j)+z_up(j)+reg;
-	if( m > m_new ){
-	  m = m_new;
-	}
+	m = std::min(m,m_new);
       }
     }
     assert( m > -std::numeric_limits<REAL>::max() );
