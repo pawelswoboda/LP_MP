@@ -7,14 +7,13 @@
 
 namespace LP_MP {
 
-// class containing the FactorList, MessageList, ProblemConstructorList, Visitor, InputFunction
-// contains dual bound, primal solution
+// class containing the LP, problem constructor list, Visitor, input function
+// holds dual bound, primal solution
 // takes care of logging
-// binds together constructors, solver and organizes input/output
-template<typename FMC, typename INPUT_FUNCTION, typename VISITOR>
+// binds together constructors and solver and organizes input/output
+template<typename FMC, typename VISITOR>
 class Solver {
 public:
-   using InputFunction = INPUT_FUNTION; // do zrobienia: this is not so easy to do as a predefined template
    using VisitorType = VISITOR;
 
    Solver(int argc, char** argv)
@@ -44,15 +43,12 @@ public:
 
       }
 
-   ~ProblemDecomposition() 
-   { 
-      //if(lp_ != nullptr) { delete lp_; }
-   }
+   ~ProblemDecomposition() {}
 
    template<typename INPUT_FUNCTION, typename... ARGS>
    bool ReadProblem(INPUT_FUNCTION inputFct, ARGS... args)
    {
-
+      inputFct(inputFile_,this,args...);
    }
 
    spdlog::logger& GetLogger() const { return logger_; }
@@ -72,7 +68,6 @@ private:
    TCLAP::ValueArg<std::string> outputFileArg_;
    std::string inputFile_;
    std::string outputFile_;
-
 }
 
 

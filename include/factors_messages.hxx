@@ -255,6 +255,35 @@ public:
    constexpr INDEX size() const { return NO_ELEMENTS; }
 };
 
+// holds at most NO_ELEMENTS in std::array. Unused entries have nullptr in them
+template<INDEX NO_ELEMENTS, typename T>
+class UpToFixedSizeMessageContainer : public std::array<T,NO_ELEMENTS> {
+public:
+   UpToFixedSizeMessageContainer() : size_(0) { this->fill(nullptr); }
+   ~UpToFixedSizeMessageContainer() { 
+      static_assert(std::is_pointer<T>::value, "Message container must hold pointers to messages"); 
+      static_assert(NO_ELEMENTS > 0, "");
+   }
+   void push_back(T t) {
+      assert(size_ < NO_ELEMENTS - 1);
+      this->operator[](size_) = t;
+      ++size_;
+   }
+   INDEX size() const { return size_; }
+
+private:
+   INDEX size_;
+};
+
+
+// N=0 means variable number of messages, > 0 means compile time fixed number of messages and <0 means at most compile time number of messages
+// see config.hxx for shortcuts
+template<SIGNED_INDEX N, typename MESSAGE_CONTAINER_TYPE>
+struct MessageContainerSelector {
+   using type = typename std::conditional<(N > 0), FixedSizeMessageContainer<INDEX(N),MESSAGE_CONTAINER_TYPE*>,
+        typename std::conditional<(N < 0), UpToFixedSizeMessageContainer<INDEX(-N),MESSAGE_CONTAINER_TYPE*>, std::vector<MESSAGE_CONTAINER_TYPE*> >::type >::type;
+};
+
 // there are two possible choices: (i) knowing message size in advance, (ii) holding message explicitly (e.g. when one factor is reparametrized implicitly)
 // provide message storage classes for the four combinations of these cases
 // do zrobienia: replace std::vector
@@ -308,9 +337,6 @@ template<typename MESSAGE_TYPE,
          SIGNED_INDEX MESSAGE_SIZE, 
          typename FACTOR_MESSAGE_TRAIT, 
          INDEX MESSAGE_NO
-         // do zrobienia: remove these
-         //typename SEND_MESSAGE_TO_RIGHT_WEIGHT = RationalNumberTemplate<0,1>,
-         //typename SEND_MESSAGE_TO_LEFT_WEIGHT = RationalNumberTemplate<0,1>
          >
 class MessageContainer : public MessageStorageSelector<MESSAGE_SIZE,true>::type, public MessageTypeAdapter
 {
@@ -322,8 +348,9 @@ public:
    typedef MESSAGE_TYPE MessageType;
    typedef typename MessageStorageSelector<MESSAGE_SIZE,true>::type MessageStorageType; // do zrobienia: true is just for now. In general, message need not hold actual message, except when some factor is reparametrized implicitly
 
-   using LeftMessageContainerStorageType = typename std::conditional<(NO_OF_LEFT_FACTORS >= 0), FixedSizeMessageContainer<INDEX(NO_OF_LEFT_FACTORS),MessageContainerType*>, std::vector<MessageContainerType*> >::type;
-   using RightMessageContainerStorageType = typename std::conditional<(NO_OF_RIGHT_FACTORS >= 0), FixedSizeMessageContainer<INDEX(NO_OF_RIGHT_FACTORS),MessageContainerType*>, std::vector<MessageContainerType*> >::type;
+   // structures used in FactorContainer to hold pointers to messages
+   using LeftMessageContainerStorageType = typename MessageContainerSelector<NO_OF_LEFT_FACTORS, MessageContainerType>::type;
+   using RightMessageContainerStorageType = typename MessageContainerSelector<NO_OF_RIGHT_FACTORS, MessageContainerType>::type;
 
    // FactorContainer
    using LeftFactorContainer = meta::at_c<typename FACTOR_MESSAGE_TRAIT::FactorList, leftFactorNumber>;
@@ -975,37 +1002,31 @@ public:
    // do zrobienia: remove this function, obsolete: New primal computation mode
    void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal) final
    {
+      ReceiveMessages(omega);
+
       if(CanComputePrimal()) { // do zrobienia: for now
-         std::vector<REAL> tmpRepam; // temporary structure where repam is stored before it is reverted back.
          if(CanReceiveRestrictedMessages()) {
-            tmpRepam.resize(this->size()); // temporary structure where repam is stored before it is reverted back.
+            std::vector<REAL> tmpRepam(this->size()); // temporary structure where repam is stored before it is reverted back.
             for(INDEX i=0; i<tmpRepam.size(); ++i) {
                tmpRepam[i] = this->operator[](i);
             }
-         }
-         // first we compute restricted incoming messages, on which to compute the primal
-         ReceiveRestrictedMessages(primal);
-         // now we compute primal
-         MaximizePotentialAndComputePrimal(primal);
-
-         if(CanReceiveRestrictedMessages()) {
+            // first we compute restricted incoming messages, on which to compute the primal
+            ReceiveRestrictedMessages(primal);
+            // now we compute primal
+            MaximizePotentialAndComputePrimal(primal);
+            // restore original reparametrization
             for(INDEX i=0; i<tmpRepam.size(); ++i) {
                this->operator[](i) = tmpRepam[i];
             }
+            MaximizePotential();
+         } else {
+            MaximizePotentialAndComputePrimal(primal);
          }
-      }
+      } else {
+         MaximizePotential();
+      } 
 
-      ReceiveMessages(omega);
-      MaximizePotential();
       SendMessages(omega);
-   
-   } 
-
-   template<typename ARRAY, bool ENABLE=CanComputePrimal()>
-   typename std::enable_if<ENABLE,void>::type
-   ComputePrimal(const ARRAY& pot, typename PrimalSolutionStorage::Element& primal)
-   {
-      ///////////////////
    }
 
    template<bool ENABLE=CanMaximizePotential()>
