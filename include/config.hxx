@@ -35,7 +35,17 @@ namespace LP_MP {
    enum class ReparametrizationMode {Explicit,Implicit};
 
    constexpr REAL eps = 1e-8;
-   constexpr SIGNED_INDEX variableMessageNumber = -1;
+   
+   // shortcuts to indicate how many messages a factor holds
+   constexpr SIGNED_INDEX variableMessageNumber = 0;
+   constexpr SIGNED_INDEX atMostOneMessage = -1;
+   constexpr SIGNED_INDEX atMostTwoMessages = -2;
+   constexpr SIGNED_INDEX atMostThreeMessages = -3;
+   constexpr SIGNED_INDEX atMostFourMessages = -4;
+   constexpr SIGNED_INDEX atMostFiveMessages = -5;
+   constexpr SIGNED_INDEX atMostSixMessages = -6;
+
+   // shortcut to indicate how big the message is
    constexpr SIGNED_INDEX variableMessageSize = -1;
 }
 

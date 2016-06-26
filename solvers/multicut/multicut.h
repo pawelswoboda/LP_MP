@@ -32,8 +32,8 @@ struct FMC_MULTICUT {
    typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
    typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_MULTICUT, 2> MulticutGlobalFactorContainer;
 
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, -1, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, -1, 0, FMC_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, variableMessageNumber, 0, FMC_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
 
    using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer >;
    using MessageList = meta::list<MulticutUnaryTripletMessageContainer, MulticutUnaryGlobalMessageContainer>;
@@ -53,11 +53,11 @@ struct FMC_ODD_WHEEL_MULTICUT {
 
    typedef FactorContainer<MulticutTripletPlusSpokeFactor, FixedSizeExplicitRepamStorage<MulticutTripletPlusSpokeFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 3> MulticutTripletPlusSpokeFactorContainer;
       
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, -1, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, -1, 0, FMC_ODD_WHEEL_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, variableMessageNumber, 0, FMC_ODD_WHEEL_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
    
-   typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 3, -1, -1, MulticutTripletPlusSpokeMessage::size(), FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeMessageContainer;
-   typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 3, -1, 1, MulticutTripletPlusSpokeCoverMessage::size(), FMC_ODD_WHEEL_MULTICUT, 3> MulticutTripletPlusSpokeCoverMessageContainer;
+   typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 3, variableMessageNumber, variableMessageNumber, MulticutTripletPlusSpokeMessage::size(), FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeMessageContainer;
+   typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 3, variableMessageNumber, 1, MulticutTripletPlusSpokeCoverMessage::size(), FMC_ODD_WHEEL_MULTICUT, 3> MulticutTripletPlusSpokeCoverMessageContainer;
 
    using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer, MulticutTripletPlusSpokeFactorContainer >;
    using MessageList = meta::list<
@@ -79,12 +79,12 @@ struct FMC_LIFTED_MULTICUT_ODD_CYCLE {
    typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_LIFTED_MULTICUT_ODD_CYCLE, 1> MulticutTripletFactorContainer;
    typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_LIFTED_MULTICUT_ODD_CYCLE, 2> MulticutGlobalFactorContainer;
    
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, -1, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, -1, 0, FMC_LIFTED_MULTICUT_ODD_CYCLE, 1> MulticutUnaryGlobalMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, variableMessageNumber, 0, FMC_LIFTED_MULTICUT_ODD_CYCLE, 1> MulticutUnaryGlobalMessageContainer;
 
    typedef FactorContainer<LiftedMulticutCutFactor, ExplicitRepamStorage, FMC_LIFTED_MULTICUT_ODD_CYCLE, 3> LiftedMulticutCutFactorContainer;
-   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 3, -1, -1, CutEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 2 > CutEdgeLiftedMulticutFactorMessageContainer;
-   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 3, -1, -1, LiftedEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 3 > LiftedEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 3, variableMessageNumber, variableMessageNumber, CutEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 2 > CutEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 3, variableMessageNumber, variableMessageNumber, LiftedEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 3 > LiftedEdgeLiftedMulticutFactorMessageContainer;
 
    using FactorList = meta::list<MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer, LiftedMulticutCutFactorContainer >;
    using MessageList = meta::list<MulticutUnaryTripletMessageContainer, MulticutUnaryGlobalMessageContainer, CutEdgeLiftedMulticutFactorMessageContainer, LiftedEdgeLiftedMulticutFactorMessageContainer>;
