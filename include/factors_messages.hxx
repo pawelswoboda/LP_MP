@@ -26,6 +26,11 @@
 
 #include "LP_MP.h"
 
+
+// do zrobienia: remove these
+#include <fstream>
+#include <sstream>
+
 // this file provides message and factor containers. The factors and messages are plugged into the container and then every method call is dispatched correctly with static polymorphism and template tricks.
 
 // do zrobienia: Introduce MessageConstraint and FactorConstraint for templates
@@ -568,21 +573,21 @@ public:
    }
    template<bool ENABLE=CanCheckPrimalConsistency()>
    typename std::enable_if<ENABLE,bool>::type
-   CheckPrimalConsistencyImpl(const PrimalSolutionStorage::Element leftPrimal, const PrimalSolutionStorage::Element rightPrimal) const
+   CheckPrimalConsistencyImpl(PrimalSolutionStorage::Element primal) const
    {
       static_assert(ENABLE == CanCheckPrimalConsistency(),"");
-      return msg_op_.CheckPrimalConsistency(leftPrimal, rightPrimal);
+      return msg_op_.CheckPrimalConsistency(primal + leftFactor_->GetPrimalOffset(), primal + rightFactor_->GetPrimalOffset());
    }
    template<bool ENABLE=CanCheckPrimalConsistency()>
    typename std::enable_if<!ENABLE,bool>::type
-   CheckPrimalConsistencyImpl(const PrimalSolutionStorage::Element leftPrimal, const PrimalSolutionStorage::Element rightPrimal) const
+   CheckPrimalConsistencyImpl(PrimalSolutionStorage::Element primal) const
    {
       static_assert(ENABLE == CanCheckPrimalConsistency(),"");
       return true;
    }
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, PrimalSolutionStorage::Element rightPrimal) const final
+   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) const final
    { 
-      return CheckPrimalConsistencyImpl(leftPrimal,rightPrimal);
+      return CheckPrimalConsistencyImpl(primal);
    }
 
    // do zrobienia: this does not capture write back functions not returning REAL&
@@ -1479,6 +1484,7 @@ public:
    {
       return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
    }
+   /*
 
    template<bool WRITE_PRIMAL_SOLUTION_TMP = WRITE_PRIMAL_SOLUTION>
    typename std::enable_if<!WRITE_PRIMAL_SOLUTION_TMP>::type
@@ -1493,9 +1499,10 @@ public:
       //factor_.WritePrimal(dynamic_cast<PrimalSolutionStorage*>(primal)->primal_,fs);
       //fs << "\n";
    }
+   */
    void WritePrimal(typename PrimalSolutionStorage::Element primal, std::ofstream& fs) const final
    {
-      WritePrimalImpl(primal,fs);
+      //WritePrimalImpl(primal,fs);
    }
 };
 

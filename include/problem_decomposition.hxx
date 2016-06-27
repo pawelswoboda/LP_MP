@@ -1,3 +1,4 @@
+/*
 #ifndef LP_MP_PROBLEM_DECOMPOSITION_HXX
 #define LP_MP_PROBLEM_DECOMPOSITION_HXX
 
@@ -263,3 +264,4 @@ int main(int argc, char* argv[]) \
 } // end namespace LP_MP
 
 #endif // LP_MP_PROBLEM_DECOMPOSITION_HXX
+*/

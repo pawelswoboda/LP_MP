@@ -45,7 +45,7 @@ namespace LP_MP {
    constexpr SIGNED_INDEX atMostFiveMessages = -5;
    constexpr SIGNED_INDEX atMostSixMessages = -6;
 
-   // shortcut to indicate how big the message is
+   // shortcut to indicate how big the message is: here it is determined only at runtime
    constexpr SIGNED_INDEX variableMessageSize = -1;
 }
 

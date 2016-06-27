@@ -113,7 +113,8 @@ public:
    virtual ~MessageTypeAdapter() {};
    virtual FactorTypeAdapter* GetLeftFactor() const = 0;
    virtual FactorTypeAdapter* GetRightFactor() const = 0;
-   virtual bool CheckPrimalConsistency(typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right) const = 0;
+   //virtual bool CheckPrimalConsistency(typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right) const = 0;
+   virtual bool CheckPrimalConsistency(typename PrimalSolutionStorage::Element primal) const = 0;
    virtual void SetMessage(const std::valarray<REAL>& m) = 0; // do zrobienia: change to vector
    virtual const std::valarray<REAL> GetMessage() const = 0; // do zrobienia: change to vector
    
@@ -194,16 +195,17 @@ public:
       REAL EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_STORAGE_ITERATOR primalIt) const;
    void UpdateFactor(FactorTypeAdapter* f, const std::vector<REAL>& omega); // perform one block coordinate step for factor f
    void ComputePass();
-   void ComputePassAndPrimal();
+   template<typename PRIMAL_FEASIBILITY_CHECK_FCT>
+   void ComputePassAndPrimal(PRIMAL_FEASIBILITY_CHECK_FCT primalCheck);
    void ComputeLowerBound();
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
       void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt);
    void UpdateFactor(FactorTypeAdapter* f, const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal);
-   template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename PRIMAL_SOLUTION_STORAGE_ITERATOR>
+   template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename PRIMAL_SOLUTION_STORAGE_ITERATOR, typename PRIMAL_CHECK_FCT>
    void ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt, 
-         PRIMAL_SOLUTION_STORAGE_ITERATOR primalIt, PRIMAL_SOLUTION_STORAGE_ITERATOR bestPrimalIt, REAL& bestPrimalcost);
-   template<typename VISITOR>
-   SIGNED_INDEX Solve(VISITOR& v);
+         PRIMAL_SOLUTION_STORAGE_ITERATOR primalIt, PRIMAL_SOLUTION_STORAGE_ITERATOR bestPrimalIt, REAL& bestPrimalcost, PRIMAL_CHECK_FCT primalCheck);
+   template<typename VISITOR,typename PRIMAL_CONSISTENCY_CHECK_FCT>
+   SIGNED_INDEX Solve(VISITOR& v, PRIMAL_CONSISTENCY_CHECK_FCT);
 
    std::vector<std::vector<REAL> > GetReparametrizedModel() const;
    std::vector<std::vector<REAL> > GetReparametrizedModel(const INDEX begin, const INDEX end) const;
@@ -231,11 +233,11 @@ private:
    template<typename FACTOR_ITERATOR, typename PRIMAL_ITERATOR>
       bool CheckPrimalConsistency(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_ITERATOR primalIt) const;
 
-   REAL bestForwardPrimalCost_ = std::numeric_limits<REAL>::max(), 
-        bestBackwardPrimalCost_ = std::numeric_limits<REAL>::max();
+   REAL bestForwardPrimalCost_ = std::numeric_limits<REAL>::infinity(), 
+        bestBackwardPrimalCost_ = std::numeric_limits<REAL>::infinity();
 
-   REAL bestLowerBound_ = -std::numeric_limits<REAL>::max();
-   REAL currentLowerBound_ = -std::numeric_limits<REAL>::max();
+   REAL bestLowerBound_ = -std::numeric_limits<REAL>::infinity();
+   REAL currentLowerBound_ = -std::numeric_limits<REAL>::infinity();
 
    PrimalSolutionStorage forwardPrimal_, backwardPrimal_, bestForwardPrimal_, bestBackwardPrimal_; // note: these vectors are stored in the order of forwardOrdering_
 
@@ -273,12 +275,14 @@ void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd
    }
 }
 
-inline void LP::ComputePassAndPrimal()
+template<typename PRIMAL_FEASIBILITY_CHECK_FCT>
+inline void LP::ComputePassAndPrimal(PRIMAL_FEASIBILITY_CHECK_FCT primalCheck)
 {
    forwardPrimal_.Initialize();
-   ComputePassAndPrimal(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_.begin(), forwardPrimal_.begin(), bestForwardPrimal_.begin(), bestForwardPrimalCost_); 
+   ComputePassAndPrimal(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_.begin(), forwardPrimal_.begin(), bestForwardPrimal_.begin(), bestForwardPrimalCost_, primalCheck); 
+   
    backwardPrimal_.Initialize();
-   ComputePassAndPrimal(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_.begin(), backwardPrimal_.begin(), bestBackwardPrimal_.begin(), bestBackwardPrimalCost_); 
+   ComputePassAndPrimal(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_.begin(), backwardPrimal_.begin(), bestBackwardPrimal_.begin(), bestBackwardPrimalCost_, primalCheck); 
 }
 
 inline void LP::ComputeLowerBound()
@@ -305,30 +309,26 @@ inline void LP::ComputeUniformWeights()
    }
 }
 
-template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename PRIMAL_SOLUTION_STORAGE_ITERATOR>
+template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename PRIMAL_SOLUTION_STORAGE_ITERATOR, typename PRIMAL_CHECK_FCT>
 void LP::ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, 
-      PRIMAL_SOLUTION_STORAGE_ITERATOR primalIt, PRIMAL_SOLUTION_STORAGE_ITERATOR bestPrimalIt, REAL& bestPrimalCost)
+      PRIMAL_SOLUTION_STORAGE_ITERATOR primalIt, PRIMAL_SOLUTION_STORAGE_ITERATOR bestPrimalIt, REAL& bestPrimalCost, PRIMAL_CHECK_FCT primalCheck)
 {
-   // first we need to set primal storage iterator to zero
-   //ResetPrimalStorage(primalIt, primalIt + INDEX(factorEndIt-factorIt));
-   //PRIMAL_SOLUTION_STORAGE_ITERATOR primalItTmp = primalIt;
-   FACTOR_ITERATOR factorItTmp = factorIt;
-   for(; factorItTmp!=factorEndIt; ++factorItTmp, ++omegaIt) {
+   for(auto factorItTmp = factorIt; factorItTmp!=factorEndIt; ++factorItTmp, ++omegaIt) {
       UpdateFactor(*factorItTmp, *omegaIt, primalIt);
    }
-   //for(; factorItTmp!=factorEndIt; ++factorItTmp, ++omegaIt, ++primalItTmp) {
-   //   UpdateFactor(*factorItTmp, *omegaIt, *primalItTmp);
-   //}
    const REAL currentPrimalCost = EvaluatePrimal(factorIt,factorEndIt,primalIt);
-   if(currentPrimalCost < bestPrimalCost || bestPrimalCost >= std::numeric_limits<REAL>::max()) { // the second case occurs whenever we have some infeasible primal solution. Possibly, the newer solution, although infeasible, are not as infeasible as the old one.
-      bestPrimalCost = currentPrimalCost;
-      std::swap(*(primalIt),*(bestPrimalIt));
+   if(currentPrimalCost < bestPrimalCost) { 
+      const bool feasible = primalCheck(primalIt);
+      if(feasible) {
+         bestPrimalCost = currentPrimalCost;
+         std::swap(*(primalIt),*(bestPrimalIt));
+      }
    }
 }
 
 
-template<typename VISITOR>
-SIGNED_INDEX LP::Solve(VISITOR& v)
+template<typename VISITOR, typename PRIMAL_CONSISTENCY_CHECK_FCT>
+SIGNED_INDEX LP::Solve(VISITOR& v, PRIMAL_CONSISTENCY_CHECK_FCT primalCheck)
 {
 /*
    std::cout << "Current SIMD implementation: ";
@@ -384,13 +384,13 @@ SIGNED_INDEX LP::Solve(VISITOR& v)
             break;
          case LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform:
             ComputeUniformWeights();
-            ComputePassAndPrimal();
+            ComputePassAndPrimal(primalCheck);
             ComputeLowerBound();
             s = v.template visit<LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform>(this);
             break;
          case LPVisitorReturnType::ReparametrizePrimalUniform:
             ComputeUniformWeights();
-            ComputePassAndPrimal();
+            ComputePassAndPrimal(primalCheck);
             s = v.template visit<LPVisitorReturnType::ReparametrizePrimalUniform>(this);
             break;
 
@@ -407,13 +407,13 @@ SIGNED_INDEX LP::Solve(VISITOR& v)
             break;
          case LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic:
             ComputeAnisotropicWeights();
-            ComputePassAndPrimal();
+            ComputePassAndPrimal(primalCheck);
             ComputeLowerBound();
             s = v.template visit<LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic>(this);
             break;
          case LPVisitorReturnType::ReparametrizePrimalAnisotropic:
             ComputeAnisotropicWeights();
-            ComputePassAndPrimal();
+            ComputePassAndPrimal(primalCheck);
             s = v.template visit<LPVisitorReturnType::ReparametrizePrimalAnisotropic>(this);
             break;
 
@@ -429,26 +429,16 @@ SIGNED_INDEX LP::Solve(VISITOR& v)
    }
 }
 
-// Here we check whether messages do not
+// Here we check whether messages constraints are satisfied
 template<typename FACTOR_ITERATOR, typename PRIMAL_ITERATOR>
 bool LP::CheckPrimalConsistency(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_ITERATOR primalIt) const
 {
-   std::map<FactorTypeAdapter*, INDEX> factorToIndex;
-   std::map<INDEX, FactorTypeAdapter*> indexToFactor; // do zrobienia: this should equal f_. Modify BuildIndexMaps
-   BuildIndexMaps(factorIt,factorEndIt,factorToIndex,indexToFactor); // do zrobienia: precompute BuildIndexMaps by hashing it with pair(factorIt,factorEndIt). Also this can be done faster by noting that factorIt is either forward or backward order of primalIt, hence it is just simple index calculations everywhere
-
    for(auto msgIt = m_.begin(); msgIt!=m_.end(); ++msgIt) {
-      FactorTypeAdapter* const leftFactor = (*msgIt)->GetLeftFactor();
-      FactorTypeAdapter* const rightFactor = (*msgIt)->GetRightFactor();
-      const INDEX leftFactorIndex = factorToIndex[leftFactor];
-      const INDEX rightFactorIndex = factorToIndex[rightFactor];
-      assert(leftFactorIndex < f_.size() && rightFactorIndex < f_.size());
-      // do zrobienia: consistency check is off
-      //const bool consistent = false;assert(false);
-      //const bool consistent = (*msgIt)->CheckPrimalConsistency(primalIt+leftFactorIndex, primalIt+rightFactorIndex);
-      //if(consistent == false) return false;
+      if(!(*msgIt)->CheckPrimalConsistency(primalIt)) {
+         std::cout << "message constraints are not fulfilled by primal solution\n";
+         return false;
+      }
    }
-
    return true;
 }
 
@@ -456,7 +446,7 @@ template<typename FACTOR_ITERATOR, typename PRIMAL_STORAGE_ITERATOR>
 REAL LP::EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_STORAGE_ITERATOR primalIt) const
 {
    const bool consistent = CheckPrimalConsistency(factorIt, factorEndIt, primalIt);
-   if(consistent == false) return std::numeric_limits<REAL>::max();
+   if(consistent == false) return std::numeric_limits<REAL>::infinity();
 
    REAL cost = 0.0;
    for(; factorIt!=factorEndIt; ++factorIt) {
@@ -645,7 +635,6 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
       //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size()) );
    }
 }
-
 
 } // end namespace LP_MP
 

@@ -1,7 +1,7 @@
 #ifndef LP_MP_MRF_PROBLEM_CONSTRUCTION_HXX
 #define LP_MP_MRF_PROBLEM_CONSTRUCTION_HXX
 
-#include "problem_decomposition.hxx"
+#include "solver.hxx"
 #include "cycle_inequalities.hxx"
 
 #include <string>
@@ -25,7 +25,7 @@ public:
    using RightMessageType = typename RightMessageContainer::MessageType;
 
 
-   MRFProblemConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd) {}
+   MRFProblemConstructor(Solver<FMC>& solver) : lp_(&solver.GetLP()) {}
    // do zrobienia: this object is not movable
    /*
    MRFProblemConstructor(const MRFProblemConstructor& other)
@@ -43,7 +43,7 @@ public:
    {
       UnaryFactorContainer* u = new UnaryFactorContainer(UnaryFactorType(cost), cost);
       unaryFactor_.push_back(u);
-      pd_.GetLP()->AddFactor(u);;
+      lp_->AddFactor(u);;
       return unaryFactor_.size()-1;
    }
    */
@@ -58,7 +58,7 @@ public:
       }
       unaryFactor_[node_number] = u;
       
-      pd_.GetLP()->AddFactor(u);;
+      lp_->AddFactor(u);;
 
       return u;
    }
@@ -87,10 +87,9 @@ public:
       pairwiseMap_.insert(std::make_pair(std::make_tuple(var1,var2), factorId));
       LinkUnaryPairwiseFactor(unaryFactor_[var1], p, unaryFactor_[var2]);
 
-      auto* lp = pd_.GetLP();
-      lp->AddFactor(p);
-      lp->AddFactorRelation(unaryFactor_[var1], p);
-      lp->AddFactorRelation(p, unaryFactor_[var2]);
+      lp_->AddFactor(p);
+      lp_->AddFactorRelation(unaryFactor_[var1], p);
+      lp_->AddFactorRelation(p, unaryFactor_[var2]);
 
       return p;
    }
@@ -100,24 +99,24 @@ public:
       //assert(false); // left->size need not be msg size. Use instead message size
       auto* m = new LeftMessageContainer(msg, left, p, left->size());
       leftMessage_.push_back(m);
-      pd_.GetLP()->AddMessage(m);
+      lp_->AddMessage(m);
    }
    void LinkRightUnaryPairwiseFactor(UnaryFactorContainer* const right, PairwiseFactorContainer* const p, RightMessageType msg)
    {
       //assert(false); // left->size need not be msg size. Use instead message size
       auto* m = new RightMessageContainer(msg, right, p, right->size());
       rightMessage_.push_back(m);
-      pd_.GetLP()->AddMessage(m);
+      lp_->AddMessage(m);
    }
    */
    void LinkUnaryPairwiseFactor(UnaryFactorContainer* const left, PairwiseFactorContainer* const p, UnaryFactorContainer* right)
    {
       auto* l = new LeftMessageContainer(ConstructLeftUnaryPairwiseMessage(left, p), left, p, left->size());
       leftMessage_.push_back(l);
-      pd_.GetLP()->AddMessage(l);
+      lp_->AddMessage(l);
       auto* r = new RightMessageContainer(ConstructRightUnaryPairwiseMessage(right, p), right, p, right->size());
       rightMessage_.push_back(r);
-      pd_.GetLP()->AddMessage(r);
+      lp_->AddMessage(r);
       /*
       using LeftUnaryLoopType = typename LeftMessageType::LeftLoopType;
       using LeftPairwiseLoopType = typename LeftMessageType::RightLoopType;
@@ -178,17 +177,16 @@ public:
    }
 
 
-   void Construct(ProblemDecomposition<FMC>& pd) 
+   void Construct(Solver<FMC>& pd) 
    {
       std::cout << "Construct MRF problem with " << unaryFactor_.size() << " unary factors and " << pairwiseFactor_.size() << " pairwise factors\n";
-      LP* lp = pd.GetLP();
 
       // add order relations. These are important for the anisotropic weights computation to work.
-      unaryFactorIndexBegin_ = lp->GetNumberOfFactors();
+      unaryFactorIndexBegin_ = lp_->GetNumberOfFactors();
       if(unaryFactor_.size() > 1) {
          for(auto it=unaryFactor_.begin(); it+1 != unaryFactor_.end(); ++it) {
             assert(*it != nullptr);
-            lp->AddFactorRelation(*it,*(it+1));
+            lp_->AddFactorRelation(*it,*(it+1));
          }
       }
 
@@ -226,7 +224,7 @@ protected:
 
    INDEX unaryFactorIndexBegin_, unaryFactorIndexEnd_; 
 
-   ProblemDecomposition<FMC>& pd_;
+   LP* lp_;
 };
 
 // overloads virtual functions above for standard SimplexFactor and SimplexMarginalizationMessage
@@ -296,7 +294,7 @@ protected:
    using PairwiseTripletMessage23Container = typename meta::at_c<typename FMC::MessageList, PAIRWISE_TRIPLET_MESSAGE23_NO>::MessageContainerType;
 
 public:
-   TighteningMRFProblemConstructor(ProblemDecomposition<FMC>& pd)
+   TighteningMRFProblemConstructor(Solver<FMC>& pd)
       : MRF_PROBLEM_CONSTRUCTOR(pd)
    {}
 

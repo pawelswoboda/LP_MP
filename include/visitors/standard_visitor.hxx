@@ -12,7 +12,7 @@
  minimal visitor class:
 class Visitor {
 public:
-   Visitor(TCLAP::CmdLine& cmd, PROBLEM_DECOMPOSITION& pd);
+   Visitor(TCLAP::CmdLine& cmd, SOLVER& pd);
    LPVisitorReturnType begin(const LP* lp);
    template<LPVisitorReturnType LP_STATE>
    LPVisitorReturnType visit(LP* lp)
@@ -38,11 +38,11 @@ namespace LP_MP {
 
    // standard visitor class for LP_MP solver, when no custom visitor is given
    // do zrobienia: add xor arguments primalBoundComputationInterval, dualBoundComputationInterval with boundComputationInterval
-   template<class PROBLEM_DECOMPOSITION>
+   template<class SOLVER>
    class StandardVisitor {
       
       public:
-      StandardVisitor(TCLAP::CmdLine& cmd, PROBLEM_DECOMPOSITION& pd)
+      StandardVisitor(TCLAP::CmdLine& cmd, SOLVER& pd)
          :
             maxIterArg_("","maxIter","maximum number of iterations of LP_MP, default = 1000",false,1000,"positive integer",cmd),
             maxMemoryArg_("","maxMemory","maximum amount of memory (MB) LP_MP is allowed to use",false,std::numeric_limits<INDEX>::max(),"positive integer",cmd),
@@ -273,15 +273,15 @@ namespace LP_MP {
       REAL curDualBound_ = -std::numeric_limits<REAL>::max();
       TimeType beginTime_;
 
-      PROBLEM_DECOMPOSITION& pd_;
+      SOLVER& pd_;
    };
 
-   template<class PROBLEM_DECOMPOSITION>
-   class StandardTighteningVisitor : public StandardVisitor<PROBLEM_DECOMPOSITION>
+   template<class SOLVER>
+   class StandardTighteningVisitor : public StandardVisitor<SOLVER>
    {
-      using BaseVisitorType = StandardVisitor<PROBLEM_DECOMPOSITION>;
+      using BaseVisitorType = StandardVisitor<SOLVER>;
       public:
-      StandardTighteningVisitor(TCLAP::CmdLine& cmd, PROBLEM_DECOMPOSITION& pd)
+      StandardTighteningVisitor(TCLAP::CmdLine& cmd, SOLVER& pd)
          :
             BaseVisitorType(cmd,pd),
             tightenArg_("","tighten","enable tightening",cmd,false),

@@ -4,10 +4,10 @@
 #include "LP_MP.h"
 #include "multicut_unary_factor.hxx"
 #include "multicut_triplet_factor.hxx"
-//#include "multicut_message.hxx"
 #include "permutation.hxx"
 #include "multicut_odd_wheel.hxx"
 
+#include "union_find.hxx"
 #include "max_flow.hxx"
 
 #include <unordered_map>
@@ -22,11 +22,11 @@ protected:
 
    using UnaryFactorContainer = meta::at_c<typename FMC::FactorList, UNARY_FACTOR_NO>;
    using TripletFactorContainer = meta::at_c<typename FMC::FactorList, TRIPLET_FACTOR_NO>;
-   using GlobalFactorContainer = meta::at_c<typename FMC::FactorList, GLOBAL_FACTOR_NO>;
+   //using GlobalFactorContainer = meta::at_c<typename FMC::FactorList, GLOBAL_FACTOR_NO>;
    using UnaryTripletMessageContainer = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_NO>::MessageContainerType;
    using UnaryTripletMessageType = typename UnaryTripletMessageContainer::MessageType;
-   using UnaryGlobalMessageContainer = typename meta::at_c<typename FMC::MessageList, UNARY_GLOBAL_MESSAGE_NO>::MessageContainerType;
-   using UnaryGlobalMessageType = typename UnaryGlobalMessageContainer::MessageType;
+   //using UnaryGlobalMessageContainer = typename meta::at_c<typename FMC::MessageList, UNARY_GLOBAL_MESSAGE_NO>::MessageContainerType;
+   //using UnaryGlobalMessageType = typename UnaryGlobalMessageContainer::MessageType;
 
    // graph for edges with positive cost
    struct Arc;
@@ -335,9 +335,9 @@ private:
 };
 
 public:
-MulticutConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd) 
+MulticutConstructor(Solver<FMC>& pd) : pd_(pd) 
    {
-      globalFactor_ = nullptr;
+      //globalFactor_ = nullptr;
    }
    ~MulticutConstructor()
    {
@@ -348,21 +348,21 @@ MulticutConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd)
 
    virtual UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost) // declared virtual so that derived class notices when unary factor is added
    {
-      if(globalFactor_ == nullptr) {
-         globalFactor_ = new GlobalFactorContainer(MulticutGlobalFactor(), 1); // we have one element currently
-         pd_.GetLP()->AddFactor(globalFactor_);
-      } else {
-         globalFactor_->ResizeRepam(unaryFactors_.size()+1);
-      }
+      //if(globalFactor_ == nullptr) {
+         //globalFactor_ = new GlobalFactorContainer(MulticutGlobalFactor(), 1); // we have one element currently
+      //   pd_.GetLP().AddFactor(globalFactor_);
+      //} else {
+      //   globalFactor_->ResizeRepam(unaryFactors_.size()+1);
+      //}
       assert(i1 < i2);
       assert(!HasUnaryFactor(i1,i2));
       
       auto* u = new UnaryFactorContainer(MulticutUnaryFactor(cost), std::vector<REAL>{cost});
       unaryFactors_.insert(std::make_pair(std::make_tuple(i1,i2), u));
-      pd_.GetLP()->AddFactor(u);
+      pd_.GetLP().AddFactor(u);
       noNodes_ = std::max(noNodes_,std::max(i1,i2)+1);
 
-      LinkUnaryGlobal(u,globalFactor_,i1,i2);
+      //LinkUnaryGlobal(u,globalFactor_,i1,i2);
       
       //logger->info() << "Add unary factor (" << i1 << "," << i2 << ") with cost = " << cost;
       return u;
@@ -375,28 +375,28 @@ MulticutConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd)
    {
       assert(i < 3);
       auto* m = new UnaryTripletMessageContainer(UnaryTripletMessageType(i), u, t, UnaryTripletMessageType::size());
-      pd_.GetLP()->AddMessage(m);
+      pd_.GetLP().AddMessage(m);
       return m;
    }
-   UnaryGlobalMessageContainer* LinkUnaryGlobal(UnaryFactorContainer* u, GlobalFactorContainer* g, const INDEX i1, const INDEX i2)
-   {
-      auto* m = new UnaryGlobalMessageContainer(UnaryGlobalMessageType( g->GetFactor()->AddEdge(i1,i2) ), u, g, 0);
-      pd_.GetLP()->AddMessage(m);
-      return m;
-   }
+   //UnaryGlobalMessageContainer* LinkUnaryGlobal(UnaryFactorContainer* u, GlobalFactorContainer* g, const INDEX i1, const INDEX i2)
+   //{
+   //   auto* m = new UnaryGlobalMessageContainer(UnaryGlobalMessageType( g->GetFactor()->AddEdge(i1,i2) ), u, g, 0);
+   //   pd_.GetLP().AddMessage(m);
+   //   return m;
+   //}
    virtual TripletFactorContainer* AddTripletFactor(const INDEX i1, const INDEX i2, const INDEX i3) // declared virtual so that derived constructor notices when triplet factor is added
    {
       assert(i1 < i2 && i2 < i3);
       assert(!HasTripletFactor(i1,i2,i3));
       assert(HasUnaryFactor(i1,i2) && HasUnaryFactor(i1,i3) && HasUnaryFactor(i2,i3));
       auto* t = new TripletFactorContainer(MulticutTripletFactor(), std::vector<REAL>(MulticutTripletFactor::size(),0.0));
-      pd_.GetLP()->AddFactor(t);
+      pd_.GetLP().AddFactor(t);
       tripletFactors_.insert(std::make_pair( std::make_tuple(i1,i2,i3), t ));
       // get immediate predeccessor and successor and place new triplet in between
       auto succ = tripletFactors_.upper_bound(std::make_tuple(i1,i2,i3));
       if(succ != tripletFactors_.end()) {
          assert(t != succ->second);
-         pd_.GetLP()->AddFactorRelation(t,succ->second);
+         pd_.GetLP().AddFactorRelation(t,succ->second);
       }
       auto tripletEdges = MulticutTripletFactor::SortEdges(i1,i2,i3);
       // link with all three unary factors
@@ -555,12 +555,13 @@ MulticutConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd)
       return tripletsAdded;
    }
 
-   bool CheckPrimalConsistency(const std::vector<bool>& primal) const
+   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) const
    {
-      assert(false);
+      std::cout << "checking primal feasibility for multicut\n";
       UnionFind uf(noNodes_);
       for(const auto& e : unaryFactors_) {
          UnaryFactorContainer* f = e.second; 
+         assert(primal[f->GetPrimalOffset()] != unknownState);
          if(primal[f->GetPrimalOffset()] == false) {
             // connect components 
             const INDEX i = std::get<0>(e.first);
@@ -575,16 +576,18 @@ MulticutConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd)
             const INDEX j = std::get<1>(e.first);
             // there may not be a path from i1 to i2 consisting of edges with primal value false only
             if(uf.connected(i,j)) {
+               std::cout << "solution infeasible: (" << i << "," << j << ") = true, yet there exists a path with false values only\n";
                return false;
             }
          }
       }
 
+      std::cout << "solution feasible\n";
       return true;
    }
 
 protected:
-   GlobalFactorContainer* globalFactor_;
+   //GlobalFactorContainer* globalFactor_;
    // do zrobienia: replace this by unordered_map, provide hash function.
    // possibly dont do this, but use sorting to provide ordering for LP
    std::map<std::tuple<INDEX,INDEX>, UnaryFactorContainer*> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
@@ -602,7 +605,7 @@ protected:
    std::map<std::tuple<INDEX,INDEX,INDEX>, TripletFactorContainer*, tripletComp> tripletFactors_; // triplet factors are defined on cycles of length three
    INDEX noNodes_ = 0;
 
-   ProblemDecomposition<FMC>& pd_;
+   Solver<FMC>& pd_;
 };
 
 template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX GLOBAL_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO, INDEX UNARY_GLOBAL_MESSAGE_NO,
@@ -615,7 +618,7 @@ class MulticutOddWheelConstructor : public MulticutConstructor<FACTOR_MESSAGE_CO
    using TripletPlusSpokeMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_MESSAGE_NO>::MessageContainerType;
    using TripletPlusSpokeCoverMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>::MessageContainerType;
 public:
-   MulticutOddWheelConstructor(ProblemDecomposition<FACTOR_MESSAGE_CONNECTION>& pd) : BaseConstructor(pd) {}
+   MulticutOddWheelConstructor(Solver<FMC>& pd) : BaseConstructor(pd) {}
 
    // add triplet indices additionally to tripletIndices_
    virtual typename BaseConstructor::UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost)
@@ -663,14 +666,14 @@ public:
    {
       assert(!HasTripletPlusSpokeFactor(n1,n2,centerNode,spokeNode));
       auto* tps = new TripletPlusSpokeFactorContainer(MulticutTripletPlusSpokeFactor(),std::vector<REAL>(MulticutTripletPlusSpokeFactor::size(),0.0));
-      BaseConstructor::pd_.GetLP()->AddFactor(tps);
+      BaseConstructor::pd_.GetLP().AddFactor(tps);
       assert(n1<n2);
       tripletPlusSpokeFactors_.insert(std::make_pair(std::array<INDEX,4>({n1,n2,centerNode,spokeNode}),tps));
       std::array<INDEX,3> tripletIndices{n1,n2,centerNode};
       std::sort(tripletIndices.begin(), tripletIndices.end());
       auto* t = BaseConstructor::GetTripletFactor(tripletIndices[0], tripletIndices[1], tripletIndices[2]);
       auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(n1,n2,centerNode,spokeNode), t, tps, MulticutTripletPlusSpokeCoverMessage::size());
-      BaseConstructor::pd_.GetLP()->AddMessage(m);
+      BaseConstructor::pd_.GetLP().AddMessage(m);
       return tps;
    }
    bool HasTripletPlusSpokeFactor(const INDEX n1, const INDEX n2, const INDEX centerNode, const INDEX spokeNode) const
@@ -715,7 +718,7 @@ public:
 
       auto* m = new TripletPlusSpokeMessageContainer(MulticutTripletPlusSpokeMessage(n1,n2,centerNode,spokeNode,tripletIndices[0],tripletIndices[1],tripletIndices[2]),t,tps,MulticutTripletPlusSpokeMessage::size());
       //auto* m = new TripletPlusSpokeMessageContainer(MulticutTripletPlusSpokeMessage(sharedTripletEdgeTriplet,spokeEdgeTriplet,sharedTripletEdgeTripletPlusSpoke),t,tps,MulticutTripletPlusSpokeMessage::size());
-      BaseConstructor::pd_.GetLP()->AddMessage(m);
+      BaseConstructor::pd_.GetLP().AddMessage(m);
       return m;
    }
 
@@ -918,7 +921,7 @@ public:
    };
    using CutId = std::vector<Edge>;
 
-   LiftedMulticutConstructor(ProblemDecomposition<FMC>& pd) : MULTICUT_CONSTRUCTOR(pd) {}
+   LiftedMulticutConstructor(Solver<FMC>& pd) : MULTICUT_CONSTRUCTOR(pd) {}
 
    virtual typename MULTICUT_CONSTRUCTOR::UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost)
    {
@@ -955,12 +958,12 @@ public:
    {
       assert(!HasCutFactor(cut));
       auto* f = new LiftedMulticutCutFactorContainer(LiftedMulticutCutFactor(cut.size()),std::vector<REAL>(cut.size(),0));
-      MULTICUT_CONSTRUCTOR::pd_.GetLP()->AddFactor(f);
+      MULTICUT_CONSTRUCTOR::pd_.GetLP().AddFactor(f);
       // connect the cut edges
       for(INDEX e=0; e<cut.size(); ++e) {
          auto* unaryFactor = MULTICUT_CONSTRUCTOR::GetUnaryFactor(cut[e][0],cut[e][1]);
          auto* m = new CutEdgeLiftedMulticutFactorMessageContainer(CutEdgeLiftedMulticutFactorMessage(e),unaryFactor,f,1); // do zrobienia: remove 1
-         MULTICUT_CONSTRUCTOR::pd_.GetLP()->AddMessage(m);
+         MULTICUT_CONSTRUCTOR::pd_.GetLP().AddMessage(m);
       }
       liftedMulticutFactors_.insert(std::make_pair(cut,std::make_pair(f,std::vector<Edge>())));
       return f;
@@ -981,7 +984,7 @@ public:
       auto& edgeList = c.second;
       auto* unaryFactor = MULTICUT_CONSTRUCTOR::GetUnaryFactor(i1,i2);
       auto* m = new LiftedEdgeLiftedMulticutFactorMessageContainer(LiftedEdgeLiftedMulticutFactorMessage(edgeList.size() + cut.size()), unaryFactor, f, 1); // do zrobienia: remove 1
-      MULTICUT_CONSTRUCTOR::pd_.GetLP()->AddMessage(m);
+      MULTICUT_CONSTRUCTOR::pd_.GetLP().AddMessage(m);
       c.second.push_back(Edge({i1,i2}));
       f->resize(f->size()+1,0.0);
       f->GetFactor()->IncreaseLifted();
@@ -1152,9 +1155,9 @@ public:
    }
 
    // check if all lifted edges are primally consistent by asserting that a path of zero values exists in the ground graph whenever lifted edge is zero
-   bool CheckPrimalConsistency(const std::vector<bool>& primal) const
+   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) const
    {
-      const bool multicutConsistent = MULTICUT_CONSTRUCTOR::CheckPrimalConsistency();
+      const bool multicutConsistent = MULTICUT_CONSTRUCTOR::CheckPrimalConsistency(primal);
       if(!multicutConsistent) {
          return false;
       }

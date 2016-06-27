@@ -2,11 +2,10 @@
 #define LP_MP_MULTICUT_HXX
 
 #include "LP_MP.h"
-#include "problem_decomposition.hxx"
+#include "solver.hxx"
 #include "factors_messages.hxx"
 #include "multicut_unary_factor.hxx"
 #include "multicut_triplet_factor.hxx"
-#include "multicut_global_factor.hxx"
 #include "multicut_odd_wheel_factor.hxx"
 #include "multicut_odd_wheel.hxx"
 #include "lifted_multicut_factors_messages.hxx"
@@ -23,20 +22,18 @@ namespace LP_MP {
 
 // do zrobienia: possibly rename unary to edge factor
 
-//template<MessageSendingType MESSAGE_SENDING>
+template<MessageSendingType MESSAGE_SENDING>
 struct FMC_MULTICUT {
    constexpr static const char* name = "Multicut with odd cycle constraints";
-   constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
+   //constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
    typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_MULTICUT, 0, true> MulticutUnaryFactorContainer;
    typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_MULTICUT, 2> MulticutGlobalFactorContainer;
 
    typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, variableMessageNumber, 0, FMC_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
 
-   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer >;
-   using MessageList = meta::list<MulticutUnaryTripletMessageContainer, MulticutUnaryGlobalMessageContainer>;
+   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer>;
+   using MessageList = meta::list<MulticutUnaryTripletMessageContainer>;
 
    using multicut = MulticutConstructor<FMC_MULTICUT,0,1,2,0,1>;
    using ProblemDecompositionList = meta::list<multicut>;
@@ -49,25 +46,30 @@ struct FMC_ODD_WHEEL_MULTICUT {
 
    typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
    typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_ODD_WHEEL_MULTICUT, 2> MulticutGlobalFactorContainer;
+   //typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_ODD_WHEEL_MULTICUT, 2> MulticutGlobalFactorContainer;
 
-   typedef FactorContainer<MulticutTripletPlusSpokeFactor, FixedSizeExplicitRepamStorage<MulticutTripletPlusSpokeFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 3> MulticutTripletPlusSpokeFactorContainer;
+   typedef FactorContainer<MulticutTripletPlusSpokeFactor, FixedSizeExplicitRepamStorage<MulticutTripletPlusSpokeFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeFactorContainer;
       
    typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, variableMessageNumber, 0, FMC_ODD_WHEEL_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
+   //typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, variableMessageNumber, 0, FMC_ODD_WHEEL_MULTICUT, 1> MulticutUnaryGlobalMessageContainer;
    
-   typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 3, variableMessageNumber, variableMessageNumber, MulticutTripletPlusSpokeMessage::size(), FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeMessageContainer;
-   typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 3, variableMessageNumber, 1, MulticutTripletPlusSpokeCoverMessage::size(), FMC_ODD_WHEEL_MULTICUT, 3> MulticutTripletPlusSpokeCoverMessageContainer;
+   typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 2, variableMessageNumber, variableMessageNumber, MulticutTripletPlusSpokeMessage::size(), FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletPlusSpokeMessageContainer;
+   typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 2, variableMessageNumber, 1, MulticutTripletPlusSpokeCoverMessage::size(), FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeCoverMessageContainer;
 
-   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer, MulticutTripletPlusSpokeFactorContainer >;
+   using FactorList = meta::list< 
+      MulticutUnaryFactorContainer,
+      MulticutTripletFactorContainer,
+      //MulticutGlobalFactorContainer,
+      MulticutTripletPlusSpokeFactorContainer 
+         >;
    using MessageList = meta::list<
       MulticutUnaryTripletMessageContainer, 
-      MulticutUnaryGlobalMessageContainer, 
+      //MulticutUnaryGlobalMessageContainer, 
       MulticutTripletPlusSpokeMessageContainer, // one unfortunately cannot use a fixed size container on the right, as one spoke factor might participate in more than one odd wheel constraint
       MulticutTripletPlusSpokeCoverMessageContainer
       >;
 
-   using multicut = MulticutOddWheelConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,2,0,1,3,2,3>;
+   using multicut = MulticutOddWheelConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,1,0,1,2,1,2>;
    using ProblemDecompositionList = meta::list<multicut>;
 };
 
@@ -77,20 +79,30 @@ struct FMC_LIFTED_MULTICUT_ODD_CYCLE {
 
    typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_LIFTED_MULTICUT_ODD_CYCLE, 0, true> MulticutUnaryFactorContainer;
    typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_LIFTED_MULTICUT_ODD_CYCLE, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_LIFTED_MULTICUT_ODD_CYCLE, 2> MulticutGlobalFactorContainer;
+   //typedef FactorContainer<MulticutGlobalFactor, MulticutGlobalRepamStorage, FMC_LIFTED_MULTICUT_ODD_CYCLE, 2> MulticutGlobalFactorContainer;
    
    typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, variableMessageNumber, 0, FMC_LIFTED_MULTICUT_ODD_CYCLE, 1> MulticutUnaryGlobalMessageContainer;
+   //typedef MessageContainer<MulticutUnaryGlobalMessage, 0, 2, 1, variableMessageNumber, 0, FMC_LIFTED_MULTICUT_ODD_CYCLE, 1> MulticutUnaryGlobalMessageContainer;
 
-   typedef FactorContainer<LiftedMulticutCutFactor, ExplicitRepamStorage, FMC_LIFTED_MULTICUT_ODD_CYCLE, 3> LiftedMulticutCutFactorContainer;
-   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 3, variableMessageNumber, variableMessageNumber, CutEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 2 > CutEdgeLiftedMulticutFactorMessageContainer;
-   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 3, variableMessageNumber, variableMessageNumber, LiftedEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 3 > LiftedEdgeLiftedMulticutFactorMessageContainer;
+   typedef FactorContainer<LiftedMulticutCutFactor, ExplicitRepamStorage, FMC_LIFTED_MULTICUT_ODD_CYCLE, 2> LiftedMulticutCutFactorContainer;
+   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 3, variableMessageNumber, variableMessageNumber, CutEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 1 > CutEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 3, variableMessageNumber, variableMessageNumber, LiftedEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 2 > LiftedEdgeLiftedMulticutFactorMessageContainer;
 
-   using FactorList = meta::list<MulticutUnaryFactorContainer, MulticutTripletFactorContainer, MulticutGlobalFactorContainer, LiftedMulticutCutFactorContainer >;
-   using MessageList = meta::list<MulticutUnaryTripletMessageContainer, MulticutUnaryGlobalMessageContainer, CutEdgeLiftedMulticutFactorMessageContainer, LiftedEdgeLiftedMulticutFactorMessageContainer>;
+   using FactorList = meta::list<
+      MulticutUnaryFactorContainer, 
+      MulticutTripletFactorContainer, 
+      //MulticutGlobalFactorContainer, 
+      LiftedMulticutCutFactorContainer 
+         >;
+   using MessageList = meta::list<
+      MulticutUnaryTripletMessageContainer, 
+      //MulticutUnaryGlobalMessageContainer, 
+      CutEdgeLiftedMulticutFactorMessageContainer, 
+      LiftedEdgeLiftedMulticutFactorMessageContainer
+         >;
 
-   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT_ODD_CYCLE,0,1,2,0,1>;
-   using LiftedMulticutConstructor = LiftedMulticutConstructor<BaseMulticutConstructor,3,2,3>;
+   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT_ODD_CYCLE,0,1,1,0,1>;
+   using LiftedMulticutConstructor = LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 };
 
@@ -154,7 +166,7 @@ namespace MulticutOpenGmInput {
    }
 
    template<typename FMC>
-   bool ParseProblem(const std::string filename, ProblemDecomposition<FMC>& pd)
+   bool ParseProblem(const std::string filename, Solver<FMC>& pd)
    {
       //read with hdf5
       auto fileHandle = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -257,19 +269,19 @@ namespace MulticutTextInput {
 
 
    template<typename FMC> struct action<FMC, positive_integer > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
       {
          integer_stack.push(std::stoul(in.string())); 
       }
    };
    template<typename FMC> struct action<FMC, real_number > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
       {
          real_stack.push(std::stod(in.string())); 
       }
    };
    template<typename FMC> struct action<FMC, numberOfVariables_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 1);
          mcInput.numberOfVariables_ = integer_stack.top();
@@ -277,7 +289,7 @@ namespace MulticutTextInput {
       }
    };
    template<typename FMC> struct action<FMC, edge_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const pegtl::input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 2);
          assert(real_stack.size() == 1);
@@ -297,7 +309,7 @@ namespace MulticutTextInput {
       }
    };
    template<typename FMC> struct action<FMC, pegtl::eof> {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput& mcInput)
+      static void apply(const pegtl::input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput& mcInput)
       {}
    };
 
@@ -308,7 +320,7 @@ namespace MulticutTextInput {
 
 
    template<typename FMC> struct action<FMC, lifted_edge_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const pegtl::input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 2);
          assert(real_stack.size() == 1);
@@ -330,7 +342,7 @@ namespace MulticutTextInput {
 
       
    template<typename FMC>
-   bool ParseProblem(const std::string filename, ProblemDecomposition<FMC>& pd)
+   bool ParseProblem(const std::string filename, Solver<FMC>& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;
@@ -343,7 +355,7 @@ namespace MulticutTextInput {
    }
 
    template<typename FMC>
-   bool ParseLiftedProblem(const std::string filename, ProblemDecomposition<FMC>& pd)
+   bool ParseLiftedProblem(const std::string filename, Solver<FMC>& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;

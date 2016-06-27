@@ -12,23 +12,26 @@ class MulticutUnaryFactor
 public:
    MulticutUnaryFactor(const double cost) {};
    template<typename REPAM_ARRAY>
-   void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
+   static void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    {
       assert(repam.size() == 1);
+      if(repam[0] < 0) { 
+         primal[0] = true; 
+      } else { 
+         primal[0] = false; 
+      }
       /*
-      if(repam[0] == 0.0) { // round solution, flip coin. it does not seem to help, but I will double check this
+      if(std::abs(repam[0]) <= eps) { // round solution, flip coin. it does not seem to help, but I will double check this
          if(r() == 1) {
-            return std::make_pair(true,0.0);
+            primal[0] = true;
          } else {
-            return std::make_pair(false,0.0);
+            primal[0] = false;
          }
       }
       */
-      if(repam[0] < 0) { primal[0] = true; }
-      else { primal[1] = false; }
    }
    template<typename REPAM_ARRAY>
-   REAL LowerBound(const REPAM_ARRAY& repamPot) const {
+   static REAL LowerBound(const REPAM_ARRAY& repamPot) {
       assert(repamPot.size() == 1);
       return std::min(repamPot[0],0.0);
    }
@@ -36,11 +39,10 @@ public:
    constexpr static INDEX size() { return 1; }
 
    template<typename REPAM_ARRAY>
-   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
+   static REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal)
    {
-      std::cout << "remove in EvaluatePrimal unary factor\n";
-      return 100000000.0; // for now
       assert(repam.size() == 1);
+      assert(primal[0] == false || primal[0] == true);
       return primal[0]*repam[0];
    }
    void WritePrimal(const PrimalSolutionStorage::Element primal, std::ofstream& fs) const
