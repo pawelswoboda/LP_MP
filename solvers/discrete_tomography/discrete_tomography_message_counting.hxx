@@ -16,7 +16,7 @@ namespace LP_MP {
 
   public:
 
-    DiscreteTomographyMessageCounting(INDEX numberOfLabels,INDEX numberOfVars);
+    DiscreteTomographyMessageCounting(INDEX numberOfLabels,INDEX numberOfVarsLeft,INDEX numberOfVarsRight,INDEX SumBound);
 
     // RIGHT -> TOP Ternary
     // LEFT  -> BOTTOM Ternary
@@ -45,17 +45,28 @@ namespace LP_MP {
     template<typename G>
     void RepamRight(G& repam, const REAL msg, const INDEX msg_dim);
 
-    //void ComputeRightFromLeftPrimal(const bool leftPrimal, MulticutTripletFactor::LabelingType& rightPrimal);
+    /*------*/
 
+    void ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right);
+    
   private:
-    const INDEX numberOfLabels_,numberOfVars_; 
+    const INDEX numberOfLabels_,numberOfVarsLeft_,numberOfVarsRight_,SumBound_;
+    INDEX upSize_,leftSize_,rightSize_,regSize_;
   };
 
   template<DIRECTION DR>
-  DiscreteTomographyMessageCounting<DR>::DiscreteTomographyMessageCounting(INDEX numberOfLabels,INDEX numberOfVars)
-    : numberOfLabels_(numberOfLabels),numberOfVars_(numberOfVars) {
+  DiscreteTomographyMessageCounting<DR>::DiscreteTomographyMessageCounting(INDEX numberOfLabels,INDEX numberOfVarsLeft,INDEX numberOfVarsRight,INDEX SumBound)
+    : numberOfLabels_(numberOfLabels),numberOfVarsLeft_(numberOfVarsLeft),numberOfVarsRight_(numberOfVarsRight),SumBound_(SumBound) {
     assert(numberOfLabels_ > 1);
-    assert(numberOfVars_ > 0);
+    assert(numberOfVarsLeft_ > 0);
+    assert(numberOfVarsRight_ > 0);
+    assert(SumBound_ > 0);
+    
+    upSize_ = pow(numberOfLabels_,2)*std::min(((numberOfVarsLeft_+numberOfVarsRight_)*(numberOfLabels_-1)+1),SumBound);
+    leftSize_ = pow(numberOfLabels_,2)*std::min((numberOfVarsLeft_*(numberOfLabels_-1)+1),SumBound);
+    rightSize_ = pow(numberOfLabels_,2)*std::min((numberOfVarsRight_*(numberOfLabels_-1)+1),SumBound);
+    
+    regSize_ = pow(numberOfLabels_,2);
   }
 
   template<DIRECTION DR>
@@ -106,7 +117,7 @@ namespace LP_MP {
 	
 	assert(kidx < (up_size*pow(numberOfLabels_,2)));
 	assert(!std::isnan(val));
-	msg_v[kidx] -= std::min(msg_v[kidx],val);
+	msg_v[kidx] = std::min(msg_v[kidx],val);
       }
     }
     for(INDEX i=0;i<msg_v.size();i++){
@@ -251,9 +262,7 @@ namespace LP_MP {
 
     assert(msg_dim < f->getSize(DiscreteTomographyFactorCounting::NODE::up));
     assert(repam[msg_dim] > -std::numeric_limits<REAL>::max());
-    if( std::isfinite(msg) ){ repam[msg_dim] += msg; }
-    if( msg > -std::numeric_limits<REAL>::max() &&
-	msg < std::numeric_limits<REAL>::max()){
+    if( std::isfinite(msg) ){ 
       repam[msg_dim] += msg; 
       assert(repam[msg_dim] > -std::numeric_limits<REAL>::max() );
     }
@@ -276,7 +285,6 @@ namespace LP_MP {
       assert(msg_dim < f->getSize(DiscreteTomographyFactorCounting::NODE::left));
       assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] > -std::numeric_limits<REAL>::max());
       if( std::isfinite(msg) ){
-      
 	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] +=  msg; 
 	assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] > -std::numeric_limits<REAL>::max());
       }
@@ -296,8 +304,95 @@ namespace LP_MP {
       }
     }
   }
+
+      
+  template<DIRECTION DR>  
+  void DiscreteTomographyMessageCounting<DR>::ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right){
+    INDEX count = 0;
+
+    INDEX opt = 0;
+    INDEX a = 0;
+    INDEX b = 0;
+    INDEX c = 0;
+    INDEX d = 0;
+    INDEX kl = 0;
+    INDEX kr = 0;
     
-  
+    if( DR == DIRECTION::left ){
+      for(INDEX i=0;i<leftSize_;i++){
+	if( left[i] == 1 ){
+	  opt = i;
+	  count++;
+	  right[upSize_ + i] = 1;
+	}// else{
+	//  right[upSize_ + i] = 0;
+	//}
+      }
+      assert(count <= 1);
+      
+      a = opt % numberOfLabels_;
+      opt = (opt - a)/numberOfLabels_;
+      b = opt % numberOfLabels_;
+      opt = (opt - b)/numberOfLabels_;
+      kl = opt % numberOfLabels_;
+
+      count = 0;
+      for(INDEX i=0;i<rightSize_;i++){
+	if(right[upSize_ + leftSize_ + i] == 1){
+	  opt = i; count++;
+	}
+      }
+      assert(count <= 1);
+
+      c = opt % numberOfLabels_;
+      opt = (opt - c)/numberOfLabels_;
+      d = opt % numberOfLabels_;
+      opt = (opt - d)/numberOfLabels_;
+      kr = opt % numberOfLabels_;
+    }
+    else{
+      for(INDEX i=0;i<rightSize_;i++){
+	if( left[i] == 1 ){
+	  opt = i;
+	  count++;
+	  right[upSize_ + rightSize_ + i] = 1;
+	} //else{
+	// right[upSize_ + rightSize_ + i] = 0;
+	//}
+      }
+      assert(count <= 1);
+      
+      c = opt % numberOfLabels_;
+      opt = (opt - c)/numberOfLabels_;
+      d = opt % numberOfLabels_;
+      opt = (opt - d)/numberOfLabels_;
+      kr = opt % numberOfLabels_;
+
+      count = 0;
+      for(INDEX i=0;i<leftSize_;i++){
+	if(right[upSize_ + i] == 1){
+	  opt = i; count++;
+	}
+      }
+      assert(count <= 1);
+
+      a = opt % numberOfLabels_;
+      opt = (opt - a)/numberOfLabels_;
+      b = opt % numberOfLabels_;
+      opt = (opt - d)/numberOfLabels_;
+      kl = opt % numberOfLabels_;					  
+    }
+    
+    if(count == 1){
+      INDEX z = kl+kr;
+      assert(z<(upSize_/pow(numberOfLabels_,2)));
+      INDEX idx = a + d*numberOfLabels_ + z*pow(numberOfLabels_,2);
+      assert(idx < upSize_);
+      right[idx]=1;
+    }
+    
+  }
+    
 }
 
 #endif // LP_MP_DT_COUNTING_MESSAGE_HXX
