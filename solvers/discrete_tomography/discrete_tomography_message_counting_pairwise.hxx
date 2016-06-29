@@ -175,14 +175,12 @@ namespace LP_MP {
     INDEX count = 0;
 
     for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
-      if( left[i] == 1 ){
+      if( left[i] == true || left[i] == unknownState ){
 	opt = i; count++;
-	right[upSize_ + leftSize_ + rightSize_ + i] = 1;
-      } //else{
-	//right[upSize_ + leftSize_ + rightSize_ + i] = 0;
-      //}
+      } 
+      right[upSize_ + leftSize_ + rightSize_ + i] = left[i];
     }
-    assert(count <= 1);
+    //assert(count <= 1);
     
     INDEX a = 0;
     INDEX b = opt % numberOfLabels_;
@@ -192,13 +190,17 @@ namespace LP_MP {
     INDEX lIdx = 0;
     INDEX rIdx = 0;
 
+    bool consistent = true;
+    
     if( count == 1 ){
+      right[upSize_ + leftSize_ + rightSize_ + opt] = true;
+      
       if(numberOfVarsLeft_ == 1){
 	lIdx = b + b*numberOfLabels_ + b*pow(numberOfLabels_,2);
-	//for(INDEX i=0;i<leftSize_;i++){
-	//right[upSize_ + i]=0;
-	//}
-	right[upSize_ + lIdx]=1;
+	for(INDEX i=0;i<leftSize_;i++){
+	  right[upSize_ + i]=false;
+	}
+	right[upSize_ + lIdx]=true;
 	count++;
 	a = b;
 	lIdx = b;
@@ -207,7 +209,7 @@ namespace LP_MP {
 	INDEX tcount = 0;
 	opt = 0;
 	for(INDEX i=0;i<leftSize_;i++){
-	  if( right[upSize_ + i] == 1 ){
+	  if( right[upSize_ + i] == true ){
 	    opt = i; tcount++; count++;
 	  }
 	  assert(tcount <= 1);
@@ -215,18 +217,19 @@ namespace LP_MP {
 	a = opt % numberOfLabels_;
 	opt = (opt-a)/numberOfLabels_;
 	INDEX tb = opt % numberOfLabels_;
-	assert(tb == b);
-      
+	//assert(tb == b);
+	if( tb != b ){ consistent = false; }
+	
 	opt = (opt-tb)/numberOfLabels_;
 	lIdx = opt % numberOfLabels_;
       }
     
       if(numberOfVarsRight_ == 1){
 	rIdx = c + c*numberOfLabels_ + c*pow(numberOfLabels_,2);
-	//for(INDEX i=0;i<rightSize_;i++){
-	// right[upSize_ + leftSize_ + i]=0;
-	//}
-	right[upSize_ + leftSize_ + rIdx]=1;
+	for(INDEX i=0;i<rightSize_;i++){
+	  right[upSize_ + leftSize_ + i]=false;
+	}
+	right[upSize_ + leftSize_ + rIdx]=true;
 	count++;
 	d = c;
 	rIdx = c;
@@ -235,7 +238,7 @@ namespace LP_MP {
 	INDEX tcount = 0;
 	opt = 0;
 	for(INDEX i=0;i<rightSize_;i++){
-	  if( right[upSize_ + leftSize_ + i] == 1 ){
+	  if( right[upSize_ + leftSize_ + i] == true ){
 	    opt = i; tcount++; count++;
 	  }
 	  assert(tcount <= 1);
@@ -243,22 +246,23 @@ namespace LP_MP {
 	INDEX tc = opt % numberOfLabels_;
 	opt = (opt-tc)/numberOfLabels_;
 	d = opt % numberOfLabels_;
-	assert(tc == c);
-
+	//assert(tc == c);
+	if( tc != c ){ consistent = false; }
+	
 	opt = (opt-d)/numberOfLabels_;
 	rIdx = opt % numberOfLabels_;
       }
     }
-    
-    if( count == 3 ){
-      //for(INDEX i=0;i<upSize_;i++){
-      // right[i] = 0;
-      //}
-      INDEX z = lIdx + rIdx;
-      assert(z < (upSize_/pow(numberOfLabels_,2)));
+
+    INDEX z = lIdx + rIdx;
+    if( count == 3 && consistent && z < (upSize_/pow(numberOfLabels_,2)) ){
+      for(INDEX i=0;i<upSize_;i++){
+	right[i] = false;
+      }
+      //assert(z < (upSize_/pow(numberOfLabels_,2)));
       INDEX idx = a + d*numberOfLabels_ + z*pow(numberOfLabels_,2);
       assert(idx < upSize_);
-      right[idx] = 1;
+      right[idx] = true;
     }
   }
   

@@ -271,7 +271,7 @@ namespace LP_MP {
 	       //}
 	     },
 	     [&](const INDEX outer_idx){ 
-	       assert(delta < std::numeric_limits<REAL>::infinity());
+	       assert(delta > -std::numeric_limits<REAL>::infinity());
 	       assert( outer_idx < msg.size() );
 	       msg[ outer_idx ] -= delta;
 	     } );

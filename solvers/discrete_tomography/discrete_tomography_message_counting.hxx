@@ -320,30 +320,25 @@ namespace LP_MP {
     
     if( DR == DIRECTION::left ){
       for(INDEX i=0;i<leftSize_;i++){
-	if( left[i] == 1 ){
+	if( left[i] == true ){
 	  opt = i;
 	  count++;
-	  right[upSize_ + i] = 1;
-	}// else{
-	//  right[upSize_ + i] = 0;
-	//}
+	}
+	right[upSize_ + i] = left[i];
       }
-      assert(count <= 1);
-      
+            
       a = opt % numberOfLabels_;
       opt = (opt - a)/numberOfLabels_;
       b = opt % numberOfLabels_;
       opt = (opt - b)/numberOfLabels_;
       kl = opt % numberOfLabels_;
 
-      count = 0;
       for(INDEX i=0;i<rightSize_;i++){
-	if(right[upSize_ + leftSize_ + i] == 1){
+	if(right[upSize_ + leftSize_ + i] == true){
 	  opt = i; count++;
 	}
       }
-      assert(count <= 1);
-
+      
       c = opt % numberOfLabels_;
       opt = (opt - c)/numberOfLabels_;
       d = opt % numberOfLabels_;
@@ -352,15 +347,12 @@ namespace LP_MP {
     }
     else{
       for(INDEX i=0;i<rightSize_;i++){
-	if( left[i] == 1 ){
+	if( left[i] == true ){
 	  opt = i;
 	  count++;
-	  right[upSize_ + rightSize_ + i] = 1;
-	} //else{
-	// right[upSize_ + rightSize_ + i] = 0;
-	//}
+	}
+	right[upSize_ + rightSize_ + i] = left[i];
       }
-      assert(count <= 1);
       
       c = opt % numberOfLabels_;
       opt = (opt - c)/numberOfLabels_;
@@ -368,13 +360,11 @@ namespace LP_MP {
       opt = (opt - d)/numberOfLabels_;
       kr = opt % numberOfLabels_;
 
-      count = 0;
       for(INDEX i=0;i<leftSize_;i++){
-	if(right[upSize_ + i] == 1){
+	if(right[upSize_ + i] == true){
 	  opt = i; count++;
 	}
       }
-      assert(count <= 1);
 
       a = opt % numberOfLabels_;
       opt = (opt - a)/numberOfLabels_;
@@ -382,13 +372,14 @@ namespace LP_MP {
       opt = (opt - d)/numberOfLabels_;
       kl = opt % numberOfLabels_;					  
     }
-    
-    if(count == 1){
-      INDEX z = kl+kr;
-      assert(z<(upSize_/pow(numberOfLabels_,2)));
+
+    INDEX z = kl+kr;
+    if(count == 2 && z<(upSize_/pow(numberOfLabels_,2)) ){
+      //assert(z<(upSize_/pow(numberOfLabels_,2)));
       INDEX idx = a + d*numberOfLabels_ + z*pow(numberOfLabels_,2);
       assert(idx < upSize_);
-      right[idx]=1;
+      for(INDEX i=0;i<upSize_;i++){ right[i]=false; }
+      right[idx]=true;
     }
     
   }
