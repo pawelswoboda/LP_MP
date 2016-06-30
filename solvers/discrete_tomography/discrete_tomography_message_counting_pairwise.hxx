@@ -13,7 +13,7 @@ namespace LP_MP {
 
   public:
 
-    DiscreteTomographyMessageCountingPairwise(INDEX numberOfLabels);
+    DiscreteTomographyMessageCountingPairwise(INDEX numberOfLabels,INDEX numberOfVarsLeft,INDEX numberOfVarsRight,INDEX SumBound);
 
     // RIGHT -> TOP Ternary
     // LEFT  -> Pairwise
@@ -43,30 +43,42 @@ namespace LP_MP {
     template<typename G>
     void RepamRight(G& repam, const REAL msg, const INDEX msg_dim);
 
-    //void ComputeRightFromLeftPrimal(const bool leftPrimal, MulticutTripletFactor::LabelingType& rightPrimal);
+    void ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right);
 
+    
   private:
-    const INDEX numberOfLabels_;    
+    const INDEX numberOfLabels_,numberOfVarsLeft_,numberOfVarsRight_,SumBound_;
+    INDEX upSize_,leftSize_,rightSize_,regSize_;
   };
 
-  DiscreteTomographyMessageCountingPairwise::DiscreteTomographyMessageCountingPairwise(INDEX numberOfLabels)
-    : numberOfLabels_(numberOfLabels) {
+  DiscreteTomographyMessageCountingPairwise::DiscreteTomographyMessageCountingPairwise(INDEX numberOfLabels,INDEX numberOfVarsLeft,INDEX numberOfVarsRight,INDEX SumBound)
+    : numberOfLabels_(numberOfLabels),numberOfVarsLeft_(numberOfVarsLeft),numberOfVarsRight_(numberOfVarsRight),SumBound_(SumBound) {
     assert(numberOfLabels_ > 1);
+    assert(numberOfVarsLeft_ > 0);
+    assert(numberOfVarsRight_ > 0);
+    assert(SumBound_ > 0);
+    
+    upSize_ = pow(numberOfLabels_,2)*std::min(((numberOfVarsLeft_+numberOfVarsRight_)*(numberOfLabels_-1)+1),SumBound);
+    leftSize_ = pow(numberOfLabels_,2)*std::min((numberOfVarsLeft_*(numberOfLabels_-1)+1),SumBound);
+    rightSize_ = pow(numberOfLabels_,2)*std::min((numberOfVarsRight_*(numberOfLabels_-1)+1),SumBound);
+    
+    regSize_ = pow(numberOfLabels_,2);
   }
 
   template<typename LEFT_FACTOR, typename G1, typename G3>
   void DiscreteTomographyMessageCountingPairwise::SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
+    //printf("START\n");
     assert(msg.size() == pow(numberOfLabels_,2));
     assert(repam_left.size() == pow(numberOfLabels_,2));
 
     for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
+      //printf("send reg(%d) --> count: %.3e * %.3e\n",i,omega,repam_left[i]);
       msg[i] -= omega*repam_left[i];
     }     
   }
     
   template<typename RIGHT_FACTOR, typename G1, typename G2>
   void DiscreteTomographyMessageCountingPairwise::ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
-
     assert(msg.size() == pow(numberOfLabels_,2));
     assert(repam_right.size() == ((*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up) +
 				  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left) +
@@ -118,6 +130,7 @@ namespace LP_MP {
     assert(msg_dim < pow(numberOfLabels_,2));
     assert(repam[msg_dim] > -std::numeric_limits<REAL>::max());
     if( std::isfinite(msg) ){ repam[msg_dim] += msg; } 
+    
     else{ repam[msg_dim] = std::numeric_limits<REAL>::infinity(); }
     assert(repam[msg_dim] > -1.0e-02);
   }
@@ -137,8 +150,8 @@ namespace LP_MP {
 		 f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
 		 f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
 		 msg_dim] > -std::numeric_limits<REAL>::max());
-    if( std::isfinite(msg) )
-      {
+    
+    if( std::isfinite(msg) ){
 	repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
 	      f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
 	      f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
@@ -155,7 +168,104 @@ namespace LP_MP {
 	    msg_dim] = std::numeric_limits<REAL>::infinity();
     }
   }
+
+  void DiscreteTomographyMessageCountingPairwise::ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right){
+
+    INDEX opt = 0;
+    INDEX count = 0;
+
+    for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
+      if( left[i] == true || left[i] == unknownState ){
+	opt = i; count++;
+      } 
+      right[upSize_ + leftSize_ + rightSize_ + i] = left[i];
+    }
+    //assert(count <= 1);
     
+    INDEX a = 0;
+    INDEX b = opt % numberOfLabels_;
+    INDEX c = ((opt - b)/numberOfLabels_) % numberOfLabels_;
+    INDEX d = 0;
+    
+    INDEX lIdx = 0;
+    INDEX rIdx = 0;
+
+    bool consistent = true;
+    
+    if( count == 1 ){
+      right[upSize_ + leftSize_ + rightSize_ + opt] = true;
+      
+      if(numberOfVarsLeft_ == 1){
+	lIdx = b + b*numberOfLabels_ + b*pow(numberOfLabels_,2);
+	for(INDEX i=0;i<leftSize_;i++){
+	  right[upSize_ + i]=false;
+	}
+	right[upSize_ + lIdx]=true;
+	count++;
+	a = b;
+	lIdx = b;
+      }
+      else{
+	INDEX tcount = 0;
+	opt = 0;
+	for(INDEX i=0;i<leftSize_;i++){
+	  if( right[upSize_ + i] == true ){
+	    opt = i; tcount++; count++;
+	  }
+	  assert(tcount <= 1);
+	}
+	a = opt % numberOfLabels_;
+	opt = (opt-a)/numberOfLabels_;
+	INDEX tb = opt % numberOfLabels_;
+	//assert(tb == b);
+	if( tb != b ){ consistent = false; }
+	
+	opt = (opt-tb)/numberOfLabels_;
+	lIdx = opt % numberOfLabels_;
+      }
+    
+      if(numberOfVarsRight_ == 1){
+	rIdx = c + c*numberOfLabels_ + c*pow(numberOfLabels_,2);
+	for(INDEX i=0;i<rightSize_;i++){
+	  right[upSize_ + leftSize_ + i]=false;
+	}
+	right[upSize_ + leftSize_ + rIdx]=true;
+	count++;
+	d = c;
+	rIdx = c;
+      }
+      else{
+	INDEX tcount = 0;
+	opt = 0;
+	for(INDEX i=0;i<rightSize_;i++){
+	  if( right[upSize_ + leftSize_ + i] == true ){
+	    opt = i; tcount++; count++;
+	  }
+	  assert(tcount <= 1);
+	}
+	INDEX tc = opt % numberOfLabels_;
+	opt = (opt-tc)/numberOfLabels_;
+	d = opt % numberOfLabels_;
+	//assert(tc == c);
+	if( tc != c ){ consistent = false; }
+	
+	opt = (opt-d)/numberOfLabels_;
+	rIdx = opt % numberOfLabels_;
+      }
+    }
+
+    INDEX z = lIdx + rIdx;
+    if( count == 3 && consistent && z < (upSize_/pow(numberOfLabels_,2)) ){
+      for(INDEX i=0;i<upSize_;i++){
+	right[i] = false;
+      }
+      //assert(z < (upSize_/pow(numberOfLabels_,2)));
+      INDEX idx = a + d*numberOfLabels_ + z*pow(numberOfLabels_,2);
+      assert(idx < upSize_);
+      right[idx] = true;
+    }
+  }
+  
 }
 
 

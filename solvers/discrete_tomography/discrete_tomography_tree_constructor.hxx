@@ -88,7 +88,7 @@ namespace LP_MP {
 	    t.getSize(DiscreteTomographyFactorCounting::NODE::right) +
 	    t.getSize(DiscreteTomographyFactorCounting::NODE::reg);
 	  std::vector<REAL> repam(repamSize,0.0);
-	   
+
 	  if( idxL.n + idxR.n == projectionVar.size() ){
 	    
 	    assert(PointerToQueue->size() == 0);
@@ -128,18 +128,18 @@ namespace LP_MP {
 	  auto *reg = mrfConstructor.GetPairwiseFactor(mrfConstructor.GetPairwiseFactorId(idxL.b,idxR.a));
 
 	  // messages
-	  auto *m_pairwise = new DiscreteTomographyCountingPairwiseMessageContainer(DiscreteTomographyMessageCountingPairwise(noLabels_),
+	  auto *m_pairwise = new DiscreteTomographyCountingPairwiseMessageContainer(DiscreteTomographyMessageCountingPairwise(noLabels_,idxL.n,idxR.n,summationCost.size()),
 										    reg,factors.back(),pow(noLabels_,2));
 	  pd_.GetLP()->AddMessage(m_pairwise);
 
 	  if(idxL.n != 1){
-	    auto *m_left = new DiscreteTomographyCountingMessageLeft(DiscreteTomographyMessageCounting<DIRECTION::left>(noLabels_,idxL.n),
+	    auto *m_left = new DiscreteTomographyCountingMessageLeft(DiscreteTomographyMessageCounting<DIRECTION::left>(noLabels_,idxL.n,idxR.n,summationCost.size()),
 								     factors[idxL.id],factors.back(),
 								     pow(noLabels_,2)*std::min((INDEX) summationCost.size(),(INDEX)(idxL.n*(noLabels_-1)+1)));
 	    pd_.GetLP()->AddMessage(m_left);
 	  }
 	  if(idxR.n != 1){
-	    auto *m_right = new DiscreteTomographyCountingMessageRight(DiscreteTomographyMessageCounting<DIRECTION::right>(noLabels_,idxR.n),
+	    auto *m_right = new DiscreteTomographyCountingMessageRight(DiscreteTomographyMessageCounting<DIRECTION::right>(noLabels_,idxL.n,idxR.n,summationCost.size()),
 								       factors[idxR.id],factors.back(),
 								       pow(noLabels_,2)*std::min((INDEX) summationCost.size(),(INDEX) (idxR.n*(noLabels_-1)+1)));
 	    pd_.GetLP()->AddMessage(m_right);
