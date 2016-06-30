@@ -571,7 +571,7 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
    omega.resize(factorEndIt - factorIt);
    if(m_.size() == 0) { 
       std::cout << "no messages in problem\n"; 
-      assert(false);
+      //assert(false);
       return;
    }
 

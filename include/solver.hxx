@@ -96,7 +96,10 @@ public:
    }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size(),INDEX>::type
-   CheckPrimalConsistency(PrimalSolutionStorage::Element primal) { return true; }
+   CheckPrimalConsistency(PrimalSolutionStorage::Element primal) 
+   {
+      return true; 
+   }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanCheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
    CheckPrimalConsistency(PrimalSolutionStorage::Element primal)
@@ -109,8 +112,9 @@ public:
    {
       if(std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).CheckPrimalConsistency(primal)) {
          return CheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO+1>(primal);
-      } 
-      return false;
+      } else { 
+         return false;
+      }
    }
    bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) // minDualIncrease says how small minimally must be the increase guaranteed by added constraints, while maxConstraints gives maximum number of constraints to add
    {

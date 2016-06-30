@@ -75,7 +75,7 @@ std::vector<INDEX> Graph::topologicalSort()
    //std::cout << sorted_vertices.size() << ", " << V << std::endl;
    assert(LP_MP::HasUniqueValues(sorted_vertices));
    assert(sorted_vertices.size() == INDEX(V));
-   return sorted_vertices;
+   return std::move(sorted_vertices);
 }
 
 } // end namespace Topological_Sort

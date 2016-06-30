@@ -1,7 +1,7 @@
 #ifndef LP_MP_GRAPH_MATCHING_H
 #define LP_MP_GRAPH_MATCHING_H
 
-#include "problem_decomposition.hxx"
+//#include "problem_decomposition.hxx"
 #include "factors_messages.hxx"
 #include "LP_MP.h"
 #include "factors/simplex_factor.hxx"
@@ -62,23 +62,23 @@ struct FMC_MP {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "AMP-B"
       : "unknown variant"));
       
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 0, false, true > UnaryFactor; // set to true if labeling by unaries is desired
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 0, true, true > UnaryFactor; // set to true if labeling by unaries is desired
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 1, false, false > PairwiseFactor;
-   typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_MP_PARAM, 2, true, false> McfLabelingFactor;
+   //typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_MP_PARAM, 2, true, false> McfLabelingFactor;
 
    typedef MessageContainer<EqualityMessage, 0, 0, variableMessageNumber, variableMessageNumber, 1, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeft;
    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRight;
-   typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_MP_PARAM, 3 > UnaryMcfLabelingMessage;
+   //typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_MP_PARAM, 3 > UnaryMcfLabelingMessage;
 
-   using FactorList = meta::list< UnaryFactor, PairwiseFactor, McfLabelingFactor >;
-   using MessageList = meta::list< AssignmentConstraintMessage, UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight, UnaryMcfLabelingMessage >;
+   using FactorList = meta::list< UnaryFactor, PairwiseFactor>;//, McfLabelingFactor >;
+   using MessageList = meta::list< AssignmentConstraintMessage, UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight>;//, UnaryMcfLabelingMessage >;
 
    using assignment = AssignmentViaMessagePassingProblemConstructor<FMC_MP_PARAM,0,0>;
    using mrfLeft = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
    using mrfRight = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
-   using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
-   using ProblemDecompositionList = meta::list<assignment, mrfLeft, mrfRight, mcfLabeling>;
+   //using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
+   using ProblemDecompositionList = meta::list<assignment, mrfLeft, mrfRight>;//, mcfLabeling>;
 };
 
 // graph matching with assignment via message passing + tightening triplets
@@ -220,20 +220,20 @@ struct FMC_GM {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "GM-I"
       : "unknown variant");
       
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, false, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, true, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 1, false, false > PairwiseFactor;
-   typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_GM_PARAM, 2, true, false> McfLabelingFactor;
+   //typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_GM_PARAM, 2, true, false> McfLabelingFactor;
 
    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
-   typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_GM_PARAM, 2 > UnaryMcfLabelingMessage;
+   //typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_GM_PARAM, 2 > UnaryMcfLabelingMessage;
 
-   using FactorList = meta::list< UnaryFactor, PairwiseFactor, McfLabelingFactor >;
-   using MessageList = meta::list< UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight, UnaryMcfLabelingMessage >;
+   using FactorList = meta::list< UnaryFactor, PairwiseFactor>;//, McfLabelingFactor >;
+   using MessageList = meta::list< UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight>;//, UnaryMcfLabelingMessage >;
 
    using mrf = StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>;
-   using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_GM_PARAM,0,2,2>;
-   using ProblemDecompositionList = meta::list<mrf,mcfLabeling>;
+   //using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_GM_PARAM,0,2,2>;
+   using ProblemDecompositionList = meta::list<mrf>;//,mcfLabeling>;
 };
 
 // + tightening triplets
@@ -245,34 +245,34 @@ struct FMC_GM_T {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "GM-I-T"
       : "unknown variant");
       
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, false, false > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, true, false > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 1, false, false > PairwiseFactor;
-   typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_GM_PARAM, 2, true, false> McfLabelingFactor;
+   //typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_GM_PARAM, 2, true, false> McfLabelingFactor;
 
    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
-   typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_GM_PARAM, 2 > UnaryMcfLabelingMessage;
+   //typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_GM_PARAM, 2 > UnaryMcfLabelingMessage;
 
    // tightening
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 3 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 3> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 4> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 5> PairwiseTriplet23MessageContainer;
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 2 > EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
 
-   using FactorList = meta::list< UnaryFactor, PairwiseFactor, McfLabelingFactor, EmptyTripletFactor >;
+   using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor >;
    using MessageList = meta::list<
       UnaryPairwiseMessageLeft,
       UnaryPairwiseMessageRight,
-      UnaryMcfLabelingMessage,
+      //UnaryMcfLabelingMessage,
       PairwiseTriplet12MessageContainer, 
       PairwiseTriplet13MessageContainer, 
       PairwiseTriplet23MessageContainer 
          >;
 
    using mrf = StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>;
-   using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,3,4,5>;
-   using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_GM_PARAM,0,2,2>;
-   using ProblemDecompositionList = meta::list<tighteningMrf,mcfLabeling>;
+   using tighteningMrf = TighteningMRFProblemConstructor<mrf,2,2,3,4>;
+   //using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_GM_PARAM,0,2,2>;
+   using ProblemDecompositionList = meta::list<tighteningMrf>;//,mcfLabeling>;
 };
 
 
@@ -337,21 +337,21 @@ namespace TorresaniEtAlInput {
       : pegtl::nothing< Rule > {};
 
    template<typename FMC> struct action< FMC, positive_integer > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>&, GraphMatchingInput&)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>&, GraphMatchingInput&)
       { 
          integer_stack.push(std::stoul(in.string())); 
       };
    };
 
    template<typename FMC> struct action< FMC, real_number > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>&, std::stack<REAL>& real_stack, GraphMatchingInput&)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>&, std::stack<REAL>& real_stack, GraphMatchingInput&)
       {
          real_stack.push(std::stod(in.string()));
       }
    };
 
    template<typename FMC> struct action< FMC, init_line > {
-      static void apply(const pegtl::input& in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input& in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          const INDEX quadraticNo = integer_stack.top(); integer_stack.pop();
          const INDEX assignmentNo = integer_stack.top(); integer_stack.pop();
@@ -366,7 +366,7 @@ namespace TorresaniEtAlInput {
    };
 
    template<typename FMC> struct action< FMC, assignment_line > {
-      static void apply(const pegtl::input& in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input& in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          const INDEX rightNode = integer_stack.top();
          integer_stack.pop();
@@ -388,7 +388,7 @@ namespace TorresaniEtAlInput {
       }
    };
    template<typename FMC> struct action< FMC, quadratic_pot_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          const INDEX assignment2 = integer_stack.top();
          integer_stack.pop();
@@ -492,7 +492,7 @@ namespace TorresaniEtAlInput {
 
    // specializations for FMC_MP, FMC_MCF and FMC_GM. Here construction of the model takes place
    template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MP>(FMC{}) || FmcTypeCheck<FMC_MP_T>(FMC{}), pegtl::eof>::type > {
-      static void apply(const pegtl::input& in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input& in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          std::cout << "Parsed problem, now construct mp version\n";
 
@@ -548,7 +548,7 @@ namespace TorresaniEtAlInput {
 
    template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MCF>(FMC{}) || FmcTypeCheck<FMC_MCF_T>(FMC{}),pegtl::eof>::type> {
       static void
-      apply(const pegtl::input& in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      apply(const pegtl::input& in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          std::cout << "Parsed problem, now construct mcf version\n";
 
@@ -574,7 +574,7 @@ namespace TorresaniEtAlInput {
                // connect unary with mcf factor
                UnaryToAssignmentMessage<FMC::McfCoveringFactor> msg(edgeList);
                typename FMC::UnaryToAssignmentMessageContainer* msgContainer = new typename FMC::UnaryToAssignmentMessageContainer(msg, unary, assignment.GetMinCostFlowFactorContainer(), edgeList.size());
-               pd.GetLP()->AddMessage(msgContainer);
+               pd.GetLP().AddMessage(msgContainer);
             }
          }
          // right side
@@ -585,7 +585,7 @@ namespace TorresaniEtAlInput {
 
                UnaryToAssignmentMessage<FMC::McfCoveringFactor> msg(edgeList);
                typename FMC::UnaryToAssignmentMessageContainer* msgContainer = new typename FMC::UnaryToAssignmentMessageContainer(msg, unary, assignment.GetMinCostFlowFactorContainer(), edgeList.size());
-               pd.GetLP()->AddMessage(msgContainer);
+               pd.GetLP().AddMessage(msgContainer);
             }
          }
          // now construct pairwise potentials
@@ -615,7 +615,7 @@ namespace TorresaniEtAlInput {
    };
 
    template<typename FMC> struct action< FMC, typename std::enable_if<FmcTypeCheck<FMC_GM>(FMC{}) || FmcTypeCheck<FMC_GM_T>(FMC{}), pegtl::eof>::type > {
-      static void apply(const pegtl::input& in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input& in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          constexpr PairwiseConstruction pc = FmcConstruction(FMC {});
          static_assert(pc == PairwiseConstruction::Left || pc == PairwiseConstruction::Right,"");
@@ -692,7 +692,7 @@ namespace TorresaniEtAlInput {
       };
 
    template<typename FMC>
-   bool ParseProblem(const std::string filename, ProblemDecomposition<FMC>& pd)
+   bool ParseProblem(const std::string filename, Solver<FMC>& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;
@@ -754,33 +754,33 @@ namespace UAIInput {
 
 
    template<typename FMC> struct action< FMC, positive_integer > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>&, GraphMatchingInput &)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>&, GraphMatchingInput &)
       { 
          integer_stack.push(std::stoul(in.string())); 
       }
    };
    template<typename FMC> struct action< FMC, real_number > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>&, std::stack<REAL>& real_stack, GraphMatchingInput&)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>&, std::stack<REAL>& real_stack, GraphMatchingInput&)
       { 
          real_stack.push(std::stod(in.string())); 
       }
    };
    template<typename FMC> struct action< FMC, numberOfVariables_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          gmInput.numberOfVariables_ = integer_stack.top();
          integer_stack.pop();
       }
    };
    template<typename FMC> struct action< FMC, numberOfCliques > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          gmInput.numberOfCliques_ = integer_stack.top();
          integer_stack.pop();
       }
    };
    template<typename FMC> struct action< FMC, cardinality_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          assert(integer_stack.size() == gmInput.numberOfVariables_);
          while(!integer_stack.empty()) {
@@ -791,7 +791,7 @@ namespace UAIInput {
       }
    };
    template<typename FMC> struct action< FMC, cliqueScope_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          gmInput.cliqueScope_.push_back(std::vector<INDEX>(0));
          while(integer_stack.size() > 1) {
@@ -806,7 +806,7 @@ namespace UAIInput {
    };
    // reconstruct the function tables
    template<typename FMC> struct action< FMC, functionTables > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          // first read in real stack into array
          std::vector<REAL> values;
@@ -852,7 +852,7 @@ namespace UAIInput {
       }
    };
    template<typename FMC> struct action< FMC, constraint_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          //std::cout << "constraint: " << in.string() << "\n";
          const INDEX sum = integer_stack.top();
@@ -921,7 +921,7 @@ namespace UAIInput {
    }
 
    template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_GM>(FMC{}) || FmcTypeCheck<FMC_GM_T>(FMC{}),pegtl::eof>::type> {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left,"");
          std::cout << "construct gm version\n";
@@ -972,14 +972,14 @@ namespace UAIInput {
          }
   
          // construct labeling factor
-         auto& mcf = pd.template GetProblemConstructor<1>();
-         mcf.ConstructLinearAssignmentGraph(BuildGraph(gmInput));
-         mcf.LinkUnaries(mrf);
+         //auto& mcf = pd.template GetProblemConstructor<1>();
+         //mcf.ConstructLinearAssignmentGraph(BuildGraph(gmInput));
+         //mcf.LinkUnaries(mrf);
       }
    };
 
    template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MP>(FMC{}) || FmcTypeCheck<FMC_MP_T>(FMC{}),pegtl::eof>::type> {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left,"");
          std::cout << "construct mp version\n";
@@ -1051,15 +1051,15 @@ namespace UAIInput {
 
          // connect left and right mp to mcf labeling factor
          // construct labeling factor
-         auto& mcf = pd.template GetProblemConstructor<3>();
-         mcf.ConstructLinearAssignmentGraph(graph,false);
-         mcf.LinkLeftUnaries(mrfLeft);
-         mcf.LinkRightUnaries(mrfRight,graph,false);
+         //auto& mcf = pd.template GetProblemConstructor<3>();
+         //mcf.ConstructLinearAssignmentGraph(graph,false);
+         //mcf.LinkLeftUnaries(mrfLeft);
+         //mcf.LinkRightUnaries(mrfRight,graph,false);
       }
    };
 
    template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MCF>(FMC{}) || FmcTypeCheck<FMC_MCF_T>(FMC{}),pegtl::eof>::type> {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
+      static void apply(const pegtl::input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
       {
          static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left,"");
 
@@ -1131,7 +1131,7 @@ namespace UAIInput {
 
             UnaryToAssignmentMessage<1> msg(edgeList); // covering factor is 1 as we only have potentials on left side
             typename FMC::UnaryToAssignmentMessageContainer* msgContainer = new typename FMC::UnaryToAssignmentMessageContainer(msg, unary, assignment.GetMinCostFlowFactorContainer(), edgeList.size());
-            pd.GetLP()->AddMessage(msgContainer);
+            pd.GetLP().AddMessage(msgContainer);
          }
       }
    };
@@ -1142,7 +1142,7 @@ namespace UAIInput {
       };
 
    template<typename FMC>
-   bool ParseProblem(const std::string filename, ProblemDecomposition<FMC>& pd)
+   bool ParseProblem(const std::string filename, Solver<FMC>& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;

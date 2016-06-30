@@ -11,11 +11,18 @@
 #include "max_flow.hxx"
 
 #include <unordered_map>
+#include <unordered_set>
 #include <queue>
 
 namespace LP_MP {
 
-template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX GLOBAL_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO, INDEX UNARY_GLOBAL_MESSAGE_NO>
+
+// hash function for maps used in constructors. Do zrobienia: define hash functions used somewhere globally in config.hxx
+static auto hf2 = [](const std::array<INDEX,2> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1]); };
+static auto hf3 = [](const std::array<INDEX,3> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2]); };
+static auto hf4 = [](const std::array<INDEX,4> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3]); };
+
+template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO>
 class MulticutConstructor {
 protected:
    using FMC = FACTOR_MESSAGE_CONNECTION;
@@ -335,9 +342,13 @@ private:
 };
 
 public:
-MulticutConstructor(Solver<FMC>& pd) : pd_(pd) 
+MulticutConstructor(Solver<FMC>& pd) 
+   : pd_(pd),
+   unaryFactors_(100,hf2),
+   tripletFactors_(100,hf3)
    {
-      //globalFactor_ = nullptr;
+      unaryFactors_.max_load_factor(0.7);
+      tripletFactors_.max_load_factor(0.7);
    }
    ~MulticutConstructor()
    {
@@ -358,7 +369,7 @@ MulticutConstructor(Solver<FMC>& pd) : pd_(pd)
       assert(!HasUnaryFactor(i1,i2));
       
       auto* u = new UnaryFactorContainer(MulticutUnaryFactor(cost), std::vector<REAL>{cost});
-      unaryFactors_.insert(std::make_pair(std::make_tuple(i1,i2), u));
+      unaryFactors_.insert(std::make_pair(std::array<INDEX,2>{i1,i2}, u));
       pd_.GetLP().AddFactor(u);
       noNodes_ = std::max(noNodes_,std::max(i1,i2)+1);
 
@@ -369,7 +380,7 @@ MulticutConstructor(Solver<FMC>& pd) : pd_(pd)
    }
    UnaryFactorContainer* GetUnaryFactor(const INDEX i1, const INDEX i2) const {
       assert(HasUnaryFactor(i1,i2));
-      return unaryFactors_.find(std::make_tuple(i1,i2))->second;
+      return unaryFactors_.find(std::array<INDEX,2>{i1,i2})->second;
    }
    UnaryTripletMessageContainer* LinkUnaryTriplet(UnaryFactorContainer* u, TripletFactorContainer* t, const INDEX i) // argument i denotes which edge the unary factor connects to
    {
@@ -391,13 +402,20 @@ MulticutConstructor(Solver<FMC>& pd) : pd_(pd)
       assert(HasUnaryFactor(i1,i2) && HasUnaryFactor(i1,i3) && HasUnaryFactor(i2,i3));
       auto* t = new TripletFactorContainer(MulticutTripletFactor(), std::vector<REAL>(MulticutTripletFactor::size(),0.0));
       pd_.GetLP().AddFactor(t);
-      tripletFactors_.insert(std::make_pair( std::make_tuple(i1,i2,i3), t ));
+      tripletFactors_.insert(std::make_pair( std::array<INDEX,3>{i1,i2,i3}, t ));
+      // use following ordering of unary and triplet factors: triplet comes after edge factor (i1,i2) and before (i2,i3)
+      auto* before = GetUnaryFactor(i1,i2);
+      //pd_.GetLP().AddFactorRelation(before,t);
+      auto* middle = GetUnaryFactor(i1,i3);
+      //pd_.GetLP().AddFactorRelation(middle,t);
+      auto* after = GetUnaryFactor(i2,i3);
+      //pd_.GetLP().AddFactorRelation(t,after);
       // get immediate predeccessor and successor and place new triplet in between
-      auto succ = tripletFactors_.upper_bound(std::make_tuple(i1,i2,i3));
-      if(succ != tripletFactors_.end()) {
-         assert(t != succ->second);
-         pd_.GetLP().AddFactorRelation(t,succ->second);
-      }
+      //auto succ = tripletFactors_.upper_bound(std::make_tuple(i1,i2,i3));
+      //if(succ != tripletFactors_.end()) {
+      //   assert(t != succ->second);
+      //   pd_.GetLP().AddFactorRelation(t,succ->second);
+      //}
       auto tripletEdges = MulticutTripletFactor::SortEdges(i1,i2,i3);
       // link with all three unary factors
       LinkUnaryTriplet(GetUnaryFactor(tripletEdges[0][0],tripletEdges[0][1]), t, 0);
@@ -411,24 +429,24 @@ MulticutConstructor(Solver<FMC>& pd) : pd_(pd)
    bool HasUnaryFactor(const std::tuple<INDEX,INDEX> e) const 
    {
       assert(std::get<0>(e) < std::get<1>(e));
-      return unaryFactors_.find(e) != unaryFactors_.end();
+      return unaryFactors_.find(std::array<INDEX,2>{std::get<0>(e),std::get<1>(e)}) != unaryFactors_.end();
    }
    bool HasUnaryFactor(const INDEX i1, const INDEX i2) const 
    {
       //logger->info() << "Has Unary factor with: " << i1 << ":" << i2;
       assert(i1 < i2);
-      return (unaryFactors_.find(std::make_tuple(i1,i2)) != unaryFactors_.end());
+      return (unaryFactors_.find(std::array<INDEX,2>{i1,i2}) != unaryFactors_.end());
    }
    bool HasTripletFactor(const INDEX i1, const INDEX i2, const INDEX i3) const 
    {
       assert(i1 < i2 && i2 < i3);
-      return (tripletFactors_.find(std::make_tuple(i1,i2,i3)) != tripletFactors_.end());
+      return (tripletFactors_.find(std::array<INDEX,3>{i1,i2,i3}) != tripletFactors_.end());
    }
 
    TripletFactorContainer* GetTripletFactor(const INDEX i1, const INDEX i2, const INDEX i3) const 
    {
       assert(HasTripletFactor(i1,i2,i3));
-      return tripletFactors_.find(std::make_tuple(i1,i2,i3))->second;
+      return tripletFactors_.find(std::array<INDEX,3>{i1,i2,i3})->second;
    }
 
 
@@ -519,6 +537,13 @@ MulticutConstructor(Solver<FMC>& pd) : pd_(pd)
       //MostViolatedPathData mp(posEdgesGraph);
       BfsData mp(posEdgesGraph);
 
+      // better: collect all cycles, then sort them according to violation, and only then add them
+
+
+
+
+
+
       INDEX tripletsAdded = 0;
       using CycleType = std::tuple<REAL, std::vector<INDEX>>;
       std::vector< CycleType > cycles;
@@ -537,7 +562,7 @@ MulticutConstructor(Solver<FMC>& pd) : pd_(pd)
                return tripletsAdded;
             }
          } else {
-            throw std::runtime_error("No path found although there is one"); 
+            throw std::runtime_error("No path found although there should be one"); 
          }
       }
       // sort by guaranteed increase in decreasing order
@@ -557,7 +582,7 @@ MulticutConstructor(Solver<FMC>& pd) : pd_(pd)
 
    bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) const
    {
-      std::cout << "checking primal feasibility for multicut\n";
+      //std::cout << "checking primal feasibility for multicut\n";
       UnionFind uf(noNodes_);
       for(const auto& e : unaryFactors_) {
          UnaryFactorContainer* f = e.second; 
@@ -574,7 +599,7 @@ MulticutConstructor(Solver<FMC>& pd) : pd_(pd)
          if(primal[f->GetPrimalOffset()] == true) {
             const INDEX i = std::get<0>(e.first);
             const INDEX j = std::get<1>(e.first);
-            // there may not be a path from i1 to i2 consisting of edges with primal value false only
+            // there must not be a path from i1 to i2 consisting of edges with primal value false only
             if(uf.connected(i,j)) {
                std::cout << "solution infeasible: (" << i << "," << j << ") = true, yet there exists a path with false values only\n";
                return false;
@@ -590,7 +615,7 @@ protected:
    //GlobalFactorContainer* globalFactor_;
    // do zrobienia: replace this by unordered_map, provide hash function.
    // possibly dont do this, but use sorting to provide ordering for LP
-   std::map<std::tuple<INDEX,INDEX>, UnaryFactorContainer*> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
+   std::unordered_map<std::array<INDEX,2>, UnaryFactorContainer*, decltype(hf2)> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
    // sort triplet factors as follows: Let indices be i=(i1,i2,i3) and j=(j1,j2,j3). Then i<j iff i1+i2+i3 < j1+j2+j3 or for ties sort lexicographically
    struct tripletComp {
       bool operator()(const std::tuple<INDEX,INDEX,INDEX> i, const std::tuple<INDEX,INDEX,INDEX> j) const
@@ -602,23 +627,27 @@ protected:
          else return i<j; // lexicographic comparison
       }
    };
-   std::map<std::tuple<INDEX,INDEX,INDEX>, TripletFactorContainer*, tripletComp> tripletFactors_; // triplet factors are defined on cycles of length three
+   std::unordered_map<std::array<INDEX,3>, TripletFactorContainer*, decltype(hf3)> tripletFactors_; // triplet factors are defined on cycles of length three
    INDEX noNodes_ = 0;
 
    Solver<FMC>& pd_;
 };
 
-template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX GLOBAL_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO, INDEX UNARY_GLOBAL_MESSAGE_NO,
+
+
+template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO,
    INDEX TRIPLET_PLUS_SPOKE_FACTOR_NO, INDEX TRIPLET_PLUS_SPOKE_MESSAGE_NO, INDEX TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>
-class MulticutOddWheelConstructor : public MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, GLOBAL_FACTOR_NO, UNARY_TRIPLET_MESSAGE_NO, UNARY_GLOBAL_MESSAGE_NO> {
+class MulticutOddWheelConstructor : public MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_NO> {
    using FMC = FACTOR_MESSAGE_CONNECTION;
-   using BaseConstructor = MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, GLOBAL_FACTOR_NO, UNARY_TRIPLET_MESSAGE_NO, UNARY_GLOBAL_MESSAGE_NO>;
+   using BaseConstructor = MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_NO>;
 
    using TripletPlusSpokeFactorContainer = meta::at_c<typename FMC::FactorList, TRIPLET_PLUS_SPOKE_FACTOR_NO>;
    using TripletPlusSpokeMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_MESSAGE_NO>::MessageContainerType;
    using TripletPlusSpokeCoverMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>::MessageContainerType;
 public:
-   MulticutOddWheelConstructor(Solver<FMC>& pd) : BaseConstructor(pd) {}
+   MulticutOddWheelConstructor(Solver<FMC>& pd) : BaseConstructor(pd), tripletPlusSpokeFactors_(100,hf4) { 
+      tripletPlusSpokeFactors_.max_load_factor(0.7); 
+   }
 
    // add triplet indices additionally to tripletIndices_
    virtual typename BaseConstructor::UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost)
@@ -674,6 +703,7 @@ public:
       auto* t = BaseConstructor::GetTripletFactor(tripletIndices[0], tripletIndices[1], tripletIndices[2]);
       auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(n1,n2,centerNode,spokeNode), t, tps, MulticutTripletPlusSpokeCoverMessage::size());
       BaseConstructor::pd_.GetLP().AddMessage(m);
+      //BaseConstructor::pd_.GetLP().AddFactorRelation(t,tps);
       return tps;
    }
    bool HasTripletPlusSpokeFactor(const INDEX n1, const INDEX n2, const INDEX centerNode, const INDEX spokeNode) const
@@ -719,16 +749,30 @@ public:
       auto* m = new TripletPlusSpokeMessageContainer(MulticutTripletPlusSpokeMessage(n1,n2,centerNode,spokeNode,tripletIndices[0],tripletIndices[1],tripletIndices[2]),t,tps,MulticutTripletPlusSpokeMessage::size());
       //auto* m = new TripletPlusSpokeMessageContainer(MulticutTripletPlusSpokeMessage(sharedTripletEdgeTriplet,spokeEdgeTriplet,sharedTripletEdgeTripletPlusSpoke),t,tps,MulticutTripletPlusSpokeMessage::size());
       BaseConstructor::pd_.GetLP().AddMessage(m);
+      if(tripletNode == n1) {
+         //BaseConstructor::pd_.GetLP().AddFactorRelation(t,tps);
+      } else {
+         assert(tripletNode == n2);
+         //BaseConstructor::pd_.GetLP().AddFactorRelation(tps,t);
+      }
       return m;
    }
 
-   // rename to EnforceOddWheel. No single odd wheel factor is added
    INDEX EnforceOddWheel(const INDEX centerNode, std::vector<INDEX> cycle)
    {
+      assert(cycle.size()%2 == 1);
       CycleNormalForm(cycle);
       //logger->info() << "Enforce odd wheel with center node " << centerNode << " and cycle nodes ";
       //for(auto i : cycle) logger->info() << i << ",";
       for(auto i : cycle) { assert(i != centerNode); }
+      // add emppty triplets emanating from center node
+      for(INDEX i=0; i<cycle.size(); ++i) {
+         std::array<INDEX,3> triplet{centerNode, cycle[i], cycle[(i+1)%cycle.size()]};
+         std::sort(triplet.begin(), triplet.end()); // do zrobienia: use faster sorting
+         if(!BaseConstructor::HasTripletFactor(triplet[0],triplet[1],triplet[2])) {
+            AddTripletFactor(triplet[0],triplet[1],triplet[2]);
+         }
+      }
    
       INDEX tripletPlusSpokesAdded = 0;
       // we enforce the odd wheel constraint by quadrangulating the odd wheel. This results in triplets and triplets with an additional spoke.
@@ -769,14 +813,173 @@ public:
    INDEX FindOddWheels(const REAL minDualIncrease, const INDEX maxCuttingPlanesToAdd)
    {
       INDEX oddWheelsAdded = 0;
+
+      // search for all triangles present in the graph, also in places where no triplet factor has been added
+      // Construct adjacency list
+      std::vector<std::vector<INDEX>> adjacencyList(BaseConstructor::noNodes_);
+      for(auto& e : BaseConstructor::unaryFactors_) {
+         const INDEX i = std::get<0>(e)[0];
+         const INDEX j = std::get<0>(e)[1];
+         assert(i<j);
+         adjacencyList[i].push_back(j);
+         adjacencyList[j].push_back(i);
+      }
+      // sort it for fast intersection
+      for(INDEX i=0; i<adjacencyList.size(); ++i) {
+         std::sort(adjacencyList[i].begin(), adjacencyList[i].end());
+      }
+      /*
+      // count triangles
+      INDEX noTriangles = 0;
+      for(auto& e : BaseConstructor::unaryFactors_) {
+         const INDEX i = std::get<0>(e)[0];
+         const INDEX j = std::get<0>(e)[1];
+         assert(i<j);
+         auto commonNodesEnd = std::set_intersection(adjacencyList[i].begin(), adjacencyList[i].end(), adjacencyList[j].begin(), adjacencyList[j].end(), commonNodes.begin());
+         for(auto it=commonNodes.begin(); it!=commonNodesEnd; ++it) {
+            if(j < *it) { // triangles are counted multiple times
+               ++noTriangles;
+            }
+         }
+      }
+      std::cout << "no triangles = " << noTriangles << "\n";
+      exit(1);
+      // construct all triangles
+      std::unordered_set<std::array<INDEX,3>,decltype(hf3)> triangles {noTriangles,hf3};
+      for(auto& e : BaseConstructor::unaryFactors_) {
+         const INDEX i = std::get<0>(e)[0];
+         const INDEX j = std::get<0>(e)[1];
+         assert(i<j);
+         auto commonNodesEnd = std::set_intersection(adjacencyList[i].begin(), adjacencyList[i].end(), adjacencyList[j].begin(), adjacencyList[j].end(), commonNodes.begin());
+         for(auto it=commonNodes.begin(); it!=commonNodesEnd; ++it) {
+            if(j < *it) { // triangles are counted multiple times
+               triangles.insert(std::array<INDEX,3>{i,j,*it});
+            }
+         }
+      }
+      */
+
+
+      std::vector<INDEX> commonNodes(BaseConstructor::noNodes_); // for detecting triangles
+      for(INDEX i=0; i<BaseConstructor::noNodes_; ++i) {
+         // compressed nodes for later usage in bfs
+         std::unordered_map<INDEX,INDEX> origToCompressedNode {tripletByIndices_[i].size()}; // compresses node indices
+         origToCompressedNode.max_load_factor(0.7);
+         std::vector<INDEX> compressedToOrigNode; // compressed nodes to original
+         std::vector<std::array<INDEX,2>> compressedEdges;
+
+         // find all triangles ijk
+         for(INDEX j : adjacencyList[i]) {
+            auto commonNodesEnd = std::set_intersection(adjacencyList[i].begin(), adjacencyList[i].end(), adjacencyList[j].begin(), adjacencyList[j].end(), commonNodes.begin());
+            for(auto it=commonNodes.begin(); it!=commonNodesEnd; ++it) {
+               const INDEX k = *it; 
+               if(j<k) { // edge is encountered twice
+                  // compute cost of all possible triangle assignments on ijk
+                  bool addTriplet = false;
+                  std::array<INDEX,3> triplet{i,j,k};
+                  std::sort(triplet.begin(),triplet.end()); // do zrobienia: use faster sorting
+                  if(BaseConstructor::HasTripletFactor(triplet[0],triplet[1],triplet[2])) {
+                     auto* t = BaseConstructor::GetTripletFactor(triplet[0],triplet[1],triplet[2]);
+                     INDEX l1, l2;
+                     INDEX l3, l4; // the other labelings
+                     assert(t->GetFactor()->size() == 4);
+                     if(i < j && i < k) { // the cycle edge is the last one
+                        l1 = 0; l2 = 1;
+                        l3 = 2; l4 = 3;
+                     } else if (i > j && i > k) { // the cycle edge is the first one
+                        l1 = 1; l2 = 2;
+                        l3 = 0; l4 = 3;
+                     } else { // j < i < k, the cycle edge is the second one
+                        l1 = 0; l2 = 2;
+                        l3 = 1; l4 = 3;
+                     }
+                     if( std::min((*t)[l1], (*t)[l2]) <= std::min(0.0,std::min((*t)[l3],(*t)[l4])) - minDualIncrease) { // do zrobienia: check again
+                        addTriplet = true;
+                     }
+                  } else { // get cost directly from edge factors
+                     const REAL ij = BaseConstructor::GetUnaryFactor(std::min(i,j), std::max(i,j))->operator[](0);
+                     const REAL ik = BaseConstructor::GetUnaryFactor(std::min(i,k), std::max(i,k))->operator[](0);
+                     const REAL jk = BaseConstructor::GetUnaryFactor(j,k)->operator[](0);
+                     if(std::min(ij+jk, ik+jk) <= std::min(std::min(ij+ik, ij+ik+jk),0.0) - minDualIncrease) { // do zrobienia: check again
+                        addTriplet = true;
+                     }
+                  }
+                  if(addTriplet == true) {
+                     // add j and k to compressed nodes
+                     if(origToCompressedNode.find(j) == origToCompressedNode.end()) {
+                        origToCompressedNode.insert(std::make_pair(j, origToCompressedNode.size()));
+                        compressedToOrigNode.push_back(j);
+                     }
+                     if(origToCompressedNode.find(k) == origToCompressedNode.end()) {
+                        origToCompressedNode.insert(std::make_pair(k, origToCompressedNode.size()));
+                        compressedToOrigNode.push_back(k);
+                     }
+                     const INDEX jc = origToCompressedNode[j];
+                     const INDEX kc = origToCompressedNode[k];
+                     assert(jc != kc);
+                     compressedEdges.push_back(std::array<INDEX,2>{jc,kc});
+
+                  }
+               }
+            }
+         }
+         const INDEX noCompressedNodes = origToCompressedNode.size();
+         const INDEX noBipartiteCompressedNodes = 2*noCompressedNodes;
+         typename BaseConstructor::Graph g(noBipartiteCompressedNodes,2*compressedEdges.size());
+         typename BaseConstructor::BfsData mp(g);
+         UnionFind uf(noBipartiteCompressedNodes);
+         // construct bipartite graph based on triangles
+         for(auto& e : compressedEdges) {
+            const INDEX jc = e[0];
+            const INDEX  kc = e[1];
+            g.AddEdge(jc,noCompressedNodes + kc,0.0);
+            g.AddEdge(noCompressedNodes + jc,kc,0.0);
+            uf.merge(jc,noCompressedNodes + kc);
+            uf.merge(noCompressedNodes + jc,kc);
+         }
+         // now check whether path exists between any given edges on graph
+         //logger->info() << "built auxiliary graph for node " << i << " with " << origToCompressedNode.size() << " nodes";
+         for(INDEX j=0; j<noCompressedNodes; ++j) { // not nice: this has to be original number of nodes and bipartiteNumberOfNodes
+            // find path from node j to node noNodes+j in g
+            if(uf.connected(j,noCompressedNodes+j)) {
+               //logger->info() << "find path from " << j << " to " << j+noNodes << " and add corresponding wheel";
+               auto path = mp.FindPath(j,noCompressedNodes+j,g);
+               auto pathNormalized = std::get<1>(path);
+               //logger->info() << "found compressed path ";
+               //for(INDEX k=0; k<pathNormalized.size(); ++k) {
+               //   logger->info() << pathNormalized[k] << ", ";
+               //}
+               pathNormalized.resize(pathNormalized.size()-1); // first and last node coincide
+               for(INDEX k=0; k<pathNormalized.size(); ++k) { // note: last node is copy of first one
+                  //assert(compressedToOrigNode.find(pathNormalized[k]%noCompressedNodes) != compressedToOrigNode.end());
+                  pathNormalized[k] = compressedToOrigNode[pathNormalized[k]%noCompressedNodes];
+               }
+               //for(auto& k : pathNormalized) {
+               //   assert(compressedToOrigNode.find(k) != compressedToOrigNode.end());
+               //   k = compressedToOrigNode[k%noNodes];
+               //}
+               if(HasUniqueValues(pathNormalized)) { // possibly already add the subpath that is unique and do not search for it later. Indicate this with a std::vector<bool>
+                  //assert(HasUniqueValues(pathNormalized)); // if not, a shorter subpath has been found. This subpath will be detected or has been deteced and has been added
+                  CycleNormalForm(pathNormalized);
+                  //CycleNormalForm called unnecesarily in EnforceOddWheel
+                  oddWheelsAdded += EnforceOddWheel(i,pathNormalized);
+               } else {
+                  //spdlog::get("logger")->info() << "kwaskwas: add subcycles";
+                  //assert(false); //
+               }
+            }
+         }
+      }
+
+      return oddWheelsAdded;
+
       //logger->info() << "find odd wheel, " << BaseConstructor::tripletFactors_.size();
       // do zrobienia: use reparametrization of edge potentials or of triplet potentials or of both simultaneously?
       // currently we assume we have triplet edges, which may not hold true. Better use original edges
       for(INDEX i=0; i<BaseConstructor::noNodes_; ++i) {
          // get all triplet factors attached to node i and build bipartite subgraph with doubled edges as described in Nowozin's thesis
-         // make a hash of this. Give hints to load etc.
-         // do zrobienia: use hash map
-         std::map<INDEX,INDEX> origToCompressedNode; // compresses node indices
+         std::unordered_map<INDEX,INDEX> origToCompressedNode {tripletByIndices_[i].size()}; // compresses node indices
+         origToCompressedNode.max_load_factor(0.7);
          std::vector<INDEX> compressedToOrigNode; // compressed nodes to original
          for(INDEX j=0; j<tripletByIndices_[i].size(); ++j) {
             const INDEX i1 = std::get<0>(tripletByIndices_[i][j]);
@@ -787,12 +990,10 @@ public:
             if(origToCompressedNode.find(i1) == origToCompressedNode.end()) {
                origToCompressedNode.insert(std::make_pair(i1, origToCompressedNode.size()));
                compressedToOrigNode.push_back(i1);
-               //compressedToOrigNode.insert(std::make_pair(origToCompressedNode.size()-1,i1));
             }
             if(origToCompressedNode.find(i2) == origToCompressedNode.end()) {
                origToCompressedNode.insert(std::make_pair(i2, origToCompressedNode.size()));
                compressedToOrigNode.push_back(i2);
-               //compressedToOrigNode.insert(std::make_pair(origToCompressedNode.size()-1,i2));
             }
          }
          const INDEX noCompressedNodes = origToCompressedNode.size();
@@ -804,7 +1005,7 @@ public:
             typename BaseConstructor::TripletFactorContainer*  t = std::get<2>(tripletByIndices_[i][j]);
             const INDEX i1 = std::get<0>(tripletByIndices_[i][j]);
             const INDEX i2 = std::get<1>(tripletByIndices_[i][j]);
-            // check if 110 or 101 are among the minimal labelings. where the first edge is the outer cycle edge
+            // check if 110 or 101 are among the minimal labelings, where the first edge is the outer cycle edge
             // the corresponding labeling numbers are
             INDEX l1, l2;
             INDEX l3, l4; // the other labelings
@@ -819,13 +1020,12 @@ public:
                l1 = 0; l2 = 2;
                l3 = 1; l4 = 3;
             }
-            //if( std::min((*t)[l1], (*t)[l2]) <= t->GetFactor()->LowerBound(*t) + eps ) {
             if( std::min((*t)[l1], (*t)[l2]) <= std::min(0.0,std::min((*t)[l3],(*t)[l4])) - minDualIncrease) {
                const INDEX i1c = origToCompressedNode[i1];
                const INDEX i2c = origToCompressedNode[i2];
                assert(i1c != i2c);
-               g.AddEdge(i1c,noCompressedNodes + i2c,0.0); // do zrobienia: possibly only add edges for labelings which have a margin >= minDualIncrease
-               g.AddEdge(noCompressedNodes + i1c,i2c,0.0); // do zrobienia: possibly only add edges for labelings which have a margin >= minDualIncrease
+               g.AddEdge(i1c,noCompressedNodes + i2c,0.0);
+               g.AddEdge(noCompressedNodes + i1c,i2c,0.0);
                uf.merge(i1c,noCompressedNodes + i2c);
                uf.merge(noCompressedNodes + i1c,i2c);
             }
@@ -842,7 +1042,8 @@ public:
                //for(INDEX k=0; k<pathNormalized.size(); ++k) {
                //   logger->info() << pathNormalized[k] << ", ";
                //}
-               for(INDEX k=0; k<pathNormalized.size()-1; ++k) {
+               pathNormalized.resize(pathNormalized.size()-1); // first and last node coincide
+               for(INDEX k=0; k<pathNormalized.size(); ++k) { // note: last node is copy of first one
                   //assert(compressedToOrigNode.find(pathNormalized[k]%noCompressedNodes) != compressedToOrigNode.end());
                   pathNormalized[k] = compressedToOrigNode[pathNormalized[k]%noCompressedNodes];
                }
@@ -850,15 +1051,14 @@ public:
                //   assert(compressedToOrigNode.find(k) != compressedToOrigNode.end());
                //   k = compressedToOrigNode[k%noNodes];
                //}
-               pathNormalized.resize(pathNormalized.size()-1); // first and last node coincide
                if(HasUniqueValues(pathNormalized)) { // possibly already add the subpath that is unique and do not search for it later. Indicate this with a std::vector<bool>
                   //assert(HasUniqueValues(pathNormalized)); // if not, a shorter subpath has been found. This subpath will be detected or has been deteced and has been added
                   CycleNormalForm(pathNormalized);
                   //CycleNormalForm called unnecesarily in EnforceOddWheel
                   oddWheelsAdded += EnforceOddWheel(i,pathNormalized);
                } else {
-                  spdlog::get("logger")->info() << "kwaskwas: add subcycles";
-                  assert(false); //
+                  //spdlog::get("logger")->info() << "kwaskwas: add subcycles";
+                  //assert(false); //
                }
             }
          }
@@ -874,7 +1074,8 @@ public:
       if(tripletsAdded >= maxCuttingPlanesToAdd ) {
          return tripletsAdded;
       } else {
-         const INDEX oddWheelsAdded = FindOddWheels(minDualIncrease, maxCuttingPlanesToAdd - tripletsAdded);
+         // require the odd wheels to have larger impact relative to violated cycles. This ensures that odd wheels are only added late in the optimziation, when no good violated cycles are present any more
+         const INDEX oddWheelsAdded = FindOddWheels(1e10*minDualIncrease, maxCuttingPlanesToAdd - tripletsAdded);
          spdlog::get("logger")->info() << "Added " << oddWheelsAdded << " factors for odd wheel constraints";
          return tripletsAdded + oddWheelsAdded;
       }
@@ -890,21 +1091,12 @@ public:
       assert(false);
    }
 
-   bool CheckPrimalConsistency(const std::vector<bool>& primal) const 
-   {
-
-   }
-
 
 private:
-   //std::map<std::tuple<INDEX,std::vector<INDEX>>, OddWheelFactorContainer*> oddWheelFactors_; // first entry denotes center node, then come cycle nodes with smallest node first, as computed by CycleNormalForm
-   //std::map<std::tuple<INDEX,std::vector<INDEX>>, CriticalTripletCountingFactorContainer*> oddWheelFactors_; // first entry denotes center node, then come cycle nodes with smallest node first, as computed by CycleNormalForm
-   // do zrobienia: possibly also hold pointer to factor
    std::vector<std::vector<std::tuple<INDEX,INDEX,typename BaseConstructor::TripletFactorContainer*>>> tripletByIndices_; // of triplet factor with indices (i1,i2,i3) exists, then (i1,i2,i3) will be in the vector of index i1, i2 and i3
    // the format for TripletPlusSpoke is (node1,node2, centerNode, spokeNode) and we assume n1<n2
-   std::map<std::array<INDEX,4>,TripletPlusSpokeFactorContainer*> tripletPlusSpokeFactors_;
-   //std::vector<std::vector<std::tuple<INDEX,typename BaseConstructor::UnaryFactorContainer*>>> unaryIndices_;
-
+   // hash for std::array<INDEX,4>
+   std::unordered_map<std::array<INDEX,4>,TripletPlusSpokeFactorContainer*,decltype(hf4)> tripletPlusSpokeFactors_;
 };
 
 template<class MULTICUT_CONSTRUCTOR, INDEX LIFTED_MULTICUT_CUT_FACTOR_NO, INDEX CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO, INDEX LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO>

@@ -118,7 +118,6 @@ struct RightMessageFuncGetter
    constexpr static decltype(&MSG_CONTAINER::GetRightMessage) GetMessageFunc() { return &MSG_CONTAINER::GetRightMessage; }
 
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromLeftContainer) GetReceiveFunc() { return &MSG_CONTAINER::ReceiveMessageFromLeftContainer; }
-   template<typename REPAM_ARRAY>
    constexpr static decltype(&MSG_CONTAINER::ReceiveRestrictedMessageFromLeftContainer) GetReceiveRestrictedFunc() { return &MSG_CONTAINER::ReceiveRestrictedMessageFromLeftContainer; }
    template<typename ARRAY>
    constexpr static decltype(&MSG_CONTAINER::template SendMessageToLeftContainer<ARRAY>) GetSendFunc() { return &MSG_CONTAINER::template SendMessageToLeftContainer<ARRAY>; }
@@ -546,37 +545,44 @@ public:
    constexpr static bool
    CanComputeRightFromLeftPrimal()
    {
-      return FunctionExistence::HasComputeRightFromLeftPrimal<MessageType,void,typename PrimalSolutionStorage::Element,typename PrimalSolutionStorage::Element>();
+      return FunctionExistence::HasComputeRightFromLeftPrimal<MessageType,void,
+             typename PrimalSolutionStorage::Element, decltype(leftFactor_->GetFactor()),
+             typename PrimalSolutionStorage::Element, decltype(rightFactor_->GetFactor())>();
    }
    constexpr static bool
    CanComputeLeftFromRightPrimal()
    {
-      return FunctionExistence::HasComputeLeftFromRightPrimal<MessageType,void,typename PrimalSolutionStorage::Element,typename PrimalSolutionStorage::Element>();
+      return FunctionExistence::HasComputeLeftFromRightPrimal<MessageType,void,
+             typename PrimalSolutionStorage::Element, decltype(leftFactor_->GetFactor()),
+             typename PrimalSolutionStorage::Element, decltype(rightFactor_->GetFactor())>();
    }
 
    void ComputeRightFromLeftPrimal(typename PrimalSolutionStorage::Element primal) 
    {
-      msg_op_.ComputeRightFromLeftPrimal(primal + leftFactor_->GetPrimalOffset(), primal + rightFactor_->GetPrimalOffset());
+      msg_op_.ComputeRightFromLeftPrimal(primal + leftFactor_->GetPrimalOffset(), leftFactor_->GetFactor(), primal + rightFactor_->GetPrimalOffset(), rightFactor_->GetFactor());
       rightFactor_->ComputePrimalThroughMessages(primal);
    }
 
    void ComputeLeftFromRightPrimal(typename PrimalSolutionStorage::Element primal)
    {
-      msg_op_.ComputeLeftFromRightPrimal(primal + leftFactor_->GetPrimalOffset(), primal + rightFactor_->GetPrimalOffset());
+      msg_op_.ComputeLeftFromRightPrimal(primal + leftFactor_->GetPrimalOffset(), leftFactor_->GetFactor(), primal + rightFactor_->GetPrimalOffset(), rightFactor_->GetFactor());
       leftFactor_->ComputePrimalThroughMessages(primal);
    }
 
    constexpr static bool
    CanCheckPrimalConsistency()
    {
-      return FunctionExistence::HasCheckPrimalConsistency<MessageType,bool,PrimalSolutionStorage::Element,PrimalSolutionStorage::Element>();
+      return false;
+      //return FunctionExistence::HasCheckPrimalConsistency<MessageType,bool,
+      //       typename PrimalSolutionStorage::Element, decltype(std::declval<LeftFactorContainer*>()->GetFactor()),
+      //       typename PrimalSolutionStorage::Element, decltype(std::declval<RightFactorContainer*>()->GetFactor())>();
    }
    template<bool ENABLE=CanCheckPrimalConsistency()>
    typename std::enable_if<ENABLE,bool>::type
    CheckPrimalConsistencyImpl(PrimalSolutionStorage::Element primal) const
    {
       static_assert(ENABLE == CanCheckPrimalConsistency(),"");
-      return msg_op_.CheckPrimalConsistency(primal + leftFactor_->GetPrimalOffset(), primal + rightFactor_->GetPrimalOffset());
+      return msg_op_.CheckPrimalConsistency(primal + leftFactor_->GetPrimalOffset(), leftFactor_->GetFactor(), primal + rightFactor_->GetPrimalOffset(), rightFactor_->GetFactor());
    }
    template<bool ENABLE=CanCheckPrimalConsistency()>
    typename std::enable_if<!ENABLE,bool>::type
@@ -1007,7 +1013,6 @@ public:
    // do zrobienia: remove this function, obsolete: New primal computation mode
    void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal) final
    {
-      ReceiveMessages(omega);
 
       if(CanComputePrimal()) { // do zrobienia: for now
          if(CanReceiveRestrictedMessages()) {
@@ -1031,6 +1036,7 @@ public:
          MaximizePotential();
       } 
 
+      ReceiveMessages(omega);
       SendMessages(omega);
    }
 

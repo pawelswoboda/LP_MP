@@ -168,7 +168,7 @@ namespace LP_MP {
             logger->info() << "Primal cost equals lower bound";
             return LPVisitorReturnType::Break;
          }
-         if(timeout_ != std::numeric_limits<REAL>::max() && timeElapsed >= timeout_) {
+         if(timeout_ != std::numeric_limits<REAL>::max() && timeElapsed/1000 >= timeout_) {
             logger->info() << "Timeout reached after " << timeElapsed << " seconds";
             remainingIter_ = std::min(INDEX(1),remainingIter_);
          }
@@ -200,7 +200,7 @@ namespace LP_MP {
             } else if(roundingReparametrization_ == "uniform") {
                return LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform;
             } else {
-               throw std::runtime_error("unknown reparametrization mode");
+               throw std::runtime_error("unknown rounding reparametrization mode: " + roundingReparametrization_);
             }
          } else if(curIter_ % primalComputationInterval_ == 0) {
             if(roundingReparametrization_ == "anisotropic") {
@@ -208,23 +208,23 @@ namespace LP_MP {
             } else if(roundingReparametrization_ == "uniform") {
                return LPVisitorReturnType::ReparametrizePrimalUniform;
             } else {
-               throw std::runtime_error("unknown reparametrization mode");
+               throw std::runtime_error("unknown rounding reparametrization mode: " + roundingReparametrization_);
             }
          } else if(curIter_ % lowerBoundComputationInterval_ == 0) {
             if(standardReparametrization_ == "anisotropic") {
                return LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic;
-            } else if(roundingReparametrization_ == "uniform") {
+            } else if(standardReparametrization_ == "uniform") {
                return LPVisitorReturnType::ReparametrizeLowerBoundUniform;
             } else {
-               throw std::runtime_error("unknown reparametrization mode");
+               throw std::runtime_error("unknown standard reparametrization mode: " + standardReparametrization_);
             }
          } else {
             if(standardReparametrization_ == "anisotropic") {
                return LPVisitorReturnType::ReparametrizeAnisotropic;
-            } else if(roundingReparametrization_ == "uniform") {
+            } else if(standardReparametrization_ == "uniform") {
                return LPVisitorReturnType::ReparametrizeUniform;
             } else {
-               throw std::runtime_error("unknown reparametrization mode");
+               throw std::runtime_error("unknown standard reparametrization mode: " + standardReparametrization_);
             }
          }
          

@@ -7,7 +7,6 @@
  *  Adapted to LP_MP by Paul Swoboda (only 2012 code)
  *
  */
-#pragma once
 #ifndef LP_MP_CYCLE_INEQUALITIES_HXX
 #define LP_MP_CYCLE_INEQUALITIES_HXX
 

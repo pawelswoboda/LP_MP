@@ -87,14 +87,20 @@ public:
    void
    ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, PrimalSolutionStorage::Element primal) const
    {
+      return;
       assert(msg.size() == 1);
       if(primal[(i_+1)%3] == true || primal[(i_+2)%3] == true || primal[3] == true) { // force unary to one
          msg[0] += std::numeric_limits<REAL>::infinity();
+         //std::cout << msg.GetLeftFactor()->operator[](0) << "\n";
          assert(msg.GetLeftFactor()->operator[](0) == -std::numeric_limits<REAL>::infinity() );
       } else if(primal[i_] == true || (primal[0] == false && primal[1] == false && primal[2] == false && primal[3] == false)) { // force unary to zero 
+         return;
+         assert(msg.GetLeftFactor()->operator[](0) != std::numeric_limits<REAL>::infinity() );
          msg[0] -= std::numeric_limits<REAL>::infinity(); 
+         std::cout << msg.GetLeftFactor()->operator[](0) << "\n";
          assert(msg.GetLeftFactor()->operator[](0) == std::numeric_limits<REAL>::infinity() );
       } else { // compute message on unknown values only. No entry of primal is true
+         return;
          assert(4 == r->size());
          std::array<REAL,4> restrictedPot;
          restrictedPot.fill(std::numeric_limits<REAL>::infinity());
@@ -135,38 +141,43 @@ public:
       repamPot[3] += msg; 
    }
 
-   void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element leftPrimal, typename PrimalSolutionStorage::Element rightPrimal) const
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element leftPrimal, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element rightPrimal, RIGHT_FACTOR* r) const
    {
+      //return;
       if(leftPrimal[0] == true) { 
-         // check whether one of 011,101,110 can be inferred
-         if(rightPrimal[3] != false && rightPrimal[i_] == false) { // this means that some other message has set current variable to zero, but then we can infer that one of 110,101,011 must be true
-            if(rightPrimal[(i_+1)%3] == false && rightPrimal[(i_+2)%3] != false) {
-               rightPrimal[(i_+2)%3] = true;
-            } else if(rightPrimal[(i_+2)%3] == false && rightPrimal[(i_+1)%3] != false) { 
-               rightPrimal[(i_+1)%3] = true;
-            }
+         // check whether one of 011,101,110 can be inferred. Fot this, some other label must have been set to 0 already and the third one must not have been yet visited
+         if(rightPrimal[3] == false && rightPrimal[i_] == false && rightPrimal[(i_+1)&3] == false && rightPrimal[(i_+2)%3] == unknownState) {
+            rightPrimal[(i_+2)%3] = true;
+            return;
+         }
+         if(rightPrimal[3] == false && rightPrimal[i_] == false && rightPrimal[(i_+2)&3] == false && rightPrimal[(i_+1)%3] == unknownState) {
+            rightPrimal[(i_+1)%3] = true;
+            return;
          }
          rightPrimal[i_] = false;
-      } else if( leftPrimal[0] == false) {
-         // check, whether some other variable is one. This is true, whenever exactly one other 0-configuration is forbidden. If so, we can infer one of 011,101,110
+         // now check if 111 can be inferred:
+         // if 011,101,110 are false, but 111 is not, then make it true. We know in this case that all the unaries are true
+         if(rightPrimal[0] == false && rightPrimal[1] == false && rightPrimal[2] == false && rightPrimal[3] == unknownState) {
+            rightPrimal[3] = true;
+            return;
+         } 
+      } else {
+         assert(leftPrimal[0] == false); // we assume that unary factor has been set in rounding previously.
+         // check, whether some other variable is true. This is true, whenever exactly one other 0-configuration is forbidden. If so, we can infer one of 011,101,110
          if(rightPrimal[3] != false && ((rightPrimal[(i_+1)%3] == false || rightPrimal[(i_+2)%3] != false) || (rightPrimal[(i_+2)%3] == false || rightPrimal[(i_+1)%3] != false)) ) {
             rightPrimal[i_] = true;
          }
          rightPrimal[(i_+1)%3] = false;
          rightPrimal[(i_+2)%3] = false;
          rightPrimal[3] = false;
-      } else { // we assume that unary factor has been set in rounding previously.
-         assert(false);
       }
-      // now check if 111 can be inferred:
-      // if 011,101,110 are false, but 111 is not, then make it true. We know in this case that all the unaries are true
-      if(rightPrimal[0] == false && rightPrimal[1] == false && rightPrimal[2] == false && rightPrimal[3] != false) {
-         rightPrimal[3] = true;
-      } 
    }
 
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, PrimalSolutionStorage::Element rightPrimal) const
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element rightPrimal, RIGHT_FACTOR* r) const
    {
+      assert(false);
       assert(leftPrimal[0] != unknownState);
       if(leftPrimal[0] == false) {
          if(!(rightPrimal[i_] == true || (rightPrimal[0] == false && rightPrimal[1] == false && rightPrimal[2] == false && rightPrimal[3] == false))) {

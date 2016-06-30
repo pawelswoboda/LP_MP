@@ -15,7 +15,7 @@ public:
    static void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    {
       assert(repam.size() == 1);
-      if(repam[0] < 0) { 
+      if(repam[0] <= 0) { 
          primal[0] = true; 
       } else { 
          primal[0] = false; 

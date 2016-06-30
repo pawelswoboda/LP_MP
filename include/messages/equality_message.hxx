@@ -55,6 +55,25 @@ public:
       //MakeLeftFactorUniform(leftPot, msg); 
    }
 
+   template<typename RIGHT_FACTOR, typename G1, typename G2>
+   void ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, typename PrimalSolutionStorage::Element rightPrimal)
+   {
+      if(rightPrimal[rightVar_] == false) {
+         msg[0] -= std::numeric_limits<REAL>::infinity();
+      } else if(rightPrimal[rightVar_] == true) {
+         msg[0] += std::numeric_limits<REAL>::infinity();
+      }
+   }
+
+   template<typename LEFT_FACTOR, typename G1, typename G2>
+   void ReceiveRestrictedMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg, typename PrimalSolutionStorage::Element leftPrimal)
+   { 
+      if(leftPrimal[leftVar_] == false) {
+         msg[0] -= std::numeric_limits<REAL>::infinity();
+      } else if(leftPrimal[leftVar_] == true) {
+         msg[0] += std::numeric_limits<REAL>::infinity();
+      }
+   }
    /*
    template<typename LEFT_FACTOR, typename G1, typename G3>
    void SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega)
@@ -176,18 +195,41 @@ public:
       if(i==rightVar_) return msg[0];
       else return 0.0;
    }
-   
+
+   /*
+   void ComputeLeftFromRightPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right) 
+   {
+      if(right[rightVar_] == true) { 
+         left[leftVar_] = true;
+         // it would be nice to set all other entries to false
+      } else if(right[rightVar_] == false) {
+         left[leftVar_] = false;
+      }
+   }
+   */
+
+   void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right)
+   {
+      if(left[leftVar_] == true) { 
+         right[rightVar_] = true;
+         // it would be nice to set all other entries to false
+      } else if(left[leftVar_] == false) {
+         right[rightVar_] = false;
+      }
+   }
+  
    // here it is checked whether labeling on left side and labeling on right side fulfill the constraints of the message
    // note: If we build an LP-model, this could be checked automatically!
-   bool CheckPrimalConsistency(const INDEX leftPrimal, const INDEX rightPrimal) const
+   bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, PrimalSolutionStorage::Element rightPrimal) const
    {
-      if(leftPrimal == leftVar_) { return rightPrimal == rightVar_; }
-      if(rightPrimal == rightVar_) { return leftPrimal == leftVar_; }
+      if(leftPrimal[leftVar_]) { return rightPrimal[rightVar_] == true; }
+      if(rightPrimal[rightVar_]) { return leftPrimal[leftVar_] == true; }
       return true;
    }
 
+
 private:
-   //do zrobienia: possibly SHORT_INDEX
+   //do zrobienia: possibly SHORT_INDEX or some 16 bit index (i.e. short unsigned int)
    const INDEX leftVar_, rightVar_; // variables affected 
 };
 
