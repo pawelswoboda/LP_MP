@@ -56,7 +56,7 @@ namespace LP_MP{
 
     auto xa = [&](INDEX idx){ return idx % numberOfLabels_;  };
     auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
-    auto z = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xb(idx); };
+    auto z = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return (idx - xa(idx))/numberOfLabels_; };
     
     if( xa(up) == xa(left) &&
         xb(up) == xb(right)&&
@@ -140,34 +140,43 @@ namespace LP_MP{
 
 
   void DiscreteTomographyFactorCounting::PropagatePrimal(PrimalSolutionStorage::Element primal) const{
-
+    
     struct IdxLbl {
-      IdxLbl(INDEX x,INDEX y) : idx(x),c(y) {
+      IdxLbl(INDEX x,INDEX y,INDEX l) : idx(x),c(y),noLabels(l) {
         INDEX i=idx;
-        a = i & numberOfLabels_;
-        i = (i-a) / numberOfLabels_;
-        b = i % numberOfLabels_;
-        z = (i-b) / numberOfLabels_;
+        a = i % noLabels;
+        i = (i-a) / noLabels;
+        b = i % noLabels;
+        z = (i-b) / noLabels;
       }
       
-      const INDEX idx,c;
+      const INDEX idx,c,noLabels;
       INDEX a = 0;
       INDEX b = 0;
       INDEX z = 0;
     };
-    
+
     auto getOptLabel = [&](INDEX s,INDEX t){
       INDEX noTrue = 0;
       INDEX noUnkwn = 0;
       INDEX opt = 0;
       for(INDEX i=0;i<s;i++){
-        if( primal[t + i] == true ){ noTrue++; opt=i;  }
-        if( primal[t + i] == unknownState ){ noUnkwn++; }
+        if( primal[t + i] == true ){ noTrue++; opt=i; }
+        if( primal[t + i] == unknownState ){ noUnkwn++; opt=i; }
       }
       assert(noTrue <=1);
       assert(noTrue != 1 || noUnkwn == 0);
-      assert(noUnkwn != 0 || noTrue == 1 );
-      return IdxLbl(opt,noTrue);
+      assert(noTrue == 0 || noUnkwn == 0);
+
+      if( noTrue == 1 ){ return IdxLbl(opt,1,numberOfLabels_); }
+      else if( noUnkwn == 1 && noTrue == 0  ){
+        primal[t+opt]=true;
+        return IdxLbl(opt,1,numberOfLabels_);
+      }
+      else if( noUnkwn > 1 && noTrue == 0 ){
+        return IdxLbl(opt,0,numberOfLabels_);
+      }
+      else{ assert(false); } // not possible!
     };
     
     /* Get primal label */
@@ -176,28 +185,28 @@ namespace LP_MP{
     auto right = getOptLabel(rightSize_,upSize_ + leftSize_);
     auto reg   = getOptLabel(regSize_  ,upSize_ + leftSize_ + rightSize_);
 
-    auto CalcIdx = [&](INDEX a,INDEX b,INDEX z){ return a + b*numberOfLabels_ + z*pow(numberOfLabels_,2); };
+    auto CalcIdx = [&](INDEX a,INDEX b,INDEX z){ return a + b*numberOfLabels_ + z*((INDEX)pow(numberOfLabels_,2)); };
     auto Set2False = [&](INDEX s,INDEX t){ for(INDEX i=0;i<s;i++){primal[t+i]=false;} };
     INDEX count = up.c + left.c + right.c + reg.c;
     
     /* If exact one label is missing, we can calculate it */
     if( count == 3 ){
-      if(up.c == 0 && left.b == reg.a && right.a == reg.b ){   // up + consistency   
-        assert(left.z+right.z < upSize_);
+      if(up.c == 0 && left.b == reg.a && right.a == reg.b
+         && CalcIdx(left.a,right.b,left.z+right.z) < upSize_ ){   // up + consistency
         Set2False(upSize_,0);
         primal[CalcIdx(left.a,right.b,left.z+right.z)]=true; }
-      if(left.c == 0 && up.b == right.b && right.a == reg.b ){ // left + consistency
-        assert(up.z >= right.z);
-        assert(up.z-right.z < leftSize_);
+      if(left.c == 0 && up.b == right.b && right.a == reg.b
+         && up.z >= right.z
+         && CalcIdx(up.a,reg.a,up.z-right.z) < leftSize_){ // left + consistency
         Set2False(leftSize_,upSize_);
         primal[upSize_ + CalcIdx(up.a,reg.a,up.z-right.z)]=true; }
-      if(right.c == 0 && up.a == left.a && left.b == reg.a ){  // right + consistency
-        assert(up.z >= right.z);
-        assert(up.z-right.z < rightSize_);
+      if(right.c == 0 && up.a == left.a && left.b == reg.a   // right + consistency
+         && CalcIdx(up.b,reg.b,up.z-left.z)
+         && up.z >= right.z ){
         Set2False(rightSize_,upSize_ + leftSize_);
         primal[upSize_ + leftSize_ + CalcIdx(up.b,reg.b,up.z-left.z)]=true; }
       if(reg.c == 0 && up.a == left.a && up.b == right.b 
-          && up.z == (left.z + right.z) ){                    // pairwise + consistency
+         && up.z == (left.z + right.z) ){                    // pairwise + consistency
         Set2False(regSize_,upSize_ + leftSize_ + rightSize_);
         primal[upSize_ + leftSize_ + rightSize_ + CalcIdx(left.b,right.a,0)]=true; }
     } 
@@ -205,7 +214,7 @@ namespace LP_MP{
     if( count == 4){
       assert(left.a == up.a && up.b == right.b);
       assert(left.b == reg.a && reg.b == right.a);
-      assert(up.z == (left.z + right.z))
+      assert(up.z == (left.z + right.z));
     }
     
   }
@@ -220,6 +229,10 @@ namespace LP_MP{
     INDEX right = 0;
     INDEX reg = 0;
 
+    auto xa = [&](INDEX idx){ return idx % numberOfLabels_;  };
+    auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
+    auto z = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return (idx - xa(idx))/numberOfLabels_; };
+    
     auto updateVal = [&](INDEX s,INDEX t,INDEX& idx){
       for(INDEX i=0;i<s;i++){
         if(primal[t+i] == true){
@@ -234,12 +247,8 @@ namespace LP_MP{
     size += upSize_;     updateVal(leftSize_,size,left);
     size += leftSize_;   updateVal(rightSize_,size,right);
     size += rightSize_;  updateVal(regSize_,size,reg);
-
+    
     assert(count <= 4);
-
-    auto xa = [&](INDEX idx){ return idx % numberOfLabels_;  };
-    auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
-    auto z = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xb(idx); };
 
     if( xa(up) == xa(left) &&
         xb(up) == xb(right)&&
@@ -247,7 +256,7 @@ namespace LP_MP{
         xa(reg) == xb(left) &&
         xb(reg) == xa(right) &&
         count == 4 )
-      { return val; }
+      {  return val; }
     else{
       return std::numeric_limits<REAL>::infinity();
     }

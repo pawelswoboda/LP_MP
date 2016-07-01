@@ -179,48 +179,52 @@ namespace LP_MP {
     assert(rightFactor->getSize(DiscreteTomographyFactorCounting::NODE::right) == rightSize_);
     assert(rightFactor->getSize(DiscreteTomographyFactorCounting::NODE::reg) == regSize_);
 
+    
     INDEX opt = 0;
     INDEX count = 0;
+    INDEX noUnkwn = 0;
 
     /* Check if there is one "true" label for the pairwise term */
     for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
-      if( left[i] == true ){  //|| left[i] == unknownState ){
+      if( left[i] == true ){
         opt = i; count++;
+        assert(right[upSize_ + leftSize_ + rightSize_ + i] != 0); // do not overwrite results!
       }
+      if( left[i] == unknownState ){ opt = i; noUnkwn++; };
       right[upSize_ + leftSize_ + rightSize_ + i] = left[i]; // copy pairwise primal to ternary
     }
     assert(count <= 1);
-
+    assert(count != 1 || noUnkwn == 0);
+    assert(noUnkwn != 0 || count == 1);
+    assert(noUnkwn != 0 || count != 0);
+    
     /* Calculate left and right label  */
     INDEX b = opt % numberOfLabels_;
     INDEX c = ((opt - b)/numberOfLabels_) % numberOfLabels_;
 
     /*
       Check for leafs
-     */
-    
-    /* If the left variables is a leaf  */
-    if(numberOfVarsLeft_ == 1 && count == 1){
-      
+    */
+    if(noUnkwn == 1 && count == 0){ count = 1; }
+
+    /* If the left variable is a leaf  */
+    INDEX lIdx = b + b*numberOfLabels_ + b*pow(numberOfLabels_,2);
+    if(numberOfVarsLeft_ == 1 && count == 1 && lIdx < leftSize_){
       for(INDEX i=0;i<leftSize_;i++){
         right[upSize_ + i]=false;
       }
       
-      INDEX lIdx = b + b*numberOfLabels_ + b*pow(numberOfLabels_,2);
       right[upSize_ + lIdx]=true;
-      count++;
     }
 
-    /* If the right variables is a leaf  */
-    if(numberOfVarsRight_ == 1 && count == 1){
-      
+    /* If the right variable is a leaf  */
+    INDEX rIdx = c + c*numberOfLabels_ + c*pow(numberOfLabels_,2);
+    if(numberOfVarsRight_ == 1 && count == 1 && rIdx < rightSize_){
       for(INDEX i=0;i<rightSize_;i++){
         right[upSize_ + leftSize_ + i]=false;
       }
 
-      INDEX rIdx = c + c*numberOfLabels_ + c*pow(numberOfLabels_,2);
       right[upSize_ + leftSize_ + rIdx]=true;
-      count++;
     }
      
   }

@@ -318,29 +318,33 @@ namespace LP_MP {
     assert(rightFactor->getSize(DiscreteTomographyFactorCounting::NODE::right) == rightSize_);
     assert(rightFactor->getSize(DiscreteTomographyFactorCounting::NODE::reg) == regSize_);
     
-     INDEX noTrue = 0;
-     INDEX noUnkwn = 0;
+    auto copyPrimal = [&](INDEX s,INDEX t){
+      INDEX noTrue = 0;
+      INDEX noUnkwn = 0;
+      INDEX opt = 0;
+      for(INDEX i=0;i<s;i++){
+        if( left[i] == true ){
+          noTrue++;
+          assert(right[upSize_ + t + i] != false); // do not overwrite results!
+        }
+        if( left[i] == unknownState ){ noUnkwn++; }
+        right[upSize_ + t + i] = left[i];
+      }
+      assert(noTrue <=1);
+      assert(noTrue != 1 || noUnkwn == 0);
+      assert(noUnkwn != 0 || noTrue == 1 );
+      assert(noUnkwn != 0 || noTrue != 0);
+    };
+     
+    if( DR == DIRECTION::left ){
+      assert( leftFactor->getSize(DiscreteTomographyFactorCounting::NODE::up) == leftSize_ );
+      copyPrimal(leftSize_,0);
+    }
+    else{
+      assert( leftFactor->getSize(DiscreteTomographyFactorCounting::NODE::up) == rightSize_ );
+      copyPrimal(rightSize_,leftSize_);
+    }
 
-     auto copyPrimal = [&](INDEX s,INDEX t){
-       for(INDEX i=0;i<s;i++){
-         if( left[i] == true ){ noTrue++; }
-         if( left[i] == unknownState ){ noUnkwn++; }
-         right[upSize_ + t + i] = left[i];
-       }
-     };
-     
-     if( DR == DIRECTION::left ){
-       assert( leftFactor->getSize(DiscreteTomographyFactorCounting::NODE::up) == leftSize_ );
-       copyPrimal(leftSize_,0);
-     }
-     else{
-       assert( leftFactor->getSize(DiscreteTomographyFactorCounting::NODE::up) == rightSize_ );
-       copyPrimal(rightSize_,leftSize_);
-     }
-     
-     assert(noTrue <=1);
-     assert(noTrue != 1 || noUnkwn == 0);
-     assert(noUnkwn != 0 || noTrue == 1 );
   }
 
 }
