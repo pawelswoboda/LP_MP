@@ -191,7 +191,33 @@ public:
 
    int Solve()
    {
-      return Solver<FMC>::lp_.Solve(visitor_, [&](PrimalSolutionStorage::Element primal) -> bool { return this->CheckPrimalConsistency(primal); });
+      int rt = Solver<FMC>::lp_.Solve(visitor_, [&](PrimalSolutionStorage::Element primal) -> bool { return this->CheckPrimalConsistency(primal); });
+      // discrete tomo inspection
+      auto& mrf = std::get<0>(Solver<FMC>::problemConstructor_);
+      std::cout << "unary potentials:\n";
+      for(INDEX i=0; i<mrf.GetNumberOfVariables();++i) {
+         std::cout << i << ": ";
+         auto* f = mrf.GetUnaryFactor(i);
+         for(INDEX x=0; x<mrf.GetNumberOfLabels(i);++x) {
+            std::cout << f->operator[](x) << ", ";
+         }
+         std::cout << "\n";
+      }
+      std::cout << "pairwise potentials:\n";
+      for(INDEX c=0; c<mrf.GetNumberOfPairwiseFactors(); ++c) {
+         auto* f = mrf.GetPairwiseFactor(c);
+         auto ij = mrf.GetPairwiseVariables(c);
+         const INDEX i=std::get<0>(ij);
+         const INDEX j=std::get<1>(ij);
+         std::cout << i << "," << j << ":\n";
+         for(INDEX xi=0; xi<mrf.GetNumberOfLabels(i);++xi) {
+            for(INDEX xj=0; xj<mrf.GetNumberOfLabels(j);++xj) {
+               std::cout << f->operator[](xi + xj*mrf.GetNumberOfLabels(i)) << ", ";
+            }
+            std::cout << "\n";
+         }
+      }
+      return rt;
    }
 
 private:

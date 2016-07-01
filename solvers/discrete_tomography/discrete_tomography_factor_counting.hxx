@@ -26,6 +26,8 @@ namespace LP_MP{
     //template<typename REPAM_ARRAY>
     //void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, PrimalSolutionStorage::Element primal) const;
     
+   void PropagatePrimal(PrimalSolutionStorage::Element primal) const;
+
     template<typename REPAM_ARRAY>
     REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const; //--required
 
@@ -136,26 +138,32 @@ namespace LP_MP{
     return m;
   }
 
+
+   void DiscreteTomographyFactorCounting::PropagatePrimal(PrimalSolutionStorage::Element primal) const{
+
+   }
+
+
+
   template<typename REPAM_ARRAY>
   REAL DiscreteTomographyFactorCounting::EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const{
-    assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
-    REAL val = 0;
-    INDEX count = 0;
-    INDEX up = 0;
-    INDEX left = 0;
-    INDEX right = 0;
-    INDEX reg = 0;
-    }
-    
-    auto updateVal = [&](INDEX s,INDEX t,INDEX& idx){
-      for(INDEX i=0;i<s;i++){
-	if(primal[t+i] == true){
-	  val += repam[t+i];
-	  idx = i;
-	  count++;
-	}
-      }
-    };
+     assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
+     REAL val = 0;
+     INDEX count = 0;
+     INDEX up = 0;
+     INDEX left = 0;
+     INDEX right = 0;
+     INDEX reg = 0;
+
+     auto updateVal = [&](INDEX s,INDEX t,INDEX& idx){
+        for(INDEX i=0;i<s;i++){
+           if(primal[t+i] == true){
+              val += repam[t+i];
+              idx = i;
+              count++;
+           }
+        }
+     };
 
     INDEX size = 0;      updateVal(upSize_,size,up);
     size += upSize_;     updateVal(leftSize_,size,left);

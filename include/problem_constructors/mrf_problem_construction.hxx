@@ -322,7 +322,7 @@ public:
       LinkPairwiseTripletFactor<PairwiseTripletMessage13Container>(factor13Id,factorId);
       LinkPairwiseTripletFactor<PairwiseTripletMessage23Container>(factor23Id,factorId);
 
-      this->pd_.GetLP()->AddFactor(t);
+      this->lp_->AddFactor(t);
       return t;
    }
    template<typename PAIRWISE_TRIPLET_MESSAGE_CONTAINER>
@@ -359,7 +359,7 @@ public:
       MessageType m = MessageType(pairwiseLoop, tripletLoop);
       PAIRWISE_TRIPLET_MESSAGE_CONTAINER* mc = new PAIRWISE_TRIPLET_MESSAGE_CONTAINER(m, p, t, p->size());
       tripletMessage_.push_back( mc );
-      this->pd_.GetLP()->AddMessage(mc);
+      this->lp_->AddMessage(mc);
    }
    INDEX GetNumberOfTripletFactors() const { return tripletFactor_.size(); }
 

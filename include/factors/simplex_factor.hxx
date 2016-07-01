@@ -17,8 +17,12 @@ namespace LP_MP {
 
 // this class does nothing and is used, when reparametrization is held explicitly by RepamStorage. Specialized classes for holding actual information can be supplied, though.
 struct SimplexEmptyVector {
-template<typename ARRAY> SimplexEmptyVector(const ARRAY& a) {}
+template<typename ARRAY> SimplexEmptyVector(const ARRAY& a) : size_(a.size()) {}
+const INDEX size() const { return size_; }
+private:
+const INDEX size_;
 };
+
 template<typename COST_ARRAY = SimplexEmptyVector>
 class SimplexFactor : public COST_ARRAY
 {
@@ -26,26 +30,31 @@ public:
    SimplexFactor(const std::vector<REAL>& cost)
       : COST_ARRAY(cost)
    {}
-   SimplexFactor() {}
+   //SimplexFactor() {}
 
    template<typename REPAM_ARRAY>
    static void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    {
       for(INDEX i=0; i<repam.size(); ++i) { // ensure that primal has been initialized correctly to true
+         std::cout << repam[i] << ",";
+      }
+      for(INDEX i=0; i<repam.size(); ++i) { // ensure that primal has been initialized correctly to true
          assert(primal[i] == unknownState); // note: more general procedure is possible, but not implemented yet. In general, if already one state is primal, set all unknown states to false. Otherwise choose minimum over unknown states and set primal to it. use randomization?
       }
       // note: currently possibly also pairwise factors are called here, although this should not be made for SRMP style rounding
       INDEX min_element;
-      REAL min_value = std::numeric_limits<REAL>::max();
+      REAL min_value = std::numeric_limits<REAL>::infinity();
       for(INDEX i=0; i<repam.size(); ++i) {
          primal[i] = false;
-         if(min_value > repam[i]) {
+         if(min_value >= repam[i]) {
             min_value = repam[i];
             min_element = i;
          }
       }
       assert(min_element < repam.size());
       primal[min_element] = true;
+      std::cout << ";    " << min_element;
+      std::cout << "\n";
    };
 
    template<typename REPAM_ARRAY>
@@ -57,38 +66,49 @@ public:
       return min_val;
    }
 
-   template<typename REPAM_ARRAY>
-   static REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) 
+   // if there is exactly one unknownIndex (rest false), make it true
+   // if there is already one true index, make all other false
+   void PropagatePrimal(PrimalSolutionStorage::Element primal)
    {
-      REAL cost = std::numeric_limits<REAL>::max();
-      INDEX noActive = 0;
+      INDEX noTrue = 0;
       INDEX noUnknown = 0;
       INDEX unknownIndex;
-      for(INDEX i=0; i<repam.size(); ++i) {
+      for(INDEX i=0; i<this->size(); ++i) {
          if(primal[i] == true) { 
-            ++noActive;
-            cost = repam[i];
+            ++noTrue;
          }
          if(primal[i] == unknownState) {
             ++noUnknown;
             unknownIndex = i;
          }
       }
-      if(noActive == 0 && noUnknown == 1) {
-         // set 
+      if(noTrue == 0 && noUnknown == 1) {
          primal[unknownIndex] = true;
-         return repam[unknownIndex];
-      } else if(noActive == 1 && noUnknown == 0) {
-         return cost;
-      } else if(noActive == 1) {
-         for(INDEX i=0; i<repam.size(); ++i) {
+      } else if(noTrue == 1 && noUnknown > 0) {
+         for(INDEX i=0; i<this->size(); ++i) {
             if(primal[i] == unknownState) {
                primal[i] = false;
             }
          }
+      }
+   }
+
+   template<typename REPAM_ARRAY>
+   static REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) 
+   {
+      REAL cost = std::numeric_limits<REAL>::max();
+      INDEX primalSum = 0;
+      for(INDEX i=0; i<repam.size(); ++i) {
+         if(primal[i] == true) { 
+            std::cout << i << "\n";
+            cost = repam[i];
+         }
+         primalSum += primal[i];
+      }
+      if(primalSum == 1) {
          return cost;
       } else {
-         // most probably something is not working in primal propagation
+         std::cout << "primal not inferred correctly: " << primalSum << "\n";
          return std::numeric_limits<REAL>::infinity();
       }
    }

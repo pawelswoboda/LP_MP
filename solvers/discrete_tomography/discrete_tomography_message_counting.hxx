@@ -47,7 +47,11 @@ namespace LP_MP {
 
     /*------*/
 
-    void ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right);
+    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    void ComputeRightFromLeftPrimal(
+          PrimalSolutionStorage::Element left, LEFT_FACTOR* l,
+          PrimalSolutionStorage::Element right, RIGHT_FACTOR* r);
+
     
   private:
     const INDEX numberOfLabels_,numberOfVarsLeft_,numberOfVarsRight_,SumBound_;
@@ -307,83 +311,86 @@ namespace LP_MP {
 
       
   template<DIRECTION DR>  
-  void DiscreteTomographyMessageCounting<DR>::ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right){
-    INDEX count = 0;
+  template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+  void DiscreteTomographyMessageCounting<DR>::ComputeRightFromLeftPrimal(
+          PrimalSolutionStorage::Element left, LEFT_FACTOR* leftFactor,
+          PrimalSolutionStorage::Element right, RIGHT_FACTOR* rightFactor){
+     INDEX count = 0;
 
-    INDEX opt = 0;
-    INDEX a = 0;
-    INDEX b = 0;
-    INDEX c = 0;
-    INDEX d = 0;
-    INDEX kl = 0;
-    INDEX kr = 0;
-    
-    if( DR == DIRECTION::left ){
-      for(INDEX i=0;i<leftSize_;i++){
-	if( left[i] == true ){
-	  opt = i;
-	  count++;
-	}
-	right[upSize_ + i] = left[i];
-      }
-            
-      a = opt % numberOfLabels_;
-      opt = (opt - a)/numberOfLabels_;
-      b = opt % numberOfLabels_;
-      opt = (opt - b)/numberOfLabels_;
-      kl = opt % numberOfLabels_;
+     INDEX opt = 0;
+     INDEX a = 0;
+     INDEX b = 0;
+     INDEX c = 0;
+     INDEX d = 0;
+     INDEX kl = 0;
+     INDEX kr = 0;
 
-      for(INDEX i=0;i<rightSize_;i++){
-	if(right[upSize_ + leftSize_ + i] == true){
-	  opt = i; count++;
-	}
-      }
-      
-      c = opt % numberOfLabels_;
-      opt = (opt - c)/numberOfLabels_;
-      d = opt % numberOfLabels_;
-      opt = (opt - d)/numberOfLabels_;
-      kr = opt % numberOfLabels_;
-    }
-    else{
-      for(INDEX i=0;i<rightSize_;i++){
-	if( left[i] == true ){
-	  opt = i;
-	  count++;
-	}
-	right[upSize_ + rightSize_ + i] = left[i];
-      }
-      
-      c = opt % numberOfLabels_;
-      opt = (opt - c)/numberOfLabels_;
-      d = opt % numberOfLabels_;
-      opt = (opt - d)/numberOfLabels_;
-      kr = opt % numberOfLabels_;
+     if( DR == DIRECTION::left ){
+        for(INDEX i=0;i<leftSize_;i++){
+           if( left[i] == true ){
+              opt = i;
+              count++;
+           }
+           right[upSize_ + i] = left[i];
+        }
 
-      for(INDEX i=0;i<leftSize_;i++){
-	if(right[upSize_ + i] == true){
-	  opt = i; count++;
-	}
-      }
+        a = opt % numberOfLabels_;
+        opt = (opt - a)/numberOfLabels_;
+        b = opt % numberOfLabels_;
+        opt = (opt - b)/numberOfLabels_;
+        kl = opt % numberOfLabels_;
 
-      a = opt % numberOfLabels_;
-      opt = (opt - a)/numberOfLabels_;
-      b = opt % numberOfLabels_;
-      opt = (opt - d)/numberOfLabels_;
-      kl = opt % numberOfLabels_;					  
-    }
+        for(INDEX i=0;i<rightSize_;i++){
+           if(right[upSize_ + leftSize_ + i] == true){
+              opt = i; count++;
+           }
+        }
 
-    INDEX z = kl+kr;
-    if(count == 2 && z<(upSize_/pow(numberOfLabels_,2)) ){
-      //assert(z<(upSize_/pow(numberOfLabels_,2)));
-      INDEX idx = a + d*numberOfLabels_ + z*pow(numberOfLabels_,2);
-      assert(idx < upSize_);
-      for(INDEX i=0;i<upSize_;i++){ right[i]=false; }
-      right[idx]=true;
-    }
-    
+        c = opt % numberOfLabels_;
+        opt = (opt - c)/numberOfLabels_;
+        d = opt % numberOfLabels_;
+        opt = (opt - d)/numberOfLabels_;
+        kr = opt % numberOfLabels_;
+     }
+     else{
+        for(INDEX i=0;i<rightSize_;i++){
+           if( left[i] == true ){
+              opt = i;
+              count++;
+           }
+           right[upSize_ + rightSize_ + i] = left[i];
+        }
+
+        c = opt % numberOfLabels_;
+        opt = (opt - c)/numberOfLabels_;
+        d = opt % numberOfLabels_;
+        opt = (opt - d)/numberOfLabels_;
+        kr = opt % numberOfLabels_;
+
+        for(INDEX i=0;i<leftSize_;i++){
+           if(right[upSize_ + i] == true){
+              opt = i; count++;
+           }
+        }
+
+        a = opt % numberOfLabels_;
+        opt = (opt - a)/numberOfLabels_;
+        b = opt % numberOfLabels_;
+        opt = (opt - d)/numberOfLabels_;
+        kl = opt % numberOfLabels_;					  
+     }
+
+     INDEX z = kl+kr;
+     if(count == 2 && z<(upSize_/pow(numberOfLabels_,2)) ){
+        //assert(z<(upSize_/pow(numberOfLabels_,2)));
+        INDEX idx = a + d*numberOfLabels_ + z*pow(numberOfLabels_,2);
+        assert(idx < upSize_);
+        for(INDEX i=0;i<upSize_;i++){ right[i]=false; }
+        right[idx]=true;
+     }
+
   }
-    
+
 }
 
 #endif // LP_MP_DT_COUNTING_MESSAGE_HXX

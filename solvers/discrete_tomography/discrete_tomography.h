@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include "LP_MP.h"
+#include "solver.hxx"
 #include "factors/simplex_factor.hxx"
 #include "messages/simplex_marginalization_message.hxx"
 #include "problem_constructors/mrf_problem_construction.hxx"
@@ -30,13 +31,21 @@ namespace LP_MP{
 
   typedef SimplexFactor<> Simplex;
 
+  // messages to triplet factors for tightening
+  typedef PairwiseTripletLoop<0,1> PairwiseTripletLoopType12;
+  typedef PairwiseTripletLoop<0,2> PairwiseTripletLoopType13;
+  typedef PairwiseTripletLoop<1,2> PairwiseTripletLoopType23;
+  typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType12,true,false,false,true> PairwiseTriplet12Message;
+  typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType13,true,false,false,true> PairwiseTriplet13Message;
+  typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType23,true,false,false,true> PairwiseTriplet23Message;
+
 
   struct FMC_DT {
     static constexpr char* name = "Discrete Tomography";
 
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 0, true, true > UnaryFactor;
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 1, false, false > PairwiseFactor;
-    typedef FactorContainer<DiscreteTomographyFactorCounting, ExplicitRepamStorage, FMC_DT, 2, false, false> DiscreteTomographyCountingFactorContainer;
+    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 0, true, true> UnaryFactor;
+    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 1> PairwiseFactor;
+    typedef FactorContainer<DiscreteTomographyFactorCounting, ExplicitRepamStorage, FMC_DT, 2> DiscreteTomographyCountingFactorContainer;
    
     typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 0 > UnaryPairwiseMessageLeft;
     typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 1 > UnaryPairwiseMessageRight;
@@ -48,17 +57,28 @@ namespace LP_MP{
     typedef MessageContainer<DiscreteTomographyMessageCountingPairwise, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_DT, 4>
       DiscreteTomographyCountingPairwiseMessageContainer;
 
-    using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer >;
+   // tightening
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 3> EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT, 5> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT, 6> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT, 7> PairwiseTriplet23MessageContainer;
+
+    using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer, EmptyTripletFactor >;
     using MessageList = meta::list<
       UnaryPairwiseMessageLeft,
       UnaryPairwiseMessageRight,
       DiscreteTomographyCountingMessageLeft,
       DiscreteTomographyCountingMessageRight,
-      DiscreteTomographyCountingPairwiseMessageContainer>;
+      DiscreteTomographyCountingPairwiseMessageContainer,
+      PairwiseTriplet12MessageContainer,
+      PairwiseTriplet13MessageContainer,
+      PairwiseTriplet23MessageContainer
+      >;
 
     using mrf = StandardMrfConstructor<FMC_DT,0,1,0,1>;
+    using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,5,6,7>;
     using dt = DiscreteTomographyTreeConstructor<FMC_DT,0,2,2,3,4>;
-    using ProblemDecompositionList = meta::list<mrf,dt>;
+    using ProblemDecompositionList = meta::list<tighteningMrf,dt>;
 	  
   };
 
@@ -110,14 +130,14 @@ namespace LP_MP{
     
     template<>
       struct action<real_number> {
-      static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
+      static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
       {
 	realStack.push(std::stod(in.string()));
       }
     };
     template<>
       struct action<positive_integer> {
-      static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
+      static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
       {
 	integerStack.push(std::stoul(in.string()));
       }
@@ -126,7 +146,7 @@ namespace LP_MP{
 
     template<>
       struct action< numberOfVariables_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+      static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
       {
 	mrfInput.numberOfVariables_ = integer_stack.top();
 	integer_stack.pop();
@@ -134,7 +154,7 @@ namespace LP_MP{
     };
     template<>
       struct action< numberOfCliques > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+      static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
       {
 	mrfInput.numberOfCliques_ = integer_stack.top();
 	integer_stack.pop();
@@ -142,7 +162,7 @@ namespace LP_MP{
     };
     template<>
       struct action< cardinality_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+      static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
       {
 	assert(integer_stack.size() ==mrfInput.numberOfVariables_);
 	while(!integer_stack.empty()) {
@@ -156,7 +176,7 @@ namespace LP_MP{
     };
     template<>
       struct action< cliqueScope_line > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+      static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
       {
 	mrfInput.cliqueScope_.push_back(std::vector<INDEX>(0));
 	while(integer_stack.size() > 1) {
@@ -172,7 +192,7 @@ namespace LP_MP{
     // reconstruct the function tables
     template<>
       struct action< functionTables > {
-      static void apply(const pegtl::input & in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+      static void apply(const pegtl::input & in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
       {
 	// first read in real stack into array
 	std::vector<REAL> values;
@@ -246,7 +266,7 @@ namespace LP_MP{
 
     template<>
       struct action<ProjectionPreamble> {
-            static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
+            static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
 	    {
 	      for(INDEX i=0; i<mrfInput.numberOfVariables_-1; ++i) {
 		assert(mrfInput.cardinality_[i] == mrfInput.cardinality_[i+1]);
@@ -259,7 +279,7 @@ namespace LP_MP{
 
     template<>
       struct action<ProjectionLine> {
-      static void apply(const pegtl::input& in, ProblemDecomposition<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
+      static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
       {
 	std::vector<INDEX> projectionVar;
 	while(!integerStack.empty()) {
@@ -278,7 +298,7 @@ namespace LP_MP{
       }
     };
 
-    bool ParseProblem(const std::string& filename, ProblemDecomposition<FMC_DT>& pd) {
+    bool ParseProblem(const std::string& filename, Solver<FMC_DT>& pd) {
       std::stack<SIGNED_INDEX> integerStack;
       std::stack<REAL> realStack;
       MRFInput mrfInput;

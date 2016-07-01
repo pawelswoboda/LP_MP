@@ -91,14 +91,14 @@ namespace LP_MP {
     ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
     {
        static_assert(LSA == LEFT_SIDE_ACTIVE,"");
-       OptimizeRestricted(rightPot, msg, r, loopRight_, rightPrimal);
+       //OptimizeRestricted(rightPot, msg, r, loopRight_, rightPrimal);
     }
     template<typename LEFT_FACTOR, typename G1, typename G2, bool RSA = RIGHT_SIDE_ACTIVE>
     typename std::enable_if<RSA,void>::type 
     ReceiveRestrictedMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg, typename PrimalSolutionStorage::Element leftPrimal)
     { 
        static_assert(RSA == RIGHT_SIDE_ACTIVE,"");
-       OptimizeRestricted(leftPot, msg, l, loopLeft_, leftPrimal);
+       //OptimizeRestricted(leftPot, msg, l, loopLeft_, leftPrimal);
     }
    
 
@@ -192,22 +192,21 @@ namespace LP_MP {
 
     // note: the two functions below only make sense, if loop type is pairwise.
     // in general, labels are propagated as follows: 
-    // initally, the primal is set to all true vector. The left and right whiten out the vector, and exactly one entry should remain true
-    template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = PROPAGATE_PRIMAL_TO_LEFT>
+    // initally, the primal is set to all unknown vector. The left and right zero out the vector, and exactly one entry should remain unknown, which is then forced to true
+    template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = PROPAGATE_PRIMAL_TO_LEFT, typename LEFT_FACTOR, typename RIGHT_FACTOR>
     typename std::enable_if<PROPAGATE_PRIMAL_TO_LEFT_TMP,void>::type
-    ComputeLeftFromRightPrimal(typename PrimalSolutionStorage::Element left, const typename PrimalSolutionStorage::Element right) 
+    ComputeLeftFromRightPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
     {
-      static_assert(PROPAGATE_PRIMAL_TO_LEFT_TMP == PROPAGATE_PRIMAL_TO_LEFT,"");
-      // note that we can assume that left simplex has been initialized to all ones. Zero out impossible configurations
-      loopLeft_.PropagateLabel(right,left);
+       static_assert(PROPAGATE_PRIMAL_TO_LEFT_TMP == PROPAGATE_PRIMAL_TO_LEFT,"");
+       loopLeft_.PropagateLabel(right,left);
     }
 
-    template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = PROPAGATE_PRIMAL_TO_RIGHT>
+    template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = PROPAGATE_PRIMAL_TO_RIGHT, typename LEFT_FACTOR, typename RIGHT_FACTOR>
     typename std::enable_if<PROPAGATE_PRIMAL_TO_RIGHT_TMP,void>::type
-    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right)
+    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
     {
-      static_assert(PROPAGATE_PRIMAL_TO_RIGHT_TMP == PROPAGATE_PRIMAL_TO_RIGHT,"");
-      loopRight_.PropagateLabel(left,right);
+       static_assert(PROPAGATE_PRIMAL_TO_RIGHT_TMP == PROPAGATE_PRIMAL_TO_RIGHT,"");
+       loopRight_.PropagateLabel(left,right);
     }
    
    

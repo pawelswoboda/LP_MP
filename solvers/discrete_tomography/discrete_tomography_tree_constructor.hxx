@@ -22,7 +22,7 @@ namespace LP_MP {
     using DiscreteTomographyCountingPairwiseMessageContainer =
       typename meta::at_c<typename FMC::MessageList, DISCRETE_TOMOGRAPHY_COUNTING_PAIRWISE_MESSAGE_NO>::MessageContainerType;
 
-    DiscreteTomographyTreeConstructor(ProblemDecomposition<FMC>& pd) : pd_(pd) {}
+    DiscreteTomographyTreeConstructor(Solver<FMC>& pd) : pd_(pd) {}
     
     void SetNumberOfLabels(const INDEX noLabels) { noLabels_ = noLabels; }
 
@@ -122,7 +122,7 @@ namespace LP_MP {
 	  }
 		  
 	  auto *f = new DiscreteTomographyCountingFactorContainer(t,repam);
-	  pd_.GetLP()->AddFactor(f);
+	  pd_.GetLP().AddFactor(f);
 	  factors.push_back(f);
 	  	  
 	  auto *reg = mrfConstructor.GetPairwiseFactor(mrfConstructor.GetPairwiseFactorId(idxL.b,idxR.a));
@@ -130,19 +130,19 @@ namespace LP_MP {
 	  // messages
 	  auto *m_pairwise = new DiscreteTomographyCountingPairwiseMessageContainer(DiscreteTomographyMessageCountingPairwise(noLabels_,idxL.n,idxR.n,summationCost.size()),
 										    reg,factors.back(),pow(noLabels_,2));
-	  pd_.GetLP()->AddMessage(m_pairwise);
+	  pd_.GetLP().AddMessage(m_pairwise);
 
 	  if(idxL.n != 1){
 	    auto *m_left = new DiscreteTomographyCountingMessageLeft(DiscreteTomographyMessageCounting<DIRECTION::left>(noLabels_,idxL.n,idxR.n,summationCost.size()),
 								     factors[idxL.id],factors.back(),
 								     pow(noLabels_,2)*std::min((INDEX) summationCost.size(),(INDEX)(idxL.n*(noLabels_-1)+1)));
-	    pd_.GetLP()->AddMessage(m_left);
+	    pd_.GetLP().AddMessage(m_left);
 	  }
 	  if(idxR.n != 1){
 	    auto *m_right = new DiscreteTomographyCountingMessageRight(DiscreteTomographyMessageCounting<DIRECTION::right>(noLabels_,idxL.n,idxR.n,summationCost.size()),
 								       factors[idxR.id],factors.back(),
 								       pow(noLabels_,2)*std::min((INDEX) summationCost.size(),(INDEX) (idxR.n*(noLabels_-1)+1)));
-	    pd_.GetLP()->AddMessage(m_right);
+	    pd_.GetLP().AddMessage(m_right);
 	  }
 	}
 	if( (*PointerToQueue).size() == 0 ){
@@ -156,7 +156,7 @@ namespace LP_MP {
   private:
     //std::vector<Tree> treeIndices_;
     INDEX noLabels_ = 0;
-    ProblemDecomposition<FMC>& pd_;
+    Solver<FMC>& pd_;
   };
 
 }
