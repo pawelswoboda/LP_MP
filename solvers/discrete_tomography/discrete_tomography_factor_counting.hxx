@@ -26,7 +26,7 @@ namespace LP_MP{
     //template<typename REPAM_ARRAY>
     //void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, PrimalSolutionStorage::Element primal) const;
     
-   void PropagatePrimal(PrimalSolutionStorage::Element primal) const;
+    void PropagatePrimal(PrimalSolutionStorage::Element primal) const;
 
     template<typename REPAM_ARRAY>
     REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const; //--required
@@ -59,13 +59,13 @@ namespace LP_MP{
     auto z = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xb(idx); };
     
     if( xa(up) == xa(left) &&
-	xb(up) == xb(right)&&
-	z(left) + z(right) == z(up) )
+        xb(up) == xb(right)&&
+        z(left) + z(right) == z(up) )
       { return
-	  repam[up] +
-	  repam[upSize_ + left] +
-	  repam[upSize_ + leftSize_ + right] +
-	  repam[upSize_ + leftSize_ + rightSize_ + xb(left) + xa(right)*pow(numberOfLabels_,2)]; }
+          repam[up] +
+          repam[upSize_ + left] +
+          repam[upSize_ + leftSize_ + right] +
+          repam[upSize_ + leftSize_ + rightSize_ + xb(left) + xa(right)*pow(numberOfLabels_,2)]; }
     else
       { return std::numeric_limits<REAL>::infinity(); }
     
@@ -126,44 +126,82 @@ namespace LP_MP{
 
       REAL m_new = 0;
       for( INDEX j=0;j<z_up_size;j++ ){
-	assert(j == op(mc.getIdxA(j),mc.getIdxB(j)));
-	assert(z_up(j) > -std::numeric_limits<REAL>::max() );
-	assert(!std::isnan(z_up(j)));
+        assert(j == op(mc.getIdxA(j),mc.getIdxB(j)));
+        assert(z_up(j) > -std::numeric_limits<REAL>::max() );
+        assert(!std::isnan(z_up(j)));
 	
-	m_new = mc.getConv(j)+z_up(j)+reg;
-	m = std::min(m,m_new);
-	assert(m > -1.0e-02);
+        m_new = mc.getConv(j)+z_up(j)+reg;
+        m = std::min(m,m_new);
+        assert(m > -1.0e-02);
       }
     }
     return m;
   }
 
 
-   void DiscreteTomographyFactorCounting::PropagatePrimal(PrimalSolutionStorage::Element primal) const{
+  void DiscreteTomographyFactorCounting::PropagatePrimal(PrimalSolutionStorage::Element primal) const{
 
-   }
+    struct IdxLbl {
+      IdxLbl(INDEX x,INDEX y) : idx(x),c(y) {
+        INDEX i=idx;
+        a = i & numberOfLabels_;
+        i = (i-a) / numberOfLabels_;
+        b = i % numberOfLabels_;
+        z = (i-b) / numberOfLabels_;
+      }
+      
+      const INDEX idx,c;
+      INDEX a = 0;
+      INDEX b = 0;
+      INDEX z = 0;
+    };
+    
+    auto getOptLabel = [&](INDEX s,INDEX t){
+      INDEX noTrue = 0;
+      INDEX noUnkwn = 0;
+      INDEX opt = 0;
+      for(INDEX i=0;i<s;i++){
+        if( primal[t + i] == true ){ noTrue++; opt=i;  }
+        if( primal[t + i] == unknownState ){ noUnkwn++; }
+      }
+      assert(noTrue <=1);
+      assert(noTrue != 1 || noUnkwn == 0);
+      assert(noUnkwn != 0 || noTrue == 1 );
+      return IdxLbl(opt,noTrue);
+    };
+    
+    auto up    = getOptLabel(upSize_   ,0);
+    auto left  = getOptLabel(leftSize_ ,upSize_);
+    auto right = getOptLabel(rightSize_,upSize_ + leftSize_);
+    auto reg   = getOptLabel(regSize_  ,upSize_ + leftSize_ + rightSize_);
+
+    INDEX count = up.c + left.c + right.c + reg.c;
+    if( count == 3 ){
+      //TODO
+    }    
+  }
 
 
 
   template<typename REPAM_ARRAY>
   REAL DiscreteTomographyFactorCounting::EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const{
-     assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
-     REAL val = 0;
-     INDEX count = 0;
-     INDEX up = 0;
-     INDEX left = 0;
-     INDEX right = 0;
-     INDEX reg = 0;
+    assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
+    REAL val = 0;
+    INDEX count = 0;
+    INDEX up = 0;
+    INDEX left = 0;
+    INDEX right = 0;
+    INDEX reg = 0;
 
-     auto updateVal = [&](INDEX s,INDEX t,INDEX& idx){
-        for(INDEX i=0;i<s;i++){
-           if(primal[t+i] == true){
-              val += repam[t+i];
-              idx = i;
-              count++;
-           }
+    auto updateVal = [&](INDEX s,INDEX t,INDEX& idx){
+      for(INDEX i=0;i<s;i++){
+        if(primal[t+i] == true){
+          val += repam[t+i];
+          idx = i;
+          count++;
         }
-     };
+      }
+    };
 
     INDEX size = 0;      updateVal(upSize_,size,up);
     size += upSize_;     updateVal(leftSize_,size,left);
@@ -177,19 +215,19 @@ namespace LP_MP{
     auto z = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xb(idx); };
 
     if( xa(up) == xa(left) &&
-	xb(up) == xb(right)&&
-	z(left) + z(right) == z(up) &&
-	xa(reg) == xb(left) &&
-	xb(reg) == xa(right) &&
-	count == 4 )
+        xb(up) == xb(right)&&
+        z(left) + z(right) == z(up) &&
+        xa(reg) == xb(left) &&
+        xb(reg) == xa(right) &&
+        count == 4 )
       { return val; }
     else{
       return std::numeric_limits<REAL>::infinity();
-				 }
-      
     }
+      
+  }
     
-  } // end namespace LP_MP
+} // end namespace LP_MP
 
 #endif // LPMP_DTOMOGRAPHY_FACTOR_COUNTING_HXX
 

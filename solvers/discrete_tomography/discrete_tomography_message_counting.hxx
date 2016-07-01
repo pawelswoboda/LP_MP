@@ -48,9 +48,8 @@ namespace LP_MP {
     /*------*/
 
     template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    void ComputeRightFromLeftPrimal(
-          PrimalSolutionStorage::Element left, LEFT_FACTOR* l,
-          PrimalSolutionStorage::Element right, RIGHT_FACTOR* r);
+    void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, LEFT_FACTOR* l,
+                                    PrimalSolutionStorage::Element right, RIGHT_FACTOR* r);
 
     
   private:
@@ -312,83 +311,36 @@ namespace LP_MP {
       
   template<DIRECTION DR>  
   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-  void DiscreteTomographyMessageCounting<DR>::ComputeRightFromLeftPrimal(
-          PrimalSolutionStorage::Element left, LEFT_FACTOR* leftFactor,
-          PrimalSolutionStorage::Element right, RIGHT_FACTOR* rightFactor){
-     INDEX count = 0;
+  void DiscreteTomographyMessageCounting<DR>::ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, LEFT_FACTOR* leftFactor,
+                                                                         PrimalSolutionStorage::Element right, RIGHT_FACTOR* rightFactor){
+    assert(rightFactor->getSize(DiscreteTomographyFactorCounting::NODE::up) == upSize_);
+    assert(rightFactor->getSize(DiscreteTomographyFactorCounting::NODE::left) == leftSize_);
+    assert(rightFactor->getSize(DiscreteTomographyFactorCounting::NODE::right) == rightSize_);
+    assert(rightFactor->getSize(DiscreteTomographyFactorCounting::NODE::reg) == regSize_);
+    
+     INDEX noTrue = 0;
+     INDEX noUnkwn = 0;
 
-     INDEX opt = 0;
-     INDEX a = 0;
-     INDEX b = 0;
-     INDEX c = 0;
-     INDEX d = 0;
-     INDEX kl = 0;
-     INDEX kr = 0;
-
+     auto copyPrimal = [&](INDEX s,INDEX t){
+       for(INDEX i=0;i<s;i++){
+         if( left[i] == true ){ noTrue++; }
+         if( left[i] == unknownState ){ noUnkwn++; }
+         right[upSize_ + t + i] = left[i];
+       }
+     };
+     
      if( DR == DIRECTION::left ){
-        for(INDEX i=0;i<leftSize_;i++){
-           if( left[i] == true ){
-              opt = i;
-              count++;
-           }
-           right[upSize_ + i] = left[i];
-        }
-
-        a = opt % numberOfLabels_;
-        opt = (opt - a)/numberOfLabels_;
-        b = opt % numberOfLabels_;
-        opt = (opt - b)/numberOfLabels_;
-        kl = opt % numberOfLabels_;
-
-        for(INDEX i=0;i<rightSize_;i++){
-           if(right[upSize_ + leftSize_ + i] == true){
-              opt = i; count++;
-           }
-        }
-
-        c = opt % numberOfLabels_;
-        opt = (opt - c)/numberOfLabels_;
-        d = opt % numberOfLabels_;
-        opt = (opt - d)/numberOfLabels_;
-        kr = opt % numberOfLabels_;
+       assert( leftFactor->getSize(DiscreteTomographyFactorCounting::NODE::up) == leftSize_ );
+       copyPrimal(leftSize_,0);
      }
      else{
-        for(INDEX i=0;i<rightSize_;i++){
-           if( left[i] == true ){
-              opt = i;
-              count++;
-           }
-           right[upSize_ + rightSize_ + i] = left[i];
-        }
-
-        c = opt % numberOfLabels_;
-        opt = (opt - c)/numberOfLabels_;
-        d = opt % numberOfLabels_;
-        opt = (opt - d)/numberOfLabels_;
-        kr = opt % numberOfLabels_;
-
-        for(INDEX i=0;i<leftSize_;i++){
-           if(right[upSize_ + i] == true){
-              opt = i; count++;
-           }
-        }
-
-        a = opt % numberOfLabels_;
-        opt = (opt - a)/numberOfLabels_;
-        b = opt % numberOfLabels_;
-        opt = (opt - d)/numberOfLabels_;
-        kl = opt % numberOfLabels_;					  
+       assert( leftFactor->getSize(DiscreteTomographyFactorCounting::NODE::up) == rightSize_ );
+       copyPrimal(rightSize_,leftSize_);
      }
-
-     INDEX z = kl+kr;
-     if(count == 2 && z<(upSize_/pow(numberOfLabels_,2)) ){
-        //assert(z<(upSize_/pow(numberOfLabels_,2)));
-        INDEX idx = a + d*numberOfLabels_ + z*pow(numberOfLabels_,2);
-        assert(idx < upSize_);
-        for(INDEX i=0;i<upSize_;i++){ right[i]=false; }
-        right[idx]=true;
-     }
-
+     
+     assert(noTrue <=1);
+     assert(noTrue != 1 || noUnkwn == 0);
+     assert(noUnkwn != 0 || noTrue == 1 );
   }
 
 }
