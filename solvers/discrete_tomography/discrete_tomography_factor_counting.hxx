@@ -170,18 +170,45 @@ namespace LP_MP{
       return IdxLbl(opt,noTrue);
     };
     
+    /* Get primal label */
     auto up    = getOptLabel(upSize_   ,0);
     auto left  = getOptLabel(leftSize_ ,upSize_);
     auto right = getOptLabel(rightSize_,upSize_ + leftSize_);
     auto reg   = getOptLabel(regSize_  ,upSize_ + leftSize_ + rightSize_);
 
+    auto CalcIdx = [&](INDEX a,INDEX b,INDEX z){ return a + b*numberOfLabels_ + z*pow(numberOfLabels_,2); };
+    auto Set2False = [&](INDEX s,INDEX t){ for(INDEX i=0;i<s;i++){primal[t+i]=false;} };
     INDEX count = up.c + left.c + right.c + reg.c;
+    
+    /* If exact one label is missing, we can calculate it */
     if( count == 3 ){
-      //TODO
-    }    
+      if(up.c == 0 && left.b == reg.a && right.a == reg.b ){   // up + consistency   
+        assert(left.z+right.z < upSize_);
+        Set2False(upSize_,0);
+        primal[CalcIdx(left.a,right.b,left.z+right.z)]=true; }
+      if(left.c == 0 && up.b == right.b && right.a == reg.b ){ // left + consistency
+        assert(up.z >= right.z);
+        assert(up.z-right.z < leftSize_);
+        Set2False(leftSize_,upSize_);
+        primal[upSize_ + CalcIdx(up.a,reg.a,up.z-right.z)]=true; }
+      if(right.c == 0 && up.a == left.a && left.b == reg.a ){  // right + consistency
+        assert(up.z >= right.z);
+        assert(up.z-right.z < rightSize_);
+        Set2False(rightSize_,upSize_ + leftSize_);
+        primal[upSize_ + leftSize_ + CalcIdx(up.b,reg.b,up.z-left.z)]=true; }
+      if(reg.c == 0 && up.a == left.a && up.b == right.b 
+          && up.z == (left.z + right.z) ){                    // pairwise + consistency
+        Set2False(regSize_,upSize_ + leftSize_ + rightSize_);
+        primal[upSize_ + leftSize_ + rightSize_ + CalcIdx(left.b,right.a,0)]=true; }
+    } 
+    /* Just for debugging */
+    if( count == 4){
+      assert(left.a == up.a && up.b == right.b);
+      assert(left.b == reg.a && reg.b == right.a);
+      assert(up.z == (left.z + right.z))
+    }
+    
   }
-
-
 
   template<typename REPAM_ARRAY>
   REAL DiscreteTomographyFactorCounting::EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const{
