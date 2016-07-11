@@ -123,6 +123,21 @@ namespace LP_MP {
 		  
           auto *f = new DiscreteTomographyCountingFactorContainer(t,repam);
           pd_.GetLP().AddFactor(f);
+          if( idxL.n == 1 && idxR.n == 1){
+            auto* leftUnaryFactor = mrfConstructor.GetUnaryFactor(idxL.a);
+            auto* rightUnaryFactor = mrfConstructor.GetUnaryFactor(idxL.b);
+            if(idxL.a < idxL.b) {
+              pd_.GetLP().AddFactorRelation(leftUnaryFactor,f);
+              pd_.GetLP().AddFactorRelation(f,rightUnaryFactor);
+            }
+            else{
+              pd_.GetLP().AddFactorRelation(rightUnaryFactor,f);
+              pd_.GetLP().AddFactorRelation(f,leftUnaryFactor);
+            }
+            auto* reg = mrfConstructor.GetPairwiseFactor(mrfConstructor.GetPairwiseFactorId(idxL.b,idxR.a));
+            pd_.GetLP().AddFactorRelation(f,reg);
+          }
+          
           factors.push_back(f);
 	  	  
           auto *reg = mrfConstructor.GetPairwiseFactor(mrfConstructor.GetPairwiseFactorId(idxL.b,idxR.a));
@@ -137,12 +152,15 @@ namespace LP_MP {
                                                                      factors[idxL.id],factors.back(),
                                                                      pow(noLabels_,2)*std::min((INDEX) summationCost.size(),(INDEX)(idxL.n*(noLabels_-1)+1)));
             pd_.GetLP().AddMessage(m_left);
+            //pd_.GetLP().AddFactorRelation(factors[idxL.id],factors.back());
+            pd_.GetLP().AddFactorRelation(m_left->GetLeftFactor(), m_left->GetRightFactor());
           }
           if(idxR.n != 1){
             auto *m_right = new DiscreteTomographyCountingMessageRight(DiscreteTomographyMessageCounting<DIRECTION::right>(noLabels_,idxL.n,idxR.n,summationCost.size()),
                                                                        factors[idxR.id],factors.back(),
                                                                        pow(noLabels_,2)*std::min((INDEX) summationCost.size(),(INDEX) (idxR.n*(noLabels_-1)+1)));
             pd_.GetLP().AddMessage(m_right);
+            pd_.GetLP().AddFactorRelation(m_right->GetLeftFactor(), m_right->GetRightFactor());
           }
         }
         if( (*PointerToQueue).size() == 0 ){
