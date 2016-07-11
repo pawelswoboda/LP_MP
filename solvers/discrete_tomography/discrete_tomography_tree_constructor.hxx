@@ -131,6 +131,16 @@ namespace LP_MP {
           auto *m_pairwise = new DiscreteTomographyCountingPairwiseMessageContainer(DiscreteTomographyMessageCountingPairwise(noLabels_,idxL.n,idxR.n,summationCost.size()),
                                                                                     reg,factors.back(),pow(noLabels_,2));
           pd_.GetLP().AddMessage(m_pairwise);
+          //pd_.GetLP().AddFactorRelation(reg,factors.back());
+          auto* leftUnaryFactor = mrfConstructor.GetUnaryFactor(idxL.b);
+          auto* rightUnaryFactor = mrfConstructor.GetUnaryFactor(idxR.a);
+          if(idxL.b <  idxL.a) {
+             pd_.GetLP().AddFactorRelation(factors.back(),leftUnaryFactor);
+             pd_.GetLP().AddFactorRelation(rightUnaryFactor,factors.back());
+          } else {
+             pd_.GetLP().AddFactorRelation(leftUnaryFactor,factors.back());
+             pd_.GetLP().AddFactorRelation(factors.back(),rightUnaryFactor);
+          }
 
           if(idxL.n != 1){
             auto *m_left = new DiscreteTomographyCountingMessageLeft(DiscreteTomographyMessageCounting<DIRECTION::left>(noLabels_,idxL.n,idxR.n,summationCost.size()),
@@ -149,6 +159,10 @@ namespace LP_MP {
           std::swap(PointerToStack,PointerToQueue);
         }
       }
+
+      //for(INDEX i=1;i<factors.size();++i) {
+      //   pd_.GetLP().AddFactorRelation(factors[i-1],factors[i]);
+      //}
 	
       
     }
