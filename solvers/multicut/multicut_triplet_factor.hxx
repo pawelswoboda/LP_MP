@@ -23,6 +23,7 @@ public:
    }
 
    constexpr static INDEX size() { return 4; }
+   constexpr static INDEX PrimalSize() { return 5; } // primal states: 011 101 110 111 000. Last one receives cost 0 always, however is needed to keep track of primal solution in PropagatePrimal etc.
 
    template<typename REPAM_ARRAY>
    static REAL LowerBound(const REPAM_ARRAY& repamPot) 
@@ -31,27 +32,51 @@ public:
       return std::min(std::min(std::min( repamPot[0], repamPot[1]), std::min(repamPot[2], repamPot[3])),0.0); // possibly, if we have a SIMD factor, use a simdized minimum
    }
 
+   void PropagatePrimal(PrimalSolutionStorage::Element primal) const
+   {
+      INDEX noTrue = 0;
+      INDEX noUnknown = 0;
+      INDEX unknownIndex;
+      for(INDEX i=0; i<PrimalSize(); ++i) {
+         if(primal[i] == true) { 
+            ++noTrue;
+         }
+         if(primal[i] == unknownState) {
+            ++noUnknown;
+            unknownIndex = i;
+         }
+      }
+      if(noTrue == 0 && noUnknown == 1) {
+         primal[unknownIndex] = true;
+      } else if(noTrue == 1 && noUnknown > 0) { // should not happen in code currently. Left it for completeness
+         for(INDEX i=0; i<PrimalSize(); ++i) {
+            if(primal[i] == unknownState) {
+               primal[i] = false;
+            }
+         }
+      }
+   }
+
    template<typename REPAM_ARRAY, typename PRIMAL>
    static REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PRIMAL primal)
    {
       assert(repam.size() == 4);
-      for(INDEX i=0; i<4; ++i) {
+      for(INDEX i=0; i<PrimalSize(); ++i) {
          assert(primal[i] != unknownState);
       }
 
       REAL cost = 0.0;
       INDEX noActive = 0;
-      for(INDEX i=0; i<4; ++i) {
+      for(INDEX i=0; i<size(); ++i) {
          cost += primal[i]*repam[i];
          noActive += primal[i];
       }
-      if(noActive > 1) {
-         assert(false);
+      noActive += primal[PrimalSize()-1];
+      if(noActive != 1) {
          return std::numeric_limits<REAL>::infinity();
       }
       return cost;
    }
-
 };
 
 
@@ -87,30 +112,32 @@ public:
    void
    ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, PrimalSolutionStorage::Element primal) const
    {
-      return;
+      //return;
       assert(msg.size() == 1);
       if(primal[(i_+1)%3] == true || primal[(i_+2)%3] == true || primal[3] == true) { // force unary to one
          msg[0] += std::numeric_limits<REAL>::infinity();
          //std::cout << msg.GetLeftFactor()->operator[](0) << "\n";
-         assert(msg.GetLeftFactor()->operator[](0) == -std::numeric_limits<REAL>::infinity() );
-      } else if(primal[i_] == true || (primal[0] == false && primal[1] == false && primal[2] == false && primal[3] == false)) { // force unary to zero 
-         return;
-         assert(msg.GetLeftFactor()->operator[](0) != std::numeric_limits<REAL>::infinity() );
+         //assert(msg.GetLeftFactor()->operator[](0) == -std::numeric_limits<REAL>::infinity() );
+      } else if(primal[i_] == true || primal[4] == true) { // force unary to zero 
+         //assert(msg.GetLeftFactor()->operator[](0) != std::numeric_limits<REAL>::infinity() );
          msg[0] -= std::numeric_limits<REAL>::infinity(); 
-         std::cout << msg.GetLeftFactor()->operator[](0) << "\n";
-         assert(msg.GetLeftFactor()->operator[](0) == std::numeric_limits<REAL>::infinity() );
+         //std::cout << msg.GetLeftFactor()->operator[](0) << "\n";
+         //assert(msg.GetLeftFactor()->operator[](0) == std::numeric_limits<REAL>::infinity() );
       } else { // compute message on unknown values only. No entry of primal is true
-         return;
          assert(4 == r->size());
-         std::array<REAL,4> restrictedPot;
+         assert(RIGHT_FACTOR::PrimalSize() == 5);
+         std::array<REAL,RIGHT_FACTOR::PrimalSize()> restrictedPot;
          restrictedPot.fill(std::numeric_limits<REAL>::infinity());
-         for(INDEX i=0; i<4; ++i) {
+         for(INDEX i=0; i<size(); ++i) {
             assert(primal[i] != true);
             if(primal[i] == unknownState) {
                restrictedPot[i] = rightPot[i];
             }
          }
-         msg[0] -= std::min(std::min(restrictedPot[(i_+1)%3], restrictedPot[(i_+2)%3]), restrictedPot[3]) - std::min(restrictedPot[i_],0.0);
+         if(primal[4] == unknownState) {
+            restrictedPot[4] = 0.0;
+         }
+         msg[0] -= std::min(std::min(restrictedPot[(i_+1)%3], restrictedPot[(i_+2)%3]), restrictedPot[3]) - std::min(restrictedPot[i_],restrictedPot[4]);
       }
    }
 
@@ -144,43 +171,25 @@ public:
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
    void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element leftPrimal, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element rightPrimal, RIGHT_FACTOR* r) const
    {
-      //return;
-      if(leftPrimal[0] == true) { 
-         // check whether one of 011,101,110 can be inferred. Fot this, some other label must have been set to 0 already and the third one must not have been yet visited
-         if(rightPrimal[3] == false && rightPrimal[i_] == false && rightPrimal[(i_+1)&3] == false && rightPrimal[(i_+2)%3] == unknownState) {
-            rightPrimal[(i_+2)%3] = true;
-            return;
-         }
-         if(rightPrimal[3] == false && rightPrimal[i_] == false && rightPrimal[(i_+2)&3] == false && rightPrimal[(i_+1)%3] == unknownState) {
-            rightPrimal[(i_+1)%3] = true;
-            return;
-         }
+      if(leftPrimal[0] == true) {
          rightPrimal[i_] = false;
-         // now check if 111 can be inferred:
-         // if 011,101,110 are false, but 111 is not, then make it true. We know in this case that all the unaries are true
-         if(rightPrimal[0] == false && rightPrimal[1] == false && rightPrimal[2] == false && rightPrimal[3] == unknownState) {
-            rightPrimal[3] = true;
-            return;
-         } 
+         rightPrimal[4] = false;
       } else {
-         assert(leftPrimal[0] == false); // we assume that unary factor has been set in rounding previously.
-         // check, whether some other variable is true. This is true, whenever exactly one other 0-configuration is forbidden. If so, we can infer one of 011,101,110
-         if(rightPrimal[3] != false && ((rightPrimal[(i_+1)%3] == false || rightPrimal[(i_+2)%3] != false) || (rightPrimal[(i_+2)%3] == false || rightPrimal[(i_+1)%3] != false)) ) {
-            rightPrimal[i_] = true;
-         }
+         assert(leftPrimal[0] == false);
          rightPrimal[(i_+1)%3] = false;
          rightPrimal[(i_+2)%3] = false;
          rightPrimal[3] = false;
       }
+      return;
    }
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
    bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element rightPrimal, RIGHT_FACTOR* r) const
    {
-      assert(false);
+      return true;
       assert(leftPrimal[0] != unknownState);
       if(leftPrimal[0] == false) {
-         if(!(rightPrimal[i_] == true || (rightPrimal[0] == false && rightPrimal[1] == false && rightPrimal[2] == false && rightPrimal[3] == false))) {
+         if(!(rightPrimal[i_] == true || rightPrimal[4] == true)) {
             return false;
          }
       } else {

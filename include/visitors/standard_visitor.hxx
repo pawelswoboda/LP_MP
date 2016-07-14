@@ -58,7 +58,8 @@ namespace LP_MP {
             roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution: {anisotropic|uniform}",false,"uniform","{anisotropic|uniform}",cmd),
             protocolateConsoleArg_("","protocolateConsole","protocolate on console (stdout)",cmd,false),
             protocolateFileArg_("","protocolateFile","file into which to protocolate progress of algorithm",false,"","file name",cmd),
-            pd_(pd)
+            pd_(pd),
+            primalTime_(0)
       {}
 
       LPVisitorReturnType begin(const LP* lp) // called, after problem is constructed. 
@@ -135,8 +136,13 @@ namespace LP_MP {
          } else if(LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundUniform || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic) {
             logger->info() << "iteration = " << curIter_ << ", lower bound = " << lp->BestLowerBound() << ", time elapsed = " << timeElapsed << " milliseconds";
          } else if(LP_STATE == LPVisitorReturnType::ReparametrizePrimalUniform || LP_STATE == LPVisitorReturnType::ReparametrizePrimalAnisotropic) {
+            assert(false);
+            ComputePrimal();
+            EvaluatePrimal();
             logger->info() << "iteration = " << curIter_ << ", upper bound = " << lp->BestPrimalBound() << ", time elapsed = " << timeElapsed << " milliseconds";
          } else if(LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic) {
+            ComputePrimal();
+            EvaluatePrimal();
             logger->info() << "iteration = " << curIter_ << ", lower bound = " << lp->BestLowerBound() << ", upper bound = " << lp->BestPrimalBound() << ", time elapsed = " << timeElapsed << " milliseconds";
          } else if(LP_STATE == LPVisitorReturnType::Break) {
             auto endTime = std::chrono::steady_clock::now();
@@ -231,6 +237,26 @@ namespace LP_MP {
          assert(false);
       }
 
+      void ComputePrimal()
+      {
+         auto primalComputationBeginTime = std::chrono::steady_clock::now();
+         pd_.ComputePrimal(currentPrimal_.begin());
+         auto primalComputationEndTime = std::chrono::steady_clock::now();
+         primalTime_ += std::chrono::duration_cast<std::chrono::milliseconds>(primalComputationEndTime - primalComputationBeginTime).count();
+      }
+
+      void EvaluatePrimal()
+      {
+         currentPrimalCost_ = pd_.GetLP().EvaluatePrimal(currentPrimal_.begin());
+         if(currentPrimalCost_ < bestPrimalCost_) {
+            std::swap(currentPrimal_, bestPrimal_);
+            std::swap(currentPrimalCost_, bestPrimalCost_);
+         }
+      }
+
+      REAL GetPrimalCost() const
+      { return bestPrimalCost_; }
+
       
       using TimeType = decltype(std::chrono::steady_clock::now());
       TimeType GetBeginTime() const { return beginTime_; }
@@ -274,6 +300,16 @@ namespace LP_MP {
       TimeType beginTime_;
 
       SOLVER& pd_;
+
+      // primal
+      REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
+      REAL currentPrimalCost_ = std::numeric_limits<REAL>::infinity();
+
+      REAL bestLowerBound_ = -std::numeric_limits<REAL>::infinity();
+      REAL currentLowerBound_ = -std::numeric_limits<REAL>::infinity();
+
+      PrimalSolutionStorage currentPrimal_, bestPrimal_;
+      INDEX primalTime_;
    };
 
    template<class SOLVER>

@@ -323,6 +323,10 @@ public:
       LinkPairwiseTripletFactor<PairwiseTripletMessage23Container>(factor23Id,factorId);
 
       this->lp_->AddFactor(t);
+
+      this->lp_->AddFactorRelation(this->GetPairwiseFactor(factor12Id),t);
+      this->lp_->AddFactorRelation(this->GetPairwiseFactor(factor13Id),t);
+      this->lp_->AddFactorRelation(t,this->GetPairwiseFactor(factor23Id));
       return t;
    }
    template<typename PAIRWISE_TRIPLET_MESSAGE_CONTAINER>

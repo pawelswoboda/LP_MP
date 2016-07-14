@@ -35,12 +35,14 @@ public:
    template<typename REPAM_ARRAY>
    static void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    {
+      /*
       for(INDEX i=0; i<repam.size(); ++i) { // ensure that primal has been initialized correctly to true
          std::cout << repam[i] << ",";
       }
       for(INDEX i=0; i<repam.size(); ++i) { // ensure that primal has been initialized correctly to true
          assert(primal[i] == unknownState); // note: more general procedure is possible, but not implemented yet. In general, if already one state is primal, set all unknown states to false. Otherwise choose minimum over unknown states and set primal to it. use randomization?
       }
+      */
       // note: currently possibly also pairwise factors are called here, although this should not be made for SRMP style rounding
       INDEX min_element;
       REAL min_value = std::numeric_limits<REAL>::infinity();
@@ -53,8 +55,8 @@ public:
       }
       assert(min_element < repam.size());
       primal[min_element] = true;
-      std::cout << ";    " << min_element;
-      std::cout << "\n";
+      //std::cout << ";    " << min_element;
+      //std::cout << "\n";
    };
 
    template<typename REPAM_ARRAY>
@@ -100,7 +102,7 @@ public:
       INDEX primalSum = 0;
       for(INDEX i=0; i<repam.size(); ++i) {
          if(primal[i] == true) { 
-            std::cout << i << "\n";
+            //std::cout << i << "\n";
             cost = repam[i];
          }
          primalSum += primal[i];
@@ -108,7 +110,7 @@ public:
       if(primalSum == 1) {
          return cost;
       } else {
-         std::cout << "primal not inferred correctly: " << primalSum << "\n";
+         //std::cout << "primal not inferred correctly: " << primalSum << "\n";
          return std::numeric_limits<REAL>::infinity();
       }
    }

@@ -155,6 +155,42 @@ public:
       return Tighten<0>(minDualIncrease, maxConstraints);
    }
 
+
+
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputePrimal,ComputePrimal);
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   constexpr static bool
+   CanComputePrimal()
+   {
+      // do zrobienia: this is not nice. CanComputePrimal should only be called with valid PROBLEM_CONSTRUCTOR_NO
+      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
+      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
+      else return HasComputePrimal<meta::at_c<ProblemDecompositionList,n>, void, PrimalSolutionStorage::Element>();
+      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
+   }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size()>::type
+   ComputePrimal(PrimalSolutionStorage::Element primal) { return; }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
+   ComputePrimal(PrimalSolutionStorage::Element primal)
+   {
+      return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
+   }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
+   ComputePrimal(PrimalSolutionStorage::Element primal)
+   {
+      spdlog::get("logger")->info() << "ComputePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO;
+      std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).ComputePrimal(primal);
+      return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
+   }
+   void ComputePrimal(PrimalSolutionStorage::Element primal)
+   {
+      ComputePrimal<0>(primal);
+   }
+
+
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    meta::at_c<ProblemDecompositionList, PROBLEM_CONSTRUCTOR_NO>& GetProblemConstructor() 
    {
@@ -193,6 +229,7 @@ public:
    {
       int rt = Solver<FMC>::lp_.Solve(visitor_, [&](PrimalSolutionStorage::Element primal) -> bool { return this->CheckPrimalConsistency(primal); });
       // discrete tomo inspection
+      /*
       auto& mrf = std::get<0>(Solver<FMC>::problemConstructor_);
       std::cout << "unary potentials:\n";
       for(INDEX i=0; i<mrf.GetNumberOfVariables();++i) {
@@ -217,6 +254,7 @@ public:
             std::cout << "\n";
          }
       }
+      */
       return rt;
    }
 

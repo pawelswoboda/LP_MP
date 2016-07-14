@@ -50,9 +50,9 @@ namespace LP_MP{
     typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 0 > UnaryPairwiseMessageLeft;
     typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 1 > UnaryPairwiseMessageRight;
     
-    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::left>, 2, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT, 2>
+    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::left>, 2, 2, atMostOneMessage, atMostOneMessage, variableMessageSize, FMC_DT, 2>
       DiscreteTomographyCountingMessageLeft;
-    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::right>, 2, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT, 3>
+    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::right>, 2, 2, atMostOneMessage, atMostOneMessage, variableMessageSize, FMC_DT, 3>
       DiscreteTomographyCountingMessageRight;
     typedef MessageContainer<DiscreteTomographyMessageCountingPairwise, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_DT, 4>
       DiscreteTomographyCountingPairwiseMessageContainer;

@@ -1,3 +1,4 @@
+// do zrobienia: put all of this into LP_MP.h and remove this file
 #include "LP_MP.h"
 
 namespace LP_MP {
@@ -68,7 +69,7 @@ void LP::SortFactors()
    Topological_Sort::Graph g(f_.size());
 
    std::map<FactorTypeAdapter*,INDEX> factorToIndex; // possibly do it with a hash_map for speed
-   std::map<INDEX,FactorTypeAdapter*> indexToFactor;
+   std::map<INDEX,FactorTypeAdapter*> indexToFactor; // do zrobienia: need not be map, oculd be vector!
    BuildIndexMaps(f_.begin(), f_.end(),factorToIndex,indexToFactor);
 
    for(auto fRelIt=factorRel_.begin(); fRelIt!=factorRel_.end(); fRelIt++) {
@@ -88,10 +89,15 @@ void LP::SortFactors()
    for(INDEX i=0; i<sortedIndices.size(); i++) {
       fSorted.push_back( indexToFactor[sortedIndices[i]] );
    }
+   assert(fSorted.size() == f_.size());
    assert(HasUniqueValues(fSorted));
    forwardOrdering_  = fSorted;
-   //backwardOrdering_ = fSorted;
-   //std::reverse(backwardOrdering_.begin(), backwardOrdering_.end());
+   forwardUpdateOrdering_.clear();
+   for(auto f : forwardOrdering_) {
+      if(f->FactorUpdated()) {
+         forwardUpdateOrdering_.push_back(f);
+      }
+   }
 }
 
 

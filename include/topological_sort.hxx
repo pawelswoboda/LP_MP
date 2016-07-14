@@ -27,6 +27,7 @@ Graph::Graph(INDEX V)
    this->V = V;
 }
 
+// add directed edge from v to w
 void Graph::addEdge(INDEX v, INDEX w)
 {
    assert(v<V && w<V);
@@ -35,47 +36,48 @@ void Graph::addEdge(INDEX v, INDEX w)
 
 std::vector<INDEX> Graph::topologicalSort()
 {
-   // do zrobienia: unnecessary copying below
-   std::vector<bool> visited(V,false);
-   std::stack<std::pair<bool,INDEX> > dfs;
-   std::stack<INDEX> postOrder;
-   std::list<INDEX> newVec;
-   std::list<INDEX>::iterator it;
+   constexpr unsigned char notMarked = 0;
+   constexpr unsigned char tempMarked = 1;
+   constexpr unsigned char permMarked = 2;
+   
+   std::vector<unsigned char> mark(V,notMarked); 
+   std::stack<std::pair<INDEX,decltype(adj[0].begin())> > dfs;
+   std::vector<INDEX> postOrder;
+
    for(INDEX i=0;i<V;i++){
-      if(visited[i]==false){
-         dfs.push(std::make_pair(false,i));
-      }   
-      while(!dfs.empty()){
-         std::pair<bool,INDEX> node=dfs.top();
-         dfs.pop();
-         if (node.first) {
-            postOrder.push(node.second);
-         } else {
-            visited[node.second]=true;
-            dfs.push(std::make_pair(true, node.second));
-            newVec=adj[node.second]; //vector of neighbors
-            for(it=newVec.begin();it!=newVec.end();it++){
-               INDEX son=*it;
-               if(visited[son]==false){
-                  dfs.push(std::make_pair(false, son));
-               }
+      if(mark[i] == notMarked) {
+         dfs.push(std::make_pair(i,adj[i].begin()));
+         while(!dfs.empty()){
+            INDEX node = dfs.top().first;
+            auto& it = dfs.top().second;
+            //if(mark[node] == tempMarked) {
+            //   throw std::runtime_error("graph not a dag");
+            //}
+            if(it == adj[node].begin()) { // first visit
+               assert(mark[node] == notMarked);
+               mark[node] = permMarked;
+            }
+            while(it != adj[node].end() && mark[*it] != notMarked) {
+               ++it;
+            }
+            if(it != adj[node].end()) {
+               INDEX next = *it;
+               ++it;
+               dfs.top().second = it;
+               dfs.push(std::make_pair(next,adj[next].begin()));
+            } else {
+               dfs.pop();
+               mark[node] = permMarked;
+               postOrder.push_back(node);
             }
          }
       }
    }
-   std::vector<INDEX> sorted_vertices(0);
-   sorted_vertices.reserve(V);
-   while (postOrder.empty() == false)
-   {
-      //std::cout << postOrder.top() << " ";
-      sorted_vertices.push_back(postOrder.top());
-      postOrder.pop();
-   }
-   //std::cout << std::endl;
-   //std::cout << sorted_vertices.size() << ", " << V << std::endl;
-   assert(LP_MP::HasUniqueValues(sorted_vertices));
-   assert(sorted_vertices.size() == INDEX(V));
-   return std::move(sorted_vertices);
+
+   assert(postOrder.size() == INDEX(V));
+   assert(LP_MP::HasUniqueValues(postOrder));
+   std::reverse(postOrder.begin(),postOrder.end());
+   return std::move(postOrder);
 }
 
 } // end namespace Topological_Sort

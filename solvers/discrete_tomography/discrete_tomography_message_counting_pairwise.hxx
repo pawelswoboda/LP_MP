@@ -21,20 +21,32 @@ namespace LP_MP {
     /* repam.GetFactor()->&f  */
       
     template<typename RIGHT_FACTOR, typename G1, typename G2>
-    void ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg);
+    void ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
+       MakeRightFactorUniform(f_right, repam_right, msg, 1.0);
+    }
+
+    template<typename RIGHT_FACTOR, typename G1, typename G2>
+    void SendMessageToLeft(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg, const REAL omega){
+       MakeRightFactorUniform(f_right, repam_right, msg, omega);
+    }
 
     template<typename LEFT_FACTOR, typename G1, typename G3>
-    void SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega);
+    void SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
+       MakeLeftFactorUniform(f_left, repam_left, msg, omega);
+    }
 
-    /*------*/
-      
-    //template<typename LEFT_FACTOR, typename G1, typename G2>
-    //void ReceiveMessageFromLeft(LEFT_FACTOR* const f_left, const G1& repam_left, G2& msg);
+    template<typename LEFT_FACTOR, typename G1, typename G3>
+    void ReceiveMessageFromLeft(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg){
+       MakeLeftFactorUniform(f_left, repam_left, msg, 1.0);
+    }
 
-    //template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G2, typename G3>
-    //void SendMessageToLeft(RIGHT_FACTOR* const f_right, const G2& repam_right, G3& msg, const REAL omega);
 
-    /*------*/
+    template<typename LEFT_FACTOR, typename REPAM_ARRAY, typename MSG>
+    void MakeLeftFactorUniform(LEFT_FACTOR* f_left, const REPAM_ARRAY& repam_left, MSG& msg, const REAL omega);
+
+    template<typename RIGHT_FACTOR, typename REPAM_ARRAY, typename MSG>
+    void MakeRightFactorUniform(RIGHT_FACTOR* f_right, const REPAM_ARRAY& repam_right, MSG& msg, const REAL omega);
+
     // Update repam with message for each factor ?
       
     template<typename G>
@@ -67,60 +79,61 @@ namespace LP_MP {
     regSize_ = pow(numberOfLabels_,2);
   }
 
-  template<typename LEFT_FACTOR, typename G1, typename G3>
-  void DiscreteTomographyMessageCountingPairwise::SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
-    //printf("START\n");
-    assert(msg.size() == pow(numberOfLabels_,2));
-    assert(repam_left.size() == pow(numberOfLabels_,2));
+  template<typename LEFT_FACTOR, typename REPAM_ARRAY, typename MSG>
+  void DiscreteTomographyMessageCountingPairwise::MakeLeftFactorUniform(LEFT_FACTOR* f_left, const REPAM_ARRAY& repam_left, MSG& msg, const REAL omega)
+  {
+     assert(msg.size() == pow(numberOfLabels_,2));
+     assert(repam_left.size() == pow(numberOfLabels_,2));
 
-    for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
-      //printf("send reg(%d) --> count: %.3e * %.3e\n",i,omega,repam_left[i]);
-      msg[i] -= omega*repam_left[i];
-    }     
+     for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
+        //printf("send reg(%d) --> count: %.3e * %.3e\n",i,omega,repam_left[i]);
+        msg[i] -= omega*repam_left[i];
+     }   
   }
-    
-  template<typename RIGHT_FACTOR, typename G1, typename G2>
-  void DiscreteTomographyMessageCountingPairwise::ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
-    assert(msg.size() == pow(numberOfLabels_,2));
-    assert(repam_right.size() == ((*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up) +
-                                  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left) +
-                                  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right) +
-                                  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::reg)));
 
-    INDEX left_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left)/pow(numberOfLabels_,2);
-    INDEX right_size =(*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right)/pow(numberOfLabels_,2);
-    INDEX up_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up)/pow(numberOfLabels_,2);
-	
-    auto op = [&](INDEX i,INDEX j){ return (i+j < up_size) ? i+j : up_size; };
-	
-    for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
-      REAL m = std::numeric_limits<REAL>::infinity();
-      INDEX b = i % numberOfLabels_;
-      INDEX c = ((i-b)/numberOfLabels_) % numberOfLabels_;
-      
-      REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
-      
-      for(INDEX j=0;j<pow(numberOfLabels_,2);j++){
-        INDEX a = j % numberOfLabels_;
-        INDEX d = ((j-a)/numberOfLabels_) % numberOfLabels_;
+  template<typename RIGHT_FACTOR, typename REPAM_ARRAY, typename MSG>
+  void DiscreteTomographyMessageCountingPairwise::MakeRightFactorUniform(RIGHT_FACTOR* f_right, const REPAM_ARRAY& repam_right, MSG& msg, const REAL omega)
+  {
+     assert(msg.size() == pow(numberOfLabels_,2));
+     assert(repam_right.size() == ((*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up) +
+              (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left) +
+              (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right) +
+              (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::reg)));
 
-        auto z_up = [&](INDEX k){ return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-        auto z_left = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-        auto z_right = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-	  	  
-        MinConv mc(z_left,z_right,left_size,right_size,up_size);
-        mc.CalcConv(op,z_left,z_right);
+     INDEX left_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left)/pow(numberOfLabels_,2);
+     INDEX right_size =(*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right)/pow(numberOfLabels_,2);
+     INDEX up_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up)/pow(numberOfLabels_,2);
 
-        for(INDEX k=0;k<up_size;k++){
-          assert( k == (mc.getIdxA(k) + mc.getIdxB(k)));
-	  
-          REAL val = mc.getConv(k) + z_up(k);
-          m = std::min(m,val);
+     auto op = [&](INDEX i,INDEX j){ return (i+j < up_size) ? i+j : up_size; };
+
+     for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
+        REAL m = std::numeric_limits<REAL>::infinity();
+        INDEX b = i % numberOfLabels_;
+        INDEX c = ((i-b)/numberOfLabels_) % numberOfLabels_;
+
+        REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
+
+        for(INDEX j=0;j<pow(numberOfLabels_,2);j++){
+           INDEX a = j % numberOfLabels_;
+           INDEX d = ((j-a)/numberOfLabels_) % numberOfLabels_;
+
+           auto z_up = [&](INDEX k){ return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+           auto z_left = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+           auto z_right = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+
+           MinConv mc(z_left,z_right,left_size,right_size,up_size);
+           mc.CalcConv(op,z_left,z_right);
+
+           for(INDEX k=0;k<up_size;k++){
+              assert( k == (mc.getIdxA(k) + mc.getIdxB(k)));
+
+              REAL val = mc.getConv(k) + z_up(k);
+              m = std::min(m,val);
+           }
         }
-      }
-      assert( (m + reg) > -1.0e-02);
-      msg[i] -= (m + reg);
-    }    
+        assert( (m + reg) > -1.0e-02);
+        msg[i] -= (m + reg);
+     }    
   }
 
   template<typename G>

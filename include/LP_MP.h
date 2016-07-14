@@ -24,35 +24,7 @@ namespace LP_MP {
 class MessageTypeAdapter;
 class MessageIterator;
 
-// here we store the primal solution as a std::vector<bool>
-// Each factor is allocated factor.size() entries. Offsets are stored in an auxiliary std::vector<INDEX>.
-// Do zrobienia: offsets could be stored once for multiple primal solutions. Then iterator based on offsets would be more complicated, though.
-/*
-class PrimalSolutionStorage : public std::vector<bool> {
-public:
-   using Element = std::vector<bool>::iterator;
-
-   PrimalSolutionStorage() {}
-   template<typename FACTOR_ITERATOR>
-   PrimalSolutionStorage(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd)
-   {
-      INDEX size = 0;
-      for(;factorIt != factorItEnd; ++factorIt) {
-         size += (*factorIt)->size();
-      }
-      this->resize(size,true);
-      //this->shrink_to_fit();
-      std::cout << "primal size = " << this->size() << "\n";
-   }
-
-   void Initialize()
-   {
-      std::fill(this->begin(), this->end(), true);
-   }
-};
-*/
-
-// do zrobienia: better use some custom vector with packing. Essentially only 3 values are needed: true, false, unknown, which can be stored with 2 bits
+// do zrobienia: better use some custom vector with packing. Essentially only 3 values are needed: true, false, unknown, which can be stored with 2 bits. Also using 3 bits for two values is possible, but runtime cost may be too high with such a difficult construction. Alternatively, pack 2 entries into 3 bits and then use chunk of, say, 64 bits, such that every k entries we have alignment.
 static constexpr unsigned char unknownState = 3;
 class PrimalSolutionStorage : public std::vector<unsigned char> {
 public:
@@ -64,11 +36,11 @@ public:
    {
       INDEX size = 0;
       for(;factorIt != factorItEnd; ++factorIt) {
-         size += (*factorIt)->size();
+         size += (*factorIt)->PrimalSize();
       }
       this->resize(size,unknownState);
       //this->shrink_to_fit();
-      std::cout << "primal size = " << this->size() << "\n";
+      //std::cout << "primal size = " << this->size() << "\n";
    }
 
    void Initialize()
@@ -88,6 +60,7 @@ public:
    virtual void UpdateFactor(const std::vector<REAL>& omega) = 0;
    virtual void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primalIt) = 0;
    virtual INDEX size() const = 0;
+   virtual INDEX PrimalSize() const = 0;
    MessageIterator begin(); 
    MessageIterator end();
    virtual const INDEX GetNoMessages() const = 0;
@@ -105,6 +78,7 @@ public:
    virtual REAL EvaluatePrimal(typename PrimalSolutionStorage::Element primalSolution) const = 0;
    // do zrobienia: this is not needed as well and could be automated. Possibly it is good to keep this to enable solution rewriting.
    virtual void WritePrimal(PrimalSolutionStorage::Element primalSolution, std::ofstream& fs) const = 0;
+   virtual bool FactorUpdated() const = 0;
 };
 
 class MessageTypeAdapter
@@ -191,6 +165,12 @@ public:
    void ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, std::vector<std::vector<REAL> >& omega); // do zrobienia: rename to isotropic weights
 
    REAL LowerBound() const;
+   template<typename PRIMAL_FEASIBILITY_CHECK_FCT>
+   REAL EvaluatePrimal(PrimalSolutionStorage::Element primal, PRIMAL_FEASIBILITY_CHECK_FCT primalCheck, const REAL primalBound  = std::numeric_limits<REAL>::infinity());
+   REAL EvaluatePrimal(PrimalSolutionStorage::Element primal, const REAL primalBound  = std::numeric_limits<REAL>::infinity())
+   {
+      return EvaluatePrimal(primal, [](PrimalSolutionStorage::Element primal) { return true; }, primalBound);
+   }
    template<typename FACTOR_ITERATOR, typename PRIMAL_STORAGE_ITERATOR>
       REAL EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_STORAGE_ITERATOR primalIt) const;
    void UpdateFactor(FactorTypeAdapter* f, const std::vector<REAL>& omega); // perform one block coordinate step for factor f
@@ -225,6 +205,7 @@ private:
    std::vector<FactorTypeAdapter*> f_; // note that here the factors are stored in the original order they were given. They will be output in this order as well, e.g. by problemDecomposition
    std::vector<MessageTypeAdapter*> m_;
    std::vector<FactorTypeAdapter*> forwardOrdering_;//, backwardOrdering_; // separate forward and backward ordering are not needed: Just store factorOrdering_ and generate forward order by begin() and backward order by rbegin().
+   std::vector<FactorTypeAdapter*> forwardUpdateOrdering_; // like forwardOrdering_, but includes only those factors where UpdateFactor actually does something
    std::vector<std::vector<REAL> > omegaForward_, omegaBackward_;
    std::vector<std::pair<FactorTypeAdapter*, FactorTypeAdapter*> > factorRel_; // factor ordering relations. First factor must come before second factor. factorRel_ must describe a DAG
 
@@ -233,6 +214,7 @@ private:
    template<typename FACTOR_ITERATOR, typename PRIMAL_ITERATOR>
       bool CheckPrimalConsistency(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_ITERATOR primalIt) const;
 
+   // move below primal and bounds into visitor
    REAL bestForwardPrimalCost_ = std::numeric_limits<REAL>::infinity(), 
         bestBackwardPrimalCost_ = std::numeric_limits<REAL>::infinity();
 
@@ -263,8 +245,8 @@ inline void LP::Init()
 
 inline void LP::ComputePass()
 {
-   ComputePass(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_.begin());
-   ComputePass(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_.begin());
+   ComputePass(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omegaForward_.begin());
+   ComputePass(forwardUpdateOrdering_.rbegin(), forwardUpdateOrdering_.rend(), omegaBackward_.begin());
 }
 
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
@@ -279,10 +261,10 @@ template<typename PRIMAL_FEASIBILITY_CHECK_FCT>
 inline void LP::ComputePassAndPrimal(PRIMAL_FEASIBILITY_CHECK_FCT primalCheck)
 {
    forwardPrimal_.Initialize();
-   ComputePassAndPrimal(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_.begin(), forwardPrimal_.begin(), bestForwardPrimal_.begin(), bestForwardPrimalCost_, primalCheck); 
+   ComputePassAndPrimal(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omegaForward_.begin(), forwardPrimal_.begin(), bestForwardPrimal_.begin(), bestForwardPrimalCost_, primalCheck); 
    
    backwardPrimal_.Initialize();
-   ComputePassAndPrimal(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_.begin(), backwardPrimal_.begin(), bestBackwardPrimal_.begin(), bestBackwardPrimalCost_, primalCheck); 
+   ComputePassAndPrimal(forwardUpdateOrdering_.rbegin(), forwardUpdateOrdering_.rend(), omegaBackward_.begin(), backwardPrimal_.begin(), bestBackwardPrimal_.begin(), bestBackwardPrimalCost_, primalCheck); 
 }
 
 inline void LP::ComputeLowerBound()
@@ -306,7 +288,7 @@ inline void LP::ComputeUniformWeights()
       ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_);
       ComputeUniformWeights(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_);
       repamMode_ = LPReparametrizationMode::Uniform;
-   }
+   };
 }
 
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename PRIMAL_SOLUTION_STORAGE_ITERATOR, typename PRIMAL_CHECK_FCT>
@@ -326,6 +308,22 @@ void LP::ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR fa
    }
 }
 
+// do not check for feasibility, if we can guarantee that primalBound is not improved
+template<typename PRIMAL_FEASIBILITY_CHECK_FCT>
+REAL LP::EvaluatePrimal(PrimalSolutionStorage::Element primal, PRIMAL_FEASIBILITY_CHECK_FCT primalCheck, const REAL primalBound)
+{
+   REAL primalCost = 0.0;
+   const REAL currentPrimalCost = EvaluatePrimal(f_.begin(),f_.end(),primal);
+   if(currentPrimalCost < primalBound) { 
+      const bool feasible = primalCheck(primal);
+      if(feasible) {
+         return primalCost;
+      } else {
+         return std::numeric_limits<REAL>::infinity();
+      }
+   }
+   return std::numeric_limits<REAL>::infinity();
+}
 
 template<typename VISITOR, typename PRIMAL_CONSISTENCY_CHECK_FCT>
 SIGNED_INDEX LP::Solve(VISITOR& v, PRIMAL_CONSISTENCY_CHECK_FCT primalCheck)
@@ -568,7 +566,7 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
    }
    
    omega.clear();
-   omega.resize(factorEndIt - factorIt);
+   omega.reserve(factorEndIt - factorIt);
    if(m_.size() == 0) { 
       std::cout << "no messages in problem\n"; 
       //assert(false);
@@ -577,30 +575,32 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
 
    fcIt = fc.begin();
    fcAccessedLaterIt = fcAccessedLater.begin();
-   for(auto omegaIt = omega.begin(); factorIt != factorEndIt; ++factorIt, ++omegaIt, ++fcIt, ++fcAccessedLaterIt) {
-      assert(fcIt->size() == fcAccessedLaterIt->size());
-      (*omegaIt).resize(fcIt->size(), 0.0);
-      INDEX noFactorsAccessedLater = 0;
-      for(INDEX j=0;j<fcIt->size(); j++) {
-         if((*fcAccessedLaterIt)[j]) {
-            noFactorsAccessedLater++;
+   for(;factorIt != factorEndIt; ++factorIt, ++fcIt, ++fcAccessedLaterIt) {
+      if((*factorIt)->FactorUpdated()) {
+         assert(fcIt->size() == fcAccessedLaterIt->size());
+         omega.push_back(std::vector<REAL>(fcIt->size(), 0.0));
+         INDEX noFactorsAccessedLater = 0;
+         for(INDEX j=0;j<fcIt->size(); j++) {
+            if((*fcAccessedLaterIt)[j]) {
+               noFactorsAccessedLater++;
+            }
          }
-      }
-      //const INDEX numberActiveMessages = std::count(fcAccessedLaterIt->begin(), fcAccessedLaterIt->end(), true);
+         //const INDEX numberActiveMessages = std::count(fcAccessedLaterIt->begin(), fcAccessedLaterIt->end(), true);
 
-      //const REAL weight = 1.0 / REAL(noFactorsAccessedLater);
-      //const REAL weight = 0.8*1.0 / REAL(noFactorsAccessedLater);
-      // do zrobienia: not the traditional way
-      const REAL weight = 1.0 / (std::max(REAL(noFactorsAccessedLater), REAL(fcAccessedLaterIt->size() - noFactorsAccessedLater)) );
-      //const REAL weight = 0.1; // 0.5 works well for pure assignment with equality messages
-      for(INDEX j=0; j<fcIt->size(); j++) {
-         if((*fcAccessedLaterIt)[j]) {
-            (*omegaIt)[j] = weight; 
-         } else {
-            (*omegaIt)[j] = 0.0;
+         //const REAL weight = 1.0 / REAL(noFactorsAccessedLater);
+         //const REAL weight = 0.8*1.0 / REAL(noFactorsAccessedLater);
+         // do zrobienia: not the traditional way
+         const REAL weight = 1.0 / (std::max(REAL(noFactorsAccessedLater), REAL(fcAccessedLaterIt->size() - noFactorsAccessedLater)) );
+         //const REAL weight = 0.1; // 0.5 works well for pure assignment with equality messages
+         for(INDEX j=0; j<fcIt->size(); j++) {
+            if((*fcAccessedLaterIt)[j]) {
+               omega.back()[j] = weight; 
+            } else {
+               omega.back()[j] = 0.0;
+            }
          }
+         assert( std::accumulate(omega.back().begin(), omega.back().end(),0.0) <= 1.0 + eps);
       }
-      assert( std::accumulate(omegaIt->begin(), omegaIt->end(),0.0) <= 1.0 + eps);
    }
    for(INDEX i=0; i<omega.size(); ++i) {
       for(INDEX j=0; j<omega[i].size(); ++j) {
@@ -626,10 +626,13 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
    omega.resize(factorEndIt-factorIt);
    auto omegaIt = omega.begin();
    auto fcIt = fc.begin();
-   for(; factorIt != factorEndIt; ++factorIt, ++omegaIt, ++fcIt) {
+   for(; factorIt != factorEndIt; ++factorIt, ++fcIt) {
       // do zrobienia: let the factor below be variable and specified on the command line
       // better for rounding
-      (*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 0.001) );
+      if((*factorIt)->FactorUpdated()) {
+         (*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 0.001) );
+         ++omegaIt;
+      }
       //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 1.0) );
       // better for dual convergence
       //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size()) );

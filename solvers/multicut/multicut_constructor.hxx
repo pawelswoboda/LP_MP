@@ -14,6 +14,12 @@
 #include <unordered_set>
 #include <queue>
 
+#include "andres/graph/graph.hxx"
+#include "andres/graph/grid-graph.hxx"
+#include "andres/graph/multicut-lifted/kernighan-lin.hxx"
+#include "andres/graph/multicut-lifted/greedy-additive.hxx"
+
+
 namespace LP_MP {
 
 
@@ -344,10 +350,10 @@ private:
 public:
 MulticutConstructor(Solver<FMC>& pd) 
    : pd_(pd),
-   unaryFactors_(100,hf2),
+   //unaryFactors_(100,hf2),
    tripletFactors_(100,hf3)
    {
-      unaryFactors_.max_load_factor(0.7);
+      //unaryFactors_.max_load_factor(0.7);
       tripletFactors_.max_load_factor(0.7);
    }
    ~MulticutConstructor()
@@ -369,8 +375,25 @@ MulticutConstructor(Solver<FMC>& pd)
       assert(!HasUnaryFactor(i1,i2));
       
       auto* u = new UnaryFactorContainer(MulticutUnaryFactor(cost), std::vector<REAL>{cost});
-      unaryFactors_.insert(std::make_pair(std::array<INDEX,2>{i1,i2}, u));
       pd_.GetLP().AddFactor(u);
+      auto it = unaryFactors_.insert(std::make_pair(std::array<INDEX,2>{i1,i2}, u)).first;
+      //std::cout << "current edge: (" << i1 << "," << i2 << ")";
+      if(it != unaryFactors_.begin()) {
+         auto prevIt = it;
+         --prevIt;
+         //std::cout << ", prev edge: (" << prevIt->first.operator[](0) << "," << prevIt->first.operator[](1) << ")";
+         assert(prevIt->second != u);
+         pd_.GetLP().AddFactorRelation(prevIt->second, u);
+      }
+      auto nextIt = it;
+      ++nextIt;
+      if(nextIt != unaryFactors_.end()) {
+         assert(nextIt->second != u);
+         //std::cout << ", next edge: (" << nextIt->first.operator[](0) << "," << nextIt->first.operator[](1) << ")";
+         pd_.GetLP().AddFactorRelation(u, nextIt->second);
+      }
+      //std::cout << "\n";
+
       noNodes_ = std::max(noNodes_,std::max(i1,i2)+1);
 
       //LinkUnaryGlobal(u,globalFactor_,i1,i2);
@@ -405,11 +428,11 @@ MulticutConstructor(Solver<FMC>& pd)
       tripletFactors_.insert(std::make_pair( std::array<INDEX,3>{i1,i2,i3}, t ));
       // use following ordering of unary and triplet factors: triplet comes after edge factor (i1,i2) and before (i2,i3)
       auto* before = GetUnaryFactor(i1,i2);
-      //pd_.GetLP().AddFactorRelation(before,t);
+      pd_.GetLP().AddFactorRelation(before,t);
       auto* middle = GetUnaryFactor(i1,i3);
-      //pd_.GetLP().AddFactorRelation(middle,t);
+      pd_.GetLP().AddFactorRelation(middle,t);
       auto* after = GetUnaryFactor(i2,i3);
-      //pd_.GetLP().AddFactorRelation(t,after);
+      pd_.GetLP().AddFactorRelation(t,after);
       // get immediate predeccessor and successor and place new triplet in between
       //auto succ = tripletFactors_.upper_bound(std::make_tuple(i1,i2,i3));
       //if(succ != tripletFactors_.end()) {
@@ -615,7 +638,8 @@ protected:
    //GlobalFactorContainer* globalFactor_;
    // do zrobienia: replace this by unordered_map, provide hash function.
    // possibly dont do this, but use sorting to provide ordering for LP
-   std::unordered_map<std::array<INDEX,2>, UnaryFactorContainer*, decltype(hf2)> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
+   std::map<std::array<INDEX,2>, UnaryFactorContainer*> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
+   //std::unordered_map<std::array<INDEX,2>, UnaryFactorContainer*, decltype(hf2)> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
    // sort triplet factors as follows: Let indices be i=(i1,i2,i3) and j=(j1,j2,j3). Then i<j iff i1+i2+i3 < j1+j2+j3 or for ties sort lexicographically
    struct tripletComp {
       bool operator()(const std::tuple<INDEX,INDEX,INDEX> i, const std::tuple<INDEX,INDEX,INDEX> j) const
@@ -1192,13 +1216,13 @@ public:
       const INDEX noBaseConstraints = MULTICUT_CONSTRUCTOR::Tighten(minDualIncrease, 0.8*maxCuttingPlanesToAdd);
       INDEX noLiftingConstraints = 0;
       spdlog::get("logger")->info() << "number of cut constraints: " << liftedMulticutFactors_.size();
-      for(INDEX i=0; i<baseEdges_.size(); ++i) {
-         std::cout << baseEdges_[i].weight() << ", ";
-      }
-      std::cout << "\n";
-      for(INDEX i=0; i<liftedEdges_.size(); ++i) {
-         std::cout << liftedEdges_[i].weight() << ", ";
-      }
+      //for(INDEX i=0; i<baseEdges_.size(); ++i) {
+      //   std::cout << baseEdges_[i].weight() << ", ";
+      //}
+      //std::cout << "\n";
+      //for(INDEX i=0; i<liftedEdges_.size(); ++i) {
+      //   std::cout << liftedEdges_[i].weight() << ", ";
+      //}
       std::cout << "\n";
       if(noBaseConstraints < maxCuttingPlanesToAdd) {
          noLiftingConstraints = FindViolatedCuts(minDualIncrease, maxCuttingPlanesToAdd - noBaseConstraints);
@@ -1274,9 +1298,9 @@ public:
       // note that currently possibly multiple max flow computations are performed, when lifted edges come from the same connected components. This is superfluous and searches could be remembered and reused.
       const int capacityMax = baseEdges_.size()+1;
       for(const auto& liftedEdge : liftedEdges_) {
-         spdlog::get("logger")->info() << "considering lifted edge " << liftedEdge.i << "," << liftedEdge.j;
+         //spdlog::get("logger")->info() << "considering lifted edge " << liftedEdge.i << "," << liftedEdge.j;
          if(factorsAdded >= noConstraints) { 
-            spdlog::get("logger")->info() << "maximal number of constraints to add reached";
+            //spdlog::get("logger")->info() << "maximal number of constraints to add reached";
             break; 
          }
          if(liftedEdge.weight() > minDualIncrease) {
@@ -1294,7 +1318,7 @@ public:
                std::stack<INDEX> q;
                std::vector<bool> visited(ccNodes,false);
                q.push(i);
-               spdlog::get("logger")->info() << "finding max flow between node " << i << " and " << j;
+               //spdlog::get("logger")->info() << "finding max flow between node " << i << " and " << j;
                while(!q.empty()) {
                   const INDEX v = q.top();
                   q.pop();
@@ -1310,9 +1334,9 @@ public:
                      assert(v_test == v);
                      if(maxFlow.what_segment(INDEX(v)) != maxFlow.what_segment(INDEX(w))) {
                         // expand all edges that were collapsed into (v,w) in the original graph
-                           spdlog::get("logger")->info() << "edge in mincut: " << v << "," << w;
+                           //spdlog::get("logger")->info() << "edge in mincut: " << v << "," << w;
                         for(const auto& e : ccToBaseEdges[Edge(INDEX(v),INDEX(w))]) {
-                           spdlog::get("logger")->info() << " expanded edge : " << e[0] << "," << e[1];
+                           //spdlog::get("logger")->info() << " expanded edge : " << e[0] << "," << e[1];
                            minCut.push_back(Edge(e[0],e[1]));
                         }
                      } else if(!visited[INDEX(w)]) {
@@ -1370,6 +1394,60 @@ public:
       }
       return true;
    }
+
+   void ComputePrimal(PrimalSolutionStorage::Element primal) const
+   {
+      // do zrobienia: templatize for correct graph type
+      // do zrobienia: put original graph into multicut constructor and let it be constant, i.e. not reallocate it every time for primal computation. Problem: When adding additional edges, we may not add them to the lifted multicut solver, as extra edges must not participate in cut inequalities
+
+      // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
+      const INDEX noNodes = MULTICUT_CONSTRUCTOR::noNodes_;
+      andres::graph::Graph<> originalGraph(noNodes);
+      andres::graph::Graph<> liftedGraph(noNodes);
+      std::vector<REAL> edgeValues;
+      edgeValues.reserve(baseEdges_.size() + liftedEdges_.size());
+
+      for(const auto& e : baseEdges_) {
+         originalGraph.insertEdge(e.i, e.j);
+         liftedGraph.insertEdge(e.i,e.j);
+         edgeValues.push_back(e.f->operator[](0));
+      }
+      for(const auto& e : liftedEdges_) {
+         liftedGraph.insertEdge(e.i, e.j);
+         edgeValues.push_back(e.f->operator[](0));
+      }
+
+      std::vector<char> labeling(baseEdges_.size() + liftedEdges_.size(),0);
+      andres::graph::multicut_lifted::greedyAdditiveEdgeContraction(originalGraph,liftedGraph,edgeValues,labeling);
+      andres::graph::multicut_lifted::kernighanLin(originalGraph,liftedGraph,edgeValues,labeling,labeling);
+
+      // now write back primal solution and evaluate cost. 
+      // Problem: we have to infer state of tightening edges. Note: Multicut is uniquely determined by baseEdges_, hence labeling of thightening edges can be inferred with union find datastructure.
+      UnionFind uf(noNodes);
+      for(INDEX e=0; e<baseEdges_.size(); ++e) {
+         std::array<bool,1> l { bool(labeling[e]) };
+         baseEdges_[e].f->SetAndPropagatePrimal(primal, l.begin());
+         uf.merge(baseEdges_[e].i, baseEdges_[e].j);
+      }
+      for(INDEX e=0; e<liftedEdges_.size(); ++e) {
+         std::array<bool,1> l { bool(labeling[e + baseEdges_.size()]) };
+         liftedEdges_[e].f->SetAndPropagatePrimal(primal, l.begin());
+      }
+      // now go over all edges: additionally tightening edges will not have received primal value, set if now.
+      for(const auto& e : MULTICUT_CONSTRUCTOR::unaryFactors_) {
+         const auto* f = e.second;
+         if(primal[f->GetPrimalOffset()] != unknownState) {
+            std::array<bool,1> l;
+            if(uf.connected(e.first[0],e.first[1])) {
+               l[0] = 0;
+            } else {
+               l[0] = 1;
+            }
+            f->SetAndPropagatePrimal(primal, l.begin());
+         }
+      }
+   }
+
 
    private:
    //struct Edge {INDEX i; INDEX j; REAL w;}; // replace by WeightedEdge

@@ -91,14 +91,14 @@ namespace LP_MP {
     ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
     {
        static_assert(LSA == LEFT_SIDE_ACTIVE,"");
-       //OptimizeRestricted(rightPot, msg, r, loopRight_, rightPrimal);
+       OptimizeRestricted(rightPot, msg, r, loopRight_, rightPrimal);
     }
     template<typename LEFT_FACTOR, typename G1, typename G2, bool RSA = RIGHT_SIDE_ACTIVE>
     typename std::enable_if<RSA,void>::type 
     ReceiveRestrictedMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg, typename PrimalSolutionStorage::Element leftPrimal)
     { 
        static_assert(RSA == RIGHT_SIDE_ACTIVE,"");
-       //OptimizeRestricted(leftPot, msg, l, loopLeft_, leftPrimal);
+       OptimizeRestricted(leftPot, msg, l, loopLeft_, leftPrimal);
     }
    
 
@@ -235,6 +235,7 @@ namespace LP_MP {
     void Optimize(const G1& pot, G2& msg, FACTOR_TYPE* fac, LOOP& l, const REAL omega)
     {
       REAL delta;
+      // do zrobienia: normalize by minimum value
       l.loop( 
 	     [&](const INDEX outer_idx){ 
 	       delta = std::numeric_limits<REAL>::infinity(); 

@@ -64,6 +64,7 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeRightFromLeftPrimal, ComputeRightFromLe
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency, CheckPrimalConsistency); 
 
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasPrimalSize,PrimalSize);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential);
 
@@ -270,7 +271,7 @@ public:
       static_assert(NO_ELEMENTS > 0, "");
    }
    void push_back(T t) {
-      assert(size_ < NO_ELEMENTS - 1);
+      assert(size_ < NO_ELEMENTS);
       this->operator[](size_) = t;
       ++size_;
    }
@@ -566,7 +567,7 @@ public:
 
    }
 
-   void ComputeLeftFromRightPrimal(typename PrimalSolutionStorage::Element primal)
+   void ComputeLeftFromRightPrimal(PrimalSolutionStorage::Element primal)
    {
       msg_op_.ComputeLeftFromRightPrimal(primal + leftFactor_->GetPrimalOffset(), leftFactor_->GetFactor(), primal + rightFactor_->GetPrimalOffset(), rightFactor_->GetFactor());
       leftFactor_->PropagatePrimal(primal + leftFactor_->GetPrimalOffset());
@@ -577,8 +578,8 @@ public:
    CanCheckPrimalConsistency()
    {
       return FunctionExistence::HasCheckPrimalConsistency<MessageType,bool,
-          PrimalSolutionStorage::Element, typename LeftFactorContainer::FactorType,
-          PrimalSolutionStorage::Element, typename RightFactorContainer::FactorType>();
+          PrimalSolutionStorage::Element, typename LeftFactorContainer::FactorType*,
+          PrimalSolutionStorage::Element, typename RightFactorContainer::FactorType*>();
    }
    template<bool ENABLE=CanCheckPrimalConsistency()>
    typename std::enable_if<ENABLE,bool>::type
@@ -1028,7 +1029,6 @@ public:
       PropagatePrimalImpl(primal);
    }
 
-
    constexpr static bool
    CanMaximizePotential()
    {
@@ -1046,8 +1046,7 @@ public:
                tmpRepam[i] = this->operator[](i);
             }
             // first we compute restricted incoming messages, on which to compute the primal
-            // kwaskwaskwas: do zrobienia: comment receive restricted messages in again
-            //ReceiveRestrictedMessages(primal);
+            ReceiveRestrictedMessages(primal);
             // now we compute primal
             MaximizePotentialAndComputePrimal(primal);
             // restore original reparametrization
@@ -1101,9 +1100,12 @@ public:
    ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element primal) const
    {
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it) {
-         MESSAGE_DISPATCHER_TYPE::ComputePrimalThroughMessage(*(*it), primal);
+      for(INDEX i=0; i<std::get<n>(msg_).size(); ++i) {
+         MESSAGE_DISPATCHER_TYPE::ComputePrimalThroughMessage(*(std::get<n>(msg_)[i]), primal);
       }
+      //for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it) {
+      //   MESSAGE_DISPATCHER_TYPE::ComputePrimalThroughMessage(*(*it), primal);
+      //}
    }
    template<typename MESSAGE_DISPATCHER_TYPE>
    typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanComputePrimalThroughMessage() == false>::type 
@@ -1133,12 +1135,18 @@ public:
       // receive messages for current MESSAGE_DISPATCER_TYPE
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       // do zrobienia: note that msgs array is not used!
-      for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it, ++omegaIt) {
+      for(INDEX i=0; i<std::get<n>(msg_).size(); ++i) {
          // this is not valid. Instead, use a vector of bools which indicates whether to receive messages and let it be computed by Compute...Weights
          //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
-            MESSAGE_DISPATCHER_TYPE::ReceiveMessage(*(*it));
+         MESSAGE_DISPATCHER_TYPE::ReceiveMessage(*(std::get<n>(msg_)[i]));
          //}
       }
+      //for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it, ++omegaIt) {
+      //   // this is not valid. Instead, use a vector of bools which indicates whether to receive messages and let it be computed by Compute...Weights
+      //   //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
+      //      MESSAGE_DISPATCHER_TYPE::ReceiveMessage(*(*it));
+      //   //}
+      //}
    }
    // or do not perform receiving message updates (if no receive message is implemented)
    template<typename MESSAGE_DISPATCHER_TYPE, typename MSG_ARRAY, typename ITERATOR>
@@ -1175,9 +1183,12 @@ public:
       // receive restricted messages for current MESSAGE_DISPATCHER_TYPE
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       // do zrobienia: note that msgs array is not used!
-      for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it) { // do zrobienia: only receive messages from sensible ones
-         MESSAGE_DISPATCHER_TYPE::ReceiveRestrictedMessage(*(*it),primal);
+      for(INDEX i=0; i<std::get<n>(msg_).size(); ++i) {
+         MESSAGE_DISPATCHER_TYPE::ReceiveRestrictedMessage(*(std::get<n>(msg_)[i]), primal); // do zrobienia: only receive messages from sensible ones
       }
+      //for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it) { // do zrobienia: only receive messages from sensible ones
+      //   MESSAGE_DISPATCHER_TYPE::ReceiveRestrictedMessage(*(*it),primal);
+      //}
    }
    // or do not perform receiving message updates (if no receive restricted message is implemented)
    template<typename MESSAGE_DISPATCHER_TYPE>
@@ -1288,11 +1299,16 @@ public:
    SendMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, const MSG_ARRAY& msgs, const REPAM_ARRAY& repam, ITERATOR omegaIt)
    {
       // call individual message updates
-      for(auto it=msgs.cbegin(); it!=msgs.cend(); ++it, ++omegaIt) {
+      for(INDEX i=0; i<msgs.size(); ++i, ++omegaIt) {
          if(*omegaIt != 0.0) {
-            MESSAGE_DISPATCHER_TYPE::SendMessage(*(*it), repam, *omegaIt);
+            MESSAGE_DISPATCHER_TYPE::SendMessage(*msgs[i], repam, *omegaIt); // do zrobienia: only receive messages from sensible ones
          }
       }
+      //for(auto it=msgs.cbegin(); it!=msgs.cend(); ++it, ++omegaIt) {
+      //   if(*omegaIt != 0.0) {
+      //      MESSAGE_DISPATCHER_TYPE::SendMessage(*(*it), repam, *omegaIt);
+      //   }
+      //}
       return msgs.size(); 
    }
    // no updates if they are not implemented 
@@ -1386,6 +1402,89 @@ public:
    }
 
    template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   constexpr static bool CanReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) 
+   {
+      return false;
+   }
+   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   constexpr static bool CanReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t)
+   {
+      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      if( MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage()) {
+         return true;
+      } else {
+         return CanReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
+      }
+   }
+   constexpr static bool CanReceiveMessages() 
+   {
+      return CanReceiveMessages(MESSAGE_DISPATCHER_TYPELIST{});
+   }
+   // check whether actually receive restricted messages is called. Can be false, even if CanReceiveRestrictedMessages is true, e.g. when no message is present
+   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   bool CallsReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) const
+   { return false; }
+   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   bool CallsReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t)  const
+   {
+      constexpr bool canReceive = MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage();
+      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      if(canReceive == true && std::get<n>(msg_).size() > 0) {
+         return true;
+      } else {
+         return CallsReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
+      }
+   }
+   bool CallsReceiveMessages() const
+   {
+      return CallsReceiveMessages(MESSAGE_DISPATCHER_TYPELIST{});
+   }
+
+
+   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   constexpr static bool CanSendMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) 
+   {
+      return false;
+   }
+   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   constexpr static bool CanSendMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t)
+   {
+      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      if( MESSAGE_DISPATCHER_TYPE::template CanCallSendMessage<std::vector<REAL>>() ||
+             MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<FactorContainerType, std::vector<REAL>, decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>() ) {
+         return true;
+      } else {
+         return CanSendMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
+      }
+   }
+   constexpr static bool CanSendMessages() 
+   {
+      return CanSendMessages(MESSAGE_DISPATCHER_TYPELIST{});
+   }
+
+   // check whether actually send messages is called. Can be false, even if CanSendMessages is true, e.g. when no message is present
+   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   bool CallsSendMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) const
+   { return false; }
+   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   bool CallsSendMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t)  const
+   {
+      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      constexpr bool canSend = MESSAGE_DISPATCHER_TYPE::template CanCallSendMessage<std::vector<REAL>>() || 
+             MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<decltype(*this), std::vector<REAL>, decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>();
+      if(canSend == true && std::get<n>(msg_).size() > 0) {
+         return true;
+      } else {
+         return CallsSendMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
+      }
+   }
+   bool CallsSendMessages() const
+   {
+      return CallsSendMessages(MESSAGE_DISPATCHER_TYPELIST{});
+   }
+
+
+   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
    bool CanSendMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX cur_msg_idx) const 
    {
       throw std::runtime_error("message index out of bound");
@@ -1408,6 +1507,55 @@ public:
    bool CanSendMessage(const INDEX msg_idx) const final
    {
       return CanSendMessage(MESSAGE_DISPATCHER_TYPELIST{}, msg_idx);
+   }
+
+
+   // check whether actually receive restricted messages is called. Can be false, even if CanReceiveRestrictedMessages is true, e.g. when no message is present
+   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   bool CallsReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) const
+   { return false; }
+   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   bool CallsReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t)  const
+   {
+      constexpr bool canReceive = MESSAGE_DISPATCHER_TYPE::CanCallReceiveRestrictedMessage();
+      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      if(canReceive == true && std::get<n>(msg_).size() > 0) {
+         return true;
+      } else {
+         return CallsReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
+      }
+   }
+   bool CallsReceiveRestrictedMessages() const
+   {
+      return CallsReceiveRestrictedMessages(MESSAGE_DISPATCHER_TYPELIST{});
+   }
+
+
+   // does factor call {Receive|Send}Messages? If not, it need, UpdateFactor need not be called
+   bool FactorUpdated() const final
+   {
+      if(CanComputePrimal()) {
+         return true;
+      }
+      if(CanReceiveMessages() && CallsReceiveMessages()) {
+         return true;
+      }
+      if(CanSendMessages() && CallsSendMessages()) {
+         return true;
+      }
+      if(CanReceiveRestrictedMessages() && CallsReceiveRestrictedMessages()) {
+         return true;
+      }
+      return false;
+   }
+
+   template<typename ITERATOR>
+   void SetAndPropagatePrimal(PrimalSolutionStorage::Element primal, ITERATOR label) const
+   {
+      for(INDEX i=0; i<PrimalSize(); ++i) {
+         primal[i + GetPrimalOffset()] = label[i];
+      }
+      ComputePrimalThroughMessages(primal);
    }
 
    // do zrobienia: possibly do it with std::result_of
@@ -1434,6 +1582,25 @@ public:
    }
 
    INDEX size() const final { return RepamStorageType::size(); }
+
+   constexpr static bool CanComputePrimalSize()
+   {
+      return FunctionExistence::HasPrimalSize<FactorType,INDEX>();
+   }
+   template<bool ENABLE = CanComputePrimalSize()>
+   typename std::enable_if<!ENABLE,INDEX>::type
+   PrimalSizeImpl() const
+   {
+      return this->size();
+   }
+   template<bool ENABLE = CanComputePrimalSize()>
+   typename std::enable_if<ENABLE,INDEX>::type
+   PrimalSizeImpl() const
+   {
+      return factor_.PrimalSize();
+   }
+   // return size for primal storage
+   INDEX PrimalSize() const final { return PrimalSizeImpl(); }
 
    REAL LowerBound() const final { return factor_.LowerBound(*this); } 
 
