@@ -55,6 +55,7 @@ OPTION(BUILD_MULTICUT "Build multicut" OFF)
 OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" OFF)
 OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" ON)
 OPTION(BUILD_EVALUATION "Build evaluation" OFF)
+OPTION(BUILD_TESTS "Build tests" OFF)
 
 
 IF(UNIX AND NOT APPLE)
@@ -77,3 +78,4 @@ include_directories(lib/spdlog/include)
 include_directories(lib/andres/include)
 #include_directories(lib/hana-0.7.0/include)
 add_subdirectory(solvers)
+add_subdirectory(test)
