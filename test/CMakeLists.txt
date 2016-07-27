@@ -1,6 +1,6 @@
 if(BUILD_TESTS)
    SET(SOURCE_FILES 
-      simplex_test.cpp
+      test.cpp
       )
 
    foreach( source_file ${SOURCE_FILES} )

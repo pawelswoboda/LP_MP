@@ -1,5 +1,3 @@
-#define CATCH_CONFIG_MAIN 
-#include "catch.hpp"
 #include <vector>
 #include "factors/simplex_factor.hxx"
 
