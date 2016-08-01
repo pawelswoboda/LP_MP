@@ -17,6 +17,7 @@
 #include "topological_sort.hxx"
 #include <memory>
 #include <iterator>
+#include "lp_interface/lp_interface.h"
 
 namespace LP_MP {
 
@@ -52,13 +53,14 @@ public:
 
 
 
-// pure virtual base class for factors used by LP class
+// pure virtual base class for factor container used by LP class
 class FactorTypeAdapter
 {
 public:
-   virtual ~FactorTypeAdapter() {};
+   virtual ~FactorTypeAdapter() {}
    virtual void UpdateFactor(const std::vector<REAL>& omega) = 0;
    virtual void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primalIt) = 0;
+   virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
    virtual INDEX size() const = 0;
    virtual INDEX PrimalSize() const = 0;
    MessageIterator begin(); 
@@ -77,20 +79,22 @@ public:
    // do zrobienia: this function is not needed. Evaluation can be performed automatically
    virtual REAL EvaluatePrimal(typename PrimalSolutionStorage::Element primalSolution) const = 0;
    // do zrobienia: this is not needed as well and could be automated. Possibly it is good to keep this to enable solution rewriting.
-   virtual void WritePrimal(PrimalSolutionStorage::Element primalSolution, std::ofstream& fs) const = 0;
-   virtual bool FactorUpdated() const = 0;
+   //virtual void WritePrimal(PrimalSolutionStorage::Element primalSolution, std::ofstream& fs) const = 0;
+
+   // for the LP interface
+   void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
 };
 
 class MessageTypeAdapter
 {
 public:
-   virtual ~MessageTypeAdapter() {};
+   virtual ~MessageTypeAdapter() {}
    virtual FactorTypeAdapter* GetLeftFactor() const = 0;
    virtual FactorTypeAdapter* GetRightFactor() const = 0;
    //virtual bool CheckPrimalConsistency(typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right) const = 0;
    virtual bool CheckPrimalConsistency(typename PrimalSolutionStorage::Element primal) const = 0;
-   virtual void SetMessage(const std::valarray<REAL>& m) = 0; // do zrobienia: change to vector
-   virtual const std::valarray<REAL> GetMessage() const = 0; // do zrobienia: change to vector
+   virtual void SetMessage(const std::valarray<REAL>& m) = 0; // do zrobienia: function is not used anywhere currently // do zrobienia: change to vector
+   virtual const std::valarray<REAL> GetMessage() const = 0; // do zrobienia: function is not used anywhere currently // do zrobienia: change to vector
    
    // Also true, if SendMessagesTo{Left|Right} is active. Used for weight computation. Disregard message in weight computation if it does not send messages at all
    // do zrobienia: throw them out again
@@ -102,6 +106,8 @@ public:
    //virtual REAL GetMessageWeightToRight() const = 0;
    //virtual REAL GetMessageWeightToLeft() const = 0;
 
+   // for LP interface
+   void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
 };
 
 // primitive iterator class. Access may be slow. A more direct implementation would be more complicated, though.

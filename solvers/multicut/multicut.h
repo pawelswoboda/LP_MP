@@ -1,4 +1,4 @@
-#fndef LP_MP_MULTICUT_HXX
+#ifndef LP_MP_MULTICUT_HXX
 #define LP_MP_MULTICUT_HXX
 
 #include "LP_MP.h"

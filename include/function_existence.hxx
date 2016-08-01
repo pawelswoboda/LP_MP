@@ -6,6 +6,7 @@
 
 // generates helper classes and constexpr function with which it is possible to detect existence and callability of member functions
 // question: does this also help with inherited member functions?
+// do zrobienia: currently compiler generates lots of warnings. Rewrite such that it compiles silently.
 
 #define LP_MP_FUNCTION_EXISTENCE_CLASS(TESTER_NAME, MEMBER) \
 template<typename, typename T> \

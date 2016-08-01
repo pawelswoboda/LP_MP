@@ -915,6 +915,12 @@ public:
       return msg_op_;
    }
 
+
+   void CreateConstraints(LpInterfaceAdapter(LpInterfaceAdapter* l) const final
+   {
+
+   }
+
 protected:
    MessageType msg_op_;
    LeftFactorContainer* const leftFactor_;
@@ -933,7 +939,7 @@ template<typename FACTOR_TYPE,
          class FACTOR_MESSAGE_TRAIT,
          INDEX FACTOR_NO,
          bool COMPUTE_PRIMAL_SOLUTION = false,
-         bool WRITE_PRIMAL_SOLUTION = false>
+         bool WRITE_PRIMAL_SOLUTION = false> // do zrobienia: remove this template parameter
 class FactorContainer : public REPAM_STORAGE_TYPE<FactorContainer<FACTOR_TYPE, REPAM_STORAGE_TYPE, FACTOR_MESSAGE_TRAIT, FACTOR_NO, COMPUTE_PRIMAL_SOLUTION, WRITE_PRIMAL_SOLUTION> >, public FactorTypeAdapter
 {
 public:
@@ -953,7 +959,7 @@ public:
       //std::cout << "left message list = " << abi::__cxa_demangle(typeid(left_message_list_1).name(),0,0,&status) << "\n";
    
    }
-   virtual ~FactorContainer() { 
+   ~FactorContainer() { 
       static_assert(meta::unique<MESSAGE_DISPATCHER_TYPELIST>::size() == MESSAGE_DISPATCHER_TYPELIST::size(), 
             "Message dispatcher typelist must have unique elements");
       static_assert(FACTOR_NO >= 0 && FACTOR_NO < FACTOR_MESSAGE_TRAIT::FactorList::size(), "factor number must be smaller than length of factor list");
@@ -1607,7 +1613,7 @@ public:
    const FactorType* GetFactor() const { return &factor_; }
    FactorType* GetFactor() { return &factor_; }
    void SetPrimalOffset(const INDEX n) final { primalOffset_ = n; } // this function is used in AddFactor in LP class
-   INDEX GetPrimalOffset() const final { return primalOffset_; } // do zrobienia: possibly make this function pure virtual in base class
+   INDEX GetPrimalOffset() const final { return primalOffset_; }
 
 protected:
    FactorType factor_; // the factor operation
@@ -1673,35 +1679,16 @@ protected:
 
    tuple_from_list<msg_container_type_list> msg_;
 
-   // each factor must state whether its solution is an integer or a vector of integers. A primal solution is stored in the variable below
-   // do zrobienia:
-   // note that MaximizePotentialAndComputePrimal need not be implemented by the factor. If this is so, then the type shall be derived from Compute{Left|Right}From{Right|Left}Primal
-   // currently: read PrimalType in factor
 public:
    REAL EvaluatePrimal(typename PrimalSolutionStorage::Element primalIt) const final
    {
       return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
    }
-   /*
 
-   template<bool WRITE_PRIMAL_SOLUTION_TMP = WRITE_PRIMAL_SOLUTION>
-   typename std::enable_if<!WRITE_PRIMAL_SOLUTION_TMP>::type
-   WritePrimalImpl(typename PrimalSolutionStorage::Element primal, std::ofstream& fs) const
-   { static_assert(WRITE_PRIMAL_SOLUTION_TMP == WRITE_PRIMAL_SOLUTION, ""); }
-   template<bool WRITE_PRIMAL_SOLUTION_TMP = WRITE_PRIMAL_SOLUTION>
-   typename std::enable_if<WRITE_PRIMAL_SOLUTION_TMP>::type
-   WritePrimalImpl(typename PrimalSolutionStorage::Element primal, std::ofstream& fs) const
-   {
-      static_assert(WRITE_PRIMAL_SOLUTION_TMP == WRITE_PRIMAL_SOLUTION, "");
-      fs << "Implement this\n";
-      //factor_.WritePrimal(dynamic_cast<PrimalSolutionStorage*>(primal)->primal_,fs);
-      //fs << "\n";
-   }
-   */
-   void WritePrimal(typename PrimalSolutionStorage::Element primal, std::ofstream& fs) const final
-   {
-      //WritePrimalImpl(primal,fs);
-   }
+   void CreateConstraints(LpInterfaceAdapter(LpInterfaceAdapter* l) const final
+         {
+
+         }
 };
 
 

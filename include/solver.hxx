@@ -116,7 +116,7 @@ public:
          return false;
       }
    }
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) // minDualIncrease says how small minimally must be the increase guaranteed by added constraints, while maxConstraints gives maximum number of constraints to add
+   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) 
    {
       return CheckPrimalConsistency<0>(primal);
    }
@@ -144,13 +144,14 @@ public:
    }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   Tighten(const REAL minDualIncrease, const INDEX maxConstraints)
+   Tighten(const REAL minDualIncrease, const INDEX maxConstraints) 
    {
       spdlog::get("logger")->info() << "Tighten for pc no " << PROBLEM_CONSTRUCTOR_NO;
       const INDEX noCuttingPlaneAdded = std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).Tighten(minDualIncrease,maxConstraints);
       return noCuttingPlaneAdded + Tighten<PROBLEM_CONSTRUCTOR_NO+1>(minDualIncrease,maxConstraints);
    }
-   INDEX Tighten(const REAL minDualIncrease, const INDEX maxConstraints) // minDualIncrease says how small minimally must be the increase guaranteed by added constraints, while maxConstraints gives maximum number of constraints to add
+   // minDualIncrease says how small minimally must be the increase guaranteed by added constraints, while maxConstraints gives maximum number of constraints to add
+   INDEX Tighten(const REAL minDualIncrease, const INDEX maxConstraints) 
    {
       return Tighten<0>(minDualIncrease, maxConstraints);
    }

@@ -5,7 +5,7 @@
 using namespace LP_MP;
 using namespace std;
 
-TEST_CASE( "Simplex factor", "[simplex]" ) {
+TEST_CASE( "simplex factor", "[simplex]" ) {
    std::vector<double> cost {0.1, 0.2, 0.05, 1};
    SimplexFactor<> simplex(cost);
    SECTION( "lower bound" ) {

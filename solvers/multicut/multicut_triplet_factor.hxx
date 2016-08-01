@@ -32,6 +32,7 @@ public:
       return std::min(std::min(std::min( repamPot[0], repamPot[1]), std::min(repamPot[2], repamPot[3])),0.0); // possibly, if we have a SIMD factor, use a simdized minimum
    }
 
+   // if one entry is unknown, set it to true. If one entry is true, set all other to false
    void PropagatePrimal(PrimalSolutionStorage::Element primal) const
    {
       INDEX noTrue = 0;
