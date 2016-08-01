@@ -82,7 +82,7 @@ public:
    //virtual void WritePrimal(PrimalSolutionStorage::Element primalSolution, std::ofstream& fs) const = 0;
 
    // for the LP interface
-   void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
+   virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
 };
 
 class MessageTypeAdapter
@@ -107,7 +107,7 @@ public:
    //virtual REAL GetMessageWeightToLeft() const = 0;
 
    // for LP interface
-   void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
+   virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
 };
 
 // primitive iterator class. Access may be slow. A more direct implementation would be more complicated, though.

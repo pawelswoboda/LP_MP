@@ -68,6 +68,8 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasPrimalSize,PrimalSize);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential);
 
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints);
+
 LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(IsAssignable, operator[]);
 }
 
@@ -915,11 +917,31 @@ public:
       return msg_op_;
    }
 
-
-   void CreateConstraints(LpInterfaceAdapter(LpInterfaceAdapter* l) const final
+   constexpr static bool CanCreateConstraints()
    {
-
+      return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*>();
    }
+   
+   template<bool ENABLE = CanCreateConstraints()>
+   typename std::enable_if<ENABLE>::type
+   CreateConstraintsImpl(LpInterfaceAdapter* l) const
+   {
+      msg_op_.CreateConstraints(l);
+   }
+
+   template<bool ENABLE = CanCreateConstraints()>
+   typename std::enable_if<!ENABLE>::type
+   CreateConstraintsImpl(LpInterfaceAdapter* l) const
+   {
+      throw std::runtime_error("create constraints not implemented by message");
+   }
+
+
+   void CreateConstraints(LpInterfaceAdapter* l) const final
+   {
+      CreateConstraintsImpl(l);
+   }
+
 
 protected:
    MessageType msg_op_;
@@ -1685,10 +1707,30 @@ public:
       return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
    }
 
-   void CreateConstraints(LpInterfaceAdapter(LpInterfaceAdapter* l) const final
-         {
+   constexpr static bool CanCreateConstraints()
+   {
+      return FunctionExistence::HasCreateConstraints<FactorType,LpInterfaceAdapter*>();
+   }
+   
+   template<bool ENABLE = CanCreateConstraints()>
+   typename std::enable_if<ENABLE>::type
+   CreateConstraintsImpl(LpInterfaceAdapter* l) const
+   {
+      factor_.CreateConstraints(l);
+   }
 
-         }
+   template<bool ENABLE = CanCreateConstraints()>
+   typename std::enable_if<!ENABLE>::type
+   CreateConstraintsImpl(LpInterfaceAdapter* l) const
+   {
+      throw std::runtime_error("create constraints not implemented by factor");
+   }
+
+
+   void CreateConstraints(LpInterfaceAdapter* l) const final
+   {
+      CreateConstraintsImpl(l);
+   }
 };
 
 
