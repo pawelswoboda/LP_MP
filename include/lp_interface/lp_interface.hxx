@@ -18,8 +18,10 @@ namespace LP_MP {
       env_ = GRBEnv();
       model_ = GRBModel(env);
       
-      /* TODO: How to get number of all vars  */
-      noVars_ = 10; // <--- TODO
+      noVars_ = 0; 
+      for(auto factorIt = factorBegin; factorIt != factorEnd; ++factorIt) {
+        noVars_ += factorIt->size();
+      }
       std::vector<double> obj(noVars_,1);
       std::vector<char> types(noVars_,GRB_INTEGER);
       MainVars_ = model.addVars(NULL,NULL,&obj[0],&types[0],NULL,noVars_);
@@ -28,23 +30,27 @@ namespace LP_MP {
       /* TODO: Factor Constraints */
       for(auto factorIt = factorBegin; factorIt != factorEnd; ++factorIt) {
         Offset_ = factorIt->GetPrimalOffset();
-
+        for(INDEX i=0;i<factorIt->size();++i) {
+          GetVariable(i).set(GRB_DoubleAttr_Obj,factorIt->operator[](i));
+        }
         factorIt->CreateConstraints(this);
       }
 
       /* TODO: Message Constraints */
       for(auto messageIt = messageBegin; messageIt != messageEnd; ++messageIt) {
         Offset_ = messageIt->GetPrimalOffset();
-
         messageIt->CreateConstraints(this);
       }
       
+      model_.update();
     } 
 
     LpVariable CreateAuxiliaryVariable(REAL lb,REAL ub,bool integer);
     LpVariable GetVariable(const INDEX i){ return MainVars_[Offset_ + i]; }
-    void addLinearEquation(LinExpr lhs,LinExpr rhs);
+    void addLinearEquality(LinExpr lhs,LinExpr rhs);
     void addLinearInequality(LinExpr lhs,LinExpr rhs);
+    
+    
     
   private:
     GRBEnv env_;
@@ -55,7 +61,7 @@ namespace LP_MP {
     INDEX noVars_;    
   };
 
-  void LpInterfaceGurobi::addLinearEquation(LinExpr lhs,LinExpr rhs){
+  void LpInterfaceGurobi::addLinearEquality(LinExpr lhs,LinExpr rhs){
     model_.addConstr(lhs,GRB_EQUAL,rhs);
     //model_.update(); // We may just update it right before optimization
   }
