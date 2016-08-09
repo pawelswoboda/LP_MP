@@ -210,7 +210,39 @@ namespace LP_MP {
     }
    
    
+    template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
+    void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor)
+    { 
+      //printf("left: %d .. right: %d \n",lp->GetLeftFactorSize(),lp->GetRightFactorSize());
+      
+      INDEX FactorSize = lp->GetLeftFactorSize();
+      
+      std::vector<LinExpr> lhs;
+      std::vector<LinExpr> rhs;
+      
+      loopRight_.loop( 
+	     [&](const INDEX outer_idx){ 
+	       LinExpr left,right;
+         lhs.push_back(left);
+         rhs.push_back(right);
+         assert( outer_idx < FactorSize );
+         rhs.back() += lp->GetLeftVariable(outer_idx);
+         //printf("start: %d \n",outer_idx);
+	     }, 
+	     [&](const INDEX full_idx, const INDEX outer_idx){ 
+         //printf("full: %d .. outer: %d \n",full_idx,outer_idx);
+         lhs.back() += lp->GetRightVariable(full_idx);
+	     },
+	     [&](const INDEX outer_idx){ 
+         lp->addLinearEquality(lhs.back(),rhs.back());
+         //printf("ende: %d \n",outer_idx);
+	     } );
+       
+       assert(lhs.size() == FactorSize);
+    }
+  
   private:
+
     template<typename LEFT_FACTOR, typename G1, typename G2>
     void MaximizeLeft(LEFT_FACTOR* const l, const G1& leftPot, G2& msg, const REAL omega = 1.0)
     {
