@@ -35,6 +35,8 @@ namespace LP_MP{
 
     // --------------------
     // custom public methods 
+
+    void CreateConstraints(LpInterfaceAdapter* lp) const;
     
     INDEX getSize(NODE);
 
@@ -93,6 +95,81 @@ namespace LP_MP{
     regSize_ = pow(numberOfLabels_,2);
   }
 
+  void DiscreteTomographyFactorCounting::CreateConstraints(LpInterfaceAdapter* lp) const {
+    REAL inf = std::numeric_limits<REAL>::infinity();
+    
+    auto xa = [&](INDEX idx){ return idx % numberOfLabels_;  };
+    auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
+    auto xz = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return (idx - xa(idx))/numberOfLabels_; };
+   
+    LinExpr lhs_all;
+    std::vector<LinExpr> lhs_up(upSize_);
+    std::vector<LinExpr> lhs_left(leftSize_);
+    std::vector<LinExpr> lhs_right(rightSize_);
+    std::vector<LinExpr> lhs_reg(regSize_);
+    
+    INDEX z_max = upSize_/pow(numberOfLabels_,2);
+    
+    for(INDEX i=0;i<leftSize_;i++){
+      for(INDEX j=0;j<rightSize_;j++){
+        LpVariable var;
+        {
+          // up variable constraint
+          // sum_{ i(z) + j(z) = k(z) && i(a) = k(a) && j(b) = k(b) } eta(i,j) = mu_u(k)
+          INDEX z = xz(i) + xz(j);
+          if( z < z_max ){
+            var = lp->CreateAuxiliaryVariable(0,inf);
+            
+            INDEX a = xa(i);
+            INDEX b = xb(j);
+            INDEX idx = a + b*numberOfLabels_ + z*pow(numberOfLabels_,2);
+            assert(idx < upSize_);
+            lhs_up[idx] += var;
+          } else {
+            continue;
+          }
+        }
+        {
+          // sum_j eta(i,j) = mu_l(i) 
+          lhs_left[i] += var;
+          
+          // sum_i eta(i,j) = mu_r(j) 
+          lhs_right[j] += var;
+        }
+        {
+          // sum_{i,j} eta(i,j) = 1
+          lhs_all += var;
+        }
+        {
+          // pairwise potential
+          // sum_{i(b) = k(a) && j(a) = k(b)} eta(i,j) = mu_p(k)
+          INDEX a = xb(i);
+          INDEX b = xa(j);
+          
+          lhs_reg[a+b*numberOfLabels_] += var;
+        }
+      }
+    }
+    
+    auto AddAllConstraints = [&]( std::vector<LinExpr> lhs,
+                                  INDEX offset){
+      for(INDEX i=0;i<lhs.size();i++){
+        LinExpr rhs;
+        rhs += lp->GetVariable(offset + i);
+        lp->addLinearEquality(lhs[i],rhs);
+      }
+    };
+  
+    LinExpr rhs_all; rhs_all += 1;
+    lp->addLinearEquality(lhs_all,rhs_all);
+    
+    AddAllConstraints(lhs_up,0);
+    AddAllConstraints(lhs_left,upSize_);
+    AddAllConstraints(lhs_right,upSize_+leftSize_);
+    AddAllConstraints(lhs_reg,upSize_+leftSize_+rightSize_);
+    
+  }
+  
   template<typename REPAM_ARRAY>
   REAL DiscreteTomographyFactorCounting::LowerBound(const REPAM_ARRAY& repam) const{
     assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));

@@ -18,6 +18,9 @@ namespace LP_MP {
     // RIGHT -> TOP Ternary
     // LEFT  -> Pairwise
 
+    template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
+    void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor) const;
+    
     /* repam.GetFactor()->&f  */
       
     template<typename RIGHT_FACTOR, typename G1, typename G2>
@@ -79,6 +82,18 @@ namespace LP_MP {
     regSize_ = pow(numberOfLabels_,2);
   }
 
+  template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
+  void DiscreteTomographyMessageCountingPairwise::CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor) const {
+    for(INDEX i=0;i<regSize_;i++){
+      LinExpr lhs,rhs;
+      assert(lp->GetLeftFactorSize() == regSize_);
+      assert(lp->GetRightFactorSize() == upSize_+leftSize_+rightSize_+regSize_);
+      lhs += lp->GetLeftVariable(i);
+      rhs += lp->GetRightVariable(upSize_+leftSize_+rightSize_+i);
+      lp->addLinearEquality(lhs,rhs);
+    }
+  }
+  
   template<typename LEFT_FACTOR, typename REPAM_ARRAY, typename MSG>
   void DiscreteTomographyMessageCountingPairwise::MakeLeftFactorUniform(LEFT_FACTOR* f_left, const REPAM_ARRAY& repam_left, MSG& msg, const REAL omega)
   {
