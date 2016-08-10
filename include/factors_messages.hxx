@@ -926,7 +926,7 @@ public:
    typename std::enable_if<ENABLE>::type
    CreateConstraintsImpl(LpInterfaceAdapter* l) const
    {
-      msg_op_.CreateConstraints(l);
+      msg_op_.CreateConstraints(l,leftFactor_->GetFactor(),rightFactor_->GetFactor());
    }
 
    template<bool ENABLE = CanCreateConstraints()>
@@ -937,7 +937,7 @@ public:
    }
 
 
-   void CreateConstraints(LpInterfaceAdapter* l) const final
+   virtual void CreateConstraints(LpInterfaceAdapter* l) final
    {
       CreateConstraintsImpl(l);
    }
