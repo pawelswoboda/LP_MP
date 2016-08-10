@@ -1,0 +1,19 @@
+
+FIND_LIBRARY(GUROBI_LIB
+  NAMES libgurobi65 gurobi65
+  HINTS ${GUROBI_ROOT}/lib
+  PATHS /usr/lib
+        ENV LIBRARY_PATH
+        ENV LD_LIBRARY_PATH)
+
+FIND_LIBRARY(GUROBI_LIB_C++
+  NAMES libgurobi_c++ gurobi_c++
+  HINTS ${GUROBI_ROOT}/lib
+  PATHS /usr/lib
+        ENV LIBRARY_PATH
+        ENV LD_LIBRARY_PATH)
+
+FIND_PATH(GUROBI_INCLUDE_DIR gurobi_c++.h ${GUROBI_ROOT}/include)
+
+SET(GUROBI_LIBRARIES ${GUROBI_LIB} ${GUROBI_LIB_C++})
+

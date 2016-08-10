@@ -915,10 +915,9 @@ public:
       return msg_op_;
    }
 
-
-   void CreateConstraints(LpInterfaceAdapter(LpInterfaceAdapter* l) const final
+   void CreateConstraints(LpInterfaceAdapter* l) final
    {
-
+     msg_op_.CreateConstraints(l,leftFactor_->GetFactor(),rightFactor_->GetFactor());
    }
 
 protected:
@@ -1685,10 +1684,10 @@ public:
       return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
    }
 
-   void CreateConstraints(LpInterfaceAdapter(LpInterfaceAdapter* l) const final
-         {
-
-         }
+  void CreateConstraints(LpInterfaceAdapter* l) const final
+  {
+    factor_.CreateConstraints(l);
+  }
 };
 
 

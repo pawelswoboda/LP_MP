@@ -23,11 +23,15 @@ add_definitions(-march=native)
 # packages
 
 # GUROBI
-include_directories("/home/pswoboda/gurobi/linux64/include")
+OPTION(WITH_GUROBI "Activate Gurobi-Code" OFF)
+if(WITH_GUROBI)
+  find_package(Gurobi)
+endif(WITH_GUROBI)
+#include_directories("/home/pswoboda/gurobi/linux64/include")
 # more robust: use add_library with IMPORTED
-LINK_DIRECTORIES("/home/pswoboda/gurobi/linux64/lib")
+#LINK_DIRECTORIES("/home/pswoboda/gurobi/linux64/lib")
 #LINK_DIRECTORIES("/home/pswoboda/gurobi/linux64/src/build")
-SET(GUROBI_LIB "/home/pswoboda/gurobi/linux64/lib/libgurobi_c++.a /home/pswoboda/gurobi/linux64/lib/libgurobi65.so")
+#SET(GUROBI_LIB "/home/pswoboda/gurobi/linux64/lib/libgurobi_c++.a /home/pswoboda/gurobi/linux64/lib/libgurobi65.so")
 
 # Vc SIMD library
 set(Vc_DIR "/home/pswoboda/repo/LP_MP/lib/Vc-1.2.0/Release/cmake")
