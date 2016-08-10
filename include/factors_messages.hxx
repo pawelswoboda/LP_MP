@@ -919,7 +919,7 @@ public:
 
    constexpr static bool CanCreateConstraints()
    {
-      return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*>();
+      return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
    }
    
    template<bool ENABLE = CanCreateConstraints()>
