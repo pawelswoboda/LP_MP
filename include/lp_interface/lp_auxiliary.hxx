@@ -7,17 +7,35 @@ namespace LP_MP {
 
   class LpVariable {
   public:
-    LpVariable() : index(0),coeff(0),IsVar(false) {}
+    LpVariable() : index(0),coeff(0) {}
+    LpVariable(INDEX idx,REAL obj) : index(idx),coeff(obj) {}
+
+    LpVariable operator* (REAL value){
+      coeff = value;
+      return *this;
+    }
+    
     INDEX index;
     REAL coeff;
-    bool IsVar;
   };
-
+    
   class LinExpr {
   public:
     LinExpr(){};
+    
+    LinExpr& operator+=(const LpVariable& var){
+      vars_.push_back(var);
+      return *this;
+    }
+    
+    LinExpr& operator+=(const REAL value){
+      constant_ += value;
+      return *this;
+    }
+    
   private:
     std::vector<LpVariable> vars_;
+    REAL constant_;
   };
   
 }
