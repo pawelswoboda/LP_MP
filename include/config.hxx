@@ -47,6 +47,99 @@ namespace LP_MP {
 
    // shortcut to indicate how big the message is: here it is determined only at runtime
    constexpr SIGNED_INDEX variableMessageSize = -1;
+
+
+   // possibly make better class out of this having multiple fields|flags
+   /*
+   enum class LPVisitorReturnType {
+      ReparametrizeUniform,ReparametrizeLowerBoundUniform,ReparametrizeLowerBoundPrimalUniform,ReparametrizePrimalUniform,
+      ReparametrizeAnisotropic,ReparametrizeLowerBoundAnisotropic,ReparametrizeLowerBoundPrimalAnisotropic,ReparametrizePrimalAnisotropic,
+      Break,Error
+   };
+   bool Round(const LpVisitorReturnType t) {
+      if(t == ReparametrizeLowerBoundPrimalUniform ||
+         t == ReparametrizePrimalUniform || 
+         t == ReparametrizeLowerBoundPrimalAnisotropic || 
+         t == ReparametrizePrimalAnisotropic) {
+         return true;
+      } else {
+         return false;
+      }
+   }
+   LpVisitorReturnType RemoveRounding(const LpVisitorReturnType t) {
+      switch(t) {
+         case ReparametrizeUniform:
+            return ReparametrizeUniform;
+            break;
+         case ReparametrizeLowerBoundUniform:
+            return ReparametrizeLowerBoundUniform;
+            break;
+         case ReparametrizeLowerBoundPrimalUniform:
+            return ReparametrizeLowerBoundUniform
+            break;
+         case ReparametrizePrimalUniform:
+            return ReparametrizeUniform
+            break;
+         case ReparametrizeAnisotropic:
+            return ReparametrizeAnisotropic;
+            break;
+         case ReparametrizeLowerBoundAnisotropic:
+            return ReparametrizeLowerBoundAnisotropic;
+            break;
+         case ReparametrizeLowerBoundPrimalAnisotropic:
+            return ReparametrizeLowerBoundAnisotropic;
+            break;
+         case ReparametrizePrimalAnisotropic:
+            return ReparametrizeAnisotropic;
+            break;
+         case Break:
+            return Break;
+            break;
+         case Error:
+            return Error;
+            break;
+         default:
+            assert(false); // unknown case
+      }
+   }
+   */
+   // do zrobienia: maybe put this into LP_MP.h
+   enum class LPReparametrizationMode {Anisotropic, Uniform, Undefined};
+
+   // steers optimization of LP solver. Is returned by visitor and processed by solver.
+   // do zrobienia: nicer design by implementing it via callbacks to solver.
+   // also put this into solver.hxx
+   //template<typename SOLVER>
+   class LpControl {
+   public:
+      //void ScheduleTighten(const INDEX noConstraints, const REAL minDualIncrease) 
+      //{ 
+      //   tighten = true; 
+      //   tightenConstraints = noConstraints;
+      //   minDualIncrease = minDualIncrease; 
+      //}
+      //void SchedulePrimal() { computePrimal = true; }
+      //void SchedulaLowerBound() { computeLowerBound = true; }
+      //void SetReparametrization(LPReparametrizationMode r) { repam_ = r; }
+      //void End() { end = true; }
+   //private:
+      LPReparametrizationMode repam = LPReparametrizationMode::Undefined;
+      bool computePrimal = false;
+      bool computeLowerBound = false;
+      bool tighten = false;
+      bool end = false; // terminate optimization
+      bool error = false;
+      INDEX tightenConstraints = 0; // when given as return type, indicates how many constraints are to be added. When given as parameter to visitor, indicates how many were added.
+      REAL tightenMinDualIncrease = 0.0;
+   };
+
+
+   // hash function for various types
+   namespace hash {
+      static auto array2 = [](const std::array<INDEX,2> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1]); };
+      static auto array3 = [](const std::array<INDEX,3> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2]); };
+      static auto array4 = [](const std::array<INDEX,4> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3]); };
+   }
 }
 
 template class MinCost<LP_MP::SIGNED_INDEX,LP_MP::REAL>;

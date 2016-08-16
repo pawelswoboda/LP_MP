@@ -74,18 +74,18 @@ struct FMC_ODD_WHEEL_MULTICUT {
    using ProblemDecompositionList = meta::list<multicut>;
 };
 
-struct FMC_LIFTED_MULTICUT_ODD_CYCLE {
+struct FMC_LIFTED_MULTICUT {
    constexpr static const char* name = "Lifted Multicut with cycle constraints";
    constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
    // now rounding performed: do it via GAEC nad K&L, called from constructor
-   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_LIFTED_MULTICUT_ODD_CYCLE, 0> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_LIFTED_MULTICUT_ODD_CYCLE, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<LiftedMulticutCutFactor, ExplicitRepamStorage, FMC_LIFTED_MULTICUT_ODD_CYCLE, 2> LiftedMulticutCutFactorContainer;
+   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_LIFTED_MULTICUT, 0> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_LIFTED_MULTICUT, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<LiftedMulticutCutFactor, ExplicitRepamStorage, FMC_LIFTED_MULTICUT, 2> LiftedMulticutCutFactorContainer;
 
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, CutEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 1 > CutEdgeLiftedMulticutFactorMessageContainer;
-   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, LiftedEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT_ODD_CYCLE, 2 > LiftedEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_LIFTED_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, CutEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT, 1 > CutEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, LiftedEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT, 2 > LiftedEdgeLiftedMulticutFactorMessageContainer;
 
    using FactorList = meta::list<
       MulticutUnaryFactorContainer, 
@@ -98,7 +98,7 @@ struct FMC_LIFTED_MULTICUT_ODD_CYCLE {
       LiftedEdgeLiftedMulticutFactorMessageContainer
          >;
 
-   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT_ODD_CYCLE,0,1,0>;
+   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0>;
    using LiftedMulticutConstructor = LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 };
@@ -369,8 +369,8 @@ namespace MulticutTextInput {
 // HDF5 input as in data of Andres et al.
 namespace MulticutH5Input {
 
-   template<typename FMC>
-   bool ParseLiftedProblem(const std::string filename, Solver<FMC>& pd)
+   template<typename SOLVER>
+   bool ParseLiftedProblem(const std::string filename, SOLVER& pd)
    {
       auto& mc = pd.template GetProblemConstructor<0>();
       

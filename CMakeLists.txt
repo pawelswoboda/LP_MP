@@ -5,7 +5,7 @@ set(LP_MP_VERSION_MINOR 1)
 
 # global headers
 file(GLOB_RECURSE headers include/*.hxx)
-file(GLOB_RECURSE sources src/*.cpp)
+#file(GLOB_RECURSE sources src/*.cpp)
 include_directories(include)
 include_directories(lib)
 include_directories(.)

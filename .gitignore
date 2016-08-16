@@ -1,0 +1,9 @@
+/doc/*
+!/doc/Doxyfile
+*.vim
+.*
+!/.gitignore
+/solvers/evaluation/templates/*.tex
+/solvers/evaluation/templates/*.pdf
+/solvers/evaluation/templates/*.aux
+/solvers/evaluation/templates/*.log

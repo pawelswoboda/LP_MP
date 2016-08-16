@@ -35,8 +35,6 @@
 
 // do zrobienia: Introduce MessageConstraint and FactorConstraint for templates
 // cleanup name inconsistencies: MessageType, MessageDispatcher etc
-// rename MultiplexMargMessage into MultiplexMsg, EqualityMessage into EqualityMsg
-// do zrobienia: globally: BIG_LETTERS for templates, otherwise class names should be formatted as ClassName.
 
 namespace LP_MP {
 
@@ -936,7 +934,6 @@ public:
       throw std::runtime_error("create constraints not implemented by message");
    }
 
-
    virtual void CreateConstraints(LpInterfaceAdapter* l) final
    {
       CreateConstraintsImpl(l);
@@ -1021,7 +1018,6 @@ public:
       return msg_val + GetMessageSum(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{},i);
    }
 
-
    void UpdateFactor(const std::vector<REAL>& omega) final
    {
       ReceiveMessages(omega);
@@ -1053,7 +1049,8 @@ public:
       factor_.PropagatePrimal(primal);
    }
 
-   void PropagatePrimal(PrimalSolutionStorage::Element primal) {
+   void PropagatePrimal(PrimalSolutionStorage::Element primal) 
+   {
       PropagatePrimalImpl(primal);
    }
 

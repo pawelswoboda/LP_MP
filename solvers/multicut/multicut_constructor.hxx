@@ -13,9 +13,12 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <queue>
+#include <list>
 
 #include "andres/graph/graph.hxx"
 #include "andres/graph/grid-graph.hxx"
+#include "andres/graph/multicut/kernighan-lin.hxx"
+#include "andres/graph/multicut/greedy-additive.hxx"
 #include "andres/graph/multicut-lifted/kernighan-lin.hxx"
 #include "andres/graph/multicut-lifted/greedy-additive.hxx"
 
@@ -24,9 +27,6 @@ namespace LP_MP {
 
 
 // hash function for maps used in constructors. Do zrobienia: define hash functions used somewhere globally in config.hxx
-static auto hf2 = [](const std::array<INDEX,2> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1]); };
-static auto hf3 = [](const std::array<INDEX,3> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2]); };
-static auto hf4 = [](const std::array<INDEX,4> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3]); };
 
 template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO>
 class MulticutConstructor {
@@ -350,8 +350,8 @@ private:
 public:
 MulticutConstructor(Solver<FMC>& pd) 
    : pd_(pd),
-   //unaryFactors_(100,hf2),
-   tripletFactors_(100,hf3)
+   //unaryFactors_(100,hash::array2),
+   tripletFactors_(100,hash::array3)
    {
       //unaryFactors_.max_load_factor(0.7);
       tripletFactors_.max_load_factor(0.7);
@@ -514,11 +514,103 @@ MulticutConstructor(Solver<FMC>& pd)
    }
 
    // search for cycles to add such that coordinate ascent will be possible
-   INDEX Tighten(const REAL minDualIncrease, const INDEX maxCuttingPlanesToAdd)
+   INDEX Tighten(const INDEX maxCuttingPlanesToAdd)
    {
-      const INDEX tripletsAdded = FindNegativeCycles(minDualIncrease,maxCuttingPlanesToAdd);
-      spdlog::get("logger")->info() << "Added " << tripletsAdded << " triplet(s)";
-      return tripletsAdded;
+      //const INDEX tripletsAdded = FindNegativeCycles(minDualIncrease,maxCuttingPlanesToAdd);
+      const REAL th = FindNegativeCycleThreshold(maxCuttingPlanesToAdd);
+      if(th >= 0.0) { // otherwise no constraint can be added
+         const INDEX tripletsAdded = FindNegativeCycles(th,maxCuttingPlanesToAdd);
+         spdlog::get("logger")->info() << "Added " << tripletsAdded << " triplet(s)" << " out of " << maxCuttingPlanesToAdd;
+         return tripletsAdded;
+      } else {
+         return 0;
+      }
+   }
+
+   // find threshold such that at least maxTripletsToAdd factors will be included. Assumes that graph is connected.
+   REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
+   {
+      // do zrobienia: reuse data structures in constraint search. make one function.
+      UnionFind uf(noNodes_);
+      std::vector<std::tuple<INDEX,INDEX,REAL> > posEdges;
+      std::vector<std::list<std::tuple<INDEX,REAL>>> negEdges(this->noNodes_); // forward_list would also be possible, but is slower.
+      // sort edges 
+      for(auto& it : unaryFactors_) {
+         const REAL v = it.second->operator[](0);
+         const INDEX i = std::get<0>(it.first);
+         const INDEX j = std::get<1>(it.first);
+         if(v < 0) {
+            negEdges[i].push_front(std::make_tuple(j,v));
+            negEdges[j].push_front(std::make_tuple(i,v));
+         } else if(v > 0) {
+            posEdges.push_back(std::make_tuple(i,j,v));
+         }
+      }
+      
+      std::sort(posEdges.begin(), posEdges.end(), [](const std::tuple<INDEX,INDEX,REAL>& e1, const std::tuple<INDEX,INDEX,REAL>& e2)->bool {
+            return std::get<2>(e1) > std::get<2>(e2); // descending order
+            });
+      auto edge_sort = [] (const std::tuple<INDEX,REAL>& a, const std::tuple<INDEX,REAL>& b)->bool { return std::get<0>(a) < std::get<0>(b); };
+      for(INDEX i=0; i<negEdges.size(); ++i) {
+         negEdges[i].sort(edge_sort);
+      }
+
+      // maximum violated inequality consists of cycle with one negative edge and rest positive edges. Find negative edge of smallest weight and path with minimum positive weight maximum
+      // connect positive edge in descending order and see, whether there is some negative edge that has endpoint both in the same component. If yes, record the value of the cycle that can be obtained thisw ay.
+      REAL maxTh = -std::numeric_limits<REAL>::infinity();
+      INDEX maxThIndex = 0;
+      for(INDEX posE=0; posE<posEdges.size(); posE++) {
+         const INDEX i = std::get<0>(posEdges[posE]);
+         const INDEX j = std::get<1>(posEdges[posE]);
+         const REAL posTh = std::get<2>(posEdges[posE]);
+         if(posTh < maxTh) { // all the remaining edges will not lead to maximum violated constraint
+            break;
+         }
+         if(!uf.connected(i,j)) {
+            uf.merge(i,j);
+            const INDEX c = uf.find(i); // the new cc node number
+            // merge the edges with bases at i and j and detect edge from i to j
+            if(i != c) {
+               negEdges[c].merge(negEdges[i],edge_sort);
+            } 
+            if(j != c) {
+               negEdges[c].merge(negEdges[j],edge_sort);
+            }
+            std::transform(negEdges[c].begin(), negEdges[c].end(), negEdges[c].begin(), 
+                  [&uf] (std::tuple<INDEX,REAL> a)->std::tuple<INDEX,REAL> {
+                  std::get<0>(a) = uf.find(std::get<0>(a));
+                  return a; 
+                  });
+            // do zrobienia: mainly unnecessary: edges have already been sorted in merge operations, only parallel edges need to be sorted here.
+            negEdges[c].sort([] (const std::tuple<INDEX,REAL>& a, const std::tuple<INDEX,REAL>& b)->bool { 
+                  if(std::get<0>(a) != std::get<0>(b)) {
+                  return std::get<0>(a) < std::get<0>(b); 
+                  }
+                  return std::get<1>(a) > std::get<1>(b); // this ensures that remove removes copies with smaller weight. Thus, the largest one only remains.
+                  });
+            // now go through edge list and remove duplicates
+            for(auto it=negEdges[c].begin(); it!=negEdges[c].end(); ++it) {
+               const INDEX cc = std::get<0>(*it);
+               std::get<0>(*it) = cc;
+               if(uf.find(cc) == c) { // we have found a positive edge for which a negative path exists. remove this element and record that the dual increase possible.
+                  const REAL th = std::min(-std::get<1>(*it), std::get<2>(posEdges[posE]));
+                  if(th > maxTh) {
+                     maxTh = std::max(th, maxTh);
+                     maxThIndex = posE;
+                  }
+                  continue;
+               }
+            }
+            negEdges[c].remove_if([&uf,c,maxTh] (const std::tuple<INDEX,REAL>& a)->bool { return (std::get<1>(a) > -maxTh || uf.find(std::get<0>(a)) == c); });
+            negEdges[c].unique([] (const std::tuple<INDEX,REAL>& a, const std::tuple<INDEX,REAL>& b)->bool { return std::get<0>(a) == std::get<0>(b); });
+         }
+      }
+      if(maxTh == -std::numeric_limits<REAL>::infinity()) { // this means that no 
+         return maxTh;
+      } else {
+         // return threshold that will guarantee maximum element. Small factor allows more constraints to be included.
+         return 0.5*maxTh;
+      }
    }
 
    // returns number of triplets added
@@ -532,7 +624,7 @@ MulticutConstructor(Solver<FMC>& pd)
          const REAL v = it.second->operator[](0);
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
-         if(v > minDualIncrease) {
+         if(v >= minDualIncrease) {
             posEdgesGraph.AddEdge(i,j,v);
             uf.merge(i,j);
          }
@@ -579,8 +671,8 @@ MulticutConstructor(Solver<FMC>& pd)
          const REAL dualIncrease = std::min(-v, std::get<0>(cycle));
          assert(std::get<1>(cycle).size() > 0);
          if(std::get<1>(cycle).size() > 0) {
-            //cycles.push_back( std::make_tuple(dualIncrease, std::move(std::get<1>(cycle))) );
-            tripletsAdded += AddCycle(std::get<1>(cycle));
+            cycles.push_back( std::make_tuple(dualIncrease, std::move(std::get<1>(cycle))) );
+            //tripletsAdded += AddCycle(std::get<1>(cycle));
             if(tripletsAdded > maxTripletsToAdd) {
                return tripletsAdded;
             }
@@ -589,7 +681,6 @@ MulticutConstructor(Solver<FMC>& pd)
          }
       }
       // sort by guaranteed increase in decreasing order
-      /*
       std::sort(cycles.begin(), cycles.end(), [](const CycleType& i, const CycleType& j) { return std::get<0>(i) > std::get<0>(j); });
       for(auto& cycle : cycles) {
          const REAL cycleDualIncrease = std::get<0>(cycle);
@@ -598,7 +689,6 @@ MulticutConstructor(Solver<FMC>& pd)
             return tripletsAdded;
          }
       }
-      */
 
       return tripletsAdded;
    }
@@ -634,12 +724,43 @@ MulticutConstructor(Solver<FMC>& pd)
       return true;
    }
 
+   void ComputePrimal(PrimalSolutionStorage::Element primal) const
+   {
+      // do zrobienia: templatize for correct graph type
+      // do zrobienia: put original graph into multicut constructor and let it be constant, i.e. not reallocate it every time for primal computation. Problem: When adding additional edges, we may not add them to the lifted multicut solver, as extra edges must not participate in cut inequalities
+
+      // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
+      const INDEX noNodes = noNodes_;
+      andres::graph::Graph<> graph(noNodes);
+      std::vector<REAL> edgeValues;
+      edgeValues.reserve(unaryFactors_.size());
+
+      for(const auto& e : unaryFactors_) {
+         graph.insertEdge(e.first[0], e.first[1]);
+         edgeValues.push_back(e.second->operator[](0));
+      }
+
+      std::vector<char> labeling(unaryFactors_.size(),0);
+      andres::graph::multicut::greedyAdditiveEdgeContraction(graph,edgeValues,labeling);
+      andres::graph::multicut::kernighanLin(graph,edgeValues,labeling,labeling);
+
+      // now write back primal solution and evaluate cost. 
+      INDEX i=0; // the index in labeling
+      for(const auto& e : unaryFactors_) {
+         const auto* f = e.second;
+         f->SetAndPropagatePrimal(primal, labeling.begin()+i);
+         ++i;
+      }
+   }
+
+
+
 protected:
    //GlobalFactorContainer* globalFactor_;
    // do zrobienia: replace this by unordered_map, provide hash function.
    // possibly dont do this, but use sorting to provide ordering for LP
    std::map<std::array<INDEX,2>, UnaryFactorContainer*> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
-   //std::unordered_map<std::array<INDEX,2>, UnaryFactorContainer*, decltype(hf2)> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
+   //std::unordered_map<std::array<INDEX,2>, UnaryFactorContainer*, decltype(hash::array2)> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
    // sort triplet factors as follows: Let indices be i=(i1,i2,i3) and j=(j1,j2,j3). Then i<j iff i1+i2+i3 < j1+j2+j3 or for ties sort lexicographically
    struct tripletComp {
       bool operator()(const std::tuple<INDEX,INDEX,INDEX> i, const std::tuple<INDEX,INDEX,INDEX> j) const
@@ -651,7 +772,7 @@ protected:
          else return i<j; // lexicographic comparison
       }
    };
-   std::unordered_map<std::array<INDEX,3>, TripletFactorContainer*, decltype(hf3)> tripletFactors_; // triplet factors are defined on cycles of length three
+   std::unordered_map<std::array<INDEX,3>, TripletFactorContainer*, decltype(hash::array3)> tripletFactors_; // triplet factors are defined on cycles of length three
    INDEX noNodes_ = 0;
 
    Solver<FMC>& pd_;
@@ -669,7 +790,7 @@ class MulticutOddWheelConstructor : public MulticutConstructor<FACTOR_MESSAGE_CO
    using TripletPlusSpokeMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_MESSAGE_NO>::MessageContainerType;
    using TripletPlusSpokeCoverMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>::MessageContainerType;
 public:
-   MulticutOddWheelConstructor(Solver<FMC>& pd) : BaseConstructor(pd), tripletPlusSpokeFactors_(100,hf4) { 
+   MulticutOddWheelConstructor(Solver<FMC>& pd) : BaseConstructor(pd), tripletPlusSpokeFactors_(100,hash::array4) { 
       tripletPlusSpokeFactors_.max_load_factor(0.7); 
    }
 
@@ -834,9 +955,10 @@ public:
       return tripletPlusSpokesAdded;
    }
 
-   INDEX FindOddWheels(const REAL minDualIncrease, const INDEX maxCuttingPlanesToAdd)
+
+   INDEX FindOddWheels(const INDEX maxCuttingPlanesToAdd)
    {
-      INDEX oddWheelsAdded = 0;
+      // first prepare datastructures for threshold finding and violated constraint search
 
       // search for all triangles present in the graph, also in places where no triplet factor has been added
       // Construct adjacency list
@@ -869,7 +991,7 @@ public:
       std::cout << "no triangles = " << noTriangles << "\n";
       exit(1);
       // construct all triangles
-      std::unordered_set<std::array<INDEX,3>,decltype(hf3)> triangles {noTriangles,hf3};
+      std::unordered_set<std::array<INDEX,3>,decltype(hash::array3)> triangles {noTriangles,hash::array3};
       for(auto& e : BaseConstructor::unaryFactors_) {
          const INDEX i = std::get<0>(e)[0];
          const INDEX j = std::get<0>(e)[1];
@@ -884,9 +1006,12 @@ public:
       */
 
 
+      INDEX oddWheelsAdded = 0;
       std::vector<INDEX> commonNodes(BaseConstructor::noNodes_); // for detecting triangles
+      std::vector<std::tuple<REAL,std::vector<INDEX>>> oddWheels; // record violated odd wheels here for later sorting and inserting
       for(INDEX i=0; i<BaseConstructor::noNodes_; ++i) {
          // compressed nodes for later usage in bfs
+         // do zrobienia: origToCompressedNode and reverse is reallocated all the time. Allocate once and reset.
          std::unordered_map<INDEX,INDEX> origToCompressedNode {tripletByIndices_[i].size()}; // compresses node indices
          origToCompressedNode.max_load_factor(0.7);
          std::vector<INDEX> compressedToOrigNode; // compressed nodes to original
@@ -1092,35 +1217,27 @@ public:
       return oddWheelsAdded;
    }
 
-   INDEX Tighten(const REAL minDualIncrease, const INDEX maxCuttingPlanesToAdd)
+   INDEX Tighten(const INDEX maxCuttingPlanesToAdd)
    {
-      const INDEX tripletsAdded = BaseConstructor::Tighten(minDualIncrease, maxCuttingPlanesToAdd);
+      const INDEX tripletsAdded = BaseConstructor::Tighten(maxCuttingPlanesToAdd);
       if(tripletsAdded >= maxCuttingPlanesToAdd ) {
          return tripletsAdded;
       } else {
-         // require the odd wheels to have larger impact relative to violated cycles. This ensures that odd wheels are only added late in the optimziation, when no good violated cycles are present any more
-         const INDEX oddWheelsAdded = FindOddWheels(1e10*minDualIncrease, maxCuttingPlanesToAdd - tripletsAdded);
+         // possibly require the odd wheels to have larger impact relative to violated cycles. This ensures that odd wheels are only added late in the optimziation, when no good violated cycles are present any more
+         const INDEX oddWheelsAdded = FindOddWheels(maxCuttingPlanesToAdd - tripletsAdded);
          spdlog::get("logger")->info() << "Added " << oddWheelsAdded << " factors for odd wheel constraints";
          return tripletsAdded + oddWheelsAdded;
       }
-      /*
-      if(minDualIncrease <= 1e-14) {
-         const INDEX oddWheelsAdded = FindOddWheels(minDualIncrease*1e12, maxCuttingPlanesToAdd);
-         logger->info() << "Added " << oddWheelsAdded << " factors for odd wheel constraints";
-         return tripletsAdded + oddWheelsAdded;
-      }
-      return tripletsAdded;
-      */
-
       assert(false);
    }
 
+   
 
 private:
    std::vector<std::vector<std::tuple<INDEX,INDEX,typename BaseConstructor::TripletFactorContainer*>>> tripletByIndices_; // of triplet factor with indices (i1,i2,i3) exists, then (i1,i2,i3) will be in the vector of index i1, i2 and i3
    // the format for TripletPlusSpoke is (node1,node2, centerNode, spokeNode) and we assume n1<n2
    // hash for std::array<INDEX,4>
-   std::unordered_map<std::array<INDEX,4>,TripletPlusSpokeFactorContainer*,decltype(hf4)> tripletPlusSpokeFactors_;
+   std::unordered_map<std::array<INDEX,4>,TripletPlusSpokeFactorContainer*,decltype(hash::array4)> tripletPlusSpokeFactors_;
 };
 
 template<class MULTICUT_CONSTRUCTOR, INDEX LIFTED_MULTICUT_CUT_FACTOR_NO, INDEX CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO, INDEX LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO>
@@ -1208,28 +1325,107 @@ public:
 
 
 
-   INDEX Tighten(const REAL minDualIncrease, const INDEX maxCuttingPlanesToAdd)
+   INDEX Tighten(const INDEX maxCuttingPlanesToAdd)
    {
       const bool prevMode = addingTighteningEdges;
       addingTighteningEdges = true;
       assert(maxCuttingPlanesToAdd > 5); //otherwise the below arrangement makes little sense.
-      const INDEX noBaseConstraints = MULTICUT_CONSTRUCTOR::Tighten(minDualIncrease, 0.8*maxCuttingPlanesToAdd);
+      const INDEX noBaseConstraints = MULTICUT_CONSTRUCTOR::Tighten(0.8*maxCuttingPlanesToAdd);
+      //return noBaseConstraints;
       INDEX noLiftingConstraints = 0;
       spdlog::get("logger")->info() << "number of cut constraints: " << liftedMulticutFactors_.size();
-      //for(INDEX i=0; i<baseEdges_.size(); ++i) {
-      //   std::cout << baseEdges_[i].weight() << ", ";
-      //}
-      //std::cout << "\n";
-      //for(INDEX i=0; i<liftedEdges_.size(); ++i) {
-      //   std::cout << liftedEdges_[i].weight() << ", ";
-      //}
-      std::cout << "\n";
       if(noBaseConstraints < maxCuttingPlanesToAdd) {
-         noLiftingConstraints = FindViolatedCuts(minDualIncrease, maxCuttingPlanesToAdd - noBaseConstraints);
-         spdlog::get("logger")->info() << "added " << noLiftingConstraints << " lifted cut factors";
+         REAL th = FindViolatedCutsThreshold(maxCuttingPlanesToAdd - noBaseConstraints);
+         if(th >= 0.0) {
+            noLiftingConstraints = FindViolatedCuts(th, maxCuttingPlanesToAdd - noBaseConstraints);
+            spdlog::get("logger")->info() << "added " << noLiftingConstraints << " lifted cut factors";
+         }
       }
       addingTighteningEdges = prevMode;
       return noBaseConstraints + noLiftingConstraints;
+   }
+
+   REAL FindViolatedCutsThreshold(const INDEX maxTripletsToAdd)
+   {
+      // make one function to reuse allocated datastructures.
+      UnionFind uf(this->noNodes_);
+      std::vector<std::tuple<INDEX,INDEX,REAL>> edges;
+      edges.reserve(baseEdges_.size());
+      for(const auto& e : baseEdges_) {
+         const INDEX i = e.i;
+         const INDEX j = e.j;
+         const REAL weight = e.weight();
+         if(weight > 0) {
+            uf.merge(i,j);
+         } else {
+            edges.push_back(std::make_tuple(i,j,weight));
+         }
+      }
+      std::sort(edges.begin(),edges.end(), [] (auto& a, auto& b)->bool { return std::get<2>(a) > std::get<2>(b); });
+      std::vector<std::list<std::tuple<INDEX,REAL>>> liftedEdges(this->noNodes_);
+      for(auto& e : liftedEdges_) {
+         const INDEX i = e.i;
+         const INDEX j = e.j;
+         const REAL weight = e.weight();
+         if(weight > 0.0) {
+            liftedEdges[i].push_front(std::make_tuple(j,weight));
+            liftedEdges[j].push_front(std::make_tuple(i,weight));
+         }
+      }
+      auto edge_sort = [] (const std::tuple<INDEX,REAL>& a, const std::tuple<INDEX,REAL>& b)->bool { return std::get<0>(a) < std::get<0>(b); };
+      for(INDEX i=0; i<liftedEdges.size(); ++i) {
+         liftedEdges[i].sort(edge_sort);
+      }
+      REAL prevWeight = 0.0;
+      REAL maxTh = -std::numeric_limits<REAL>::infinity();
+      for(INDEX e=0; e<edges.size(); ++e) {
+         const INDEX i = std::get<0>(edges[e]);
+         const INDEX j = std::get<1>(edges[e]);
+         const REAL weight = std::get<2>(edges[e]);
+         if(uf.find(i) != uf.find(j)) {
+            uf.merge(i,j);
+            const INDEX c = uf.find(i);
+            // (i) merge edges emanating from same connected component
+            if(i != c) {
+               liftedEdges[c].merge(liftedEdges[i],edge_sort);
+            } 
+            if(j != c) {
+               liftedEdges[c].merge(liftedEdges[j],edge_sort);
+            }
+            std::transform(liftedEdges[c].begin(), liftedEdges[c].end(), liftedEdges[c].begin(), 
+                  [&uf,&maxTh,weight] (std::tuple<INDEX,REAL> a)->std::tuple<INDEX,REAL> {
+                  const INDEX cc = uf.find(std::get<0>(a));
+                  if(cc != std::get<0>(a)) {
+                  const REAL th = std::min(-weight, std::get<1>(a));
+                  maxTh = std::max(th,maxTh); // do zrobienia: correct?
+                  }
+                  std::get<0>(a) = cc;
+                  return a; 
+                  });
+            // do zrobienia: unnecessary sort here: has been sorted more or less after merge, only parallel edges need to be sorted
+            liftedEdges[c].sort([] (const std::tuple<INDEX,REAL>& a, const std::tuple<INDEX,REAL>& b)->bool { 
+                  if(std::get<0>(a) != std::get<0>(b)) {
+                  return std::get<0>(a) < std::get<0>(b); 
+                  }
+                  return std::get<1>(a) > std::get<1>(b); // this ensures that remove removes copies with smaller weight. Thus, the largest one only remains.
+                  });
+            // (ii) remove lifted edges that have been collapsed. do zrobienia: record weight of those
+            liftedEdges[c].remove_if([&uf,c,maxTh] (const auto& a)->bool { 
+                  if(std::get<1>(a) < maxTh) return true; // we need not take this edge into account anymore, as it would lead to smaller minimum dual improvement.
+                  // first check whether lifted edge belonged to different connected components before the last merge operation. If yes, update threshold
+                  const INDEX cc = uf.find(std::get<0>(a));
+                  return uf.find(std::get<0>(a)) == c; 
+                  });
+            // (iii) take maximal representative of edges that are parallel now
+            liftedEdges[c].unique([] (const auto& a, const auto& b)->bool { return std::get<0>(a) == std::get<0>(b); }); 
+         }
+
+      }
+
+      //if(maxTh != -std::numeric_limits<REAL>::infinity()) {
+      //   std::cout << "\nnon-trivial cut factor with weight = " << maxTh << "\n\n";
+      //}
+      return 0.5*maxTh;
    }
 
    INDEX FindViolatedCuts(const INDEX minDualIncrease, const INDEX noConstraints)
@@ -1402,11 +1598,13 @@ public:
 
       // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
       const INDEX noNodes = MULTICUT_CONSTRUCTOR::noNodes_;
+      // do zrobienia: possibly build graph only once
       andres::graph::Graph<> originalGraph(noNodes);
       andres::graph::Graph<> liftedGraph(noNodes);
       std::vector<REAL> edgeValues;
       edgeValues.reserve(baseEdges_.size() + liftedEdges_.size());
 
+      std::cout << "no base edges = " << baseEdges_.size() << ", lifted edges = " << liftedEdges_.size() << "\n";
       for(const auto& e : baseEdges_) {
          originalGraph.insertEdge(e.i, e.j);
          liftedGraph.insertEdge(e.i,e.j);
@@ -1425,19 +1623,21 @@ public:
       // Problem: we have to infer state of tightening edges. Note: Multicut is uniquely determined by baseEdges_, hence labeling of thightening edges can be inferred with union find datastructure.
       UnionFind uf(noNodes);
       for(INDEX e=0; e<baseEdges_.size(); ++e) {
-         std::array<bool,1> l { bool(labeling[e]) };
+         std::array<unsigned char,1> l { bool(labeling[e]) };
          baseEdges_[e].f->SetAndPropagatePrimal(primal, l.begin());
-         uf.merge(baseEdges_[e].i, baseEdges_[e].j);
+         if(labeling[e] == 0) {
+            uf.merge(baseEdges_[e].i, baseEdges_[e].j);
+         }
       }
       for(INDEX e=0; e<liftedEdges_.size(); ++e) {
-         std::array<bool,1> l { bool(labeling[e + baseEdges_.size()]) };
+         std::array<unsigned char,1> l { (unsigned char)(labeling[e + baseEdges_.size()]) };
          liftedEdges_[e].f->SetAndPropagatePrimal(primal, l.begin());
       }
       // now go over all edges: additionally tightening edges will not have received primal value, set if now.
-      for(const auto& e : MULTICUT_CONSTRUCTOR::unaryFactors_) {
+      for(const auto& e : this->unaryFactors_) {
          const auto* f = e.second;
-         if(primal[f->GetPrimalOffset()] != unknownState) {
-            std::array<bool,1> l;
+         if(primal[f->GetPrimalOffset()] == unknownState) { // tightening edge
+            std::array<unsigned char,1> l;
             if(uf.connected(e.first[0],e.first[1])) {
                l[0] = 0;
             } else {

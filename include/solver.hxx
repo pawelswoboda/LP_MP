@@ -7,22 +7,24 @@
 #include "template_utilities.hxx"
 #include "spdlog/spdlog.h"
 #include "tclap/CmdLine.h"
+#include "lp_interface/lp_interface.h"
 
 namespace LP_MP {
 
 // class containing the LP, problem constructor list, input function
 // takes care of logging
 // binds together problem constructors and solver and organizes input/output
+// base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
 template<typename FMC>
 class Solver {
-   using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
-   using FactorMessageConnection = FMC;
-
    // initialize a tuple uniformly
    template <class T, class... ARGS>
       std::tuple<ARGS...> tupleMaker(meta::list<ARGS...>, T& t) { return std::make_tuple(ARGS(t)...); }
 
 public:
+   using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
+   using FactorMessageConnection = FMC;
+
    Solver(int argc, char** argv)
       : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
       lp_(LP()),
@@ -50,9 +52,7 @@ public:
 
       }
 
-   ~Solver() {}
-
-   virtual int Solve() = 0; // must be implemented by solver taking some visitor.
+   virtual ~Solver() {}
 
    // needed, as more arguments could be passed to cmd_, and then we need to parse again
    void Init(int argc, char** argv)
@@ -130,68 +130,36 @@ public:
       // do zrobienia: this is not nice. CanTighten should only be called with valid PROBLEM_CONSTRUCTOR_NO
       constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
       if(n < PROBLEM_CONSTRUCTOR_NO) return false;
-      else return HasTighten<meta::at_c<ProblemDecompositionList,n>, INDEX, REAL, INDEX>();
+      else return HasTighten<meta::at_c<ProblemDecompositionList,n>, INDEX, INDEX>();
       //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
    }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size(),INDEX>::type
-   Tighten(const REAL minDualIncrease, const INDEX maxConstraints) { return 0; }
+   Tighten(const INDEX maxConstraints) { return 0; }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   Tighten(const REAL minDualIncrease, const INDEX maxConstraints)
+   Tighten(const INDEX maxConstraints)
    {
-      return Tighten<PROBLEM_CONSTRUCTOR_NO+1>(minDualIncrease,maxConstraints);
+      return Tighten<PROBLEM_CONSTRUCTOR_NO+1>(maxConstraints);
    }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   Tighten(const REAL minDualIncrease, const INDEX maxConstraints) 
+   Tighten(const INDEX maxConstraints) 
    {
       spdlog::get("logger")->info() << "Tighten for pc no " << PROBLEM_CONSTRUCTOR_NO;
-      const INDEX noCuttingPlaneAdded = std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).Tighten(minDualIncrease,maxConstraints);
-      return noCuttingPlaneAdded + Tighten<PROBLEM_CONSTRUCTOR_NO+1>(minDualIncrease,maxConstraints);
+      const INDEX noCuttingPlaneAdded = std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).Tighten(maxConstraints);
+      return noCuttingPlaneAdded + Tighten<PROBLEM_CONSTRUCTOR_NO+1>(maxConstraints);
    }
-   // minDualIncrease says how small minimally must be the increase guaranteed by added constraints, while maxConstraints gives maximum number of constraints to add
-   INDEX Tighten(const REAL minDualIncrease, const INDEX maxConstraints) 
+   // maxConstraints gives maximum number of constraints to add
+   INDEX Tighten(const INDEX maxConstraints) 
    {
-      return Tighten<0>(minDualIncrease, maxConstraints);
+      INDEX noConstraintsAdded = Tighten<0>(maxConstraints);
+      if(noConstraintsAdded > 0) { // tell lp to rebuild omegas etc
+         lp_.Init();
+      }
+      return noConstraintsAdded;
    }
-
-
-
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputePrimal,ComputePrimal);
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   constexpr static bool
-   CanComputePrimal()
-   {
-      // do zrobienia: this is not nice. CanComputePrimal should only be called with valid PROBLEM_CONSTRUCTOR_NO
-      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
-      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
-      else return HasComputePrimal<meta::at_c<ProblemDecompositionList,n>, void, PrimalSolutionStorage::Element>();
-      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size()>::type
-   ComputePrimal(PrimalSolutionStorage::Element primal) { return; }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   ComputePrimal(PrimalSolutionStorage::Element primal)
-   {
-      return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   ComputePrimal(PrimalSolutionStorage::Element primal)
-   {
-      spdlog::get("logger")->info() << "ComputePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO;
-      std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).ComputePrimal(primal);
-      return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
-   }
-   void ComputePrimal(PrimalSolutionStorage::Element primal)
-   {
-      ComputePrimal<0>(primal);
-   }
-
-
+   
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    meta::at_c<ProblemDecompositionList, PROBLEM_CONSTRUCTOR_NO>& GetProblemConstructor() 
    {
@@ -200,6 +168,38 @@ public:
 
    LP& GetLP() { return lp_; }
 
+   
+   // what to do before improving lower bound, e.g. setting reparametrization mode
+   virtual void PreIterate(LpControl c) 
+   {
+      lp_.ComputeWeights(c.repam);
+   } 
+
+   // what to do for improving lower bound, typically ComputePass or ComputePassAndPrimal
+   virtual void Iterate(LpControl c) {
+      lp_.ComputePass();
+   } 
+
+   // what to do after one iteration of message passing, e.g. primal computation and/or tightening
+   virtual void PostIterate(LpControl c) 
+   {
+      if(c.computeLowerBound) {
+         lowerBound_ = lp_.LowerBound();
+      }
+      if(c.tighten) {
+         Tighten(c.tightenConstraints);
+      }
+   } 
+
+   void RegisterPrimal(PrimalSolutionStorage& p)
+   {
+      const REAL cost = lp_.EvaluatePrimal(p.begin());
+      std::cout << "primal cost = " << cost << "\n";
+      if(cost <= bestPrimalCost_) {
+         bestPrimalCost_ = cost;
+         std::swap(bestPrimal_, p); // note: the best primal need not be admissible for the current lp, i.e. after tightening, the lp has changed, while best primal possibly has steyed the same.
+      }
+   }
 protected:
    TCLAP::CmdLine cmd_;
    LP lp_;
@@ -211,58 +211,119 @@ protected:
    TCLAP::ValueArg<std::string> outputFileArg_;
    std::string inputFile_;
    std::string outputFile_;
+
+   REAL lowerBound_;
+   // while Solver does not know how to compute primal, derived solvers do know. After computing a primal, they are expected to register their primals with the base solver
+   REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
+   PrimalSolutionStorage bestPrimal_; // these vectors are stored in the order of forwardOrdering_
+
 };
 
-// add visitor to solver. Problem is: problem constructors do not depend on visitor, hence shall be given only base solver.
-template<typename FMC, typename VISITOR>
-class VSolver : public Solver<FMC> {
+// local rounding interleaved with message passing 
+template<typename FMC>
+class MpRoundingSolver : public Solver<FMC>
+{
 public:
-   using VisitorType = VISITOR;
-
-   VSolver(int argc, char** argv)
-      : Solver<FMC>(argc,argv),
-      visitor_(Solver<FMC>::cmd_,*this)
+   void Iterate(LpControl c)
    {
-      Solver<FMC>::Init(argc,argv); // do zrobienia: not nice! but needed to parse command line, after arguments were added by visitor
+      if(c.computePrimal) {
+         Solver<FMC>::lp_.ComputePassAndPrimal(forwardPrimal_, backwardPrimal_);
+         RegisterPrimal(forwardPrimal_);
+         RegisterPrimal(backwardPrimal_);
+      } else {
+         Solver<FMC>::Iterate(c);
+      }
    }
 
+private:
+   PrimalSolutionStorage forwardPrimal_, backwardPrimal_;
+};
+
+// rounding based on primal heuristics provided by problem constructor
+template<typename FMC>
+class ProblemConstructorRoundingSolver : public Solver<FMC>
+{
+public:
+   using Solver<FMC>::Solver;
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputePrimal,ComputePrimal);
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   constexpr static bool
+   CanComputePrimal()
+   {
+      // do zrobienia: this is not nice. CanComputePrimal should only be called with valid PROBLEM_CONSTRUCTOR_NO
+      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= Solver<FMC>::ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
+      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
+      else return HasComputePrimal<meta::at_c<typename Solver<FMC>::ProblemDecompositionList,n>, void, PrimalSolutionStorage::Element>();
+      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
+   }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= Solver<FMC>::ProblemDecompositionList::size()>::type
+   ComputePrimal(PrimalSolutionStorage::Element primal) { return; }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < Solver<FMC>::ProblemDecompositionList::size() && !CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
+   ComputePrimal(PrimalSolutionStorage::Element primal)
+   {
+      return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
+   }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < Solver<FMC>::ProblemDecompositionList::size() && CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
+   ComputePrimal(PrimalSolutionStorage::Element primal)
+   {
+      spdlog::get("logger")->info() << "ComputePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO;
+      std::get<PROBLEM_CONSTRUCTOR_NO>(this->problemConstructor_).ComputePrimal(primal);
+      return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
+   }
+   void ComputePrimal(PrimalSolutionStorage::Element primal)
+   {
+      ComputePrimal<0>(primal);
+   }
+
+   virtual void PostIterate(LpControl c)
+   {
+      if(c.computePrimal) {
+         this->lp_.InitializePrimalVector(primal_); // do zrobienia: this is not nice: reallocation might occur
+         ComputePrimal(primal_.begin());
+         this->RegisterPrimal(primal_);
+      }
+      Solver<FMC>::PostIterate(c);
+   }
+   
+private:
+   PrimalSolutionStorage primal_;
+};
+
+// solver for rounding with standard (I)LP-solver
+template<typename FMC>
+class LpRoundingSolver : public Solver<FMC> {
+
+};
+
+// solver holding visitor. We do not want to have this in base class, as this would entail passing visitor information to constructors etc.
+template<typename SOLVER, typename VISITOR>
+class VisitorSolver : public SOLVER {
+public:
+   VisitorSolver(int argc, char** argv) :
+      SOLVER(argc, argv),
+      visitor_(SOLVER::cmd_)
+   {
+      this->Init(argc,argv);
+   }
    int Solve()
    {
-      int rt = Solver<FMC>::lp_.Solve(visitor_, [&](PrimalSolutionStorage::Element primal) -> bool { return this->CheckPrimalConsistency(primal); });
-      // discrete tomo inspection
-      /*
-      auto& mrf = std::get<0>(Solver<FMC>::problemConstructor_);
-      std::cout << "unary potentials:\n";
-      for(INDEX i=0; i<mrf.GetNumberOfVariables();++i) {
-         std::cout << i << ": ";
-         auto* f = mrf.GetUnaryFactor(i);
-         for(INDEX x=0; x<mrf.GetNumberOfLabels(i);++x) {
-            std::cout << f->operator[](x) << ", ";
-         }
-         std::cout << "\n";
+      this->lp_.Init();
+      LpControl c = visitor_.begin();
+      while(!c.end) {
+         this->PreIterate(c);
+         this->Iterate(c);
+         this->PostIterate(c);
+         c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
       }
-      std::cout << "pairwise potentials:\n";
-      for(INDEX c=0; c<mrf.GetNumberOfPairwiseFactors(); ++c) {
-         auto* f = mrf.GetPairwiseFactor(c);
-         auto ij = mrf.GetPairwiseVariables(c);
-         const INDEX i=std::get<0>(ij);
-         const INDEX j=std::get<1>(ij);
-         std::cout << i << "," << j << ":\n";
-         for(INDEX xi=0; xi<mrf.GetNumberOfLabels(i);++xi) {
-            for(INDEX xj=0; xj<mrf.GetNumberOfLabels(j);++xj) {
-               std::cout << f->operator[](xi + xj*mrf.GetNumberOfLabels(i)) << ", ";
-            }
-            std::cout << "\n";
-         }
-      }
-      */
-      return rt;
+      return c.error;
    }
 
 private:
    VISITOR visitor_;
 };
-
 
 // Macro for generating main function 
 // do zrobienia: get version number automatically from CMake 
@@ -271,10 +332,21 @@ private:
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   VSolver<FMC,VISITOR> solver(argc,argv); \
+   VisitorSolver<Solver<FMC>,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }
+
+// Macro for generating main function with specific primal rounding solver
+#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_VISITOR_AND_SOLVER(FMC,PARSE_PROBLEM_FUNCTION,VISITOR,SOLVER) \
+using namespace LP_MP; \
+int main(int argc, char* argv[]) \
+{ \
+   VisitorSolver<SOLVER,VISITOR> solver(argc,argv); \
+   solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
+   return solver.Solve(); \
+}
+
 
 
 } // end namespace LP_MP
