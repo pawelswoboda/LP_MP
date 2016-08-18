@@ -143,7 +143,10 @@ namespace LP_MP {
          if(c.computePrimal == false && c.computeLowerBound == false) {
             // output nothing
          } else {
-            logger->info("iteration = {}", curIter_);
+            logger->info("iteration = {}{}{}, time elapsed = {}", curIter_, 
+                  (c.computeLowerBound ? fmt::format(", lower bound = {}", lowerBound) : ""), 
+                  (c.computePrimal ? fmt::format(", upper bound = {}", primalBound) : ""), 
+                  timeElapsed);
                //<< (c.computeLowerBound ? fmt::format(", lower bound = {0}", lowerBound) : "")
                //<< (c.computePrimal ? fmt::format(", upper bound = {0}", primalBound) : "")
                //<< ", time elapsed = " << timeElapsed << " milliseconds";
@@ -172,7 +175,7 @@ namespace LP_MP {
          } 
          if(primalBound <= lowerBound + eps) {
             assert(primalBound + eps >= lowerBound);
-            logger->info("Primal cost equals lower bound");
+            logger->info("Primal cost {} greater equal lower bound {}", primalBound, lowerBound);
             ret.end = true;
             return ret;
          }
