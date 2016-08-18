@@ -520,7 +520,7 @@ MulticutConstructor(Solver<FMC>& pd)
       const REAL th = FindNegativeCycleThreshold(maxCuttingPlanesToAdd);
       if(th >= 0.0) { // otherwise no constraint can be added
          const INDEX tripletsAdded = FindNegativeCycles(th,maxCuttingPlanesToAdd);
-         spdlog::get("logger")->info() << "Added " << tripletsAdded << " triplet(s)" << " out of " << maxCuttingPlanesToAdd;
+         spdlog::get("logger")->info("Added {} triplet(s) out of {}", tripletsAdded, maxCuttingPlanesToAdd);
          return tripletsAdded;
       } else {
          return 0;
@@ -1005,6 +1005,7 @@ public:
       }
       */
 
+      REAL minDualIncrease = 0.0; // for now, remove later
 
       INDEX oddWheelsAdded = 0;
       std::vector<INDEX> commonNodes(BaseConstructor::noNodes_); // for detecting triangles
@@ -1027,8 +1028,8 @@ public:
                   bool addTriplet = false;
                   std::array<INDEX,3> triplet{i,j,k};
                   std::sort(triplet.begin(),triplet.end()); // do zrobienia: use faster sorting
-                  if(BaseConstructor::HasTripletFactor(triplet[0],triplet[1],triplet[2])) {
-                     auto* t = BaseConstructor::GetTripletFactor(triplet[0],triplet[1],triplet[2]);
+                  if(this->HasTripletFactor(triplet[0],triplet[1],triplet[2])) {
+                     auto* t = this->GetTripletFactor(triplet[0],triplet[1],triplet[2]);
                      INDEX l1, l2;
                      INDEX l3, l4; // the other labelings
                      assert(t->GetFactor()->size() == 4);
@@ -1046,9 +1047,9 @@ public:
                         addTriplet = true;
                      }
                   } else { // get cost directly from edge factors
-                     const REAL ij = BaseConstructor::GetUnaryFactor(std::min(i,j), std::max(i,j))->operator[](0);
-                     const REAL ik = BaseConstructor::GetUnaryFactor(std::min(i,k), std::max(i,k))->operator[](0);
-                     const REAL jk = BaseConstructor::GetUnaryFactor(j,k)->operator[](0);
+                     const REAL ij = this->GetUnaryFactor(std::min(i,j), std::max(i,j))->operator[](0);
+                     const REAL ik = this->GetUnaryFactor(std::min(i,k), std::max(i,k))->operator[](0);
+                     const REAL jk = this->GetUnaryFactor(j,k)->operator[](0);
                      if(std::min(ij+jk, ik+jk) <= std::min(std::min(ij+ik, ij+ik+jk),0.0) - minDualIncrease) { // do zrobienia: check again
                         addTriplet = true;
                      }
@@ -1225,7 +1226,7 @@ public:
       } else {
          // possibly require the odd wheels to have larger impact relative to violated cycles. This ensures that odd wheels are only added late in the optimziation, when no good violated cycles are present any more
          const INDEX oddWheelsAdded = FindOddWheels(maxCuttingPlanesToAdd - tripletsAdded);
-         spdlog::get("logger")->info() << "Added " << oddWheelsAdded << " factors for odd wheel constraints";
+         spdlog::get("logger")->info("Added {} factors for odd wheel constraints", oddWheelsAdded);
          return tripletsAdded + oddWheelsAdded;
       }
       assert(false);
@@ -1333,12 +1334,12 @@ public:
       const INDEX noBaseConstraints = MULTICUT_CONSTRUCTOR::Tighten(0.8*maxCuttingPlanesToAdd);
       //return noBaseConstraints;
       INDEX noLiftingConstraints = 0;
-      spdlog::get("logger")->info() << "number of cut constraints: " << liftedMulticutFactors_.size();
+      spdlog::get("logger")->info("number of cut constraints = {} ", liftedMulticutFactors_.size());
       if(noBaseConstraints < maxCuttingPlanesToAdd) {
          REAL th = FindViolatedCutsThreshold(maxCuttingPlanesToAdd - noBaseConstraints);
          if(th >= 0.0) {
             noLiftingConstraints = FindViolatedCuts(th, maxCuttingPlanesToAdd - noBaseConstraints);
-            spdlog::get("logger")->info() << "added " << noLiftingConstraints << " lifted cut factors";
+            spdlog::get("logger")->info("added {} lifted cut factors.", noLiftingConstraints);
          }
       }
       addingTighteningEdges = prevMode;

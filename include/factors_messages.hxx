@@ -347,6 +347,7 @@ template<typename MESSAGE_TYPE,
 class MessageContainer : public MessageStorageSelector<MESSAGE_SIZE,true>::type, public MessageTypeAdapter
 {
 public:
+   using leftFactorNumber_t = std::integral_constant<INDEX, LEFT_FACTOR_NO>;
    static constexpr INDEX leftFactorNumber = LEFT_FACTOR_NO;
    static constexpr INDEX rightFactorNumber = RIGHT_FACTOR_NO;
 
@@ -1638,29 +1639,52 @@ protected:
    FactorType factor_; // the factor operation
    INDEX primalOffset_;
 
+   // we do this via templates only (no values), as types are incomplete yet. This is more cumbersome than a direct value computation as can be done usually.
+   /*
+   template<typename MESSAGE_LIST>
+   constexpr static auto MetaComputeMessageTuple()
+   {
+      //auto message_tuple = hana::transform(msg_list, [](auto m) { return std::declval<typename decltype(m)::type>(); }); // go from type_c to actual type
+      //auto left_message_type_tuple = hana::filter(msg_list, [](auto m) { return std::declval<typename decltype(m)::type>().LeftFactorNumber() == FACTOR_NO; });
+      auto msg_list_t = hana::type_c<MESSAGE_LIST>; // MESSAGE_LIST cannot be instantiated yet (incomplete type) -> hold it as type_c
+      // transform message list to tuple_t holding all the tuples
+      constexpr auto
+      auto has_same_left_factor = hana::is_valid([](auto&& x) -> decltype((void)x.leftFactorNumber) { });
+      //MESSAGE_LIST* msg_list;
+      //auto left_message_type_tuple = hana::filter(*msg_list, [](auto&& m) { return decltype(m)::leftFactorNumber == FACTOR_NO; });
+      //auto left_message_dispatcher_tuple = hana::transform(left_message_type_tuple, [](auto m) { return hana::type_c<MessageDispatcher<typename decltype(m)::type, LeftMessageFuncGetter>>; });
+      //auto right_message_tuple = hana::filter(msg_list, [](auto m) { return decltype(m)::type::rightFactorNumber == FACTOR_NO; });
+      //auto right_message_dispatcher_tuple = hana::transform(right_message_tuple, [](auto m) { return hana::type_c<MessageDispatcher<typename decltype(m)::type, RightMessageFuncGetter>>; });
+      //return hana::concat<left_message_dispatcher_tuple, right_message_dispatcher_tuple>;
+
+      //return left_message_dispatcher_tuple;
+      return hana::type_c<char>;
+   }
+   */
+
+   //decltype(MetaComputeMessageTuple<typename FACTOR_MESSAGE_TRAIT::MessageListHana>()) test;
+
    // compile time metaprogramming to transform Factor-Message information into lists of which messages this factor must hold
    // first get lists with left and right message types
    struct get_msg_type_list {
       template<typename LIST>
-         using apply = typename LIST::MessageContainerType;
+         using invoke = typename LIST::MessageContainerType;
    };
    struct get_left_msg {
       template<class LIST>
-         //using apply = typename std::is_same<meta::size_t<LIST::leftFactorNo>, meta::size_t<FACTOR_NO>>::type;
-         using apply = typename std::is_same<meta::size_t<LIST::leftFactorNumber>, meta::size_t<FACTOR_NO>>::type;
+         using invoke = typename std::is_same<meta::size_t<LIST::leftFactorNumber>, meta::size_t<FACTOR_NO>>::type;
    };
    struct get_right_msg {
       template<class LIST>
-         //using apply = typename std::is_same<meta::size_t<LIST::rightFactorNo>, meta::size_t<FACTOR_NO> >::type;
-         using apply = typename std::is_same<meta::size_t<LIST::rightFactorNumber>, meta::size_t<FACTOR_NO> >::type;
+         using invoke = typename std::is_same<meta::size_t<LIST::rightFactorNumber>, meta::size_t<FACTOR_NO> >::type;
    };
    struct get_left_msg_container_type_list {
       template<class LIST>
-         using apply = typename LIST::LeftMessageContainerStorageType;
+         using invoke = typename LIST::LeftMessageContainerStorageType;
    };
    struct get_right_msg_container_type_list {
       template<class LIST>
-         using apply = typename LIST::RightMessageContainerStorageType;
+         using invoke = typename LIST::RightMessageContainerStorageType;
    };
 
    using left_msg_list = meta::transform< meta::filter<typename FACTOR_MESSAGE_TRAIT::MessageList, get_left_msg>, get_msg_type_list>;
@@ -1671,11 +1695,11 @@ protected:
    // now construct a tuple with left and right dispatcher
    struct left_dispatch {
       template<class LIST>
-         using apply = MessageDispatcher<LIST, LeftMessageFuncGetter>;
+         using invoke = MessageDispatcher<LIST, LeftMessageFuncGetter>;
    };
    struct right_dispatch {
       template<class LIST>
-         using apply = MessageDispatcher<LIST, RightMessageFuncGetter>;
+         using invoke = MessageDispatcher<LIST, RightMessageFuncGetter>;
    };
    using left_dispatcher_list = meta::transform< left_msg_list, left_dispatch >;
    using right_dispatcher_list = meta::transform< right_msg_list, right_dispatch >;

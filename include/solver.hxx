@@ -8,9 +8,11 @@
 #include "spdlog/spdlog.h"
 #include "tclap/CmdLine.h"
 #include "lp_interface/lp_interface.h"
+#include "boost/hana.hpp"
 
 namespace LP_MP {
 
+namespace hana = boost::hana; // put this somewhere more central
 // class containing the LP, problem constructor list, input function
 // takes care of logging
 // binds together problem constructors and solver and organizes input/output
@@ -18,6 +20,8 @@ namespace LP_MP {
 template<typename FMC>
 class Solver {
    // initialize a tuple uniformly
+   //template <class T, class LIST>
+   //   tuple_from_list<LIST> tupleMaker(LIST l, T& t) { return tuple_from_list<LIST>(t); }
    template <class T, class... ARGS>
       std::tuple<ARGS...> tupleMaker(meta::list<ARGS...>, T& t) { return std::make_tuple(ARGS(t)...); }
 
@@ -146,7 +150,7 @@ public:
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
    Tighten(const INDEX maxConstraints) 
    {
-      spdlog::get("logger")->info() << "Tighten for pc no " << PROBLEM_CONSTRUCTOR_NO;
+      spdlog::get("logger")->info("Tighten for pc no {}", PROBLEM_CONSTRUCTOR_NO);
       const INDEX noCuttingPlaneAdded = std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).Tighten(maxConstraints);
       return noCuttingPlaneAdded + Tighten<PROBLEM_CONSTRUCTOR_NO+1>(maxConstraints);
    }
@@ -166,8 +170,15 @@ public:
       return std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_);
    }
 
-   LP& GetLP() { return lp_; }
+   /* for hana
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   auto& GetProblemConstructor()
+   {   
+      std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_); 
+   }
+   */
 
+   LP& GetLP() { return lp_; }
    
    // what to do before improving lower bound, e.g. setting reparametrization mode
    virtual void PreIterate(LpControl c) 
@@ -204,6 +215,8 @@ protected:
    TCLAP::CmdLine cmd_;
    LP lp_;
    std::shared_ptr<spdlog::logger> logger_;
+   //typename FMC::ProblemDecompositionListHana problemConstructor_;
+
    tuple_from_list<ProblemDecompositionList> problemConstructor_;
 
    // command line arguments
@@ -269,7 +282,7 @@ public:
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < Solver<FMC>::ProblemDecompositionList::size() && CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
    ComputePrimal(PrimalSolutionStorage::Element primal)
    {
-      spdlog::get("logger")->info() << "ComputePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO;
+      spdlog::get("logger")->info("ComputePrimal for pc no {}", PROBLEM_CONSTRUCTOR_NO);
       std::get<PROBLEM_CONSTRUCTOR_NO>(this->problemConstructor_).ComputePrimal(primal);
       return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
    }

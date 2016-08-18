@@ -25,7 +25,11 @@
 #include <iostream>
 #include <vector>
 
+#include "boost/hana.hpp"
+
 namespace LP_MP {
+
+namespace hana = boost::hana;
 
 // do zrobienia: possibly rename unary to edge factor
 
@@ -78,7 +82,7 @@ struct FMC_LIFTED_MULTICUT {
    constexpr static const char* name = "Lifted Multicut with cycle constraints";
    constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
-   // now rounding performed: do it via GAEC nad K&L, called from constructor
+   // no rounding performed: do it via GAEC and K&L, called from problem constructor
    typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_LIFTED_MULTICUT, 0> MulticutUnaryFactorContainer;
    typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_LIFTED_MULTICUT, 1> MulticutTripletFactorContainer;
    typedef FactorContainer<LiftedMulticutCutFactor, ExplicitRepamStorage, FMC_LIFTED_MULTICUT, 2> LiftedMulticutCutFactorContainer;
@@ -101,6 +105,40 @@ struct FMC_LIFTED_MULTICUT {
    using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0>;
    using LiftedMulticutConstructor = LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
+
+
+   using MessageListHana = hana::tuple<
+      MulticutUnaryTripletMessageContainer, 
+      CutEdgeLiftedMulticutFactorMessageContainer, 
+      LiftedEdgeLiftedMulticutFactorMessageContainer
+         >;
+
+   using FactorListHana = hana::tuple<
+      MulticutUnaryFactorContainer, 
+      MulticutTripletFactorContainer, 
+      LiftedMulticutCutFactorContainer 
+         >;
+   //using MessageListHana = hana::tuple<
+   //   MulticutUnaryTripletMessageContainer, 
+   //   CutEdgeLiftedMulticutFactorMessageContainer, 
+   //   LiftedEdgeLiftedMulticutFactorMessageContainer
+   //      >;
+   using ProblemDecompositionListHana = hana::tuple<LiftedMulticutConstructor>;
+
+   /*
+   hana::tuple_t<
+      MulticutUnaryFactorContainer, 
+      MulticutTripletFactorContainer, 
+      LiftedMulticutCutFactorContainer 
+         > FactorListHana;
+   hana::tuple_t<
+      MulticutUnaryTripletMessageContainer, 
+      CutEdgeLiftedMulticutFactorMessageContainer, 
+      LiftedEdgeLiftedMulticutFactorMessageContainer
+         > MessageListHana;
+   hana::tuple_t<LiftedMulticutConstructor> ProblemDecompositionListHana;
+   */
+
 };
 
 namespace MulticutOpenGmInput {

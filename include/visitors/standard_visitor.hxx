@@ -121,7 +121,7 @@ namespace LP_MP {
          //}
 
          //spdlog::get("logger")->info() << "Initial number of factors = " << lp->GetNumberOfFactors();
-         spdlog::get("logger")->info() << "Initial lower bound before optimizing = " << curLowerBound_;
+         spdlog::get("logger")->info("Initial lower bound before optimizing = {}", curLowerBound_);
          beginTime_ = std::chrono::steady_clock::now();
 
 
@@ -143,14 +143,14 @@ namespace LP_MP {
          if(c.computePrimal == false && c.computeLowerBound == false) {
             // output nothing
          } else {
-            logger->info() << "iteration = " << curIter_ 
-               << (c.computeLowerBound ? fmt::format(", lower bound = {0}", lowerBound) : "")
-               << (c.computePrimal ? fmt::format(", upper bound = {0}", primalBound) : "")
-               << ", time elapsed = " << timeElapsed << " milliseconds";
+            logger->info("iteration = {}", curIter_);
+               //<< (c.computeLowerBound ? fmt::format(", lower bound = {0}", lowerBound) : "")
+               //<< (c.computePrimal ? fmt::format(", upper bound = {0}", primalBound) : "")
+               //<< ", time elapsed = " << timeElapsed << " milliseconds";
          }
          if(c.end == true) {
             auto endTime = std::chrono::steady_clock::now();
-            logger->info() << "Optimization took " << std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations";
+            logger->info("Optimization took {} milliseconds and {} iterations.", std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count(), curIter_);
          } else if(c.error == true) {
             assert(false); // this case is currently not handled
          }
@@ -172,23 +172,23 @@ namespace LP_MP {
          } 
          if(primalBound <= lowerBound + eps) {
             assert(primalBound + eps >= lowerBound);
-            logger->info() << "Primal cost equals lower bound";
+            logger->info("Primal cost equals lower bound");
             ret.end = true;
             return ret;
          }
          if(timeout_ != std::numeric_limits<REAL>::max() && timeElapsed/1000 >= timeout_) {
-            logger->info() << "Timeout reached after " << timeElapsed << " seconds";
+            logger->info("Timeout reached after {} seconds", timeElapsed);
             remainingIter_ = std::min(INDEX(1),remainingIter_);
          }
          if(maxMemory_ > 0) {
             const INDEX memoryUsed = memory_used()/(1024*1024);
             if(maxMemory_ < memoryUsed) {
                remainingIter_ = std::min(INDEX(1),remainingIter_);
-               logger->info() << "Solver uses " << memoryUsed << " MB memory, aborting optimization";
+               logger->info("Solver uses {} MB memory, aborting optimization", memoryUsed);
             }
          }
          if(minDualImprovement_ > 0 && curLowerBound_ - prevLowerBound_ < minDualImprovement_) {
-            logger->info() << "Dual improvement smaller than " << minDualImprovement_;
+            logger->info("Dual improvement smaller than {}", minDualImprovement_);
             remainingIter_ = std::min(INDEX(1),remainingIter_);
          }
 

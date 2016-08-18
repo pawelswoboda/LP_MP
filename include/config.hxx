@@ -140,6 +140,8 @@ namespace LP_MP {
       static auto array3 = [](const std::array<INDEX,3> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2]); };
       static auto array4 = [](const std::array<INDEX,4> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3]); };
    }
+
+
 }
 
 template class MinCost<LP_MP::SIGNED_INDEX,LP_MP::REAL>;
