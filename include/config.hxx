@@ -49,80 +49,24 @@ namespace LP_MP {
    constexpr SIGNED_INDEX variableMessageSize = -1;
 
 
-   // possibly make better class out of this having multiple fields|flags
-   /*
-   enum class LPVisitorReturnType {
-      ReparametrizeUniform,ReparametrizeLowerBoundUniform,ReparametrizeLowerBoundPrimalUniform,ReparametrizePrimalUniform,
-      ReparametrizeAnisotropic,ReparametrizeLowerBoundAnisotropic,ReparametrizeLowerBoundPrimalAnisotropic,ReparametrizePrimalAnisotropic,
-      Break,Error
-   };
-   bool Round(const LpVisitorReturnType t) {
-      if(t == ReparametrizeLowerBoundPrimalUniform ||
-         t == ReparametrizePrimalUniform || 
-         t == ReparametrizeLowerBoundPrimalAnisotropic || 
-         t == ReparametrizePrimalAnisotropic) {
-         return true;
-      } else {
-         return false;
-      }
-   }
-   LpVisitorReturnType RemoveRounding(const LpVisitorReturnType t) {
-      switch(t) {
-         case ReparametrizeUniform:
-            return ReparametrizeUniform;
-            break;
-         case ReparametrizeLowerBoundUniform:
-            return ReparametrizeLowerBoundUniform;
-            break;
-         case ReparametrizeLowerBoundPrimalUniform:
-            return ReparametrizeLowerBoundUniform
-            break;
-         case ReparametrizePrimalUniform:
-            return ReparametrizeUniform
-            break;
-         case ReparametrizeAnisotropic:
-            return ReparametrizeAnisotropic;
-            break;
-         case ReparametrizeLowerBoundAnisotropic:
-            return ReparametrizeLowerBoundAnisotropic;
-            break;
-         case ReparametrizeLowerBoundPrimalAnisotropic:
-            return ReparametrizeLowerBoundAnisotropic;
-            break;
-         case ReparametrizePrimalAnisotropic:
-            return ReparametrizeAnisotropic;
-            break;
-         case Break:
-            return Break;
-            break;
-         case Error:
-            return Error;
-            break;
-         default:
-            assert(false); // unknown case
-      }
-   }
-   */
    // do zrobienia: maybe put this into LP_MP.h
    enum class LPReparametrizationMode {Anisotropic, Uniform, Undefined};
 
+   LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
+   {
+      if(s == "uniform") {
+         return LPReparametrizationMode::Uniform;
+      } else if(s == "anisotropic") {
+         return LPReparametrizationMode::Anisotropic;
+      } else {
+         throw std::runtime_error("reparametrization mode " + s + " unknown");
+      }
+   }
+
    // steers optimization of LP solver. Is returned by visitor and processed by solver.
-   // do zrobienia: nicer design by implementing it via callbacks to solver.
    // also put this into solver.hxx
-   //template<typename SOLVER>
    class LpControl {
    public:
-      //void ScheduleTighten(const INDEX noConstraints, const REAL minDualIncrease) 
-      //{ 
-      //   tighten = true; 
-      //   tightenConstraints = noConstraints;
-      //   minDualIncrease = minDualIncrease; 
-      //}
-      //void SchedulePrimal() { computePrimal = true; }
-      //void SchedulaLowerBound() { computeLowerBound = true; }
-      //void SetReparametrization(LPReparametrizationMode r) { repam_ = r; }
-      //void End() { end = true; }
-   //private:
       LPReparametrizationMode repam = LPReparametrizationMode::Undefined;
       bool computePrimal = false;
       bool computeLowerBound = false;

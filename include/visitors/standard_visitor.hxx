@@ -74,20 +74,8 @@ namespace LP_MP {
             primalComputationInterval_ = primalComputationIntervalArg_.getValue();
             lowerBoundComputationInterval_ = lowerBoundComputationIntervalArg_.getValue();
 
-            if(standardReparametrizationArg_.getValue() == "anisotropic") {
-               standardReparametrization_ = LPReparametrizationMode::Anisotropic;
-            } else if(standardReparametrizationArg_.getValue() == "uniform") {
-               standardReparametrization_ = LPReparametrizationMode::Uniform;
-            } else {
-               throw std::runtime_error("reparametrization " + standardReparametrizationArg_.getValue() + " unknown");
-            }
-            if(roundingReparametrizationArg_.getValue() == "anisotropic") {
-               roundingReparametrization_ = LPReparametrizationMode::Anisotropic;
-            } else if(roundingReparametrizationArg_.getValue() == "uniform") {
-               roundingReparametrization_ = LPReparametrizationMode::Uniform;
-            } else {
-               throw std::runtime_error("reparametrization " + roundingReparametrizationArg_.getValue() + " unknown");
-            }
+            standardReparametrization_ = LPReparametrizationModeConvert( standardReparametrizationArg_.getValue() );
+            roundingReparametrization_ = LPReparametrizationModeConvert( roundingReparametrizationArg_.getValue() );
             protocolateConsole_ = protocolateConsoleArg_.getValue();
             protocolateFile_ = protocolateFileArg_.getValue();
          } catch (TCLAP::ArgException &e) {
@@ -147,9 +135,6 @@ namespace LP_MP {
                   (c.computeLowerBound ? fmt::format(", lower bound = {}", lowerBound) : ""), 
                   (c.computePrimal ? fmt::format(", upper bound = {}", primalBound) : ""), 
                   timeElapsed);
-               //<< (c.computeLowerBound ? fmt::format(", lower bound = {0}", lowerBound) : "")
-               //<< (c.computePrimal ? fmt::format(", upper bound = {0}", primalBound) : "")
-               //<< ", time elapsed = " << timeElapsed << " milliseconds";
          }
          if(c.end == true) {
             auto endTime = std::chrono::steady_clock::now();
@@ -281,24 +266,29 @@ namespace LP_MP {
          :
             BaseVisitorType(cmd),
             tightenArg_("","tighten","enable tightening",cmd,false),
+            tightenReparametrizationArg_("","tightenReparametrization","reparametrization mode used when tightening. Overrides primal computation reparametrization mode",false,"uniform","(uniform|anisotropic)",cmd),
             tightenIterationArg_("","tightenIteration","number of iterations after which tightening is performed for the first time, default = never",false,std::numeric_limits<INDEX>::max(),"positive integer", cmd),
             tightenIntervalArg_("","tightenInterval","number of iterations between tightenings",false,std::numeric_limits<INDEX>::max(),"positive integer", cmd),
-            tightenConstraintsMaxArg_("","tightenConstraintsMax","maximal number of constraints to be added during tightening",false,20,"positive integer"),
-            tightenConstraintsPercentageArg_("","tightenConstraintsPercentage","maximal number of constraints to be added during tightening as percentage of number of initial factors",false,0.01,"positive real"),
+            tightenConstraintsMaxArg_("","tightenConstraintsMax","maximal number of constraints to be added during tightening",false,20,"positive integer",cmd),
+            tightenConstraintsPercentageArg_("","tightenConstraintsPercentage","maximal number of constraints to be added during tightening as percentage of number of initial factors",false,0.01,"positive real",cmd),
             posConstraint_(),
             tightenMinDualIncreaseArg_("","tightenMinDualIncrease","minimum increase which additional constraint must guarantee",false,0.0,&posConstraint_, cmd),
             unitIntervalConstraint_(),
             tightenMinDualDecreaseFactorArg_("","tightenMinDualDecreaseFactor","factor by which to decrease minimum dual increase during tightening",false,0.5,&unitIntervalConstraint_, cmd)
       {
-         cmd.xorAdd(tightenConstraintsMaxArg_,tightenConstraintsPercentageArg_); // do zrobienia: this means that exactly one must be chosen. We want at most one to be chosen
+         //cmd.xorAdd(tightenConstraintsMaxArg_,tightenConstraintsPercentageArg_); // do zrobienia: this means that exactly one must be chosen. We want at most one to be chosen
       }
 
       LpControl begin() // called, after problem is constructed. 
       {
          try {
             tighten_ = tightenArg_.getValue();
+            tightenReparametrization_ = LPReparametrizationModeConvert( tightenReparametrizationArg_.getValue() );
             tightenIteration_ = tightenIterationArg_.getValue();
             tightenInterval_ = tightenIntervalArg_.getValue();
+            if(tightenConstraintsPercentageArg_.isSet() && tightenConstraintsMaxArg_.isSet()) {
+               throw std::runtime_error("Only one of tightenConstraintsPercentage and tightenConstraintsMax may be set");
+            }
             if(tightenConstraintsPercentageArg_.isSet()) {
                assert(false); // not supported due to not having lp information. Possibly change this
                tightenConstraintsPercentage_ = tightenConstraintsPercentageArg_.getValue();
@@ -327,14 +317,11 @@ namespace LP_MP {
          // do zrobienia: introduce tighten reparametrization
 
 
-         if(this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_) {
+         if((this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_) ||
+               (this->prevLowerBound_ >= lowerBound - tightenMinDualIncrease_)) {
             ret.tighten = true;
             ret.tightenConstraints = tightenConstraintsMax_;
-            lastTightenIteration_ = this->GetIter();
-         }
-         if(this->prevLowerBound_ >= lowerBound - tightenMinDualIncrease_) {
-            ret.tighten = true;
-            ret.tightenConstraints = tightenConstraintsMax_;
+            ret.repam = tightenReparametrization_;
             lastTightenIteration_ = this->GetIter();
          }
 
@@ -357,6 +344,7 @@ namespace LP_MP {
 
       protected:
       TCLAP::SwitchArg tightenArg_;
+      TCLAP::ValueArg<std::string> tightenReparametrizationArg_;
       TCLAP::ValueArg<INDEX> tightenIterationArg_; // after how many iterations shall tightening be performed
       TCLAP::ValueArg<INDEX> tightenIntervalArg_; // interval between tightening operations.
       TCLAP::ValueArg<INDEX> tightenConstraintsMaxArg_; // How many constraints to add in tightening maximally
@@ -367,6 +355,7 @@ namespace LP_MP {
       TCLAP::ValueArg<REAL> tightenMinDualDecreaseFactorArg_; 
 
       bool tighten_;
+      LPReparametrizationMode tightenReparametrization_;
       bool tightenInNextIteration_ = false;
       bool resumeInNextIteration_ = false;
       

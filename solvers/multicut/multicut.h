@@ -432,10 +432,14 @@ namespace MulticutH5Input {
       for(std::size_t e=0; e<liftedGraph.numberOfEdges(); ++e) {
          auto i = liftedGraph.vertexOfEdge(e,0);
          auto j = liftedGraph.vertexOfEdge(e,1);
-         //auto tmp = originalGraph.findEdge(i,j);
          if(originalGraph.findEdge(i,j).first) {
             mc.AddUnaryFactor( i, j, edgeValues[e] );
-         } else {
+         }
+      }
+      for(std::size_t e=0; e<liftedGraph.numberOfEdges(); ++e) {
+         auto i = liftedGraph.vertexOfEdge(e,0);
+         auto j = liftedGraph.vertexOfEdge(e,1);
+         if(!originalGraph.findEdge(i,j).first) {
             mc.AddLiftedUnaryFactor( i, j, edgeValues[e] );
          }
       }

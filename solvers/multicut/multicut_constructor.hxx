@@ -1275,6 +1275,7 @@ public:
 
    bool HasCutFactor(const CutId& cut) 
    {
+      assert(std::is_sorted(cut.begin(), cut.end()));
       return liftedMulticutFactors_.find(cut) != liftedMulticutFactors_.end();
    }
 
@@ -1287,10 +1288,12 @@ public:
       return std::find(edgeList.begin(),edgeList.end(),Edge({i1,i2})) != edgeList.end();
    }
 
-   // do zrobienia: probide AddCutFactor(const CutId& cut, const INDEX i1, const INDEX i2) as well
+   // do zrobienia: provide AddCutFactor(const CutId& cut, const INDEX i1, const INDEX i2) as well
    LiftedMulticutCutFactorContainer* AddCutFactor(const CutId& cut)
    {
       assert(!HasCutFactor(cut));
+      //std::cout << "Add cut with edges ";
+      //for(auto i : cut) { std::cout << "(" << std::get<0>(i) << "," << std::get<1>(i) << ");"; } std::cout << "\n";
       auto* f = new LiftedMulticutCutFactorContainer(LiftedMulticutCutFactor(cut.size()),std::vector<REAL>(cut.size(),0));
       MULTICUT_CONSTRUCTOR::pd_.GetLP().AddFactor(f);
       // connect the cut edges
@@ -1312,16 +1315,18 @@ public:
    void AddLiftedEdge(const CutId& cut, const INDEX i1, const INDEX i2)
    {
       assert(!HasLiftedEdgeInCutFactor(cut,i1,i2));
+      assert(HasCutFactor(cut));
       assert(i1<i2);
+      //std::cout << "Add lifted edge (" << i1 << "," << i2 << ") to cut\n";
       auto& c = liftedMulticutFactors_[cut];
       auto* f = c.first;
       auto& edgeList = c.second;
       auto* unaryFactor = MULTICUT_CONSTRUCTOR::GetUnaryFactor(i1,i2);
+      f->resize(f->size()+1,0.0);
+      f->GetFactor()->IncreaseLifted();
       auto* m = new LiftedEdgeLiftedMulticutFactorMessageContainer(LiftedEdgeLiftedMulticutFactorMessage(edgeList.size() + cut.size()), unaryFactor, f, 1); // do zrobienia: remove 1
       MULTICUT_CONSTRUCTOR::pd_.GetLP().AddMessage(m);
       c.second.push_back(Edge({i1,i2}));
-      f->resize(f->size()+1,0.0);
-      f->GetFactor()->IncreaseLifted();
    }
 
 
@@ -1543,6 +1548,7 @@ public:
                   }
                }
                assert(minCut.size() == noCutEdges);
+               std::sort(minCut.begin(),minCut.end()); // unique form of cut
 
                // check if minimum cut is already present
                if(!HasCutFactor(minCut)) {
@@ -1605,7 +1611,8 @@ public:
       std::vector<REAL> edgeValues;
       edgeValues.reserve(baseEdges_.size() + liftedEdges_.size());
 
-      std::cout << "no base edges = " << baseEdges_.size() << ", lifted edges = " << liftedEdges_.size() << "\n";
+      std::cout << "# base edges = " << baseEdges_.size() << ", # lifted edges = " << liftedEdges_.size() << "\n";
+      // do zrobienia: initalize the graph structures only once
       for(const auto& e : baseEdges_) {
          originalGraph.insertEdge(e.i, e.j);
          liftedGraph.insertEdge(e.i,e.j);

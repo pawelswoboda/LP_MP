@@ -204,11 +204,19 @@ public:
 
    void RegisterPrimal(PrimalSolutionStorage& p)
    {
+      //std::cout << "size of primal = " << p.size() << "\n";
       const REAL cost = lp_.EvaluatePrimal(p.begin());
-      std::cout << "primal cost = " << cost << "\n";
       if(cost <= bestPrimalCost_) {
-         bestPrimalCost_ = cost;
-         std::swap(bestPrimal_, p); // note: the best primal need not be admissible for the current lp, i.e. after tightening, the lp has changed, while best primal possibly has steyed the same.
+         // check constraints
+         if(CheckPrimalConsistency(p.begin())) {
+            //std::cout << "primal cost = " << cost << ",, solution improved, primal solution feasible. in register primal\n";
+            bestPrimalCost_ = cost;
+            std::swap(bestPrimal_, p); // note: the best primal need not be admissible for the current lp, i.e. after tightening, the lp has changed, while best primal possibly has steyed the same.
+         } else {
+            //std::cout << "primal cost = " << cost << ", solution improved, primal solution infeasible. in register primal\n";
+         }
+      } else {
+         //std::cout << "primal cost = " << cost << ", solution not improved. in register primal\n";
       }
    }
 protected:

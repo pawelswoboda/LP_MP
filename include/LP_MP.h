@@ -116,15 +116,15 @@ public:
    }
    INDEX AddFactor(FactorTypeAdapter* f)
    {
-      INDEX primalOffset;
-      if(f_.size() ==0) {
-         primalOffset = 0;
-      } else {
-         primalOffset = f_.back()->GetPrimalOffset() + f_.back()->PrimalSize();
-      }
+      //INDEX primalOffset;
+      //if(f_.size() ==0) {
+      //   primalOffset = 0;
+      //} else {
+      //   primalOffset = f_.back()->GetPrimalOffset() + f_.back()->PrimalSize();
+      //}
       //std::cout << "primal offset = " << primalOffset << "\n";
+      //f->SetPrimalOffset(primalOffset);
       f_.push_back(f);
-      f->SetPrimalOffset(primalOffset);
       return f_.size() - 1;
 
    }
@@ -165,6 +165,14 @@ public:
 
 
    void Init(); // must be called after all messages and factors have been added
+   void CalculatePrimalOffsets()
+   {
+      INDEX primalOffset = 0;
+      for(auto* f : f_) {
+         f->SetPrimalOffset(primalOffset);
+         primalOffset += f->PrimalSize();
+      }
+   }
    void SortFactors()
    {
       // assume that factorRel_ describe a DAG. Compute topological sorting
@@ -234,14 +242,9 @@ public:
    REAL EvaluatePrimal(PrimalSolutionStorage::Element primal) {
       return EvaluatePrimal(f_.begin(), f_.end(), primal);
    }
-   /*
-   REAL EvaluatePrimal(PrimalSolutionStorage::Element primal, const REAL primalBound  = std::numeric_limits<REAL>::infinity())
-   {
-      return EvaluatePrimal(primal, [](PrimalSolutionStorage::Element primal) { return true; }, primalBound);
-   }
-   */
    template<typename FACTOR_ITERATOR, typename PRIMAL_STORAGE_ITERATOR>
-      REAL EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_STORAGE_ITERATOR primalIt) const;
+   REAL EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PRIMAL_STORAGE_ITERATOR primalIt) const;
+
    void UpdateFactor(FactorTypeAdapter* f, const std::vector<REAL>& omega) // perform one block coordinate step for factor f
    {
       f->UpdateFactor(omega);
@@ -290,6 +293,8 @@ inline void LP::Init()
 {
    //std::cout << "Determining factor ordering." << std::endl;
    SortFactors();
+   CalculatePrimalOffsets();
+   // recalculation of primal offsets is needed whenever factors have been changed (factors can change size!) or have been added.
 
    // initialize three arrays of primal solutions corresponding to factors, one computed in the forward pass, one computed in the backward pass, and one with the best solution obtained so far
    //InitializePrimalVector(forwardOrdering_.begin(), forwardOrdering_.end(), forwardPrimal_);
