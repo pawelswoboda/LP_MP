@@ -10,9 +10,13 @@ OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" ON)
 OPTION(BUILD_EVALUATION "Build evaluation" ON)
 OPTION(BUILD_TESTS "Build tests" ON)
 
-# download external projects here
+OPTION(MULTICUT_DATASETS "Download multicut datasets" ON)
+if(MULTICUT_DATASETS)
+
+endif()
 
 if(USE_SUPERBUILD)
+   # download external projects here
    project (SUPERBUILD NONE)
    include(cmake/SuperBuild.cmake)
    return()

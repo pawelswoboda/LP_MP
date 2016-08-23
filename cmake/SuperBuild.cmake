@@ -73,18 +73,18 @@ ExternalProject_Get_Property(meta_Project install_dir)
 include_directories(${install_dir}/Dependencies/Source/meta_Project/include)
 
 # logging library
-list(APPEND DEPENDENCIES spdlog_Project)
-ExternalProject_Add(
-   spdlog_Project
-   GIT_REPOSITORY "https://github.com/gabime/spdlog.git"
-   GIT_TAG "master"
-   UPDATE_COMMAND ""
-   INSTALL_COMMAND ""
-   BUILD_COMMAND ""
-   CONFIGURE_COMMAND ""
-   )
-ExternalProject_Get_Property(spdlog_Project install_dir)
-include_directories(${install_dir}/Dependencies/Source/spdlog_Project/include)
+#list(APPEND DEPENDENCIES spdlog_Project)
+#ExternalProject_Add(
+#   spdlog_Project
+#   GIT_REPOSITORY "https://github.com/gabime/spdlog.git"
+#   GIT_TAG "master"
+#   UPDATE_COMMAND ""
+#   INSTALL_COMMAND ""
+#   BUILD_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(spdlog_Project install_dir)
+#include_directories(${install_dir}/Dependencies/Source/spdlog_Project/include)
 
 # unit tests framework
 list(APPEND DEPENDENCIES Catch_Project)

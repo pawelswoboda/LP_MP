@@ -8,9 +8,6 @@ using namespace LP_MP;
 using FMC_MULTICUT_ODD_CYCLE = FMC_MULTICUT<MessageSendingType::SRMP>;
 using FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL = FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>;
 
-// OpenGM input
-static auto OPENGM_MULTICUT_ODD_CYCLE_INPUT = MulticutOpenGmInput::ParseProblem<FMC_MULTICUT_ODD_CYCLE>;
-static auto OPENGM_MULTICUT_ODD_CYCLE_ODD_WHEEL_INPUT = MulticutOpenGmInput::ParseProblem<FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL>;
 
 
 std::string knott_150_prefix = "../../../solvers/multicut/knott-3d-150/";
@@ -75,38 +72,47 @@ int main()
 {
    // emulate command line options
    std::vector<std::string> options = {
-      {"--maxIter"}, {"1"},
+      {"--maxIter"}, {"10000"},
       {"--timeout"}, {"3600"},
       //{"--minDualImprovement"}, {"0.00001"},
-      {"--lowerBoundComputationInterval"}, {"1"},
+      //{"--minDualImprovement"}, {"0.00000001"}
+      {"--lowerBoundComputationInterval"}, {"10"},
       {"--primalComputationInterval"}, {"20"},
       {"--standardReparametrization"}, {"uniform"},
       {"--roundingReparametrization"}, {"uniform"},
-      //{"--overwriteDbRecord"}, // do zrobienia: possibly deactivate this. Then we do not overwrite
+      {"--overwriteDbRecord"}, // do zrobienia: possibly deactivate this. Then we do not overwrite
       {"--databaseFile"}, {"multicut.db"},
       {"--tighten"},
+      {"--tightenReparametrization"}, {"uniform"},
       {"--tightenIteration"}, {"1"},
       {"--tightenInterval"}, {"30"},
-      {"--tightenConstraintsPercentage"}, {"0.01"},
-      {"--tightenMinDualIncrease"}, {"1"},
-      {"--tightenMinDualDecreaseFactor"}, {"0.5"}
+      //{"--tightenMinDualIncrease"}, {"0.0"}
+      {"--tightenConstraintsPercentage"}, {"0.01"}
    };
 
-   using FMC_MULTICUT_ODD_CYCLE_VISITOR = SqliteVisitor<ProblemDecomposition<FMC_MULTICUT_ODD_CYCLE>,StandardTighteningVisitor>;
-   RunSolver<FMC_MULTICUT_ODD_CYCLE,FMC_MULTICUT_ODD_CYCLE_VISITOR>(OPENGM_MULTICUT_ODD_CYCLE_INPUT,knott_150_dataset,options,"knott-3d-150","MPMC-OC");
-   RunSolver<FMC_MULTICUT_ODD_CYCLE,FMC_MULTICUT_ODD_CYCLE_VISITOR>(OPENGM_MULTICUT_ODD_CYCLE_INPUT,knott_300_dataset,options,"knott-3d-300","MPMC-OC");
-   RunSolver<FMC_MULTICUT_ODD_CYCLE,FMC_MULTICUT_ODD_CYCLE_VISITOR>(OPENGM_MULTICUT_ODD_CYCLE_INPUT,knott_450_dataset,options,"knott-3d-450","MPMC-OC");
-   RunSolver<FMC_MULTICUT_ODD_CYCLE,FMC_MULTICUT_ODD_CYCLE_VISITOR>(OPENGM_MULTICUT_ODD_CYCLE_INPUT,knott_550_dataset,options,"knott-3d-550","MPMC-OC");
-   RunSolver<FMC_MULTICUT_ODD_CYCLE,FMC_MULTICUT_ODD_CYCLE_VISITOR>(OPENGM_MULTICUT_ODD_CYCLE_INPUT,modularity_clustering_dataset,options,"modularity_clustering","MPMC-OC");
+   {
+      using FMC = FMC_MULTICUT_ODD_CYCLE;
+      using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
+      using SolverType = ProblemConstructorRoundingSolver<FMC>;
+      static auto Input = MulticutOpenGmInput::ParseProblem<FMC>;
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-OC");
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-OC");
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-OC");
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-OC");
+      RunSolver<FMC,VisitorType,SolverType>(Input,modularity_clustering_dataset,options,"modularity_clustering","MPMC-OC");
+   }
+   return 0;
 
-   using FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL_VISITOR = SqliteVisitor<ProblemDecomposition<FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL>,StandardTighteningVisitor>;
-   RunSolver<FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL,FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL_VISITOR>(OPENGM_MULTICUT_ODD_CYCLE_ODD_WHEEL_INPUT,knott_150_dataset,options,"knott-3d-150","MPMC-OCOW");
-   RunSolver<FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL,FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL_VISITOR>(OPENGM_MULTICUT_ODD_CYCLE_ODD_WHEEL_INPUT,knott_300_dataset,options,"knott-3d-300","MPMC-OCOW");
-   RunSolver<FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL,FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL_VISITOR>(OPENGM_MULTICUT_ODD_CYCLE_ODD_WHEEL_INPUT,knott_450_dataset,options,"knott-3d-450","MPMC-OCOW");
-   RunSolver<FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL,FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL_VISITOR>(OPENGM_MULTICUT_ODD_CYCLE_ODD_WHEEL_INPUT,knott_550_dataset,options,"knott-3d-550","MPMC-OCOW");
-   RunSolver<FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL,FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL_VISITOR>(OPENGM_MULTICUT_ODD_CYCLE_ODD_WHEEL_INPUT,modularity_clustering_dataset,options,"modularity_clustering","MPMC-OCOW");
-
-
-   //FinishTikzFiles(graphMatchingDatasets);
+   {
+      using FMC = FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL;
+      using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
+      using SolverType = ProblemConstructorRoundingSolver<FMC>;
+      static auto Input = MulticutOpenGmInput::ParseProblem<FMC>;
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-OCOW");
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-OCOW");
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-OCOW");
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-OCOW");
+      RunSolver<FMC,VisitorType,SolverType>(Input,modularity_clustering_dataset,options,"modularity_clustering","MPMC-OCOW");
+   }
 }
 

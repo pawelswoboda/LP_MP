@@ -29,10 +29,9 @@ public:
    using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
    using FactorMessageConnection = FMC;
 
-   Solver(int argc, char** argv)
+   Solver()
       : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
       lp_(LP()),
-      //logger_();
       // do zrobienia: use perfect forwarding or std::piecewise_construct
       problemConstructor_(tupleMaker(ProblemDecompositionList{}, *this)),
       // build the standard command line arguments
@@ -59,9 +58,19 @@ public:
    virtual ~Solver() {}
 
    // needed, as more arguments could be passed to cmd_, and then we need to parse again
+   void Init(std::vector<std::string> arg)
+   { 
+      cmd_.parse(arg);
+      Init_();
+   }
+
    void Init(int argc, char** argv)
    {
       cmd_.parse(argc,argv);
+      Init_();
+   }
+   void Init_()
+   {
       try {  
          inputFile_ = inputFileArg_.getValue();
          outputFile_ = outputFileArg_.getValue();
@@ -150,7 +159,7 @@ public:
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
    Tighten(const INDEX maxConstraints) 
    {
-      spdlog::get("logger")->info("Tighten for pc no {}", PROBLEM_CONSTRUCTOR_NO);
+      std::cout << "Tighten for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
       const INDEX noCuttingPlaneAdded = std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).Tighten(maxConstraints);
       return noCuttingPlaneAdded + Tighten<PROBLEM_CONSTRUCTOR_NO+1>(maxConstraints);
    }
@@ -222,7 +231,7 @@ public:
 protected:
    TCLAP::CmdLine cmd_;
    LP lp_;
-   std::shared_ptr<spdlog::logger> logger_;
+   //std::shared_ptr<spdlog::logger> logger_;
    //typename FMC::ProblemDecompositionListHana problemConstructor_;
 
    tuple_from_list<ProblemDecompositionList> problemConstructor_;
@@ -290,7 +299,7 @@ public:
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < Solver<FMC>::ProblemDecompositionList::size() && CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
    ComputePrimal(PrimalSolutionStorage::Element primal)
    {
-      spdlog::get("logger")->info("ComputePrimal for pc no {}", PROBLEM_CONSTRUCTOR_NO);
+      std::cout << "ComputePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
       std::get<PROBLEM_CONSTRUCTOR_NO>(this->problemConstructor_).ComputePrimal(primal);
       return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
    }
@@ -324,15 +333,21 @@ template<typename SOLVER, typename VISITOR>
 class VisitorSolver : public SOLVER {
 public:
    VisitorSolver(int argc, char** argv) :
-      SOLVER(argc, argv),
+      SOLVER(),
       visitor_(SOLVER::cmd_)
    {
       this->Init(argc,argv);
    }
+   VisitorSolver(const std::vector<std::string>& arg) :
+      SOLVER(),
+      visitor_(SOLVER::cmd_)
+   {
+      this->Init(arg);
+   }
    int Solve()
    {
       this->lp_.Init();
-      LpControl c = visitor_.begin();
+      LpControl c = visitor_.begin(this->lp_);
       while(!c.end) {
          this->PreIterate(c);
          this->Iterate(c);

@@ -6,7 +6,6 @@ if(BUILD_TESTS)
       )
    enable_testing()
 
-
    add_executable(test_main test_main.cpp ${headers} ${sources})
    target_link_libraries(test_main Vc m stdc++ pthread )
 

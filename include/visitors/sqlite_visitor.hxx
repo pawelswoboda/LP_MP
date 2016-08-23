@@ -21,22 +21,34 @@ struct IterationStatistics {
 // this visitor connects to given sqlite database and writes or updates the runtime and iteration data of the algorithm.
 // do zrobienia: transaction support to avoid concurrent writing to database?
 // do zrobienia: error handling
-template<class PROBLEM_DECOMPOSITION, template<typename> class BASE_VISITOR = StandardVisitor>
-class SqliteVisitor : public BASE_VISITOR<PROBLEM_DECOMPOSITION> {
+template<class BASE_VISITOR = StandardVisitor>
+class SqliteVisitor : public BASE_VISITOR {
 
-   using BaseVisitor = BASE_VISITOR<PROBLEM_DECOMPOSITION>;
+   using BaseVisitor = BASE_VISITOR;
 
 public:
-   SqliteVisitor(TCLAP::CmdLine& cmd, PROBLEM_DECOMPOSITION& pd) 
+   SqliteVisitor(TCLAP::CmdLine& cmd) 
       :
-         BaseVisitor(cmd,pd),
-         pd_(pd),
+         BaseVisitor(cmd),
          databaseFileArg_("","databaseFile","sqlite database into which to protocolate runtime/iteration vs. primal/dual energy",true,"","file name",cmd),
          datasetNameArg_("","datasetName","name of dataset the input file belongs to",true,"","string",cmd),
          algorithmNameArg_("","algorithmName","name of algorithm",true,"","string",cmd),
+         algorithmFMCArg_("","algorithmFMC","FMC of algorithm", true, "", "string", cmd),
          overwriteDbRecordArg_("","overwriteDbRecord","if true: overwrite previous record. if false: if record is present, abort optimization",cmd,false),
          database_(nullptr)
-   {}
+   {
+      // get inputFile argument from cmd
+      auto argList = cmd.getArgList();
+      inputFileArg_ = nullptr;
+      for(auto arg : argList) {
+         if(arg->getName() == "inputFile") {
+            inputFileArg_ = arg;
+         }
+      }
+      if(inputFileArg_ == nullptr) {
+         throw std::runtime_error("input file argument must have been specified before");
+      }
+   }
 
    ~SqliteVisitor()
    {
@@ -278,13 +290,14 @@ public:
       return i>0;
    }
 
-   LPVisitorReturnType begin(const LP* lp) // called, after problem is constructed. 
+   LpControl begin(LP& lp) // called, after problem is constructed. 
    {
-      const auto ret = BaseVisitor::begin(lp);
+      auto ret = BaseVisitor::begin(lp);
       try {
          databaseFile_ = databaseFileArg_.getValue();
          datasetName_ = datasetNameArg_.getValue();
          algorithmName_ = algorithmNameArg_.getValue();
+         algorithmFMC_ = algorithmFMCArg_.getValue();
          overwriteDbRecord_ = overwriteDbRecordArg_.getValue();
       } catch (TCLAP::ArgException &e) {
          std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
@@ -293,13 +306,14 @@ public:
 
       if(sqlite3_open(databaseFile_.c_str(), &database_) != SQLITE_OK) {
          std::cout << "Could not open database file " << databaseFile_ << ", error: " << sqlite3_errmsg(database_) << "\n";
-         return LPVisitorReturnType::Error;
+         ret.error = true;
+         return ret;
       }
 
       BuildDb();
 
-      const std::string inputFile = ExtractFilename(pd_.GetInputFileName());
-      const std::string algorithmFMC_(PROBLEM_DECOMPOSITION::FactorMessageConnection::name);
+      const std::string inputFile = ExtractFilename( dynamic_cast<TCLAP::ValueArg<std::string>*>(inputFileArg_)->getValue() ); // this is very bad design!
+      std::cout << "input file = " << inputFile << "\n";
 
       solver_id_ = GetSolverId(algorithmName_, algorithmFMC_);
       dataset_id_ = GetDatasetId(datasetName_);
@@ -307,25 +321,22 @@ public:
 
       if(!overwriteDbRecord_ && CheckIterationsPresent(solver_id_, instance_id_)) { 
          std::cout << "Not performing optimization, as instance was already optimized with same algorithm\n";
-         return LPVisitorReturnType::Break; 
+         ret.end = true;
       }
 
       return ret;
    }
 
-   template<LPVisitorReturnType LP_STATE>
-   LPVisitorReturnType visit(LP* lp)
+   LpControl visit(LpControl c, const REAL lowerBound, const REAL upperBound)
    {
-      auto ret_state = this->BaseVisitor::template visit<LP_STATE>(lp);
+      auto ret_state = this->BaseVisitor::visit(c, lowerBound, upperBound);
       
-      if(!(LP_STATE == LPVisitorReturnType::Error || LP_STATE == LPVisitorReturnType::Break)) {
-         const REAL lowerBound = lp->BestLowerBound();
-         const REAL upperBound = lp->BestPrimalBound();
+      if(!(c.error || c.end)) {
          const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - BaseVisitor::GetBeginTime()).count();
          const INDEX curIter = BaseVisitor::GetIter();
          iterationStatistics_.push_back({curIter,timeElapsed,lowerBound,upperBound});
       }
-      if(LP_STATE == LPVisitorReturnType::Break) {
+      if(c.end) {
          std::cout << "write bounds to database\n";
          WriteBounds(iterationStatistics_);
       }
@@ -363,15 +374,17 @@ private:
    TCLAP::ValueArg<std::string> databaseFileArg_;
    TCLAP::ValueArg<std::string> datasetNameArg_;
    TCLAP::ValueArg<std::string> algorithmNameArg_; // custom name given for algorithm, to differentiate between same algorithm with differing options
+   TCLAP::ValueArg<std::string> algorithmFMCArg_; 
    TCLAP::SwitchArg overwriteDbRecordArg_;
 
    std::string databaseFile_;
    std::string datasetName_;
    std::string algorithmName_;
+   std::string algorithmFMC_;
    bool overwriteDbRecord_;
+   TCLAP::Arg* inputFileArg_;
 
    std::vector<IterationStatistics> iterationStatistics_;
-   PROBLEM_DECOMPOSITION& pd_;
 
    sqlite3* database_;
    int solver_id_;

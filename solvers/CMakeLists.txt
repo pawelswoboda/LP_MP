@@ -1,4 +1,3 @@
-
 if(BUILD_GRAPH_MATCHING)
    add_subdirectory(graph_matching)
 endif()

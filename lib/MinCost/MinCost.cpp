@@ -328,4 +328,4 @@ template <typename FlowType, typename CostType>
 
 #endif
 
-#include "config.hxx"
+#include "../../include/config.hxx"

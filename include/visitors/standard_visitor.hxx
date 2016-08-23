@@ -6,7 +6,7 @@
 #include "mem_use.c"
 #include "tclap/CmdLine.h"
 #include <chrono>
-#include "spdlog/spdlog.h"
+//#include "spdlog/spdlog.h"
 
 /*
  minimal visitor class:
@@ -62,7 +62,7 @@ namespace LP_MP {
             primalTime_(0)
       {}
 
-      LpControl begin() // called, after problem is constructed. 
+      LpControl begin(LP& lp) // called, after problem is constructed. 
       {
          try {
             maxIter_ = maxIterArg_.getValue();
@@ -84,6 +84,7 @@ namespace LP_MP {
          }
          //curLowerBound_ = lp->LowerBound();
 
+         /*
          try {
             std::vector<spdlog::sink_ptr> sinks;
             if(protocolateConsole_) {
@@ -99,6 +100,7 @@ namespace LP_MP {
             std::cerr << "instantiating logger class failed: " << ex.what();
             throw std::runtime_error("could not instantiate logger");
          }
+         */
 
 
          //if( ! (standardReparametrization_ == "anisotropic" || standardReparametrization_ == "uniform") ) {
@@ -109,7 +111,7 @@ namespace LP_MP {
          //}
 
          //spdlog::get("logger")->info() << "Initial number of factors = " << lp->GetNumberOfFactors();
-         spdlog::get("logger")->info("Initial lower bound before optimizing = {}", curLowerBound_);
+         std::cout << "Initial lower bound before optimizing = " << curLowerBound_ << "\n";
          beginTime_ = std::chrono::steady_clock::now();
 
 
@@ -125,20 +127,23 @@ namespace LP_MP {
       LpControl visit(const LpControl c, const REAL lowerBound, const REAL primalBound)
       {
          const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - beginTime_).count();
-         auto logger = spdlog::get("logger");
 
          // first output based on what lp solver did in last iteration
          if(c.computePrimal == false && c.computeLowerBound == false) {
             // output nothing
          } else {
-            logger->info("iteration = {}{}{}, time elapsed = {}", curIter_, 
-                  (c.computeLowerBound ? fmt::format(", lower bound = {}", lowerBound) : ""), 
-                  (c.computePrimal ? fmt::format(", upper bound = {}", primalBound) : ""), 
-                  timeElapsed);
+            std::cout << "iteration = " << curIter_;
+            if(c.computeLowerBound) {
+               std::cout << ", lower bound = " << lowerBound;
+            }
+            if(c.computePrimal) {
+               std::cout << ", upper bound = " << primalBound;
+            }
+            std::cout << ", time elapsed = " << timeElapsed << "\n";
          }
          if(c.end == true) {
             auto endTime = std::chrono::steady_clock::now();
-            logger->info("Optimization took {} milliseconds and {} iterations.", std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count(), curIter_);
+            std::cout << "Optimization took " <<  std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations.\n";
          } else if(c.error == true) {
             assert(false); // this case is currently not handled
          }
@@ -154,29 +159,29 @@ namespace LP_MP {
          }
          // check if optimization has to be terminated
          if(remainingIter_ == 0) {
-            logger->info("One iteration remaining");
+            std::cout << "One iteration remaining\n";
             ret.end = true;
             return ret;
          } 
          if(primalBound <= lowerBound + eps) {
             assert(primalBound + eps >= lowerBound);
-            logger->info("Primal cost {} greater equal lower bound {}", primalBound, lowerBound);
+            std::cout << "Primal cost " << primalBound << " greater equal lower bound " << lowerBound << "\n";
             ret.end = true;
             return ret;
          }
          if(timeout_ != std::numeric_limits<REAL>::max() && timeElapsed/1000 >= timeout_) {
-            logger->info("Timeout reached after {} seconds", timeElapsed);
+            std::cout << "Timeout reached after " << timeElapsed << " seconds\n";
             remainingIter_ = std::min(INDEX(1),remainingIter_);
          }
          if(maxMemory_ > 0) {
             const INDEX memoryUsed = memory_used()/(1024*1024);
             if(maxMemory_ < memoryUsed) {
                remainingIter_ = std::min(INDEX(1),remainingIter_);
-               logger->info("Solver uses {} MB memory, aborting optimization", memoryUsed);
+               std::cout << "Solver uses " << memoryUsed << " MB memory, aborting optimization\n";
             }
          }
          if(minDualImprovement_ > 0 && curLowerBound_ - prevLowerBound_ < minDualImprovement_) {
-            logger->info("Dual improvement smaller than {}", minDualImprovement_);
+            std::cout << "Dual improvement smaller than " << minDualImprovement_ << "\n";
             remainingIter_ = std::min(INDEX(1),remainingIter_);
          }
 
@@ -279,7 +284,7 @@ namespace LP_MP {
          //cmd.xorAdd(tightenConstraintsMaxArg_,tightenConstraintsPercentageArg_); // do zrobienia: this means that exactly one must be chosen. We want at most one to be chosen
       }
 
-      LpControl begin() // called, after problem is constructed. 
+      LpControl begin(LP& lp) // called, after problem is constructed. 
       {
          try {
             tighten_ = tightenArg_.getValue();
@@ -290,9 +295,8 @@ namespace LP_MP {
                throw std::runtime_error("Only one of tightenConstraintsPercentage and tightenConstraintsMax may be set");
             }
             if(tightenConstraintsPercentageArg_.isSet()) {
-               assert(false); // not supported due to not having lp information. Possibly change this
                tightenConstraintsPercentage_ = tightenConstraintsPercentageArg_.getValue();
-              // tightenConstraintsMax_ = INDEX(tightenConstraintsPercentage_ * lp->GetNumberOfFactors());
+               tightenConstraintsMax_ = INDEX(tightenConstraintsPercentage_ * lp.GetNumberOfFactors());
             } else if(tightenConstraintsMaxArg_.isSet()) {
                tightenConstraintsMax_ = tightenConstraintsMaxArg_.getValue();
             } else if(tightenArg_.isSet()) {
@@ -305,7 +309,7 @@ namespace LP_MP {
             exit(1);
          }
 
-         return BaseVisitorType::begin();
+         return BaseVisitorType::begin(lp);
       }
 
       // the default
@@ -313,12 +317,11 @@ namespace LP_MP {
       LpControl visit(const LpControl c, const REAL lowerBound, const REAL primalBound)
       {
          auto ret = BaseVisitorType::visit(c, lowerBound, primalBound);
-         auto logger = spdlog::get("logger");
          // do zrobienia: introduce tighten reparametrization
 
 
          if((this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_) ||
-               (this->prevLowerBound_ >= lowerBound - tightenMinDualIncrease_)) {
+               (tightenMinDualIncreaseArg_.isSet() && this->prevLowerBound_ >= lowerBound - tightenMinDualIncrease_)) {
             ret.tighten = true;
             ret.tightenConstraints = tightenConstraintsMax_;
             ret.repam = tightenReparametrization_;
