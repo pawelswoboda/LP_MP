@@ -94,6 +94,11 @@ namespace LP_MP {
   template<typename RIGHT_FACTOR, typename REPAM_ARRAY, typename MSG>
   void DiscreteTomographyMessageCountingPairwise::MakeRightFactorUniform(RIGHT_FACTOR* f_right, const REPAM_ARRAY& repam_right, MSG& msg, const REAL omega)
   {
+     // this is not valid in general, but with overall positive costs everywhere it should hold
+     for(INDEX i=0; i<repam_right.size(); ++i) {
+        assert(repam_right[i] >= - eps); 
+     }
+     
      assert(msg.size() == pow(numberOfLabels_,2));
      assert(repam_right.size() == ((*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up) +
               (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left) +
@@ -165,6 +170,11 @@ namespace LP_MP {
                  f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
                  f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
                  msg_dim] > -std::numeric_limits<REAL>::max());
+
+    assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+          f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+          f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+          msg_dim] >= -eps); // valid only for positive factors
     
     if( std::isfinite(msg) ){
       repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
@@ -175,6 +185,11 @@ namespace LP_MP {
                    f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
                    f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
                    msg_dim] > -std::numeric_limits<REAL>::max());
+
+      assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+            f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+            f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+            msg_dim] >= -eps); // valid only for positive factors
     }
     else{
       repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) +

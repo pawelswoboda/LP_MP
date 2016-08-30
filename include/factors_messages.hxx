@@ -338,6 +338,16 @@ struct MessageStorageSelector<SIZE, true> {
    using type = typename std::conditional<(SIZE >= 0), FixedSizeMessageStorage<INDEX(SIZE)>, VariableSizeMessageStorage>::type;
 };
 
+
+// Class holding message and left and right factor
+// We simulate holding two messages, one for the left and one for the right factor, each being the negative of the other one. Physically, we just hold one.
+// The following sign convention must be followed: 
+// {Left|Right}Repam use +
+// message computation uses -
+// Dispatch of signs to {Left|Right}Repam:
+// Left | Right
+//  -   |   +
+//
 template<typename MESSAGE_TYPE, 
          INDEX LEFT_FACTOR_NO, INDEX RIGHT_FACTOR_NO, SIGNED_INDEX NO_OF_LEFT_FACTORS, SIGNED_INDEX NO_OF_RIGHT_FACTORS,
          SIGNED_INDEX MESSAGE_SIZE, 
@@ -639,7 +649,7 @@ public:
    template<bool IsAssignable = IsAssignableLeft()>
    typename std::enable_if<IsAssignable == true>::type
    RepamLeft(const REAL diff, const INDEX dim) {
-      msg_op_.RepamLeft(*leftFactor_, -diff, dim); // note: in right, we reparametrize by +diff, here by -diff
+      msg_op_.RepamLeft(*leftFactor_, diff, dim); // note: in right, we reparametrize by +diff, here by -diff
    }
    template<bool IsAssignable = IsAssignableLeft()>
    typename std::enable_if<IsAssignable == false>::type
@@ -722,14 +732,16 @@ public:
       */
       MsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
       {
-         if(CHIRALITY == Chirality::right) {
+         if(CHIRALITY == Chirality::right) { // message is computed by right factor
             static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) -= x;
-            msg_->RepamLeft( -x, dim_);
-            msg_->RepamRight(-x, dim_);
-         } else if (CHIRALITY == Chirality::left) {
-            static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) += x;
             msg_->RepamLeft( +x, dim_);
+            msg_->RepamRight(-x, dim_);
+         } else if (CHIRALITY == Chirality::left) { // message is computed by left factor
+            static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) += x;
+            msg_->RepamLeft(  -x, dim_);
             msg_->RepamRight( +x, dim_);
+            //msg_->RepamLeft( +x, dim_);
+            //msg_->RepamRight( +x, dim_);
          } else {
             assert(false);
          }
@@ -737,14 +749,17 @@ public:
       }
       MsgVal& operator+=(const REAL x) __attribute__ ((always_inline))
       {
-         if(CHIRALITY == Chirality::right) {
+         assert(false);
+         if(CHIRALITY == Chirality::right) { // message is computed by right factor
             static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) += x;
             msg_->RepamLeft( x, dim_);
             msg_->RepamRight( x, dim_);
-         } else if(CHIRALITY == Chirality::left) {
+         } else if(CHIRALITY == Chirality::left) { // message is computed by left factor
             static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) -= x;
-            msg_->RepamLeft( -x, dim_);
-            msg_->RepamRight( -x, dim_);
+            msg_->RepamLeft( x, dim_);
+            msg_->RepamRight( x, dim_);
+            //msg_->RepamLeft( -x, dim_);
+            //msg_->RepamRight( -x, dim_);
          } else {
             assert(false);
          }
@@ -780,9 +795,9 @@ public:
 
       RestrictedMsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
       {
-         if(CHIRALITY == Chirality::right) {
+         if(CHIRALITY == Chirality::right) { // message is computed by right factor
             msg_->RepamRight(-x, dim_);
-         } else if (CHIRALITY == Chirality::left) {
+         } else if (CHIRALITY == Chirality::left) { // message is computed by left factor
             msg_->RepamLeft(-x, dim_);
          } else {
             assert(false);
@@ -792,6 +807,7 @@ public:
 
       RestrictedMsgVal& operator+=(const REAL x) __attribute__ ((always_inline))
       {
+         assert(false);
          if(CHIRALITY == Chirality::right) {
             msg_->RepamRight(+x, dim_);
          } else if(CHIRALITY == Chirality::left) {

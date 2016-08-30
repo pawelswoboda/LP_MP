@@ -31,12 +31,14 @@ namespace LP_MP{
     template<typename REPAM_ARRAY>
     REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const; //--required
 
+    INDEX size() const;
+    
     //void WritePrimal(const PrimalSolutionStorage::Element, std::ofstream& fs) const; //
 
     // --------------------
     // custom public methods 
     
-    INDEX getSize(NODE);
+    INDEX getSize(NODE) const;
 
     template<typename REPAM_ARRAY>
     REAL eval(INDEX,INDEX,INDEX,const REPAM_ARRAY& repam);
@@ -70,8 +72,16 @@ namespace LP_MP{
       { return std::numeric_limits<REAL>::infinity(); }
     
   }
+
+  INDEX DiscreteTomographyFactorCounting::size() const {
+       return getSize(DiscreteTomographyFactorCounting::NODE::up) 
+          + getSize(DiscreteTomographyFactorCounting::NODE::left) 
+          + getSize(DiscreteTomographyFactorCounting::NODE::right) 
+          + getSize(DiscreteTomographyFactorCounting::NODE::reg); 
+    }
+
   
-  INDEX DiscreteTomographyFactorCounting::getSize(NODE n){
+  INDEX DiscreteTomographyFactorCounting::getSize(NODE n) const {
     if( n == NODE::left ){ return leftSize_;  }
     if( n == NODE::right ){ return rightSize_;  }
     if( n == NODE::up ){ return upSize_;  }
