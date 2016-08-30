@@ -55,6 +55,7 @@ namespace LP_MP {
             ///////////////
             posConstraint_(),
             minDualImprovementArg_("","minDualImprovement","minimum dual improvement between iterations of LP_MP",false,0.0,&posConstraint_,cmd),
+            minDualImprovementIntervalArg_("","minDualImprovementInterval","the interval between which at least minimum dual improvement must occur",false,10,"positive integer",cmd),
             standardReparametrizationArg_("","standardReparametrization","mode of reparametrization: {anisotropic,uniform}",false,"anisotropic","{anisotropic|uniform}",cmd),
             roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution: {anisotropic|uniform}",false,"uniform","{anisotropic|uniform}",cmd),
             protocolateConsoleArg_("","protocolateConsole","protocolate on console (stdout)",cmd,false),
@@ -69,6 +70,7 @@ namespace LP_MP {
             maxMemory_ = maxMemoryArg_.getValue();
             remainingIter_ = maxIter_;
             minDualImprovement_ = minDualImprovementArg_.getValue();
+            minDualImprovementInterval_ = minDualImprovementIntervalArg_.getValue();
             timeout_ = timeoutArg_.getValue();
             //boundComputationInterval_ = boundComputationIntervalArg_.getValue();
             primalComputationInterval_ = primalComputationIntervalArg_.getValue();
@@ -126,6 +128,7 @@ namespace LP_MP {
       //template<typename SOLVER>
       LpControl visit(const LpControl c, const REAL lowerBound, const REAL primalBound)
       {
+         lowerBound_.push_back(lowerBound); // rename to lowerBoundHistory_
          const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - beginTime_).count();
 
          // first output based on what lp solver did in last iteration
@@ -180,9 +183,12 @@ namespace LP_MP {
                std::cout << "Solver uses " << memoryUsed << " MB memory, aborting optimization\n";
             }
          }
-         if(minDualImprovement_ > 0 && curLowerBound_ - prevLowerBound_ < minDualImprovement_) {
-            std::cout << "Dual improvement smaller than " << minDualImprovement_ << "\n";
-            remainingIter_ = std::min(INDEX(1),remainingIter_);
+         if(c.computeLowerBound && curIter_ >= minDualImprovementInterval_ && minDualImprovementArg_.isSet()) {
+            const REAL prevLowerBound = lowerBound_[lowerBound_.size() - minDualImprovementInterval_];
+            if(minDualImprovement_ > 0 && curLowerBound_ - prevLowerBound < minDualImprovement_) {
+               std::cout << "Dual improvement smaller than " << minDualImprovement_ << " after " << minDualImprovementInterval_ << ", terminating optimization\n";
+               remainingIter_ = std::min(INDEX(1),remainingIter_);
+            }
          }
 
          if(remainingIter_ == 1) {
@@ -225,6 +231,7 @@ namespace LP_MP {
       TCLAP::ValueArg<INDEX> lowerBoundComputationIntervalArg_;
       PositiveRealConstraint posConstraint_;
       TCLAP::ValueArg<REAL> minDualImprovementArg_;
+      TCLAP::ValueArg<INDEX> minDualImprovementIntervalArg_;
       TCLAP::ValueArg<std::string> standardReparametrizationArg_;
       TCLAP::ValueArg<std::string> roundingReparametrizationArg_;
       TCLAP::ValueArg<std::string> protocolateFileArg_;
@@ -238,6 +245,8 @@ namespace LP_MP {
       INDEX primalComputationInterval_;
       INDEX lowerBoundComputationInterval_;
       REAL minDualImprovement_;
+      INDEX minDualImprovementInterval_;
+      std::vector<REAL> lowerBound_; // do zrobienia: possibly make circular list out of this
       std::string protocolateFile_;
       // do zrobienia: make enum for reparametrization mode
       LPReparametrizationMode standardReparametrization_;
@@ -277,6 +286,7 @@ namespace LP_MP {
             tightenConstraintsMaxArg_("","tightenConstraintsMax","maximal number of constraints to be added during tightening",false,20,"positive integer",cmd),
             tightenConstraintsPercentageArg_("","tightenConstraintsPercentage","maximal number of constraints to be added during tightening as percentage of number of initial factors",false,0.01,"positive real",cmd),
             posConstraint_(),
+            // do zrobienia: remove minDualIncrease and minDualDecreaseFactor
             tightenMinDualIncreaseArg_("","tightenMinDualIncrease","minimum increase which additional constraint must guarantee",false,0.0,&posConstraint_, cmd),
             unitIntervalConstraint_(),
             tightenMinDualDecreaseFactorArg_("","tightenMinDualDecreaseFactor","factor by which to decrease minimum dual increase during tightening",false,0.5,&unitIntervalConstraint_, cmd)

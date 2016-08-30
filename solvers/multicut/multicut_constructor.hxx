@@ -49,7 +49,7 @@ protected:
    struct Arc {
 		Node* head;
 		Arc* next;
-      REAL cost; // not needed for Bfs.
+      REAL cost; 
 		Arc* prev; // do zrobienia: not needed currently
       Arc* sister; // do zrobienia: not really needed
    };
@@ -287,7 +287,8 @@ protected:
       }
 
       // do bfs with thresholded costs and iteratively lower threshold until enough cycles are found
-      std::tuple<REAL,std::vector<INDEX>> FindPath(const INDEX startNode, const INDEX endNode, const Graph& g) 
+      // only consider edges that have cost equal or larger than th
+      std::tuple<REAL,std::vector<INDEX>> FindPath(const INDEX startNode, const INDEX endNode, const Graph& g, const REAL th = 0) 
       {
          Reset();
          std::queue<INDEX> visit; // do zrobienia: do not allocate each time, make visit a member
@@ -304,43 +305,47 @@ protected:
 
             if(Labelled1(i)) {
                for(Arc* a=g[i].first; a!=nullptr; a = a->next) { // do zrobienia: make iteration out of this?
-                  Node* head = a->head;
-                  const INDEX j = g[head];
-                  if(!Labelled(j)) {
-                     visit.push(j);
-                     Parent(j) = i;
-                     Label1(j);
-                  } else if(Labelled2(j)) { // shortest path found
-                     // trace bacj path from j to endNode and from i to startNode
-                     std::vector<INDEX> startPath = TracePath(i);
-                     std::vector<INDEX> endPath = TracePath(j);
-                     std::reverse(endPath.begin(), endPath.end());
-                     startPath.insert( startPath.end(), endPath.begin(), endPath.end());
-                     return std::make_tuple(0.0, startPath);
+                  if(a->cost >= th) {
+                     Node* head = a->head;
+                     const INDEX j = g[head];
+                     if(!Labelled(j)) {
+                        visit.push(j);
+                        Parent(j) = i;
+                        Label1(j);
+                     } else if(Labelled2(j)) { // shortest path found
+                        // trace bacj path from j to endNode and from i to startNode
+                        std::vector<INDEX> startPath = TracePath(i);
+                        std::vector<INDEX> endPath = TracePath(j);
+                        std::reverse(endPath.begin(), endPath.end());
+                        startPath.insert( startPath.end(), endPath.begin(), endPath.end());
+                        return std::make_tuple(th, startPath);
+                     }
                   }
                }
             } else {
                assert(Labelled2(i));
                for(Arc* a=g[i].first; a!=nullptr; a = a->next) { // do zrobienia: make iteration out of this?
-                  Node* head = a->head;
-                  const INDEX j = g[head];
-                  if(!Labelled(j)) {
-                     visit.push(j);
-                     Parent(j) = i;
-                     Label2(j);
-                  } else if(Labelled1(j)) { // shortest path found
-                     // trace bacj path from j to endNode and from i to startNode
-                     std::vector<INDEX> startPath = TracePath(j);
-                     std::vector<INDEX> endPath = TracePath(i);
-                     std::reverse(endPath.begin(), endPath.end());
-                     startPath.insert( startPath.end(), endPath.begin(), endPath.end());
-                     return std::make_tuple(0.0, startPath);
+                  if(a->cost >= th) {
+                     Node* head = a->head;
+                     const INDEX j = g[head];
+                     if(!Labelled(j)) {
+                        visit.push(j);
+                        Parent(j) = i;
+                        Label2(j);
+                     } else if(Labelled1(j)) { // shortest path found
+                        // trace bacj path from j to endNode and from i to startNode
+                        std::vector<INDEX> startPath = TracePath(j);
+                        std::vector<INDEX> endPath = TracePath(i);
+                        std::reverse(endPath.begin(), endPath.end());
+                        startPath.insert( startPath.end(), endPath.begin(), endPath.end());
+                        return std::make_tuple(th, startPath);
+                     }
                   }
                }
             }
          }
-         return std::make_tuple(0.0,std::vector<INDEX>(0));
-   }
+         return std::make_tuple(th,std::vector<INDEX>(0));
+      }
 
 private:
    std::vector<Item> d;
@@ -477,6 +482,7 @@ MulticutConstructor(Solver<FMC>& pd)
    {
       return std::make_tuple(std::min(i1,i2), std::max(i1,i2));
    }
+
    INDEX AddCycle(std::vector<INDEX> cycle)
    {
       //return true, if cycle was not already present
@@ -516,34 +522,187 @@ MulticutConstructor(Solver<FMC>& pd)
    // search for cycles to add such that coordinate ascent will be possible
    INDEX Tighten(const INDEX maxCuttingPlanesToAdd)
    {
+      const INDEX tripletsAdded = FindViolatedCycles(maxCuttingPlanesToAdd);
+      std::cout << "Added " << tripletsAdded << " triplet(s) out of " <<  maxCuttingPlanesToAdd << "\n";
+      return tripletsAdded;
+      //if(tripletsAdded == 0) {
+      //   const INDEX tripletsAdded_old = FindNegativeCycles(1e-8, maxCuttingPlanesToAdd);
+      //   std::cout << "Added " << tripletsAdded_old << " triplet(s) out of " <<  maxCuttingPlanesToAdd << " by old method,error\n";
+      //   return tripletsAdded_old + tripletsAdded;
+      //}
       //const INDEX tripletsAdded = FindNegativeCycles(minDualIncrease,maxCuttingPlanesToAdd);
-      const REAL th = FindNegativeCycleThreshold(maxCuttingPlanesToAdd);
-      if(th >= 0.0) { // otherwise no constraint can be added
-         const INDEX tripletsAdded = FindNegativeCycles(th,maxCuttingPlanesToAdd);
-         std::cout << "Added " << tripletsAdded << " triplet(s) out of " <<  maxCuttingPlanesToAdd << "\n";
-         return tripletsAdded;
-      } else {
-         std::cout << "could not find any violated cycle\n";
-         return 0;
-      }
+      //const REAL th = FindNegativeCycleThreshold(maxCuttingPlanesToAdd);
+      //if(th >= 0.0) { // otherwise no constraint can be added
+      //   const INDEX tripletsAdded = FindNegativeCycles(th,maxCuttingPlanesToAdd);
+      //   std::cout << "Added " << tripletsAdded << " triplet(s) out of " <<  maxCuttingPlanesToAdd << "\n";
+      //   return tripletsAdded;
+      //} else {
+      //   std::cout << "could not find any violated cycle\n";
+      //   return 0;
+      //}
    }
 
-   // find threshold such that at least maxTripletsToAdd factors will be included. Assumes that graph is connected.
-   REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
-   {
-      // do zrobienia: reuse data structures in constraint search. make one function.
-      UnionFind uf(noNodes_);
-      std::vector<std::tuple<INDEX,INDEX,REAL> > posEdges;
-      std::vector<std::list<std::tuple<INDEX,REAL>>> negEdges(this->noNodes_); // forward_list would also be possible, but is slower.
-      // sort edges 
-      for(auto& it : unaryFactors_) {
-         const REAL v = it.second->operator[](0);
-         const INDEX i = std::get<0>(it.first);
-         const INDEX j = std::get<1>(it.first);
-         if(v < 0) {
-            negEdges[i].push_front(std::make_tuple(j,v));
-            negEdges[j].push_front(std::make_tuple(i,v));
-         } else if(v > 0) {
+   // search for cycles in descending order of guaranteed dual increase.
+   // rename to FindViolatedCycles
+   INDEX FindViolatedCycles(const INDEX maxTripletsToAdd)
+{
+   assert(maxTripletsToAdd > 0);
+   // keep here negative edge and associated maximal decrease that we can achieve using it in cycle.
+   std::multimap<REAL,std::array<INDEX,2>,std::greater<REAL>> negEdgeCandidates; // possibly must be multimap. Order with descending keys
+
+   // initialize data structures for violated cycle search
+   UnionFind uf(noNodes_);
+   std::vector<std::tuple<INDEX,INDEX,REAL> > posEdges;
+   std::vector<std::list<std::tuple<INDEX,REAL,INDEX,INDEX>>> negEdges(this->noNodes_); // forward_list would also be possible, but is slower. node entries here are the labels of connected components. Original endpoints are recorded in last two indexes.
+   Graph posEdgesGraph(noNodes_,unaryFactors_.size()); // graph consisting of positive edges
+   // sort edges 
+   for(auto& it : unaryFactors_) {
+      const REAL v = it.second->operator[](0);
+      const INDEX i = std::get<0>(it.first);
+      const INDEX j = std::get<1>(it.first);
+      assert(i<j);
+      if(v < 0) {
+         negEdges[i].push_front(std::make_tuple(j,v,i,j));
+         negEdges[j].push_front(std::make_tuple(i,v,i,j));
+      } else if(v > 0) {
+         posEdges.push_back(std::make_tuple(i,j,v));
+         posEdgesGraph.AddEdge(i,j,v);
+      }
+   }
+   BfsData mp(posEdgesGraph);
+
+   std::sort(posEdges.begin(), posEdges.end(), [](const std::tuple<INDEX,INDEX,REAL>& e1, const std::tuple<INDEX,INDEX,REAL>& e2)->bool {
+         return std::get<2>(e1) > std::get<2>(e2); // descending order
+         });
+   auto neg_edge_sort = [] (const auto& a, const auto& b)->bool { return std::get<0>(a) < std::get<0>(b); };
+   for(INDEX i=0; i<negEdges.size(); ++i) {
+      negEdges[i].sort(neg_edge_sort);
+   }
+
+   // now contract negative edges in descending order and check for self loops of negative edges.
+   // Whenever there is one, add it to negEdgeCandidates, or replace negative edge that will not be needed anymore.
+   // if maximal guaranteed increase of newly added edges is lower than some guaranteed increase of an already present edge, find cycle for the latter.
+   INDEX tripletsAdded = 0;
+   for(INDEX posE=0; posE<posEdges.size(); posE++) {
+      const INDEX i = std::get<0>(posEdges[posE]);
+      const INDEX j = std::get<1>(posEdges[posE]);
+      const REAL posTh = std::get<2>(posEdges[posE]);
+      const REAL bestCandidateTh = negEdgeCandidates.begin()->first;
+      if(posTh < bestCandidateTh) {
+         // search for cycles already. Note that posTh is an upper bound on the minimum dual increase of all remaining edges
+         for(const auto& negEdgeIt : negEdgeCandidates) {
+            const REAL th = negEdgeIt.first;
+            if(th > posTh) {
+               const INDEX i = negEdgeIt.second[0];
+               const INDEX j = negEdgeIt.second[1];
+               tripletsAdded += FindPositivePath(posEdgesGraph, mp,th,i,j);
+               if(tripletsAdded >= maxTripletsToAdd) {
+                  return tripletsAdded;
+               }
+            } else {
+               break;
+            }
+         }
+         // now erase all added negative edges
+         negEdgeCandidates.erase(negEdgeCandidates.begin(), negEdgeCandidates.lower_bound(posTh));
+      }
+      if(!uf.connected(i,j)) {
+         uf.merge(i,j);
+         const INDEX c = uf.find(i); // the new cc node number
+         // merge the edges with bases at i and j and detect edge from i to j
+         if(i != c) {
+            negEdges[c].merge(negEdges[i],neg_edge_sort);
+         } 
+         if(j != c) {
+            negEdges[c].merge(negEdges[j],neg_edge_sort);
+         }
+         std::transform(negEdges[c].begin(), negEdges[c].end(), negEdges[c].begin(), 
+               [&uf] (auto a) {
+               std::get<0>(a) = uf.find(std::get<0>(a));
+               return a; 
+               });
+         // do zrobienia: mainly unnecessary: edges have already been sorted in merge operations, only parallel edges need to be sorted here.
+         //negEdges[c].sort([] (const auto& a, const auto& b)->bool { 
+         //      if(std::get<0>(a) != std::get<0>(b)) {
+         //      return std::get<0>(a) < std::get<0>(b); 
+         //      }
+         //      return std::get<1>(a) > std::get<1>(b); // this ensures that remove deleted parallel copies with smaller weight. Thus, the largest one only remains.
+         //      });
+         // now go through edge list and search for self loops. Add such to negEdgeCandidates
+         for(auto it=negEdges[c].begin(); it!=negEdges[c].end(); ++it) {
+            const INDEX cc = std::get<0>(*it);
+            std::get<0>(*it) = cc;
+            assert(uf.find(cc) == cc);
+            if(cc == c) { // we have found a positive edge for which a negative path exists. record the dual increase possible.
+               const REAL th = std::min(-std::get<1>(*it), std::get<2>(posEdges[posE]));
+               assert(th > 0.0);
+               const INDEX negI = std::get<2>(*it);
+               const INDEX negJ = std::get<3>(*it);
+               // insert negative edge if either there are not yet enough candidates or the candidate has a better bound than already inserted ones.
+               assert(tripletsAdded < maxTripletsToAdd);
+               if(negEdgeCandidates.size() <= (maxTripletsToAdd - tripletsAdded)) {
+                  negEdgeCandidates.insert(std::make_pair(th, std::array<INDEX,2>({negI,negJ})));
+               } else { 
+                  const REAL leastBestCandidateTh = negEdgeCandidates.rbegin()->first;
+                  assert(leastBestCandidateTh == std::min_element(negEdgeCandidates.begin(), negEdgeCandidates.end(), [](auto& a, auto&b) { return a.first < b.first; })->first);
+                  if(th > leastBestCandidateTh) {
+                     auto last = negEdgeCandidates.end();
+                     --last;
+                     negEdgeCandidates.erase(last);
+                     negEdgeCandidates.insert(std::make_pair(th,std::array<INDEX,2>({negI,negJ})));
+                  }
+               }
+            }
+         }
+         // do zrobienia: remove edges that have too small threshold already.
+         //negEdges[c].remove_if([&uf,c,maxTh] (const std::tuple<INDEX,REAL>& a)->bool { return (std::get<1>(a) > -maxTh || uf.find(std::get<0>(a)) == c); });
+         // remove all self loops
+         negEdges[c].remove_if([&uf,c] (const auto& a)->bool { return std::get<0>(a) == c; });
+      }
+   }
+   // now go through all negative edge candidates and find path
+   for(const auto& negEdge : negEdgeCandidates) {
+      const REAL th = negEdge.first;
+      const INDEX i = negEdge.second[0];
+      const INDEX j = negEdge.second[1];
+      tripletsAdded += FindPositivePath(posEdgesGraph, mp, th, i, j);
+      if(tripletsAdded > maxTripletsToAdd) {
+         return tripletsAdded;
+      }
+   }
+   return tripletsAdded;
+}
+
+// find and add violated cycle with given th
+INDEX FindPositivePath(const Graph& g, BfsData& mp, const REAL th, const INDEX i, const INDEX j)
+{
+   // this is not nice: mp must be reinitalized every time
+   //MostViolatedPathData mp(g);
+   //auto cycle = mp.FindPath(i,j,g);
+   auto cycle = mp.FindPath(i,j,g,th);
+   assert(std::get<1>(cycle).size() > 1);
+   assert(std::get<1>(cycle)[0] == i);
+   assert(std::get<1>(cycle).back() == j);
+   return AddCycle(std::get<1>(cycle));
+}
+
+
+// find threshold such that at least maxTripletsToAdd factors will be included. Assumes that graph is connected.
+REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
+{
+   // do zrobienia: reuse data structures in constraint search. make one function.
+   UnionFind uf(noNodes_);
+   std::vector<std::tuple<INDEX,INDEX,REAL> > posEdges;
+   std::vector<std::list<std::tuple<INDEX,REAL>>> negEdges(this->noNodes_); // forward_list would also be possible, but is slower.
+   // sort edges 
+   for(auto& it : unaryFactors_) {
+      const REAL v = it.second->operator[](0);
+      const INDEX i = std::get<0>(it.first);
+      const INDEX j = std::get<1>(it.first);
+      if(v < 0) {
+         negEdges[i].push_front(std::make_tuple(j,v));
+         negEdges[j].push_front(std::make_tuple(i,v));
+      } else if(v > 0) {
             posEdges.push_back(std::make_tuple(i,j,v));
          }
       }
@@ -565,7 +724,7 @@ MulticutConstructor(Solver<FMC>& pd)
          const INDEX j = std::get<1>(posEdges[posE]);
          const REAL posTh = std::get<2>(posEdges[posE]);
          if(posTh < maxTh) { // all the remaining edges will not lead to maximum violated constraint
-            break;
+            return std::get<2>(posEdges[std::min(posE + maxTripletsToAdd,INDEX(posEdges.size()-1))]);
          }
          if(!uf.connected(i,j)) {
             uf.merge(i,j);
@@ -610,7 +769,8 @@ MulticutConstructor(Solver<FMC>& pd)
          return maxTh;
       } else {
          // return threshold that will guarantee maximum element. Small factor allows more constraints to be included.
-         return 0.5*maxTh;
+         assert(false);
+         return 0.001*maxTh;
       }
    }
 
@@ -662,7 +822,7 @@ MulticutConstructor(Solver<FMC>& pd)
 
       INDEX tripletsAdded = 0;
       using CycleType = std::tuple<REAL, std::vector<INDEX>>;
-      std::vector< CycleType > cycles;
+      std::vector<CycleType > cycles;
       for(auto& it : negativeEdges) {
          const INDEX i = std::get<0>(it);
          const INDEX j = std::get<1>(it);
@@ -685,9 +845,11 @@ MulticutConstructor(Solver<FMC>& pd)
       std::sort(cycles.begin(), cycles.end(), [](const CycleType& i, const CycleType& j) { return std::get<0>(i) > std::get<0>(j); });
       for(auto& cycle : cycles) {
          const REAL cycleDualIncrease = std::get<0>(cycle);
-         tripletsAdded += AddCycle(std::get<1>(cycle));
-         if(tripletsAdded > maxTripletsToAdd) {
-            return tripletsAdded;
+         if(std::get<1>(cycle).size() > 2) {
+            tripletsAdded += AddCycle(std::get<1>(cycle));
+            if(tripletsAdded > maxTripletsToAdd) {
+               return tripletsAdded;
+            }
          }
       }
 
@@ -956,6 +1118,7 @@ public:
       return tripletPlusSpokesAdded;
    }
 
+   // node i is center node, (j,k) is cycle edge
    REAL ComputeTriangleTh(const INDEX i, const INDEX j, const INDEX k)
    {
       std::array<INDEX,3> triplet{i,j,k};
@@ -972,28 +1135,25 @@ public:
          cost[3] += (*t)[3];
       } 
       // get cost directly from edge factors
-      const REAL ij = this->GetUnaryFactor(triplet[0], triplet[1])->operator[](0);
-      const REAL ik = this->GetUnaryFactor(triplet[0], triplet[2])->operator[](0);
-      const REAL jk = this->GetUnaryFactor(triplet[1], triplet[2])->operator[](0);
-      cost[0] += ik + jk;
-      cost[1] += ij + jk;
-      cost[2] += ij + ik;
-      cost[3] += ij + ik + jk;
+      const REAL c01 = this->GetUnaryFactor(triplet[0], triplet[1])->operator[](0);
+      const REAL c02 = this->GetUnaryFactor(triplet[0], triplet[2])->operator[](0);
+      const REAL c12 = this->GetUnaryFactor(triplet[1], triplet[2])->operator[](0);
+      cost[0] += c02 + c12;
+      cost[1] += c01 + c12;
+      cost[2] += c01 + c02;
+      cost[3] += c01 + c02 + c12;
 
-      INDEX l1,l2,l3,l4;
-      if(i < j && i < k) { // the cycle edge is the last one
-         l1 = 0; l2 = 1;
-         l3 = 2; l4 = 3;
-      } else if (i > j && i > k) { // the cycle edge is the first one
-         l1 = 1; l2 = 2;
-         l3 = 0; l4 = 3;
-      } else { // j < i < k, the cycle edge is the second one
-         l1 = 0; l2 = 2;
-         l3 = 1; l4 = 3;
+      assert(j<k); // if not, below computation is not valid
+      // compute difference between cost such that exactly one edge incident to center node is 1 againt cost when when zero or two incident to it are 1
+      if(std::min(j,k) == triplet[0] && std::max(j,k) == triplet[1]) { // jk is first edge
+         return std::min(0.0,std::min(cost[3],cost[0])) - std::min(cost[1],cost[2]);
+      } else if(std::min(j,k) == triplet[0] && std::max(j,k) == triplet[2]) { // jk is second edge
+         return std::min(0.0,std::min(cost[3],cost[1])) - std::min(cost[0],cost[2]);
+      } else { // jk is third edge
+         assert(std::min(j,k) == triplet[1] && std::max(j,k) == triplet[2]);
+         return std::min(0.0,std::min(cost[3],cost[2])) - std::min(cost[0],cost[1]);
       }
-      const REAL th = -(std::min(cost[l1], cost[l2]) - std::min(0.0,std::min(cost[l3],cost[l4])));
-      return th;
-
+      assert(false);
    }
 
    template<typename ADJ_LIST>
@@ -1384,7 +1544,7 @@ public:
          return tripletsAdded;
       } else {
          // possibly require the odd wheels to have larger impact relative to violated cycles. This ensures that odd wheels are only added late in the optimziation, when no good violated cycles are present any more
-         const INDEX oddWheelsAdded = FindOddWheels(maxCuttingPlanesToAdd - tripletsAdded);
+         const INDEX oddWheelsAdded = FindOddWheels(maxCuttingPlanesToAdd);
          std::cout << "Added " << oddWheelsAdded << " factors for odd wheel constraints\n";
          return oddWheelsAdded;
       }
@@ -1590,7 +1750,7 @@ public:
       //if(maxTh != -std::numeric_limits<REAL>::infinity()) {
       //   std::cout << "\nnon-trivial cut factor with weight = " << maxTh << "\n\n";
       //}
-      return 0.5*maxTh;
+      return 0.1*maxTh;
    }
 
    INDEX FindViolatedCuts(const INDEX minDualIncrease, const INDEX noConstraints)

@@ -129,184 +129,184 @@ namespace LP_MP{
 
     
     template<>
-      struct action<real_number> {
-      static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
-      {
-	realStack.push(std::stod(in.string()));
-      }
-    };
+       struct action<real_number> {
+          static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
+          {
+             realStack.push(std::stod(in.string()));
+          }
+       };
     template<>
-      struct action<positive_integer> {
-      static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
-      {
-	integerStack.push(std::stoul(in.string()));
-      }
-    };
+       struct action<positive_integer> {
+          static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
+          {
+             integerStack.push(std::stoul(in.string()));
+          }
+       };
 
 
     template<>
-      struct action< numberOfVariables_line > {
-      static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
-      {
-	mrfInput.numberOfVariables_ = integer_stack.top();
-	integer_stack.pop();
-      }
-    };
+       struct action< numberOfVariables_line > {
+          static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+          {
+             mrfInput.numberOfVariables_ = integer_stack.top();
+             integer_stack.pop();
+          }
+       };
     template<>
-      struct action< numberOfCliques > {
-      static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
-      {
-	mrfInput.numberOfCliques_ = integer_stack.top();
-	integer_stack.pop();
-      }
-    };
+       struct action< numberOfCliques > {
+          static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+          {
+             mrfInput.numberOfCliques_ = integer_stack.top();
+             integer_stack.pop();
+          }
+       };
     template<>
-      struct action< cardinality_line > {
-      static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
-      {
-	assert(integer_stack.size() ==mrfInput.numberOfVariables_);
-	while(!integer_stack.empty()) {
-	  mrfInput.cardinality_.push_back(integer_stack.top());
-	  integer_stack.pop();
-	}
-	std::reverse(mrfInput.cardinality_.begin(), mrfInput.cardinality_.end());
-	assert(real_stack.empty());
-	assert(integer_stack.empty());
-      }
-    };
+       struct action< cardinality_line > {
+          static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+          {
+             assert(integer_stack.size() ==mrfInput.numberOfVariables_);
+             while(!integer_stack.empty()) {
+                mrfInput.cardinality_.push_back(integer_stack.top());
+                integer_stack.pop();
+             }
+             std::reverse(mrfInput.cardinality_.begin(), mrfInput.cardinality_.end());
+             assert(real_stack.empty());
+             assert(integer_stack.empty());
+          }
+       };
     template<>
-      struct action< cliqueScope_line > {
-      static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
-      {
-	mrfInput.cliqueScope_.push_back(std::vector<INDEX>(0));
-	while(integer_stack.size() > 1) {
-	  mrfInput.cliqueScope_.back().push_back(integer_stack.top());
-	  integer_stack.pop();
-	}
-	std::reverse(mrfInput.cliqueScope_.back().begin(), mrfInput.cliqueScope_.back().end());
-	const INDEX cliqueSize = integer_stack.top();
-	integer_stack.pop();
-	assert(mrfInput.cliqueScope_.back().size() == cliqueSize);
-      }
-    };
+       struct action< cliqueScope_line > {
+          static void apply(const pegtl::input & in, Solver<FMC_DT>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+          {
+             mrfInput.cliqueScope_.push_back(std::vector<INDEX>(0));
+             while(integer_stack.size() > 1) {
+                mrfInput.cliqueScope_.back().push_back(integer_stack.top());
+                integer_stack.pop();
+             }
+             std::reverse(mrfInput.cliqueScope_.back().begin(), mrfInput.cliqueScope_.back().end());
+             const INDEX cliqueSize = integer_stack.top();
+             integer_stack.pop();
+             assert(mrfInput.cliqueScope_.back().size() == cliqueSize);
+          }
+       };
     // reconstruct the function tables
     template<>
-      struct action< functionTables > {
-      static void apply(const pegtl::input & in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
-      {
-	// first read in real stack into array
-	std::vector<REAL> values;
-	while(!real_stack.empty()) {
-	  values.push_back(real_stack.top());
-	  real_stack.pop();
-	}
-	std::reverse(values.begin(), values.end());
+       struct action< functionTables > {
+          static void apply(const pegtl::input & in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MRFInput& mrfInput)
+          {
+             // first read in real stack into array
+             std::vector<REAL> values;
+             while(!real_stack.empty()) {
+                values.push_back(real_stack.top());
+                real_stack.pop();
+             }
+             std::reverse(values.begin(), values.end());
 
-	// now iterate over function tables. first read in number of values of function table, then add them to the function table.
-	INDEX functionTableIdx = 0; // at which index does current function table start?
-	while( functionTableIdx<values.size() ) {
-	  // assert that this functionTableSize is actually a real variable
-	  const INDEX functionTableSize = values[functionTableIdx];
-	  assert(functionTableIdx+functionTableSize < values.size());
-	  const INDEX potentialNumber = mrfInput.functionTable_.size();
-	  const INDEX cardinality = mrfInput.cliqueScope_[potentialNumber].size();
+             // now iterate over function tables. first read in number of values of function table, then add them to the function table.
+             INDEX functionTableIdx = 0; // at which index does current function table start?
+             while( functionTableIdx<values.size() ) {
+                // assert that this functionTableSize is actually a real variable
+                const INDEX functionTableSize = values[functionTableIdx];
+                assert(functionTableIdx+functionTableSize < values.size());
+                const INDEX potentialNumber = mrfInput.functionTable_.size();
+                const INDEX cardinality = mrfInput.cliqueScope_[potentialNumber].size();
 
-	  mrfInput.functionTable_.push_back(std::vector<REAL>(functionTableSize,0.0));
-	  if(cardinality == 1) { // unary factor
-	    assert(functionTableSize == mrfInput.cardinality_[ mrfInput.cliqueScope_[potentialNumber][0] ]);
-	    for(INDEX label=0; label<functionTableSize; ++label) {
-	      mrfInput.functionTable_.back().operator[](label) = values[functionTableIdx+1+label];
-	      //std::cout << values[functionTableIdx+1+label] << ", ";
-	    }
-	    //std::cout << "\n";
-	  } else if(cardinality == 2) { // pairwise factor
-	    const INDEX var1 = mrfInput.cliqueScope_[potentialNumber][0];
-	    const INDEX var2 = mrfInput.cliqueScope_[potentialNumber][1];
-	    assert(functionTableSize == mrfInput.cardinality_[var1] * mrfInput.cardinality_[var2]);
-	    for(INDEX label1=0; label1<mrfInput.cardinality_[var1]; ++label1) {
-	      for(INDEX label2=0; label2<mrfInput.cardinality_[var2]; ++label2) {
-		// note: we must transpose the matrix, that we have read in
-		mrfInput.functionTable_.back().operator[](label1 + label2*mrfInput.cardinality_[var1]) = values[functionTableIdx + 1 + label2 + label1*mrfInput.cardinality_[var2]];
-	      }
-	    }
-	  } else {
-	    assert(false);
-	    throw std::runtime_error("Only unary and pairwise potentials supported now");
-	  }
-	  functionTableIdx += functionTableSize+1;
-	}
-      
-	// construct mrf
-	auto& mrf = pd.template GetProblemConstructor<0>();
+                mrfInput.functionTable_.push_back(std::vector<REAL>(functionTableSize,0.0));
+                if(cardinality == 1) { // unary factor
+                   assert(functionTableSize == mrfInput.cardinality_[ mrfInput.cliqueScope_[potentialNumber][0] ]);
+                   for(INDEX label=0; label<functionTableSize; ++label) {
+                      mrfInput.functionTable_.back().operator[](label) = values[functionTableIdx+1+label];
+                      //std::cout << values[functionTableIdx+1+label] << ", ";
+                   }
+                   //std::cout << "\n";
+                } else if(cardinality == 2) { // pairwise factor
+                   const INDEX var1 = mrfInput.cliqueScope_[potentialNumber][0];
+                   const INDEX var2 = mrfInput.cliqueScope_[potentialNumber][1];
+                   assert(functionTableSize == mrfInput.cardinality_[var1] * mrfInput.cardinality_[var2]);
+                   for(INDEX label1=0; label1<mrfInput.cardinality_[var1]; ++label1) {
+                      for(INDEX label2=0; label2<mrfInput.cardinality_[var2]; ++label2) {
+                         // note: we must transpose the matrix, that we have read in
+                         mrfInput.functionTable_.back().operator[](label1 + label2*mrfInput.cardinality_[var1]) = values[functionTableIdx + 1 + label2 + label1*mrfInput.cardinality_[var2]];
+                      }
+                   }
+                } else {
+                   assert(false);
+                   throw std::runtime_error("Only unary and pairwise potentials supported now");
+                }
+                functionTableIdx += functionTableSize+1;
+             }
 
-	// first input the unaries, as pairwise potentials need them to be able to link to them
-	for(INDEX i=0; i<mrfInput.numberOfCliques_; ++i) {
-	  if(mrfInput.cliqueScope_[i].size() == 1) {
-	    const INDEX var = mrfInput.cliqueScope_[i][0];
-	    assert(mrfInput.functionTable_[i].size() == mrfInput.cardinality_[var]);
-	    mrf.AddUnaryFactor(var,mrfInput.functionTable_[i]);
-	  } else if(mrfInput.cliqueScope_[i].size() > 2) {
-	    throw std::runtime_error("only pairwise models are accepted currently");
-	  }
-	}
-	// now the pairwise potentials. 
-	for(INDEX i=0; i<mrfInput.numberOfCliques_; ++i) {
-	  if(mrfInput.cliqueScope_[i].size() == 2) {
-	    const INDEX var1 = mrfInput.cliqueScope_[i][0];
-	    const INDEX var2 = mrfInput.cliqueScope_[i][1];
-	    assert(var1<var2);
-	    assert(mrfInput.functionTable_[i].size() == mrfInput.cardinality_[var1]*mrfInput.cardinality_[var2]);
-	    mrf.AddPairwiseFactor(var1,var2,mrfInput.functionTable_[i]); // or do we have to transpose the values?
-	  }
-	}
-	assert(integer_stack.empty());
-	assert(real_stack.empty());
-      }
-    };
+             // construct mrf
+             auto& mrf = pd.template GetProblemConstructor<0>();
 
-    template<>
-      struct action<ProjectionPreamble> {
-            static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
-	    {
-	      for(INDEX i=0; i<mrfInput.numberOfVariables_-1; ++i) {
-		assert(mrfInput.cardinality_[i] == mrfInput.cardinality_[i+1]);
-	      }
-	      pd.template GetProblemConstructor<1>().SetNumberOfLabels(mrfInput.cardinality_[0]);
-	      assert(integerStack.empty());
-	      assert(realStack.empty());
-	    }
-    };
+             // first input the unaries, as pairwise potentials need them to be able to link to them
+             for(INDEX i=0; i<mrfInput.numberOfCliques_; ++i) {
+                if(mrfInput.cliqueScope_[i].size() == 1) {
+                   const INDEX var = mrfInput.cliqueScope_[i][0];
+                   assert(mrfInput.functionTable_[i].size() == mrfInput.cardinality_[var]);
+                   mrf.AddUnaryFactor(var,mrfInput.functionTable_[i]);
+                } else if(mrfInput.cliqueScope_[i].size() > 2) {
+                   throw std::runtime_error("only pairwise models are accepted currently");
+                }
+             }
+             // now the pairwise potentials. 
+             for(INDEX i=0; i<mrfInput.numberOfCliques_; ++i) {
+                if(mrfInput.cliqueScope_[i].size() == 2) {
+                   const INDEX var1 = mrfInput.cliqueScope_[i][0];
+                   const INDEX var2 = mrfInput.cliqueScope_[i][1];
+                   assert(var1<var2);
+                   assert(mrfInput.functionTable_[i].size() == mrfInput.cardinality_[var1]*mrfInput.cardinality_[var2]);
+                   mrf.AddPairwiseFactor(var1,var2,mrfInput.functionTable_[i]); // or do we have to transpose the values?
+                }
+             }
+             assert(integer_stack.empty());
+             assert(real_stack.empty());
+          }
+       };
 
     template<>
-      struct action<ProjectionLine> {
-      static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
-      {
-	std::vector<INDEX> projectionVar;
-	while(!integerStack.empty()) {
-	  projectionVar.push_back(integerStack.top());
-	  integerStack.pop();
-	}
-	std::reverse(projectionVar.begin(),projectionVar.end());
+       struct action<ProjectionPreamble> {
+          static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
+          {
+             for(INDEX i=0; i<mrfInput.numberOfVariables_-1; ++i) {
+                assert(mrfInput.cardinality_[i] == mrfInput.cardinality_[i+1]);
+             }
+             pd.template GetProblemConstructor<1>().SetNumberOfLabels(mrfInput.cardinality_[0]);
+             assert(integerStack.empty());
+             assert(realStack.empty());
+          }
+       };
 
-	std::vector<REAL> projectionCost;
-	while(!realStack.empty()) {
-	  projectionCost.push_back(realStack.top());
-	  realStack.pop(); 
-	}
-	std::reverse(projectionCost.begin(), projectionCost.end());
-	pd.template GetProblemConstructor<1>().AddProjection(projectionVar,projectionCost);
-      }
-    };
+    template<>
+       struct action<ProjectionLine> {
+          static void apply(const pegtl::input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack, MRFInput& mrfInput)
+          {
+             std::vector<INDEX> projectionVar;
+             while(!integerStack.empty()) {
+                projectionVar.push_back(integerStack.top());
+                integerStack.pop();
+             }
+             std::reverse(projectionVar.begin(),projectionVar.end());
+
+             std::vector<REAL> projectionCost;
+             while(!realStack.empty()) {
+                projectionCost.push_back(realStack.top());
+                realStack.pop(); 
+             }
+             std::reverse(projectionCost.begin(), projectionCost.end());
+             pd.template GetProblemConstructor<1>().AddProjection(projectionVar,projectionCost);
+          }
+       };
 
     bool ParseProblem(const std::string& filename, Solver<FMC_DT>& pd) {
-      std::stack<SIGNED_INDEX> integerStack;
-      std::stack<REAL> realStack;
-      MRFInput mrfInput;
+       std::stack<SIGNED_INDEX> integerStack;
+       std::stack<REAL> realStack;
+       MRFInput mrfInput;
 
-      pegtl::file_parser problem(filename);
-      std::cout << "parsing " << filename << "\n";
-    
-      return problem.parse< grammar, action>(pd, integerStack, realStack, mrfInput);
+       pegtl::file_parser problem(filename);
+       std::cout << "parsing " << filename << "\n";
+
+       return problem.parse< grammar, action>(pd, integerStack, realStack, mrfInput);
     }
 
   }

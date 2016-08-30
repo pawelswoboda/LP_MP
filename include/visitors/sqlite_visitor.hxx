@@ -331,12 +331,12 @@ public:
    {
       auto ret_state = this->BaseVisitor::visit(c, lowerBound, upperBound);
       
-      if(!(c.error || c.end)) {
+      if(!(ret_state.error || ret_state.end)) {
          const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - BaseVisitor::GetBeginTime()).count();
          const INDEX curIter = BaseVisitor::GetIter();
          iterationStatistics_.push_back({curIter,timeElapsed,lowerBound,upperBound});
       }
-      if(c.end) {
+      if(ret_state.end) {
          std::cout << "write bounds to database\n";
          WriteBounds(iterationStatistics_);
       }

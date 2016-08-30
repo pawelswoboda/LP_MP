@@ -74,8 +74,8 @@ int main()
    std::vector<std::string> options = {
       {"--maxIter"}, {"10000"},
       {"--timeout"}, {"3600"},
-      //{"--minDualImprovement"}, {"0.00001"},
-      //{"--minDualImprovement"}, {"0.00000001"}
+      {"--minDualImprovement"}, {"0.001"},
+      {"--minDualImprovementInterval"}, {"50"},
       {"--lowerBoundComputationInterval"}, {"10"},
       {"--primalComputationInterval"}, {"20"},
       {"--standardReparametrization"}, {"uniform"},
@@ -85,9 +85,8 @@ int main()
       {"--tighten"},
       {"--tightenReparametrization"}, {"uniform"},
       {"--tightenIteration"}, {"1"},
-      {"--tightenInterval"}, {"30"},
-      //{"--tightenMinDualIncrease"}, {"0.0"}
-      {"--tightenConstraintsPercentage"}, {"0.01"}
+      {"--tightenInterval"}, {"5"},
+      {"--tightenConstraintsPercentage"}, {"0.1"}
    };
 
    {
@@ -95,24 +94,24 @@ int main()
       using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
       using SolverType = ProblemConstructorRoundingSolver<FMC>;
       static auto Input = MulticutOpenGmInput::ParseProblem<FMC>;
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-OC");
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-OC");
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-OC");
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-OC");
-      RunSolver<FMC,VisitorType,SolverType>(Input,modularity_clustering_dataset,options,"modularity_clustering","MPMC-OC");
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-C");
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-C");
+      //RunSolver<FMC,VisitorType,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-C");
+      //RunSolver<FMC,VisitorType,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-C");
+      RunSolver<FMC,VisitorType,SolverType>(Input,modularity_clustering_dataset,options,"modularity_clustering","MPMC-C");
    }
-   return 0;
 
    {
       using FMC = FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL;
       using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
       using SolverType = ProblemConstructorRoundingSolver<FMC>;
       static auto Input = MulticutOpenGmInput::ParseProblem<FMC>;
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-OCOW");
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-OCOW");
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-OCOW");
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-OCOW");
-      RunSolver<FMC,VisitorType,SolverType>(Input,modularity_clustering_dataset,options,"modularity_clustering","MPMC-OCOW");
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-COW");
+      RunSolver<FMC,VisitorType,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-COW");
+      //RunSolver<FMC,VisitorType,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-COW");
+      //RunSolver<FMC,VisitorType,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-COW");
+      RunSolver<FMC,VisitorType,SolverType>(Input,modularity_clustering_dataset,options,"modularity_clustering","MPMC-COW");
    }
+   return 0;
 }
 
