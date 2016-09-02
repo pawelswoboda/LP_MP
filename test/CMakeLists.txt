@@ -2,7 +2,7 @@ if(BUILD_TESTS)
    SET(TEST_FILES 
       simplex.cpp
       simplex_marginalization.cpp
-      multicut.cpp
+      #      multicut.cpp
       discrete_tomography.cpp
       )
    enable_testing()
