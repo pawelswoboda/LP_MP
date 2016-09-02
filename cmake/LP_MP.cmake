@@ -29,11 +29,13 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/OpenGM_Proj
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/PEGTL_Project")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Andres_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/TCLAP_Project/include")
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project/include")
+#add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project")
+#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Hana_Project/include")
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/CS2_CPP_Project")
+add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/CS2_CPP_Project")
 
 # manually downloaded repositories of Kolmogorov's code. How to automate?
-include_directories(lib/lemon-1.3.1)
 add_subdirectory(lib/MinCost)
 
 # HDF5 for reading OpenGM and Andres models

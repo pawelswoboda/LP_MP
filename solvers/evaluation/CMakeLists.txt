@@ -1,35 +1,41 @@
 SET(SOURCES graph_matching.cpp multicut.cpp)
 
-# download test datasets
-
-if(BUILD_MULTICUT)
-   message("Download multicut datasets")
-   set(URL "http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-150.zip")
-   set(DIRECTORY "solvers/evaluation/multicut_datasets")
-   set(DOWNLOAD_PATH "${DIRECTORY}/knott-3d-150.zip")
-   set(EXTRACTED_FILE "${DIRECTORY}/knott-3d-150/")
-   file(MAKE_DIRECTORY "${DIRECTORY}")
-   if(NOT EXISTS "${DOWNLOAD_PATH}")
-      message("actually download multicut datasets")
-      file(DOWNLOAD "${URL}" "${DOWNLOAD_PATH}")
-      add_custom_command(
-         OUTPUT "${EXTRACTED_FILE}"
-         COMMAND "unzip ${DOWNLOAD_PATH}"
-         DEPENDS "${DOWNLOAD_PATH}"
-         COMMENT "unpack multicut datasets"
+function(DOWNLOAD_AND_UNZIP URL DOWNLOAD_TO EXTRACT_TO)
+   if(NOT EXISTS ${DOWNLOAD_TO})
+      message("Download ${URL}")
+      file(DOWNLOAD "${URL}" "${DOWNLOAD_TO}")
+      execute_process(
+         COMMAND unzip  "${DOWNLOAD_TO}" -d "${EXTRACT_TO}"
+         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
          )
    endif()
+
+endfunction(DOWNLOAD_AND_UNZIP)
+
+# download test datasets
+if(BUILD_MULTICUT)
+   add_executable(multicut multicut.cpp ${headers} ${sources})
+   target_link_libraries(multicut Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
+
+   message("Download multicut datasets")
+   set(MC_DIRECTORY "solvers/evaluation/multicut_datasets")
+
+   file(MAKE_DIRECTORY "${MC_DIRECTORY}")
+   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-150.zip" "${MC_DIRECTORY}/knott-3d-150.zip" "${MC_DIRECTORY}")
+   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-300.zip" "${MC_DIRECTORY}/knott-3d-300.zip" "${MC_DIRECTORY}")
+   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-450.zip" "${MC_DIRECTORY}/knott-3d-450.zip" "${MC_DIRECTORY}")
+   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-550.zip" "${MC_DIRECTORY}/knott-3d-550.zip" "${MC_DIRECTORY}/knott-3d-550/")
+   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/modularity-clustering.zip" "${MC_DIRECTORY}/modularity-clustering.zip" "${MC_DIRECTORY}")
 endif()
 
+if(BUILD_GRAPH_MATCHING)
+   add_executable(graph_matching graph_matching.cpp ${headers} ${sources})
+   target_link_libraries(graph_matching CS2_CPP Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
 
-# do zrobienia: Only build evaluation for the respective solvers if the respective solvers are enabled as well
+   message("Download graph matching datasets")
+   set(GM_DIRECTORY "solvers/evaluation/graph_matching_datasets")
 
-# write a function for this
-foreach( source_file ${SOURCES} )
-   string( REPLACE ".cpp" "" executable_file ${source_file} )
-   add_executable( ${executable_file} ${source_file} ${headers} ${sources})
-   target_link_libraries( ${executable_file} Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
-endforeach( source_file ${SOURCES} )
-
-
+   file(MAKE_DIRECTORY "${GM_DIRECTORY}")
+   DOWNLOAD_AND_UNZIP("http://www.cs.dartmouth.edu/~lorenzo/Papers/tkr_pami13_data.zip" "${GM_DIRECTORY}/tkr_pami13_data.zip" "${GM_DIRECTORY}/tkr_pami13_data/")
+endif()
 

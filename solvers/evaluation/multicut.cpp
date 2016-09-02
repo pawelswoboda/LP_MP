@@ -10,7 +10,7 @@ using FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL = FMC_ODD_WHEEL_MULTICUT<MessageSendingTy
 
 
 
-std::string knott_150_prefix = "../../../solvers/multicut/knott-3d-150/";
+std::string knott_150_prefix = "multicut_datasets/knott-3d-150/";
 std::vector<std::string> knott_150_dataset = {
    {knott_150_prefix + "gm_knott_3d_032.h5"},
    {knott_150_prefix + "gm_knott_3d_033.h5"},
@@ -21,7 +21,7 @@ std::vector<std::string> knott_150_dataset = {
    {knott_150_prefix + "gm_knott_3d_039.h5"}
 };
 
-std::string knott_300_prefix = "../../../solvers/multicut/knott-3d-300/";
+std::string knott_300_prefix = "multicut_datasets/knott-3d-300/";
 std::vector<std::string> knott_300_dataset = {
    {knott_300_prefix + "gm_knott_3d_072.h5"},
    {knott_300_prefix + "gm_knott_3d_073.h5"},
@@ -33,7 +33,7 @@ std::vector<std::string> knott_300_dataset = {
    {knott_300_prefix + "gm_knott_3d_079.h5"}
 };
 
-std::string knott_450_prefix = "../../../solvers/multicut/knott-3d-450/";
+std::string knott_450_prefix = "multicut_datasets/knott-3d-450/";
 std::vector<std::string> knott_450_dataset = {
    {knott_450_prefix + "gm_knott_3d_096.h5"},
    {knott_450_prefix + "gm_knott_3d_097.h5"},
@@ -45,7 +45,7 @@ std::vector<std::string> knott_450_dataset = {
    {knott_450_prefix + "gm_knott_3d_103.h5"}
 };
 
-std::string knott_550_prefix = "../../../solvers/multicut/knott-3d-550/";
+std::string knott_550_prefix = "multicut_datasets/knott-3d-550/";
 std::vector<std::string> knott_550_dataset = {
    {knott_550_prefix + "gm_knott_3d_112.h5"},
    {knott_550_prefix + "gm_knott_3d_113.h5"},
@@ -57,7 +57,7 @@ std::vector<std::string> knott_550_dataset = {
    {knott_550_prefix + "gm_knott_3d_119.h5"}
 };
 
-std::string modularity_clustering_prefix = "../../../solvers/multicut/modularity-clustering/";
+std::string modularity_clustering_prefix = "multicut_datasets/modularity-clustering/";
 std::vector<std::string> modularity_clustering_dataset = {
    {modularity_clustering_prefix + "adjnoun.h5"},
    {modularity_clustering_prefix + "dolphins.h5"},
@@ -73,7 +73,7 @@ int main()
    // emulate command line options
    std::vector<std::string> options = {
       {"--maxIter"}, {"10000"},
-      {"--timeout"}, {"3600"},
+      {"--timeout"}, {"3600"}, // one hour
       {"--minDualImprovement"}, {"0.001"},
       {"--minDualImprovementInterval"}, {"50"},
       {"--lowerBoundComputationInterval"}, {"10"},

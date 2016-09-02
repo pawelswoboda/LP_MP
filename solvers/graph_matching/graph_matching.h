@@ -4,13 +4,15 @@
 //#include "problem_decomposition.hxx"
 #include "factors_messages.hxx"
 #include "LP_MP.h"
+#include "solver.hxx"
 #include "factors/simplex_factor.hxx"
 #include "const_array_types.h"
 #include "messages/simplex_marginalization_message.hxx"
 #include "messages/equality_message.hxx"
 #include "problem_constructors/mrf_problem_construction.hxx"
-#include "factors/min_cost_flow_factor_lemon.hxx"
-#include "factors/minimum_cost_flow_labeling.hxx"
+//#include "factors/min_cost_flow_factor_lemon.hxx"
+#include "factors/min_cost_flow_factor_cs2.hxx"
+//#include "factors/minimum_cost_flow_labeling.hxx"
 #include "../cosegmentation/assignment_via_min_cost_flow_constructor.hxx" // move file to problem_constructors
 #include "../cosegmentation/assignment_via_message_passing_problem_constructor.hxx" // move file to problem_constructors
 
@@ -93,24 +95,24 @@ struct FMC_MP_T {
       
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 0, false, true > UnaryFactor; // set to true if labeling by unaries is desired
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 1, false, false > PairwiseFactor;
-   typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_MP_PARAM, 2, true, false> McfLabelingFactor;
+   //typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_MP_PARAM, 2, true, false> McfLabelingFactor;
 
    typedef MessageContainer<EqualityMessage, 0, 0, variableMessageNumber, variableMessageNumber, 1, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeft;
    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRight;
-   typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_MP_PARAM, 3 > UnaryMcfLabelingMessage;
+   //typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_MP_PARAM, 3 > UnaryMcfLabelingMessage;
 
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 3 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 4> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 5> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 6> PairwiseTriplet23MessageContainer;
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 2 > EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 4> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 5> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 6> PairwiseTriplet23MessageContainer;
 
-   using FactorList = meta::list< UnaryFactor, PairwiseFactor, McfLabelingFactor, EmptyTripletFactor >;
+   using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor>;//McfLabelingFactor, EmptyTripletFactor >;
    using MessageList = meta::list< 
       AssignmentConstraintMessage,
       UnaryPairwiseMessageLeft,
       UnaryPairwiseMessageRight,
-      UnaryMcfLabelingMessage,
+      //UnaryMcfLabelingMessage,
       PairwiseTriplet12MessageContainer, 
       PairwiseTriplet13MessageContainer, 
       PairwiseTriplet23MessageContainer 
@@ -121,8 +123,8 @@ struct FMC_MP_T {
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,4,5,6>;
    using mrfLeft = tighteningMrf;
    using mrfRight = tighteningMrf;
-   using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
-   using ProblemDecompositionList = meta::list<assignment, mrfLeft, mrfRight, mcfLabeling>;
+   //using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
+   using ProblemDecompositionList = meta::list<assignment, mrfLeft, mrfRight>;//, mcfLabeling>;
 };
 
 
@@ -144,7 +146,7 @@ struct FMC_MCF {
       
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
-   typedef FactorContainer<MinCostFlowFactorLemon, MinCostFlowReparametrizationStorageLemon, FMC_MCF_PARAM, 0, true, true> MinCostFlowAssignmentFactor;
+   typedef FactorContainer<MinCostFlowFactorCS2, MinCostFlowReparametrizationStorageCS2, FMC_MCF_PARAM, 0, true, true> MinCostFlowAssignmentFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 1 > UnaryFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 2 > PairwiseFactor;
 
@@ -178,7 +180,7 @@ struct FMC_MCF_T {
       
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
-   typedef FactorContainer<MinCostFlowFactorLemon, MinCostFlowReparametrizationStorageLemon, FMC_MCF_PARAM, 0, true, true> MinCostFlowAssignmentFactor;
+   typedef FactorContainer<MinCostFlowFactorCS2, MinCostFlowReparametrizationStorageCS2, FMC_MCF_PARAM, 0, true, true> MinCostFlowAssignmentFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 1 > UnaryFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 2 > PairwiseFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 3 > EmptyTripletFactor;
@@ -539,10 +541,10 @@ namespace TorresaniEtAlInput {
          
          // connect left and right mp to mcf labeling factor
          // construct labeling factor
-         auto& mcf = pd.template GetProblemConstructor<3>();
-         mcf.ConstructLinearAssignmentGraph(gmInput.leftGraph_,true);
-         mcf.LinkLeftUnaries(mrfLeft);
-         mcf.LinkRightUnaries(mrfRight,gmInput.leftGraph_,true);
+         //auto& mcf = pd.template GetProblemConstructor<3>();
+         //mcf.ConstructLinearAssignmentGraph(gmInput.leftGraph_,true);
+         //mcf.LinkLeftUnaries(mrfLeft);
+         //mcf.LinkRightUnaries(mrfRight,gmInput.leftGraph_,true);
       }
    };
 
@@ -671,17 +673,6 @@ namespace TorresaniEtAlInput {
          }
 
          mrf.Construct(pd);
-
-         // construct labeling factor
-         auto& mcf = pd.template GetProblemConstructor<1>();
-         if(pc == PairwiseConstruction::Left) {
-            mcf.ConstructLinearAssignmentGraph(gmInput.leftGraph_,true);
-         }
-         if(pc == PairwiseConstruction::Right) {
-            mcf.ConstructLinearAssignmentGraph(gmInput.rightGraph_,true);
-         }
-         mcf.LinkUnaries(mrf);
-
       }
    };
 

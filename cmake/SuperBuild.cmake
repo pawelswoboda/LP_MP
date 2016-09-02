@@ -172,16 +172,30 @@ ExternalProject_ADD(
 ExternalProject_Get_Property(TCLAP_Project install_dir)
 
 # minimum cost flow solvers for e.g. graph matching
-list(APPEND DEPENDENCIES LEMON_Project)
+#list(APPEND DEPENDENCIES LEMON_Project)
+#ExternalProject_ADD(
+#   LEMON_Project
+#   URL "http://lemon.cs.elte.hu/pub/sources/lemon-1.3.1.tar.gz"
+#   UPDATE_COMMAND ""
+#   INSTALL_COMMAND ""
+#   BUILD_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(LEMON_Project install_dir)
+
+# alternative minimum cost flow solver based on Goldberg's implementation
+list(APPEND DEPENDENCIES CS2_CPP_Project)
 ExternalProject_ADD(
-   LEMON_Project
-   URL "http://lemon.cs.elte.hu/pub/sources/lemon-1.3.1.tar.gz"
-   UPDATE_COMMAND ""
+   CS2_CPP_Project
+   GIT_REPOSITORY "https://github.com/pawelswoboda/CS2-CPP.git"
+   GIT_TAG "master"
+   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/CS2_CPP_Project"
+   BUILD_COMMAND make
    INSTALL_COMMAND ""
-   BUILD_COMMAND ""
-   CONFIGURE_COMMAND ""
    )
-ExternalProject_Get_Property(LEMON_Project install_dir)
+ExternalProject_Get_Property(CS2_CPP_Project install_dir)
+add_library(CS2_CPP STATIC IMPORTED)
+add_dependencies(CS2_CPP CS2_CPP_Project)
 
 ExternalProject_Add (LP_MP
    DEPENDS ${DEPENDENCIES}

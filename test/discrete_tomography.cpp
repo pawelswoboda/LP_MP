@@ -8,12 +8,15 @@ using namespace std;
 
 // do zrobienia: this will not be needed anymore, once we include reparametrization into factor directly.
 template<typename FACTOR>
-struct FactorContainerMock : public std::vector<REAL> {
+struct FactorContainerMock {
    FactorContainerMock(FACTOR& f, std::vector<REAL>& cost) 
       : f_(f),
-      std::vector<REAL>(cost)
+      pot_(cost)
    {}
    FACTOR* GetFactor() { return &f_; }
+   REAL& operator[](INDEX i) { return pot_[i]; }
+   INDEX size() const { return pot_.size(); }
+   std::vector<REAL>& pot_;
    FACTOR& f_;
 };
 
@@ -30,7 +33,6 @@ TEST_CASE( "discrete tomography", "[dt]" ) {
 
    std::vector<INDEX> projectionVar {0,1,2,3};
    std::vector<REAL> projectionCost {10,10,0,100};
-
 
    
    SECTION( "counting factors/messages" ) { // a small triangle
@@ -61,8 +63,6 @@ TEST_CASE( "discrete tomography", "[dt]" ) {
             top_pot[j+i*pow(noLabels,2)] = projectionCost[i];
          }
       }
-
-
       FactorContainerMock<DiscreteTomographyFactorCounting> left_fac_cont(left_fac, left_pot);
       FactorContainerMock<DiscreteTomographyFactorCounting> right_fac_cont(right_fac, right_pot);
       FactorContainerMock<DiscreteTomographyFactorCounting> top_fac_cont(top_fac, top_pot);
@@ -81,7 +81,7 @@ TEST_CASE( "discrete tomography", "[dt]" ) {
       for(INDEX i=0; i<right_msg_var.size(); ++i) {
          right_msg.RepamLeft(right_fac_cont, right_msg_var[i], i);
          REQUIRE(*std::min_element(right_pot.begin(), right_pot.end()) >= -eps);
-         left_msg.RepamRight(top_fac_cont, -left_msg_var[i], i);
+         right_msg.RepamRight(top_fac_cont, -right_msg_var[i], i);
          REQUIRE(*std::min_element(top_pot.begin(), top_pot.end()) >= -eps);
       }
 
@@ -99,10 +99,9 @@ TEST_CASE( "discrete tomography", "[dt]" ) {
       for(INDEX i=0; i<right_msg_var.size(); ++i) {
          right_msg.RepamLeft(right_fac_cont, -right_msg_var[i], i);
          REQUIRE(*std::min_element(right_pot.begin(), right_pot.end()) >= -eps);
-         left_msg.RepamRight(top_fac_cont, left_msg_var[i], i);
+         right_msg.RepamRight(top_fac_cont, right_msg_var[i], i);
          REQUIRE(*std::min_element(top_pot.begin(), top_pot.end()) >= -eps);
       }
-
    }
 
    std::vector<std::string> options = {
