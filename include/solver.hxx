@@ -5,7 +5,6 @@
 #include "meta/meta.hpp"
 #include "function_existence.hxx"
 #include "template_utilities.hxx"
-#include "spdlog/spdlog.h"
 #include "tclap/CmdLine.h"
 #include "lp_interface/lp_interface.h"
 #include "boost/hana.hpp"

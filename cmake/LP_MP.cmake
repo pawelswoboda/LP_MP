@@ -21,8 +21,8 @@ link_directories(${Vc_LIB_DIR})
 # automatically downloaded repositories
 # can this possibly be done in one place only, i.e. in the superbuild?
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/meta_Project/include")
-add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/spdlog_Project")
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/spdlog_Project/include")
+#add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/spdlog_Project")
+#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/spdlog_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Catch_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/cpp_sort_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/OpenGM_Project/include")
