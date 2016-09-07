@@ -315,11 +315,9 @@ namespace LP_MP {
 
      assert(msg_dim < f->getSize(DiscreteTomographyFactorCounting::NODE::up));
      assert(repam[msg_dim] > -std::numeric_limits<REAL>::max());
-     assert(repam[msg_dim] >= -eps ); // only valid for positive factors everywhere
      if( std::isfinite(msg) ){ 
         repam[msg_dim] += msg; 
         assert(repam[msg_dim] > -std::numeric_limits<REAL>::max() );
-        assert(repam[msg_dim] >= -eps ); // only valid for positive factors everywhere
      }
      else{ repam[msg_dim] = std::numeric_limits<REAL>::infinity(); }
 
@@ -342,7 +340,6 @@ namespace LP_MP {
         if( std::isfinite(msg) ){
            repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] +=  msg; 
            assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] > -std::numeric_limits<REAL>::max());
-           assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] >= -eps); // do zrobienia: only for positive factors everywhere
         }
         else{
            repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] = std::numeric_limits<REAL>::infinity();
@@ -354,7 +351,6 @@ namespace LP_MP {
         if( std::isfinite(msg) ){      
            repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] += msg; 
            assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] > -std::numeric_limits<REAL>::max());
-           assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] >= -eps); // do zrobienia: only valid for positive factors everywhere
         }
         else{
            repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] = std::numeric_limits<REAL>::infinity();
