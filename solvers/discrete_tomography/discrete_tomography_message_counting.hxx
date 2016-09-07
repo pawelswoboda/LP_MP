@@ -197,7 +197,7 @@ namespace LP_MP {
         }
         for(INDEX i=0;i<msg_v.size();i++){
            assert(msg_v[i] > -1.0e-02);
-           msg[i] -= msg_v[i];
+           msg[i] -= omega*msg_v[i];
         }
      }
      else{
