@@ -329,7 +329,9 @@ int main()
    //InitTikzFiles(graphMatchingDatasets);
    // do zrobienia: renamce dataset of Hassan instances
 
-   RunSolver<FMC_MP_BOTH_SIDES,SqliteVisitor>(TORRESANI_MP_BOTH_SIDES_INPUT,graphMatchingHotelDatasets,mp_options,"hotel","AMP-B");
+   RunSolver<FMC_MP_BOTH_SIDES,SqliteVisitor,ProblemConstructorRoundingSolver<FMC_MP_BOTH_SIDES>>(TORRESANI_MP_BOTH_SIDES_INPUT,graphMatchingHotelDatasets,mp_options,"hotel","AMP-B");
+   assert(false);
+   /*
    RunSolver<FMC_MP_BOTH_SIDES,SqliteVisitor>(TORRESANI_MP_BOTH_SIDES_INPUT,graphMatchingHouseDatasets,mp_options,"house","AMP-B");
    //RunSolver<FMC_MP_BOTH_SIDES,SqliteVisitor>(TORRESANI_MP_BOTH_SIDES_INPUT,graphMatchingHassanDatasets,mp_options,"Hassan","AMP-B");
 
@@ -364,6 +366,6 @@ int main()
    RunSolver<FMC_MP_LEFT,SqliteVisitor>(UAI_MP_INPUT,graphMatchingWormsDatasets,mp_options,"worms","AMP-O");
    RunSolver<FMC_MCF_LEFT,SqliteVisitor>(UAI_MCF_INPUT,graphMatchingWormsDatasets,mcf_options,"worms","AMCF-O");
    RunSolver<FMC_GM_LEFT,SqliteVisitor>(UAI_GM_INPUT,graphMatchingWormsDatasets,gm_options,"worms","GM-O");
-
-   //FinishTikzFiles(graphMatchingDatasets);
+   */
+   return 0;
 }

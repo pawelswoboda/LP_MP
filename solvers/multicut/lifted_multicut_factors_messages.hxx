@@ -27,15 +27,15 @@ public:
       return cutEdgeContrib_ + liftedEdgeContrib_ + std::max(0.0,std::min(liftedEdgeForcedContrib_,-maxCutEdgeVal_));
 
 
-      std::cout << "lifted factor repam: ";
-      for(INDEX i=0; i<noCutEdges_; ++i) {
-         std::cout << repam[i] << ", ";
-      }
-      std::cout << ";;; ";
-      for(INDEX i=0; i<noLiftedEdges_; ++i) {
-         std::cout << repam[i+noCutEdges_] << ", ";
-      }
-      std::cout << "\n";
+      //std::cout << "lifted factor repam: ";
+      //for(INDEX i=0; i<noCutEdges_; ++i) {
+      //   std::cout << repam[i] << ", ";
+      //}
+      //std::cout << ";;; ";
+      //for(INDEX i=0; i<noLiftedEdges_; ++i) {
+      //   std::cout << repam[i+noCutEdges_] << ", ";
+      //}
+      //std::cout << "\n";
       // do zrobienia: recompute all statistics here from scratch, once they are introduced
       assert(repam.size() == size());
 
@@ -71,21 +71,27 @@ public:
    REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
    {
       assert(repam.size() == size());
+      assert(std::count(primal, primal + noCutEdges_ + noLiftedEdges_, unknownState) == 0);
       INDEX noCutEdgesOne = 0;
       REAL x = 0.0;
       for(INDEX i=0; i<noCutEdges_; ++i) {
+         assert(primal[i] != unknownState); // message should have inferred this
          noCutEdgesOne += primal[i];
          x += primal[i]*repam[i];
       }
       INDEX noLiftedEdgesOne = 0;
       for(INDEX i=0; i<noLiftedEdges_; ++i) {
+         assert(primal[i + noCutEdges_] != unknownState); // message should have inferred this
          noLiftedEdgesOne += primal[i + noCutEdges_];
          x += primal[i+noCutEdges_]*repam[i+noCutEdges_];
       }
       if(noCutEdgesOne < noCutEdges_ || noLiftedEdgesOne == noLiftedEdges_) {
          return x;
       } else {
-         return std::numeric_limits<REAL>::max();
+         assert(false);
+         //std::cout << "solution infeasible: #cut edges = 1: " << noCutEdgesOne << ", #cut edges = " << noCutEdges_ << ", #lifted edges = 1: " << noLiftedEdgesOne << ", #lifted edges = " << noLiftedEdges_ << "\n\n";
+         //exit(1);
+         return std::numeric_limits<REAL>::infinity();
       }
       assert(false); 
    }
@@ -239,6 +245,7 @@ public:
       assert(repamPot.size() == 1);
       repamPot[0] += msg;
    }
+
    template<typename G>
    void RepamRight(G& repamPot, const REAL msg, const INDEX msg_dim)
    {
@@ -263,6 +270,16 @@ public:
          repamPot.GetFactor()->MaxCutEdgeVal() = maxCutEdgeVal;
       }
    }
+
+    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    void
+    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+    {
+       assert(right[i_] == unknownState);
+       //std::cout << "cut edge index = " << i_ << ", primal value = " << INDEX(left[0]) << "\n";
+       right[i_] = left[0];
+    }
+
 
 private:
    INDEX i_; // index of cut edge in the multicut factor
@@ -313,6 +330,15 @@ public:
       repamPot.GetFactor()->LiftedEdgeContrib() += std::min(0.0,repamPot[i_]);
       repamPot.GetFactor()->LiftedEdgeForcedContrib() += std::max(0.0,repamPot[i_]);
    }
+
+    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    void
+    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+    {
+       assert(right[i_] == unknownState);
+       //std::cout << "lifted edge index = " << i_ << ", primal value = " << INDEX(left[0]) << "\n";
+       right[i_] = left[0];
+    }
 
 private:
    INDEX i_; // index of lifted edge in the multicut factor. Must be bigger than number of cut edges, smaller than size of cut factor

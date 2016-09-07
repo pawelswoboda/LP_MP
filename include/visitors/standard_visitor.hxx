@@ -6,7 +6,7 @@
 #include "mem_use.c"
 #include "tclap/CmdLine.h"
 #include <chrono>
-#include "spdlog/spdlog.h"
+//#include "spdlog/spdlog.h"
 
 /*
  minimal visitor class:
@@ -38,11 +38,12 @@ namespace LP_MP {
 
    // standard visitor class for LP_MP solver, when no custom visitor is given
    // do zrobienia: add xor arguments primalBoundComputationInterval, dualBoundComputationInterval with boundComputationInterval
-   template<class SOLVER>
+   // do zrobienia: shall visitor depend on solver?
+   //template<class SOLVER>
    class StandardVisitor {
       
       public:
-      StandardVisitor(TCLAP::CmdLine& cmd, SOLVER& pd)
+      StandardVisitor(TCLAP::CmdLine& cmd)
          :
             maxIterArg_("","maxIter","maximum number of iterations of LP_MP, default = 1000",false,1000,"positive integer",cmd),
             maxMemoryArg_("","maxMemory","maximum amount of memory (MB) LP_MP is allowed to use",false,std::numeric_limits<INDEX>::max(),"positive integer",cmd),
@@ -54,36 +55,38 @@ namespace LP_MP {
             ///////////////
             posConstraint_(),
             minDualImprovementArg_("","minDualImprovement","minimum dual improvement between iterations of LP_MP",false,0.0,&posConstraint_,cmd),
+            minDualImprovementIntervalArg_("","minDualImprovementInterval","the interval between which at least minimum dual improvement must occur",false,10,"positive integer",cmd),
             standardReparametrizationArg_("","standardReparametrization","mode of reparametrization: {anisotropic,uniform}",false,"anisotropic","{anisotropic|uniform}",cmd),
             roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution: {anisotropic|uniform}",false,"uniform","{anisotropic|uniform}",cmd),
             protocolateConsoleArg_("","protocolateConsole","protocolate on console (stdout)",cmd,false),
             protocolateFileArg_("","protocolateFile","file into which to protocolate progress of algorithm",false,"","file name",cmd),
-            pd_(pd),
             primalTime_(0)
       {}
 
-      LPVisitorReturnType begin(const LP* lp) // called, after problem is constructed. 
+      LpControl begin(LP& lp) // called, after problem is constructed. 
       {
          try {
             maxIter_ = maxIterArg_.getValue();
             maxMemory_ = maxMemoryArg_.getValue();
             remainingIter_ = maxIter_;
             minDualImprovement_ = minDualImprovementArg_.getValue();
+            minDualImprovementInterval_ = minDualImprovementIntervalArg_.getValue();
             timeout_ = timeoutArg_.getValue();
             //boundComputationInterval_ = boundComputationIntervalArg_.getValue();
             primalComputationInterval_ = primalComputationIntervalArg_.getValue();
             lowerBoundComputationInterval_ = lowerBoundComputationIntervalArg_.getValue();
 
-            standardReparametrization_ = standardReparametrizationArg_.getValue();
-            roundingReparametrization_ = roundingReparametrizationArg_.getValue();
+            standardReparametrization_ = LPReparametrizationModeConvert( standardReparametrizationArg_.getValue() );
+            roundingReparametrization_ = LPReparametrizationModeConvert( roundingReparametrizationArg_.getValue() );
             protocolateConsole_ = protocolateConsoleArg_.getValue();
             protocolateFile_ = protocolateFileArg_.getValue();
          } catch (TCLAP::ArgException &e) {
             std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
             exit(1);
          }
-         curDualBound_ = lp->LowerBound();
+         //curLowerBound_ = lp->LowerBound();
 
+         /*
          try {
             std::vector<spdlog::sink_ptr> sinks;
             if(protocolateConsole_) {
@@ -99,168 +102,123 @@ namespace LP_MP {
             std::cerr << "instantiating logger class failed: " << ex.what();
             throw std::runtime_error("could not instantiate logger");
          }
+         */
 
 
-         if( ! (standardReparametrization_ == "anisotropic" || standardReparametrization_ == "uniform") ) {
-            throw std::runtime_error("standard repararametrization mode must be {anisotropic|uniform}, is " + standardReparametrization_);
-         }
-         if( ! (roundingReparametrization_ == "anisotropic" || roundingReparametrization_ == "uniform") ) {
-            throw std::runtime_error("rounding repararametrization mode must be {anisotropic|uniform}, is " + roundingReparametrization_);
-         }
+         //if( ! (standardReparametrization_ == "anisotropic" || standardReparametrization_ == "uniform") ) {
+         //   throw std::runtime_error("standard repararametrization mode must be {anisotropic|uniform}, is " + standardReparametrization_);
+         //}
+         //if( ! (roundingReparametrization_ == "anisotropic" || roundingReparametrization_ == "uniform") ) {
+         //   throw std::runtime_error("rounding repararametrization mode must be {anisotropic|uniform}, is " + roundingReparametrization_);
+         //}
 
-         spdlog::get("logger")->info() << "Initial number of factors = " << lp->GetNumberOfFactors();
-         spdlog::get("logger")->info() << "Initial lower bound before optimizing = " << curDualBound_;
+         //spdlog::get("logger")->info() << "Initial number of factors = " << lp->GetNumberOfFactors();
+         std::cout << "Initial lower bound before optimizing = " << curLowerBound_ << "\n";
          beginTime_ = std::chrono::steady_clock::now();
 
-         if(roundingReparametrization_ == "anisotropic") {
-            return LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic;
-         } else if(roundingReparametrization_ == "uniform") {
-            return LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform;
-         } else {
-            throw std::runtime_error("parametrization not recognized");
-         }
+
+         LpControl ret;
+         ret.repam = roundingReparametrization_;
+         ret.computePrimal = true;
+         ret.computeLowerBound = true;
+         return ret;
       }
 
-
-      // the default
-      // do zrobienia: it makes little sense to have visit templatised. Just pass parameter as an argument
-      template<LPVisitorReturnType LP_STATE>
-      LPVisitorReturnType visit(LP* lp)
+      // LpControl says what was last command to solver, return type gives next
+      //template<typename SOLVER>
+      LpControl visit(const LpControl c, const REAL lowerBound, const REAL primalBound)
       {
-
+         lowerBound_.push_back(lowerBound); // rename to lowerBoundHistory_
          const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - beginTime_).count();
-         auto logger = spdlog::get("logger");
 
-         if(LP_STATE == LPVisitorReturnType::ReparametrizeUniform || LP_STATE == LPVisitorReturnType::ReparametrizeAnisotropic) {
+         // first output based on what lp solver did in last iteration
+         if(c.computePrimal == false && c.computeLowerBound == false) {
             // output nothing
-         } else if(LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundUniform || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic) {
-            logger->info() << "iteration = " << curIter_ << ", lower bound = " << lp->BestLowerBound() << ", time elapsed = " << timeElapsed << " milliseconds";
-         } else if(LP_STATE == LPVisitorReturnType::ReparametrizePrimalUniform || LP_STATE == LPVisitorReturnType::ReparametrizePrimalAnisotropic) {
-            assert(false);
-            ComputePrimal();
-            EvaluatePrimal();
-            logger->info() << "iteration = " << curIter_ << ", upper bound = " << lp->BestPrimalBound() << ", time elapsed = " << timeElapsed << " milliseconds";
-         } else if(LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic) {
-            ComputePrimal();
-            EvaluatePrimal();
-            logger->info() << "iteration = " << curIter_ << ", lower bound = " << lp->BestLowerBound() << ", upper bound = " << lp->BestPrimalBound() << ", time elapsed = " << timeElapsed << " milliseconds";
-         } else if(LP_STATE == LPVisitorReturnType::Break) {
-            auto endTime = std::chrono::steady_clock::now();
-            logger->info() << "Optimization took " << std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations";
-            return LPVisitorReturnType::Break;
-         } else if(LP_STATE == LPVisitorReturnType::Error) {
-            assert(false); // this case is currently not handled
          } else {
-            assert(false); // unknown case
+            std::cout << "iteration = " << curIter_;
+            if(c.computeLowerBound) {
+               std::cout << ", lower bound = " << lowerBound;
+            }
+            if(c.computePrimal) {
+               std::cout << ", upper bound = " << primalBound;
+            }
+            std::cout << ", time elapsed = " << timeElapsed << "\n";
+         }
+         if(c.end == true) {
+            auto endTime = std::chrono::steady_clock::now();
+            std::cout << "Optimization took " <<  std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations.\n";
+         } else if(c.error == true) {
+            assert(false); // this case is currently not handled
          }
 
          curIter_++;
          remainingIter_--;
 
-         if(LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic
-               || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic
-               || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundUniform
-               || LP_STATE == LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform) {
-            prevDualBound_ = curDualBound_;
-            curDualBound_ = lp->BestLowerBound();
+         LpControl ret;
+
+         if(c.computePrimal) {
+            prevLowerBound_ = curLowerBound_;
+            curLowerBound_ = lowerBound;
          }
          // check if optimization has to be terminated
          if(remainingIter_ == 0) {
-            logger->info("One iteration remaining");
-            return LPVisitorReturnType::Break;
+            std::cout << "One iteration remaining\n";
+            ret.end = true;
+            return ret;
          } 
-         if(lp->BestPrimalBound() <= lp->BestLowerBound() + eps) {
-            assert(lp->BestPrimalBound() + eps >= lp->BestLowerBound());
-            logger->info() << "Primal cost equals lower bound";
-            return LPVisitorReturnType::Break;
+         if(primalBound <= lowerBound + eps) {
+            assert(primalBound + eps >= lowerBound);
+            std::cout << "Primal cost " << primalBound << " greater equal lower bound " << lowerBound << "\n";
+            ret.end = true;
+            return ret;
          }
          if(timeout_ != std::numeric_limits<REAL>::max() && timeElapsed/1000 >= timeout_) {
-            logger->info() << "Timeout reached after " << timeElapsed << " seconds";
+            std::cout << "Timeout reached after " << timeElapsed << " seconds\n";
             remainingIter_ = std::min(INDEX(1),remainingIter_);
          }
          if(maxMemory_ > 0) {
             const INDEX memoryUsed = memory_used()/(1024*1024);
             if(maxMemory_ < memoryUsed) {
                remainingIter_ = std::min(INDEX(1),remainingIter_);
-               logger->info() << "Solver uses " << memoryUsed << " MB memory, aborting optimization";
+               std::cout << "Solver uses " << memoryUsed << " MB memory, aborting optimization\n";
             }
          }
-         if(minDualImprovement_ > 0 && curDualBound_ - prevDualBound_ < minDualImprovement_) {
-            logger->info() << "Dual improvement smaller than " << minDualImprovement_;
-            remainingIter_ = std::min(INDEX(1),remainingIter_);
+         if(c.computeLowerBound && curIter_ >= minDualImprovementInterval_ && minDualImprovementArg_.isSet()) {
+            const REAL prevLowerBound = lowerBound_[lowerBound_.size() - minDualImprovementInterval_];
+            if(minDualImprovement_ > 0 && curLowerBound_ - prevLowerBound < minDualImprovement_) {
+               std::cout << "Dual improvement smaller than " << minDualImprovement_ << " after " << minDualImprovementInterval_ << ", terminating optimization\n";
+               remainingIter_ = std::min(INDEX(1),remainingIter_);
+            }
          }
 
          if(remainingIter_ == 1) {
-            if(roundingReparametrization_ == "anisotropic") {
-               return LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic;
-            } else if(roundingReparametrization_ == "uniform") {
-               return LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform;
-            }
+            ret.computePrimal = true;
+            ret.computeLowerBound = true;
+            ret.repam = roundingReparametrization_;
+            return ret;
          }
 
 
-         // determine next state of solver
+         // determine next steps of solver
          if(curIter_ % primalComputationInterval_ == 0 && curIter_ % lowerBoundComputationInterval_ == 0) {
-            if(roundingReparametrization_ == "anisotropic") {
-               return LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic;
-            } else if(roundingReparametrization_ == "uniform") {
-               return LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform;
-            } else {
-               throw std::runtime_error("unknown rounding reparametrization mode: " + roundingReparametrization_);
-            }
+            ret.computePrimal = true;
+            ret.computeLowerBound = true;
+            ret.repam = roundingReparametrization_;
          } else if(curIter_ % primalComputationInterval_ == 0) {
-            if(roundingReparametrization_ == "anisotropic") {
-               return LPVisitorReturnType::ReparametrizePrimalAnisotropic;
-            } else if(roundingReparametrization_ == "uniform") {
-               return LPVisitorReturnType::ReparametrizePrimalUniform;
-            } else {
-               throw std::runtime_error("unknown rounding reparametrization mode: " + roundingReparametrization_);
-            }
+            ret.computePrimal = true;
+            ret.repam = roundingReparametrization_;
          } else if(curIter_ % lowerBoundComputationInterval_ == 0) {
-            if(standardReparametrization_ == "anisotropic") {
-               return LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic;
-            } else if(standardReparametrization_ == "uniform") {
-               return LPVisitorReturnType::ReparametrizeLowerBoundUniform;
-            } else {
-               throw std::runtime_error("unknown standard reparametrization mode: " + standardReparametrization_);
-            }
+            ret.computeLowerBound = true;
+            ret.repam = standardReparametrization_;
          } else {
-            if(standardReparametrization_ == "anisotropic") {
-               return LPVisitorReturnType::ReparametrizeAnisotropic;
-            } else if(standardReparametrization_ == "uniform") {
-               return LPVisitorReturnType::ReparametrizeUniform;
-            } else {
-               throw std::runtime_error("unknown standard reparametrization mode: " + standardReparametrization_);
-            }
+            ret.repam = standardReparametrization_;
          }
-         
-         assert(false);
+         return ret;
       }
-
-      void ComputePrimal()
-      {
-         auto primalComputationBeginTime = std::chrono::steady_clock::now();
-         pd_.ComputePrimal(currentPrimal_.begin());
-         auto primalComputationEndTime = std::chrono::steady_clock::now();
-         primalTime_ += std::chrono::duration_cast<std::chrono::milliseconds>(primalComputationEndTime - primalComputationBeginTime).count();
-      }
-
-      void EvaluatePrimal()
-      {
-         currentPrimalCost_ = pd_.GetLP().EvaluatePrimal(currentPrimal_.begin());
-         if(currentPrimalCost_ < bestPrimalCost_) {
-            std::swap(currentPrimal_, bestPrimal_);
-            std::swap(currentPrimalCost_, bestPrimalCost_);
-         }
-      }
-
-      REAL GetPrimalCost() const
-      { return bestPrimalCost_; }
-
       
       using TimeType = decltype(std::chrono::steady_clock::now());
       TimeType GetBeginTime() const { return beginTime_; }
-      REAL GetLowerBound() const { return curDualBound_; }
+      //`REAL GetLowerBound() const { return curLowerBound_; }
       INDEX GetIter() const { return curIter_; }
 
       protected:
@@ -273,6 +231,7 @@ namespace LP_MP {
       TCLAP::ValueArg<INDEX> lowerBoundComputationIntervalArg_;
       PositiveRealConstraint posConstraint_;
       TCLAP::ValueArg<REAL> minDualImprovementArg_;
+      TCLAP::ValueArg<INDEX> minDualImprovementIntervalArg_;
       TCLAP::ValueArg<std::string> standardReparametrizationArg_;
       TCLAP::ValueArg<std::string> roundingReparametrizationArg_;
       TCLAP::ValueArg<std::string> protocolateFileArg_;
@@ -286,64 +245,72 @@ namespace LP_MP {
       INDEX primalComputationInterval_;
       INDEX lowerBoundComputationInterval_;
       REAL minDualImprovement_;
+      INDEX minDualImprovementInterval_;
+      std::vector<REAL> lowerBound_; // do zrobienia: possibly make circular list out of this
       std::string protocolateFile_;
       // do zrobienia: make enum for reparametrization mode
-      std::string standardReparametrization_;
-      std::string roundingReparametrization_;
+      LPReparametrizationMode standardReparametrization_;
+      LPReparametrizationMode roundingReparametrization_;
       bool protocolateConsole_;
 
       // internal state of visitor
       INDEX remainingIter_;
       INDEX curIter_ = 0;
-      REAL prevDualBound_ = -std::numeric_limits<REAL>::max();
-      REAL curDualBound_ = -std::numeric_limits<REAL>::max();
+      REAL prevLowerBound_ = -std::numeric_limits<REAL>::max();
+      REAL curLowerBound_ = -std::numeric_limits<REAL>::max();
       TimeType beginTime_;
 
-      SOLVER& pd_;
-
       // primal
-      REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
-      REAL currentPrimalCost_ = std::numeric_limits<REAL>::infinity();
+      //REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
+      //REAL currentPrimalCost_ = std::numeric_limits<REAL>::infinity();
 
-      REAL bestLowerBound_ = -std::numeric_limits<REAL>::infinity();
-      REAL currentLowerBound_ = -std::numeric_limits<REAL>::infinity();
+      //REAL bestLowerBound_ = -std::numeric_limits<REAL>::infinity();
+      //REAL currentLowerBound_ = -std::numeric_limits<REAL>::infinity();
 
-      PrimalSolutionStorage currentPrimal_, bestPrimal_;
+      //PrimalSolutionStorage currentPrimal_, bestPrimal_;
       INDEX primalTime_;
    };
 
-   template<class SOLVER>
-   class StandardTighteningVisitor : public StandardVisitor<SOLVER>
+   //template<class SOLVER>
+   class StandardTighteningVisitor : public StandardVisitor //<SOLVER>
    {
-      using BaseVisitorType = StandardVisitor<SOLVER>;
+      using BaseVisitorType = StandardVisitor; //<SOLVER>;
       public:
-      StandardTighteningVisitor(TCLAP::CmdLine& cmd, SOLVER& pd)
+      StandardTighteningVisitor(TCLAP::CmdLine& cmd)
          :
-            BaseVisitorType(cmd,pd),
+            BaseVisitorType(cmd),
             tightenArg_("","tighten","enable tightening",cmd,false),
+            tightenReparametrizationArg_("","tightenReparametrization","reparametrization mode used when tightening. Overrides primal computation reparametrization mode",false,"uniform","(uniform|anisotropic)",cmd),
             tightenIterationArg_("","tightenIteration","number of iterations after which tightening is performed for the first time, default = never",false,std::numeric_limits<INDEX>::max(),"positive integer", cmd),
             tightenIntervalArg_("","tightenInterval","number of iterations between tightenings",false,std::numeric_limits<INDEX>::max(),"positive integer", cmd),
-            tightenConstraintsMaxArg_("","tightenConstraintsMax","maximal number of constraints to be added during tightening",false,20,"positive integer"),
-            tightenConstraintsPercentageArg_("","tightenConstraintsPercentage","maximal number of constraints to be added during tightening as percentage of number of initial factors",false,0.01,"positive real"),
+            tightenConstraintsMaxArg_("","tightenConstraintsMax","maximal number of constraints to be added during tightening",false,20,"positive integer",cmd),
+            tightenConstraintsPercentageArg_("","tightenConstraintsPercentage","maximal number of constraints to be added during tightening as percentage of number of initial factors",false,0.01,"positive real",cmd),
             posConstraint_(),
+            // do zrobienia: remove minDualIncrease and minDualDecreaseFactor
             tightenMinDualIncreaseArg_("","tightenMinDualIncrease","minimum increase which additional constraint must guarantee",false,0.0,&posConstraint_, cmd),
             unitIntervalConstraint_(),
             tightenMinDualDecreaseFactorArg_("","tightenMinDualDecreaseFactor","factor by which to decrease minimum dual increase during tightening",false,0.5,&unitIntervalConstraint_, cmd)
       {
-         cmd.xorAdd(tightenConstraintsMaxArg_,tightenConstraintsPercentageArg_);
+         //cmd.xorAdd(tightenConstraintsMaxArg_,tightenConstraintsPercentageArg_); // do zrobienia: this means that exactly one must be chosen. We want at most one to be chosen
       }
 
-      LPVisitorReturnType begin(const LP* lp) // called, after problem is constructed. 
+      LpControl begin(LP& lp) // called, after problem is constructed. 
       {
          try {
             tighten_ = tightenArg_.getValue();
+            tightenReparametrization_ = LPReparametrizationModeConvert( tightenReparametrizationArg_.getValue() );
             tightenIteration_ = tightenIterationArg_.getValue();
             tightenInterval_ = tightenIntervalArg_.getValue();
+            if(tightenConstraintsPercentageArg_.isSet() && tightenConstraintsMaxArg_.isSet()) {
+               throw std::runtime_error("Only one of tightenConstraintsPercentage and tightenConstraintsMax may be set");
+            }
             if(tightenConstraintsPercentageArg_.isSet()) {
                tightenConstraintsPercentage_ = tightenConstraintsPercentageArg_.getValue();
-               tightenConstraintsMax_ = INDEX(tightenConstraintsPercentage_ * lp->GetNumberOfFactors());
-            } else {
+               tightenConstraintsMax_ = INDEX(tightenConstraintsPercentage_ * lp.GetNumberOfFactors());
+            } else if(tightenConstraintsMaxArg_.isSet()) {
                tightenConstraintsMax_ = tightenConstraintsMaxArg_.getValue();
+            } else if(tightenArg_.isSet()) {
+               throw std::runtime_error("must set number of constraints to add");
             }
             tightenMinDualIncrease_ = tightenMinDualIncreaseArg_.getValue();
             tightenMinDualDecreaseFactor_ = tightenMinDualDecreaseFactorArg_.getValue();
@@ -356,37 +323,28 @@ namespace LP_MP {
       }
 
       // the default
-      template<LPVisitorReturnType LP_STATE>
-      LPVisitorReturnType visit(LP* lp)
+      //template<LPVisitorReturnType LP_STATE>
+      LpControl visit(const LpControl c, const REAL lowerBound, const REAL primalBound)
       {
-         const auto ret = BaseVisitorType::template visit<LP_STATE>(lp);
-         auto logger = spdlog::get("logger");
+         auto ret = BaseVisitorType::visit(c, lowerBound, primalBound);
          // do zrobienia: introduce tighten reparametrization
-         if(tighten_) {
-            if(LP_STATE != LPVisitorReturnType::Break) {
-               // do zrobienia: if one specifies tightenIteration = 0, this code does not work. 
-               if(this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_) {
-                  const INDEX noConstraintsAdded = Tighten();
-                  if(noConstraintsAdded <= tightenConstraintsMax_/2) {
-                     logger->info() << "Added only " << noConstraintsAdded << " constraints";
-                     logger->info() << "Decrease minimal dual increase in tightening, current minimal increase = " << tightenMinDualIncrease_;
-                     tightenMinDualIncrease_ *= tightenMinDualDecreaseFactor_;
-                  }
-                  if(noConstraintsAdded <= tightenConstraintsMax_/4) {
-                     logger->info() << "Tighten again";
-                     Tighten();
-                  }
-                  lastTightenIteration_ = this->GetIter();
-                  lp->Init(); // reinitialize factors, as they might have changed
-                  logger->info() << "New number of factors = " << lp->GetNumberOfFactors() << ", tightening took " << tightenTime_ << "ms";
-               }
-            } else if(LP_STATE == LPVisitorReturnType::Break) {
-               logger->info() << "Tightening took " << tightenTime_ << " milliseconds";
-            }
+
+
+         if((this->GetIter() == tightenIteration_ || this->GetIter() >= lastTightenIteration_ + tightenInterval_) ||
+               (tightenMinDualIncreaseArg_.isSet() && this->prevLowerBound_ >= lowerBound - tightenMinDualIncrease_)) {
+            ret.tighten = true;
+            ret.tightenConstraints = tightenConstraintsMax_;
+            ret.repam = tightenReparametrization_;
+            lastTightenIteration_ = this->GetIter();
          }
+
+         //if(c.end) {
+         //   logger->info() << "Tightening took " << tightenTime_ << " milliseconds";
+         //}
 
          return ret;
       }
+      /*
       INDEX Tighten()
       {
          auto tightenBeginTime = std::chrono::steady_clock::now();
@@ -395,9 +353,11 @@ namespace LP_MP {
          tightenTime_ += std::chrono::duration_cast<std::chrono::milliseconds>(tightenEndTime - tightenBeginTime).count();
          return constraintsAdded;
       }
+      */
 
       protected:
       TCLAP::SwitchArg tightenArg_;
+      TCLAP::ValueArg<std::string> tightenReparametrizationArg_;
       TCLAP::ValueArg<INDEX> tightenIterationArg_; // after how many iterations shall tightening be performed
       TCLAP::ValueArg<INDEX> tightenIntervalArg_; // interval between tightening operations.
       TCLAP::ValueArg<INDEX> tightenConstraintsMaxArg_; // How many constraints to add in tightening maximally
@@ -408,10 +368,9 @@ namespace LP_MP {
       TCLAP::ValueArg<REAL> tightenMinDualDecreaseFactorArg_; 
 
       bool tighten_;
+      LPReparametrizationMode tightenReparametrization_;
       bool tightenInNextIteration_ = false;
       bool resumeInNextIteration_ = false;
-      LPVisitorReturnType retBeforeTightening_;
-      LPReparametrizationMode repamModeBeforeTightening_;
       
       INDEX lastTightenIteration_ = std::numeric_limits<INDEX>::max()/2; // otherwise overflow occurs and tightening start immediately
       INDEX tightenIteration_;

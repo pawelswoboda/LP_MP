@@ -5,24 +5,31 @@
 #include <utility>
 #include <tuple>
 #include "config.hxx"
+#include "meta/meta.hpp"
 
 // mostly obsolete due to the meta-library
+// do zrobienia: remove altogether
 
 namespace LP_MP {
 
+   /* remove
    template<SIGNED_INDEX NUMERATOR, SIGNED_INDEX DENOMINATOR>
    struct RationalNumberTemplate
    {
       static constexpr REAL value = REAL(NUMERATOR)/REAL(DENOMINATOR);
 
    };
+   */
 
+   template<class LIST> using tuple_from_list = meta::apply<meta::quote<std::tuple>, LIST>;
+
+/*
    template<class LIST> struct tuple_from_list_impl {};
    template<template<class...> class LIST, class...T> 
       struct tuple_from_list_impl<LIST<T...> > 
       { using type = std::tuple<T...>; };
    template<class LIST> using tuple_from_list = typename tuple_from_list_impl<LIST>::type;
-
+*/
 
    // expression templates for various array transformations
    // introduce traits for expression templates such that Vc::Memory compatible expression templates are taken care of recursively

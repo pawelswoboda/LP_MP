@@ -99,32 +99,10 @@ namespace LP_MP {
   {
      assert(msg.size() == pow(numberOfLabels_,2));
      assert(repam_left.size() == pow(numberOfLabels_,2));
-     //assert(f_left->LowerBound( *(msg.GetLeftFactor()) ) > -1.0e-9);
-     
-     /*
-     auto PrintRepam = [&](){
-       for(INDEX j=0;j<repam_left.size();j++){
-         printf(" %8.3e ",(*(msg.GetLeftFactor()))[j]);
-       }
-       printf("\n");
-     };*/
-     
-     /*
-     for(INDEX j=0;j<repam_left.size();j++){
-       assert((*(msg.GetLeftFactor()))[j] == repam_left[j]);
-     }*/
-  
-     //printf("\np->t\n%.10f\n",omega);
-     //PrintRepam();
-     
+
      for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
         msg[i] -= omega*repam_left[i];
      }   
-     
-     //PrintRepam();
-     //printf("\n\n");
-     
-     //assert(f_left->LowerBound( *(msg.GetLeftFactor()) ) > -1.0e-9);
   }
 
   template<typename RIGHT_FACTOR, typename REPAM_ARRAY, typename MSG>
@@ -135,65 +113,41 @@ namespace LP_MP {
               (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left) +
               (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right) +
               (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::reg)));
-     
-     //assert(f_right->LowerBound( *(msg.GetRightFactor()) ) > -1.0e-9);
-              
+
      INDEX left_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left)/pow(numberOfLabels_,2);
      INDEX right_size =(*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right)/pow(numberOfLabels_,2);
      INDEX up_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up)/pow(numberOfLabels_,2);
 
      auto op = [&](INDEX i,INDEX j){ return (i+j < up_size) ? i+j : up_size; };
-     
-     /*
-     auto PrintRepam = [&](){
-       for(INDEX j=0;j<repam_right.size();j++){
-         printf(" %8.3e (%.3e) ",(*(msg.GetRightFactor()))[j],repam_right[j]);
-       }
-       printf("\n");
-     };*/
 
-     //for(INDEX j=0;j<repam_right.size();j++){
-     //  assert((*(msg.GetRightFactor()))[j] == repam_right[j]);
-     //}
-     
-     //printf("\nt->p\n%.10f\n",omega);
-     //PrintRepam();
      for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
-       REAL m = std::numeric_limits<REAL>::infinity();
-       INDEX b = i % numberOfLabels_;
-       INDEX c = ((i-b)/numberOfLabels_) % numberOfLabels_;
+        REAL m = std::numeric_limits<REAL>::infinity();
+        INDEX b = i % numberOfLabels_;
+        INDEX c = ((i-b)/numberOfLabels_) % numberOfLabels_;
 
-       REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
+        REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
 
-       for(INDEX j=0;j<pow(numberOfLabels_,2);j++){
-         INDEX a = j % numberOfLabels_;
-         INDEX d = ((j-a)/numberOfLabels_) % numberOfLabels_;
+        for(INDEX j=0;j<pow(numberOfLabels_,2);j++){
+           INDEX a = j % numberOfLabels_;
+           INDEX d = ((j-a)/numberOfLabels_) % numberOfLabels_;
 
-         auto z_up = [&](INDEX k){ return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-         auto z_left = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-         auto z_right = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+           auto z_up = [&](INDEX k){ return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+           auto z_left = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+           auto z_right = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
 
-         MinConv mc(z_left,z_right,left_size,right_size,up_size);
-         mc.CalcConv(op,z_left,z_right);
+           MinConv mc(z_left,z_right,left_size,right_size,up_size);
+           mc.CalcConv(op,z_left,z_right);
 
-         //printf("\n");
-         for(INDEX k=0;k<up_size;k++){
-           assert( k == (mc.getIdxA(k) + mc.getIdxB(k)));
+           for(INDEX k=0;k<up_size;k++){
+              assert( k == (mc.getIdxA(k) + mc.getIdxB(k)));
 
-           //printf("%d -- ",(int) (a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)) );
-           //printf("%.3e .. %.3e \n",mc.getConv(k),z_up(k));
-           REAL val = mc.getConv(k) + z_up(k);
-           m = std::min(m,val);
-         }
-       }
-       assert( (m + reg) > -1.0e-09);
-       //printf("-> %.3e + %.3e = %.3e\n",m,reg,m+reg);
-       msg[i] -= omega*(m + reg);
-     }
-     //printf("\n");
-     //PrintRepam();
-     //printf("\n\n");
-     //assert(f_right->LowerBound( *(msg.GetRightFactor()) ) > -1.0e-9);
+              REAL val = mc.getConv(k) + z_up(k);
+              m = std::min(m,val);
+           }
+        }
+        assert( (m + reg) > -eps);
+        msg[i] -= omega*(m + reg);
+     }    
   }
 
   template<typename G>

@@ -47,6 +47,45 @@ namespace LP_MP {
 
    // shortcut to indicate how big the message is: here it is determined only at runtime
    constexpr SIGNED_INDEX variableMessageSize = -1;
+
+
+   // do zrobienia: maybe put this into LP_MP.h
+   enum class LPReparametrizationMode {Anisotropic, Uniform, Undefined};
+
+   LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
+   {
+      if(s == "uniform") {
+         return LPReparametrizationMode::Uniform;
+      } else if(s == "anisotropic") {
+         return LPReparametrizationMode::Anisotropic;
+      } else {
+         throw std::runtime_error("reparametrization mode " + s + " unknown");
+      }
+   }
+
+   // steers optimization of LP solver. Is returned by visitor and processed by solver.
+   // also put this into solver.hxx
+   class LpControl {
+   public:
+      LPReparametrizationMode repam = LPReparametrizationMode::Undefined;
+      bool computePrimal = false;
+      bool computeLowerBound = false;
+      bool tighten = false;
+      bool end = false; // terminate optimization
+      bool error = false;
+      INDEX tightenConstraints = 0; // when given as return type, indicates how many constraints are to be added. When given as parameter to visitor, indicates how many were added.
+      REAL tightenMinDualIncrease = 0.0;
+   };
+
+
+   // hash function for various types
+   namespace hash {
+      static auto array2 = [](const std::array<INDEX,2> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1]); };
+      static auto array3 = [](const std::array<INDEX,3> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2]); };
+      static auto array4 = [](const std::array<INDEX,4> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3]); };
+   }
+
+
 }
 
 template class MinCost<LP_MP::SIGNED_INDEX,LP_MP::REAL>;

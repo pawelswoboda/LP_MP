@@ -19,6 +19,13 @@ public:
       delete [] id;
       delete [] sz;
    }
+   void reset(const INDEX N) {
+      cnt = N;
+      for(INDEX i=0; i<N; ++i) {
+         id[i] = i;
+         sz[i] = 1;
+      }
+   }
    // Return the id of component corresponding to object p.
    INDEX find(INDEX p) {
       INDEX root = p;

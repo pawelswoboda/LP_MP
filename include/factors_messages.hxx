@@ -35,8 +35,6 @@
 
 // do zrobienia: Introduce MessageConstraint and FactorConstraint for templates
 // cleanup name inconsistencies: MessageType, MessageDispatcher etc
-// rename MultiplexMargMessage into MultiplexMsg, EqualityMessage into EqualityMsg
-// do zrobienia: globally: BIG_LETTERS for templates, otherwise class names should be formatted as ClassName.
 
 namespace LP_MP {
 
@@ -340,6 +338,16 @@ struct MessageStorageSelector<SIZE, true> {
    using type = typename std::conditional<(SIZE >= 0), FixedSizeMessageStorage<INDEX(SIZE)>, VariableSizeMessageStorage>::type;
 };
 
+
+// Class holding message and left and right factor
+// We simulate holding two messages, one for the left and one for the right factor, each being the negative of the other one. Physically, we just hold one.
+// The following sign convention must be followed: 
+// {Left|Right}Repam use +
+// message computation uses -
+// Dispatch of signs to {Left|Right}Repam:
+// Left | Right
+//  -   |   +
+//
 template<typename MESSAGE_TYPE, 
          INDEX LEFT_FACTOR_NO, INDEX RIGHT_FACTOR_NO, SIGNED_INDEX NO_OF_LEFT_FACTORS, SIGNED_INDEX NO_OF_RIGHT_FACTORS,
          SIGNED_INDEX MESSAGE_SIZE, 
@@ -349,6 +357,7 @@ template<typename MESSAGE_TYPE,
 class MessageContainer : public MessageStorageSelector<MESSAGE_SIZE,true>::type, public MessageTypeAdapter
 {
 public:
+   using leftFactorNumber_t = std::integral_constant<INDEX, LEFT_FACTOR_NO>;
    static constexpr INDEX leftFactorNumber = LEFT_FACTOR_NO;
    static constexpr INDEX rightFactorNumber = RIGHT_FACTOR_NO;
 
@@ -640,7 +649,7 @@ public:
    template<bool IsAssignable = IsAssignableLeft()>
    typename std::enable_if<IsAssignable == true>::type
    RepamLeft(const REAL diff, const INDEX dim) {
-      msg_op_.RepamLeft(*leftFactor_, -diff, dim); // note: in right, we reparametrize by +diff, here by -diff
+      msg_op_.RepamLeft(*leftFactor_, diff, dim); // note: in right, we reparametrize by +diff, here by -diff
    }
    template<bool IsAssignable = IsAssignableLeft()>
    typename std::enable_if<IsAssignable == false>::type
@@ -723,14 +732,16 @@ public:
       */
       MsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
       {
-         if(CHIRALITY == Chirality::right) {
+         if(CHIRALITY == Chirality::right) { // message is computed by right factor
             static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) -= x;
-            msg_->RepamLeft( -x, dim_);
-            msg_->RepamRight(-x, dim_);
-         } else if (CHIRALITY == Chirality::left) {
-            static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) += x;
             msg_->RepamLeft( +x, dim_);
+            msg_->RepamRight(-x, dim_);
+         } else if (CHIRALITY == Chirality::left) { // message is computed by left factor
+            static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) += x;
+            msg_->RepamLeft(  -x, dim_);
             msg_->RepamRight( +x, dim_);
+            //msg_->RepamLeft( +x, dim_);
+            //msg_->RepamRight( +x, dim_);
          } else {
             assert(false);
          }
@@ -738,14 +749,17 @@ public:
       }
       MsgVal& operator+=(const REAL x) __attribute__ ((always_inline))
       {
-         if(CHIRALITY == Chirality::right) {
+         assert(false);
+         if(CHIRALITY == Chirality::right) { // message is computed by right factor
             static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) += x;
             msg_->RepamLeft( x, dim_);
             msg_->RepamRight( x, dim_);
-         } else if(CHIRALITY == Chirality::left) {
+         } else if(CHIRALITY == Chirality::left) { // message is computed by left factor
             static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) -= x;
-            msg_->RepamLeft( -x, dim_);
-            msg_->RepamRight( -x, dim_);
+            msg_->RepamLeft( x, dim_);
+            msg_->RepamRight( x, dim_);
+            //msg_->RepamLeft( -x, dim_);
+            //msg_->RepamRight( -x, dim_);
          } else {
             assert(false);
          }
@@ -781,9 +795,9 @@ public:
 
       RestrictedMsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
       {
-         if(CHIRALITY == Chirality::right) {
+         if(CHIRALITY == Chirality::right) { // message is computed by right factor
             msg_->RepamRight(-x, dim_);
-         } else if (CHIRALITY == Chirality::left) {
+         } else if (CHIRALITY == Chirality::left) { // message is computed by left factor
             msg_->RepamLeft(-x, dim_);
          } else {
             assert(false);
@@ -793,6 +807,7 @@ public:
 
       RestrictedMsgVal& operator+=(const REAL x) __attribute__ ((always_inline))
       {
+         assert(false);
          if(CHIRALITY == Chirality::right) {
             msg_->RepamRight(+x, dim_);
          } else if(CHIRALITY == Chirality::left) {
@@ -936,7 +951,6 @@ public:
       throw std::runtime_error("create constraints not implemented by message");
    }
 
-
    virtual void CreateConstraints(LpInterfaceAdapter* l) final
    {
       CreateConstraintsImpl(l);
@@ -1021,7 +1035,6 @@ public:
       return msg_val + GetMessageSum(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{},i);
    }
 
-
    void UpdateFactor(const std::vector<REAL>& omega) final
    {
       ReceiveMessages(omega);
@@ -1053,7 +1066,8 @@ public:
       factor_.PropagatePrimal(primal);
    }
 
-   void PropagatePrimal(PrimalSolutionStorage::Element primal) {
+   void PropagatePrimal(PrimalSolutionStorage::Element primal) 
+   {
       PropagatePrimalImpl(primal);
    }
 
@@ -1641,29 +1655,52 @@ protected:
    FactorType factor_; // the factor operation
    INDEX primalOffset_;
 
+   // we do this via templates only (no values), as types are incomplete yet. This is more cumbersome than a direct value computation as can be done usually.
+   /*
+   template<typename MESSAGE_LIST>
+   constexpr static auto MetaComputeMessageTuple()
+   {
+      //auto message_tuple = hana::transform(msg_list, [](auto m) { return std::declval<typename decltype(m)::type>(); }); // go from type_c to actual type
+      //auto left_message_type_tuple = hana::filter(msg_list, [](auto m) { return std::declval<typename decltype(m)::type>().LeftFactorNumber() == FACTOR_NO; });
+      auto msg_list_t = hana::type_c<MESSAGE_LIST>; // MESSAGE_LIST cannot be instantiated yet (incomplete type) -> hold it as type_c
+      // transform message list to tuple_t holding all the tuples
+      constexpr auto
+      auto has_same_left_factor = hana::is_valid([](auto&& x) -> decltype((void)x.leftFactorNumber) { });
+      //MESSAGE_LIST* msg_list;
+      //auto left_message_type_tuple = hana::filter(*msg_list, [](auto&& m) { return decltype(m)::leftFactorNumber == FACTOR_NO; });
+      //auto left_message_dispatcher_tuple = hana::transform(left_message_type_tuple, [](auto m) { return hana::type_c<MessageDispatcher<typename decltype(m)::type, LeftMessageFuncGetter>>; });
+      //auto right_message_tuple = hana::filter(msg_list, [](auto m) { return decltype(m)::type::rightFactorNumber == FACTOR_NO; });
+      //auto right_message_dispatcher_tuple = hana::transform(right_message_tuple, [](auto m) { return hana::type_c<MessageDispatcher<typename decltype(m)::type, RightMessageFuncGetter>>; });
+      //return hana::concat<left_message_dispatcher_tuple, right_message_dispatcher_tuple>;
+
+      //return left_message_dispatcher_tuple;
+      return hana::type_c<char>;
+   }
+   */
+
+   //decltype(MetaComputeMessageTuple<typename FACTOR_MESSAGE_TRAIT::MessageListHana>()) test;
+
    // compile time metaprogramming to transform Factor-Message information into lists of which messages this factor must hold
    // first get lists with left and right message types
    struct get_msg_type_list {
       template<typename LIST>
-         using apply = typename LIST::MessageContainerType;
+         using invoke = typename LIST::MessageContainerType;
    };
    struct get_left_msg {
       template<class LIST>
-         //using apply = typename std::is_same<meta::size_t<LIST::leftFactorNo>, meta::size_t<FACTOR_NO>>::type;
-         using apply = typename std::is_same<meta::size_t<LIST::leftFactorNumber>, meta::size_t<FACTOR_NO>>::type;
+         using invoke = typename std::is_same<meta::size_t<LIST::leftFactorNumber>, meta::size_t<FACTOR_NO>>::type;
    };
    struct get_right_msg {
       template<class LIST>
-         //using apply = typename std::is_same<meta::size_t<LIST::rightFactorNo>, meta::size_t<FACTOR_NO> >::type;
-         using apply = typename std::is_same<meta::size_t<LIST::rightFactorNumber>, meta::size_t<FACTOR_NO> >::type;
+         using invoke = typename std::is_same<meta::size_t<LIST::rightFactorNumber>, meta::size_t<FACTOR_NO> >::type;
    };
    struct get_left_msg_container_type_list {
       template<class LIST>
-         using apply = typename LIST::LeftMessageContainerStorageType;
+         using invoke = typename LIST::LeftMessageContainerStorageType;
    };
    struct get_right_msg_container_type_list {
       template<class LIST>
-         using apply = typename LIST::RightMessageContainerStorageType;
+         using invoke = typename LIST::RightMessageContainerStorageType;
    };
 
    using left_msg_list = meta::transform< meta::filter<typename FACTOR_MESSAGE_TRAIT::MessageList, get_left_msg>, get_msg_type_list>;
@@ -1674,11 +1711,11 @@ protected:
    // now construct a tuple with left and right dispatcher
    struct left_dispatch {
       template<class LIST>
-         using apply = MessageDispatcher<LIST, LeftMessageFuncGetter>;
+         using invoke = MessageDispatcher<LIST, LeftMessageFuncGetter>;
    };
    struct right_dispatch {
       template<class LIST>
-         using apply = MessageDispatcher<LIST, RightMessageFuncGetter>;
+         using invoke = MessageDispatcher<LIST, RightMessageFuncGetter>;
    };
    using left_dispatcher_list = meta::transform< left_msg_list, left_dispatch >;
    using right_dispatcher_list = meta::transform< right_msg_list, right_dispatch >;

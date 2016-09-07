@@ -213,32 +213,32 @@ namespace LP_MP {
     template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
     void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor)
     { 
-      //printf("left: %d .. right: %d \n",lp->GetLeftFactorSize(),lp->GetRightFactorSize());
+      auto no_constraints = 0;
+      for(auto i=0; i<LeftFactor->size(); ++i){ 
+        no_constraints = std::max(loopLeft_.GetMsgIndex(i), no_constraints);
+      } 
+      no_constraints++; 
+    
+      std::vector<std::vector<INDEX>> leftIndices(no_constraints), rightIndices(no_constraints);
       
-      INDEX FactorSize = lp->GetLeftFactorSize();
+      for(auto i=0; i<LeftFactor->size(); ++i){
+        leftIndices[loopLeft_.GetMsgIndex(i)].push_back(i); 
+      }
+      for(auto i=0; i<RightFactor->size(); ++i){
+        rightIndices[loopRight_.GetMsgIndex(i)].push_back(i); 
+      }
+          
+      for(auto i=0; i<no_constraints ; i++){
+        LinExpr lhs,rhs;
+        for(auto l=0; l<leftIndices[i].size(); l++){
+          lhs += lp->GetLeftVariable(leftIndices[i][l]);
+        }
+        for(auto r=0; r<rightIndices[i].size(); r++){
+          rhs += lp->GetRightVariable(rightIndices[i][r]);
+        }
+        lp->addLinearEquality(lhs,rhs);
+      }
       
-      std::vector<LinExpr> lhs;
-      std::vector<LinExpr> rhs;
-      
-      loopRight_.loop( 
-	     [&](const INDEX outer_idx){ 
-	       LinExpr left,right;
-         lhs.push_back(left);
-         rhs.push_back(right);
-         assert( outer_idx < FactorSize );
-         rhs.back() += lp->GetLeftVariable(outer_idx);
-         //printf("start: %d \n",outer_idx);
-	     }, 
-	     [&](const INDEX full_idx, const INDEX outer_idx){ 
-         //printf("full: %d .. outer: %d \n",full_idx,outer_idx);
-         lhs.back() += lp->GetRightVariable(full_idx);
-	     },
-	     [&](const INDEX outer_idx){ 
-         lp->addLinearEquality(lhs.back(),rhs.back());
-         //printf("ende: %d \n",outer_idx);
-	     } );
-       
-       assert(lhs.size() == FactorSize);
     }
   
   private:
