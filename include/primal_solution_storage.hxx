@@ -1,6 +1,7 @@
 #ifndef LP_MP_PRIMAL_SOLUTION_STORAGE_HXX
 #define LP_MP_PRIMAL_SOLUTION_STORAGE_HXX
 
+#include "config.hxx"
 #include <vector>
 
 namespace LP_MP {
