@@ -17,8 +17,8 @@
 #include "topological_sort.hxx"
 #include <memory>
 #include <iterator>
-#include "lp_interface/lp_interface.h"
 #include "primal_solution_storage.hxx"
+#include "lp_interface/lp_interface.h"
 
 namespace LP_MP {
 

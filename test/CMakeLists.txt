@@ -18,6 +18,5 @@ if(BUILD_TESTS)
 
    add_test(NAME LP_MP_TEST COMMAND test_main)
 
-   add_subdirectory(discrete_tomography)
 endif()
 

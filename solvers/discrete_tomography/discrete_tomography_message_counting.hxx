@@ -21,6 +21,9 @@ namespace LP_MP {
     // RIGHT -> TOP Ternary
     // LEFT  -> BOTTOM Ternary
 
+    template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
+    void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor) const;
+    
     /* repam.GetFactor()->&f  */
       
     //template<typename RIGHT_FACTOR, typename G1, typename G2>
@@ -114,6 +117,30 @@ namespace LP_MP {
   }
   */
 
+  template<DIRECTION DR>
+  template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
+  void DiscreteTomographyMessageCounting<DR>::CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor) const {
+    INDEX upSize = (*RightFactor).getSize(DiscreteTomographyFactorCounting::NODE::up);
+    INDEX leftSize = (*RightFactor).getSize(DiscreteTomographyFactorCounting::NODE::left);
+    INDEX rightSize = (*RightFactor).getSize(DiscreteTomographyFactorCounting::NODE::right);
+
+    INDEX noVars = (*LeftFactor).getSize(DiscreteTomographyFactorCounting::NODE::up);
+    auto CoupleConstraints = [&](INDEX offset){
+      for(INDEX i=0;i<noVars;i++){
+        LinExpr lhs,rhs;
+        lhs += lp->GetLeftVariable(i);
+        rhs += lp->GetRightVariable(offset + i);
+        lp->addLinearEquality(lhs,rhs);
+      }
+    };
+    if( DR == DIRECTION::left ){
+      assert((*LeftFactor).getSize(DiscreteTomographyFactorCounting::NODE::up) == leftSize );
+      CoupleConstraints(upSize);
+    } else {
+      assert((*LeftFactor).getSize(DiscreteTomographyFactorCounting::NODE::up) == rightSize );
+      CoupleConstraints(upSize+leftSize);
+    }
+  }
 
   template<DIRECTION DR>
   template<typename RIGHT_FACTOR, typename REPAM_ARRAY, typename MSG>
@@ -178,7 +205,7 @@ namespace LP_MP {
            }
         }
         for(INDEX i=0;i<msg_v.size();i++){
-           assert(msg_v[i] > -1.0e-02);
+           assert(msg_v[i] > -eps);
            msg[i] -= omega*msg_v[i];
         }
      }
@@ -232,7 +259,7 @@ namespace LP_MP {
            }
         }
         for(INDEX i=0;i<msg_v.size();i++){
-           assert(msg_v[i] > -1.0e-02);
+           assert(msg_v[i] > -eps);
            msg[i] -= omega*msg_v[i];
         }
      }      
@@ -242,9 +269,6 @@ namespace LP_MP {
   template<typename LEFT_FACTOR, typename REPAM_ARRAY, typename MSG>
   void DiscreteTomographyMessageCounting<DR>::MakeLeftFactorUniform(LEFT_FACTOR* const f_left, const REPAM_ARRAY& repam_left, MSG& msg, const REAL omega)
   {
-     for(INDEX i=0; i<repam_left.size(); ++i) {
-        assert(repam_left[i] >= -eps);
-     }
      assert(msg.size() == (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up));
      assert(repam_left.size() == ((*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up) +
               (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::left) +
@@ -294,7 +318,7 @@ namespace LP_MP {
         }
      }
      for(INDEX i=0;i<msg_v.size();i++){
-        assert(msg_v[i] > -1.0e-02);
+        assert(msg_v[i] > -eps);
         msg[i] -= omega*msg_v[i];
      }
  
@@ -304,22 +328,19 @@ namespace LP_MP {
   template<DIRECTION DR>
   template<typename G>
   void DiscreteTomographyMessageCounting<DR>::RepamLeft(G& repam, const REAL msg, const INDEX msg_dim){
-
-     assert(repam[msg_dim] >= -eps); // holds only for positive factors
-     assert(!std::isnan(msg));
-     auto f = repam.GetFactor();
-     assert( repam.size() == (f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
-              f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
-              f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
-              f->getSize(DiscreteTomographyFactorCounting::NODE::reg)));
+    
+    assert(!std::isnan(msg));
+    auto f = repam.GetFactor();
+    assert( repam.size() == (f->getSize(DiscreteTomographyFactorCounting::NODE::left) +
+                             f->getSize(DiscreteTomographyFactorCounting::NODE::right) +
+                             f->getSize(DiscreteTomographyFactorCounting::NODE::up) +
+                             f->getSize(DiscreteTomographyFactorCounting::NODE::reg)));
 
      assert(msg_dim < f->getSize(DiscreteTomographyFactorCounting::NODE::up));
      assert(repam[msg_dim] > -std::numeric_limits<REAL>::max());
-     assert(repam[msg_dim] >= -eps ); // only valid for positive factors everywhere
      if( std::isfinite(msg) ){ 
         repam[msg_dim] += msg; 
         assert(repam[msg_dim] > -std::numeric_limits<REAL>::max() );
-        assert(repam[msg_dim] >= -eps ); // only valid for positive factors everywhere
      }
      else{ repam[msg_dim] = std::numeric_limits<REAL>::infinity(); }
 
@@ -342,7 +363,6 @@ namespace LP_MP {
         if( std::isfinite(msg) ){
            repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] +=  msg; 
            assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] > -std::numeric_limits<REAL>::max());
-           assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] >= -eps); // do zrobienia: only for positive factors everywhere
         }
         else{
            repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + msg_dim] = std::numeric_limits<REAL>::infinity();
@@ -354,7 +374,6 @@ namespace LP_MP {
         if( std::isfinite(msg) ){      
            repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] += msg; 
            assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] > -std::numeric_limits<REAL>::max());
-           assert(repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] >= -eps); // do zrobienia: only valid for positive factors everywhere
         }
         else{
            repam[f->getSize(DiscreteTomographyFactorCounting::NODE::up) + f->getSize(DiscreteTomographyFactorCounting::NODE::left) + msg_dim] = std::numeric_limits<REAL>::infinity();
