@@ -107,7 +107,9 @@ public:
       }
    }
 
-  void CreateConstraints(LpInterfaceAdapter* lp) const {
+  INDEX GetNumberOfAuxVariables() const { return 0; }
+   
+  void CreateConstraints(LpInterfaceAdapter* lp) const { 
     LinExpr lhs;
     for(INDEX i=0;i<lp->GetFactorSize();i++){
       lhs += lp->GetVariable(i);

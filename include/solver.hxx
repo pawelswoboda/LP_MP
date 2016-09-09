@@ -356,18 +356,112 @@ private:
   VISITOR visitor_;
 };
 
+template<typename SOLVER, typename VISITOR, typename LpSolver>
+class VisitorLpSolver : public SOLVER {
+public:
+   VisitorLpSolver(int argc, char** argv) :
+      SOLVER(),
+      visitor_(SOLVER::cmd_),
+      LP_("","lp","use reparametrization for generating an lp",SOLVER::cmd_),
+      LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_,true),
+      RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
+      timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
+      threads_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_)
+   {
+      this->Init(argc,argv);
+   }
+   VisitorLpSolver(const std::vector<std::string>& arg) :
+      SOLVER(),
+      visitor_(SOLVER::cmd_),
+      LP_("","lp","use reparametrization for generating an lp",SOLVER::cmd_),
+      LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_,true),
+      RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
+      timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
+      threads_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_)
+   {
+      this->Init(arg);
+   }
+   
+   ~VisitorLpSolver(){
+     delete lpSolver_;
+   }
+   
+    template<class T,class E>
+    class FactorMessageIterator {
+    public:
+      FactorMessageIterator(T w,INDEX i)
+        : wrapper_(w),idx(i){ }
+      FactorMessageIterator& operator++() {++idx;return *this;}
+      FactorMessageIterator operator++(int) {FactorMessageIterator tmp(*this); operator++(); return tmp;}
+      bool operator==(const FactorMessageIterator& rhs) {return idx==rhs.idx;}
+      bool operator!=(const FactorMessageIterator& rhs) {return idx!=rhs.idx;}
+      E* operator*() {return wrapper_(idx);}
+      E* operator->() {return wrapper_(idx);}
+      INDEX idx;
+    private:
+      T wrapper_;
+    };
+   
+   int Solve() 
+   {
+      this->lp_.Init(); 
+      LpControl c = visitor_.begin(this->lp_);
+      if(LPOnly_.getValue()){        
+        while(!c.end) {
+           this->PreIterate(c);
+           this->Iterate(c);
+           this->PostIterate(c);
+           c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
+        }
+      }
+      
+      if(LP_.getValue() || !LPOnly_.getValue()){
+        auto FactorWrapper = [&](INDEX i){ return SOLVER::lp_.GetFactor(i);};
+        FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItBegin(FactorWrapper,0);
+        FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItEnd(FactorWrapper,SOLVER::lp_.GetNumberOfFactors());
+
+        auto MessageWrapper = [&](INDEX i){ return SOLVER::lp_.GetMessage(i);};
+        FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
+        FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,SOLVER::lp_.GetNumberOfMessages());
+        
+        lpSolver_ = new LpSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
+        lpSolver_->SetTimeLimit(timelimit_.getValue());
+        lpSolver_->SetNumberOfThreads(threads_.getValue());
+        
+        lpSolver_->solve();
+      }
+      
+      return c.error;
+   }
+
+private:
+  VISITOR visitor_;
+  LpInterfaceAdapter* lpSolver_;
+  
+  TCLAP::ValueArg<REAL> timelimit_;
+  TCLAP::ValueArg<INDEX> threads_;
+  TCLAP::SwitchArg LP_;
+  TCLAP::SwitchArg LPOnly_;
+  TCLAP::SwitchArg RELAX_;
+  
+};
+
   // solver for rounding with standard (I)LP-solver
   template<typename FMC,class LpSolver>
   class LpRoundingSolver : public Solver<FMC> {
 
   public:
     LpRoundingSolver(int argc, char** argv)
-      : Solver<FMC>(),LpOutputFile_("","lpFile","write LP model",false,"","file name",Solver<FMC>::cmd_){
+      : Solver<FMC>(),
+      LpOutputFile_("","lpFile","write LP model",false,"","file name",Solver<FMC>::cmd_),
+      MIP_("","relax","solve the mip relaxation",Solver<FMC>::cmd_,true){
       Solver<FMC>::Init(argc,argv);
     }
 
     LpRoundingSolver(const std::vector<std::string>& arg)
-      : Solver<FMC>(),LpOutputFile_("","lpFile","write LP model",false,"","file name",Solver<FMC>::cmd_){
+      : Solver<FMC>(),
+        LpOutputFile_("","lpFile","write LP model",false,"","file name",Solver<FMC>::cmd_),
+        MIP_("","relax","solve the mip relaxation",Solver<FMC>::cmd_,true){
       Solver<FMC>::Init(arg);
     }
     
@@ -406,7 +500,8 @@ private:
       FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
       FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,Solver<FMC>::lp_.GetNumberOfMessages());
       
-      lpSolver_ = new LpSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd);
+      lpSolver_ = new LpSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,MIP_.getValue());
+      
       if( LpOutputFile_.isSet() ){
         lpSolver_->WriteLpModel(LpOutputFile_.getValue());
       } else {
@@ -421,6 +516,8 @@ private:
     PrimalSolutionStorage lpPrimal_;
 
     TCLAP::ValueArg<std::string> LpOutputFile_;
+    TCLAP::SwitchArg MIP_;
+    //TCLAP::SwitchArg intConstr ("","integer","solving a mip",cmd);
   
   };
 
@@ -506,6 +603,15 @@ int main(int argc, char* argv[]) \
    return solver.Solve(); \
 }
 
+// Macro for generating main function with specific solver with additional LP option
+#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_LPVISITOR(FMC,PARSE_PROBLEM_FUNCTION,VISITOR,LPSOLVER) \
+using namespace LP_MP; \
+int main(int argc, char* argv[]) \
+{ \
+   VisitorLpSolver<Solver<FMC>,VISITOR,LPSOLVER> solver(argc,argv); \
+   solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
+   return solver.Solve(); \
+}
 
 
 } // end namespace LP_MP
