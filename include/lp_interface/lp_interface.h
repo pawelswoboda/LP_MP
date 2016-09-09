@@ -36,14 +36,20 @@ namespace LP_MP {
     virtual LpVariable GetVariable(const INDEX i) const = 0;
     virtual LpVariable GetLeftVariable(const INDEX i) const = 0;
     virtual LpVariable GetRightVariable(const INDEX i) const = 0;
+
+    virtual REAL GetVariableValue(const INDEX i) const = 0;
+    virtual REAL GetObjectiveValue() const = 0;
+    virtual REAL GetBestBound() const = 0;
     
     virtual void SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer = false) = 0;
+    virtual void SetTimeLimit(REAL t) = 0;
+    virtual void SetNumberOfThreads(INDEX t) = 0;
     
     virtual void addLinearEquality(LinExpr lhs,LinExpr rhs) = 0;
     virtual void addLinearInequality(LinExpr lhs,LinExpr rhs) = 0;
     
-    virtual void solve() = 0;
-    virtual void solve(PrimalSolutionStorage::Element primal) = 0;
+    virtual int solve() = 0;
+    virtual int solve(PrimalSolutionStorage::Element primal) = 0;
 
     virtual void WriteLpModel(std::string name) = 0;
     

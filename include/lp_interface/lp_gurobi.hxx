@@ -14,6 +14,10 @@ namespace LP_MP {
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
     LpInterfaceGurobi(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd)
       : env_(GRBEnv()),model_(GRBModel(env_)) {
+
+      // Standard Parameter for Gurobi
+      model_.getEnv().set(GRB_DoubleParam_TimeLimit,3600);
+      model_.getEnv().set(GRB_IntParam_Threads,1);
       
       noVars_ = 0; 
       for(auto factorIt = factorBegin; factorIt != factorEnd; ++factorIt) {
@@ -59,17 +63,23 @@ namespace LP_MP {
     INDEX GetLeftFactorSize() const { return leftSize_; }
     INDEX GetRightFactorSize() const { return rightSize_; }
         
-    LpVariable GetVariable(const INDEX i) const { assert(i < size_); return MainVars_[Offset_ + i]; }
-    LpVariable GetLeftVariable(const INDEX i) const { assert(i < leftSize_); return MainVars_[OffsetLeft_ + i]; }
-    LpVariable GetRightVariable(const INDEX i) const { assert(i < rightSize_); return MainVars_[OffsetRight_ + i]; }
+    LpVariable GetVariable(const INDEX i) const { assert(i < size_);  assert(Offset_ + i < noVars_); return MainVars_[Offset_ + i]; }
+    LpVariable GetLeftVariable(const INDEX i) const { assert(i < leftSize_); assert(OffsetLeft_ + i < noVars_); return MainVars_[OffsetLeft_ + i]; }
+    LpVariable GetRightVariable(const INDEX i) const { assert(i < rightSize_); assert(OffsetRight_ + i < noVars_); return MainVars_[OffsetRight_ + i]; }
+
+    REAL GetVariableValue(const INDEX i) const;
+    REAL GetObjectiveValue() const;
+    REAL GetBestBound() const;
     
     void SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer = false);
+    void SetTimeLimit(REAL t){ model_.getEnv().set(GRB_DoubleParam_TimeLimit,t); }
+    void SetNumberOfThreads(INDEX t){ model_.getEnv().set(GRB_IntParam_Threads,t); };
     
     void addLinearEquality(LinExpr lhs,LinExpr rhs);
     void addLinearInequality(LinExpr lhs,LinExpr rhs);
     
-    void solve();
-    void solve(PrimalSolutionStorage::Element primal) { solve(); }
+    int solve();
+    int solve(PrimalSolutionStorage::Element primal) { return solve(); }
 
     void WriteLpModel(std::string name){ model_.write(name); }
     
@@ -83,8 +93,26 @@ namespace LP_MP {
     INDEX noVars_;    
   };
 
-  void LpInterfaceGurobi::solve(){
-    
+  int LpInterfaceGurobi::solve(){
+    int status = 2;
+    try{
+      model_.optimize();
+      status = 0;
+    }
+    catch(GRBException e) {
+      std::cout << "Error code = " << e.getErrorCode() << std::endl;
+      std::cout << e.getMessage() << std::endl;
+    }
+    return status;
+  }
+
+  REAL LpInterfaceGurobi::GetVariableValue(const INDEX i) const{
+    assert(i < noVars_);
+    return MainVars_[i].get(GRB_DoubleAttr_X);
+  }
+
+  REAL LpInterfaceGurobi::GetObjectiveValue() const{
+    return model_.get(GRB_DoubleAttr_ObjVal);
   }
   
   void LpInterfaceGurobi::SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer){
@@ -115,6 +143,14 @@ namespace LP_MP {
     }
     model_.update();
     return v;
+  }
+
+  REAL LpInterfaceGurobi::GetBestBound() const{
+    REAL bound = 0.0;
+    if(model_.get(GRB_IntAttr_IsMIP)){
+      bound = model_.get(GRB_DoubleAttr_ObjBound);
+    }
+    return bound;
   }
   
 }

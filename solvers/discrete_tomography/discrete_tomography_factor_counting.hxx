@@ -219,7 +219,7 @@ namespace LP_MP{
 	
         m_new = mc.getConv(j)+z_up(j)+reg;
         m = std::min(m,m_new);
-        assert(m > -1.0e-02);
+        assert(m > -eps);
       }
     }
     return m;
