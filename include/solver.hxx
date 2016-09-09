@@ -392,7 +392,9 @@ private:
     };
   
     int Solve(){
-            
+      
+      Solver<FMC>::lp_.Init();
+      
       auto FactorWrapper = [&](INDEX i){ return Solver<FMC>::lp_.GetFactor(i);};
       FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItBegin(FactorWrapper,0);
       FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItEnd(FactorWrapper,Solver<FMC>::lp_.GetNumberOfFactors());
