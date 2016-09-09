@@ -8,7 +8,7 @@ if(BUILD_TESTS)
    enable_testing()
 
    add_executable(test_main test_main.cpp ${headers} ${sources})
-   target_link_libraries(test_main Vc m stdc++ pthread )
+   target_link_libraries(test_main Vc m stdc++ pthread ${GUROBI_LIBRARIES})
 
    foreach( source_file ${TEST_FILES} )
       string( REPLACE "_unit_test.cpp" "" object ${source_file} )
@@ -16,6 +16,9 @@ if(BUILD_TESTS)
       target_link_libraries(test_main Vc ${object})
    endforeach( source_file ${TEST_FILES} )
 
+    target_compile_definitions(discrete_tomography.cpp PUBLIC -DUSE_GUROBI)
+    target_include_directories(discrete_tomography.cpp PUBLIC ${GUROBI_INCLUDE_DIR})
+   
    add_test(NAME LP_MP_TEST COMMAND test_main)
 
 endif()

@@ -27,6 +27,7 @@ namespace LP_MP {
       /* Add Factor Constraints */
       for(auto factorIt = factorBegin; factorIt != factorEnd; ++factorIt) {
         Offset_ = factorIt->GetPrimalOffset();
+        printf("offset -> %d \n",Offset_);
         size_ = factorIt->size();
         for(INDEX i=0;i<size_;++i) {
           REAL value = factorIt->GetReparametrizedPotential()[i];
@@ -59,9 +60,9 @@ namespace LP_MP {
     INDEX GetLeftFactorSize() const { return leftSize_; }
     INDEX GetRightFactorSize() const { return rightSize_; }
         
-    LpVariable GetVariable(const INDEX i) const { assert(i < size_); return MainVars_[Offset_ + i]; }
-    LpVariable GetLeftVariable(const INDEX i) const { assert(i < leftSize_); return MainVars_[OffsetLeft_ + i]; }
-    LpVariable GetRightVariable(const INDEX i) const { assert(i < rightSize_); return MainVars_[OffsetRight_ + i]; }
+    LpVariable GetVariable(const INDEX i) const { assert(i < size_);  assert(Offset_ + i < noVars_); return MainVars_[Offset_ + i]; }
+    LpVariable GetLeftVariable(const INDEX i) const { assert(i < leftSize_); assert(OffsetLeft_ + i < noVars_); return MainVars_[OffsetLeft_ + i]; }
+    LpVariable GetRightVariable(const INDEX i) const { assert(i < rightSize_); assert(OffsetRight_ + i < noVars_); return MainVars_[OffsetRight_ + i]; }
     
     void SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer = false);
     
