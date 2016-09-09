@@ -180,8 +180,8 @@ TEST_CASE( "discrete tomography", "[dt]" ) {
    }
 
    std::vector<std::string> options = {
-      {"discrete tomography test"},
-      {"--lpFile"},{"model.lp"},
+     {"discrete tomography test"},
+      //{"--lpFile"},{"model.lp"},
       {"-i"}, {""}, // note: we dot not have an input file, but argument is mandatory
       //{"--maxIter"}, {"10"},
       //{"--lowerBoundComputationInterval"}, {"1"}
@@ -207,6 +207,21 @@ TEST_CASE( "discrete tomography", "[dt]" ) {
 
       dt.AddProjection(projectionVar,projectionCost);
       s.Solve();
+
+      auto LpSolver = s.GetLpSolver();
+
+      std::vector<REAL> vars(4,0.0);
+      REAL counting = 0.0;
+      
+      for(INDEX i=0;i<4;i++){
+        for(INDEX j=0;j<noLabels;j++){
+          vars[i] += j*LpSolver->GetVariableValue(i*noLabels + j);
+        }
+        counting += vars[i];
+      }
+
+      REQUIRE(std::fabs(counting-2) < eps);
+      
    }
 
 }

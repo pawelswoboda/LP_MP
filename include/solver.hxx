@@ -390,10 +390,13 @@ private:
     private:
       T wrapper_;
     };
-  
+
+    LpInterfaceAdapter* GetLpSolver(){ return lpSolver_; };
+    
     int Solve(){
       
       Solver<FMC>::lp_.Init();
+      int status = 0;
       
       auto FactorWrapper = [&](INDEX i){ return Solver<FMC>::lp_.GetFactor(i);};
       FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItBegin(FactorWrapper,0);
@@ -406,9 +409,11 @@ private:
       lpSolver_ = new LpSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd);
       if( LpOutputFile_.isSet() ){
         lpSolver_->WriteLpModel(LpOutputFile_.getValue());
+      } else {
+        status = lpSolver_->solve();
       }
       
-      return 0;
+      return status;
     }
   
   private:
