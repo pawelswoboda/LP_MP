@@ -106,12 +106,13 @@ namespace LP_MP{
   }
 
   void DiscreteTomographyFactorCounting::CreateConstraints(LpInterfaceAdapter* lp) const {
+    printf("\nstart\n");
     REAL inf = std::numeric_limits<REAL>::infinity();
     
-    auto xa = [&](INDEX idx){ return idx % numberOfLabels_;  };
-    auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
-    auto xz = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return (idx - xa(idx))/numberOfLabels_; };
-   
+    //auto xa = [&](INDEX idx){ return idx % numberOfLabels_;  };
+    //auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
+    //auto xz = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return (idx - xa(idx))/numberOfLabels_; };
+    
     LinExpr lhs_all;
     std::vector<LinExpr> lhs_up(upSize_);
     std::vector<LinExpr> lhs_left(leftSize_);
@@ -119,7 +120,69 @@ namespace LP_MP{
     std::vector<LinExpr> lhs_reg(regSize_);
     
     INDEX z_max = upSize_/pow(numberOfLabels_,2);
+    INDEX zl_max = leftSize_/pow(numberOfLabels_,2);
+    INDEX zr_max = rightSize_/pow(numberOfLabels_,2);
     
+    printf("%d * %d = %d \n",leftSize_,rightSize_,leftSize_*rightSize_);
+
+    for(INDEX zl=0;zl<zl_max;zl++){
+      for(INDEX zr=0;zr+zl<z_max && zr<zr_max;zr++){
+        for(INDEX idx=0;idx<pow(numberOfLabels_,4);idx++){
+          INDEX cidx = idx;
+          INDEX a = cidx % numberOfLabels_;
+          cidx = (cidx - a)/numberOfLabels_;
+          INDEX b = cidx % numberOfLabels_;
+          cidx = (cidx - b)/numberOfLabels_;
+          INDEX c = cidx % numberOfLabels_;
+          INDEX d = (cidx - c)/numberOfLabels_;
+
+          assert(a < numberOfLabels_);
+          assert(b < numberOfLabels_);
+          assert(c < numberOfLabels_);
+          assert(d < numberOfLabels_);
+          
+          INDEX i = a + b*numberOfLabels_ + zl*pow(numberOfLabels_,2);
+          INDEX j = c + d*numberOfLabels_ + zr*pow(numberOfLabels_,2);
+          
+          LpVariable var = lp->CreateAuxiliaryVariable(0,inf);
+          
+          // up variable constraint
+          // sum_{ i(z) + j(z) = k(z) && i(a) = k(a) && j(b) = k(b) } eta(i,j) = mu_u(k)
+          INDEX z = zl + zr;
+            
+          //INDEX a = xa(i);
+          //INDEX b = xb(j);
+          INDEX upIdx = a + d*numberOfLabels_ + z*pow(numberOfLabels_,2);
+          assert(upIdx < upSize_);
+          lhs_up[upIdx] += var;
+
+          
+          
+          // sum_j eta(i,j) = mu_l(i)
+          assert(i < leftSize_);
+          lhs_left[i] += var;
+          
+          // sum_i eta(i,j) = mu_r(j)
+          assert(j < rightSize_);
+          lhs_right[j] += var;
+          
+          
+          // sum_{i,j} eta(i,j) = 1
+          lhs_all += var;
+          
+          
+          // pairwise potential
+          // sum_{i(b) = k(a) && j(a) = k(b)} eta(i,j) = mu_p(k)
+          //INDEX a = xb(i);
+          //INDEX b = xa(j);
+
+          assert(b+c*numberOfLabels_ < regSize_);
+          lhs_reg[b+c*numberOfLabels_] += var;
+        }
+      }
+    }
+
+    /*
     for(INDEX i=0;i<leftSize_;i++){
       for(INDEX j=0;j<rightSize_;j++){
         LpVariable var;
@@ -160,6 +223,7 @@ namespace LP_MP{
         }
       }
     }
+    */
     
     auto AddAllConstraints = [&]( std::vector<LinExpr> lhs,
                                   INDEX offset){
@@ -172,12 +236,13 @@ namespace LP_MP{
   
     LinExpr rhs_all; rhs_all += 1;
     lp->addLinearEquality(lhs_all,rhs_all);
-    
+
+    printf("finishing (%d)\n",upSize_+leftSize_+rightSize_+regSize_);
     AddAllConstraints(lhs_up,0);
     AddAllConstraints(lhs_left,upSize_);
     AddAllConstraints(lhs_right,upSize_+leftSize_);
     AddAllConstraints(lhs_reg,upSize_+leftSize_+rightSize_);
-    
+    printf("end\n");
   }
   
   template<typename REPAM_ARRAY>
