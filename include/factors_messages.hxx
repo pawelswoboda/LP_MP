@@ -934,7 +934,8 @@ public:
 
    constexpr static bool CanCreateConstraints()
    {
-      return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
+      //return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
+      return FunctionExistence::HasCreateConstraints<MessageType,void, LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
    }
    
    template<bool ENABLE = CanCreateConstraints()>
@@ -1646,7 +1647,7 @@ public:
 
    REAL LowerBound() const final { return factor_.LowerBound(*this); } 
 
-   const FactorType* GetFactor() const { return &factor_; }
+   FactorType* GetFactor() const { return &factor_; }
    FactorType* GetFactor() { return &factor_; }
    void SetPrimalOffset(const INDEX n) final { primalOffset_ = n; } // this function is used in AddFactor in LP class
    INDEX GetPrimalOffset() const final { return primalOffset_; }
@@ -1746,7 +1747,8 @@ public:
 
    constexpr static bool CanCreateConstraints()
    {
-      return FunctionExistence::HasCreateConstraints<FactorType,LpInterfaceAdapter*>();
+      //return FunctionExistence::HasCreateConstraints<FactorType,LpInterfaceAdapter*>();
+      return FunctionExistence::HasCreateConstraints<FactorType,void,LpInterfaceAdapter*>();
    }
    
    template<bool ENABLE = CanCreateConstraints()>

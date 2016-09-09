@@ -211,9 +211,9 @@ namespace LP_MP {
    
    
     template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
-    void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor)
+    void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor) const
     { 
-      auto no_constraints = 0;
+      INDEX no_constraints = 0;
       for(auto i=0; i<LeftFactor->size(); ++i){ 
         no_constraints = std::max(loopLeft_.GetMsgIndex(i), no_constraints);
       } 
