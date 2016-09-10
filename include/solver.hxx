@@ -353,7 +353,7 @@ public:
    }
 
 private:
-  VISITOR visitor_;
+   VISITOR visitor_;
 };
 
 template<typename SOLVER, typename VISITOR, typename LpSolver>
@@ -520,67 +520,7 @@ private:
     //TCLAP::SwitchArg intConstr ("","integer","solving a mip",cmd);
   
   };
-
-  template<class FMC,class LPSolver>
-  class SolverLP : public Solver<FMC> {
-  public:
-    SolverLP(int argc, char** argv)
-      : Solver<FMC>(),LpOutputFile_("","lpFile","write LP model",false,"","file name",Solver<FMC>::cmd_){
-      Solver<FMC>::Init(argc,argv);
-    }
-
-    ~SolverLP(){
-      delete lpSolver_;
-    }
-    
-    void ComputePrimal(PrimalSolutionStorage::Element primal)
-    {
-      lpSolver_->solve(lpPrimal_.begin());
-    }
-
-    template<class T,class E>
-    class FactorMessageIterator {
-    public:
-      FactorMessageIterator(T w,INDEX i)
-        : wrapper_(w),idx(i){ }
-      FactorMessageIterator& operator++() {++idx;return *this;}
-      FactorMessageIterator operator++(int) {FactorMessageIterator tmp(*this); operator++(); return tmp;}
-      bool operator==(const FactorMessageIterator& rhs) {return idx==rhs.idx;}
-      bool operator!=(const FactorMessageIterator& rhs) {return idx!=rhs.idx;}
-      E* operator*() {return wrapper_(idx);}
-      E* operator->() {return wrapper_(idx);}
-      INDEX idx;
-    private:
-      T wrapper_;
-    };
-    
-    int Solve(){
-            
-      auto FactorWrapper = [&](INDEX i){ return Solver<FMC>::lp_.GetFactor(i);};
-      FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItBegin(FactorWrapper,0);
-      FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItEnd(FactorWrapper,Solver<FMC>::lp_.GetNumberOfFactors());
-
-      auto MessageWrapper = [&](INDEX i){ return Solver<FMC>::lp_.GetMessage(i);};
-      FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
-      FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,Solver<FMC>::lp_.GetNumberOfMessages());
-      
-      lpSolver_ = new LPSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd);
-      if( LpOutputFile_.isSet() ){
-        lpSolver_->WriteLpModel(LpOutputFile_.getValue());
-      }
-      
-      return 0;
-    }
-    
-  private:
-    LpInterfaceAdapter* lpSolver_;
-    PrimalSolutionStorage lpPrimal_;
-
-    TCLAP::ValueArg<std::string> LpOutputFile_;
-    
-  };
-
-
+  
 // Macro for generating main function 
 // do zrobienia: get version number automatically from CMake 
 // do zrobienia: version number for individual solvers?

@@ -121,7 +121,6 @@ namespace LP_MP{
     
     INDEX z_max = upSize_/pow(numberOfLabels_,2);
     
-    //LpVariable* vars = lp->CreateAuxiliaryVariables(leftSize_*rightSize_,0,inf);
     for(INDEX i=0;i<leftSize_;i++){
       for(INDEX j=0;j<rightSize_;j++){
         LpVariable var;
@@ -130,7 +129,7 @@ namespace LP_MP{
           // sum_{ i(z) + j(z) = k(z) && i(a) = k(a) && j(b) = k(b) } eta(i,j) = mu_u(k)
           INDEX z = xz(i) + xz(j);
           if( z < z_max ){
-            var = lp->GetAuxVariable(i + j*leftSize_);//lp->CreateAuxiliaryVariable(0,inf);
+            var = lp->GetAuxVariable(i + j*leftSize_);
             
             INDEX a = xa(i);
             INDEX b = xb(j);

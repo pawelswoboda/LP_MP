@@ -242,7 +242,6 @@ namespace LP_MP {
     }
   
   private:
-
     template<typename LEFT_FACTOR, typename G1, typename G2>
     void MaximizeLeft(LEFT_FACTOR* const l, const G1& leftPot, G2& msg, const REAL omega = 1.0)
     {

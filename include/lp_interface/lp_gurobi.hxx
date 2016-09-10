@@ -50,8 +50,6 @@ namespace LP_MP {
       model_.update();
 
       /* Add Factor Constraints */
-      //printf("Add Factor Constraints (%d,%d)\n",(int) noFactors,(int) noVars_);
-      INDEX nf = 0;
       INDEX fixedVars = 0;
       for(auto factorIt = factorBegin; factorIt != factorEnd; ++factorIt) {
         Offset_ = factorIt->GetPrimalOffset();
@@ -70,15 +68,10 @@ namespace LP_MP {
           }
         }
         factorIt->CreateConstraints(this);
-        nf++;
-        //printf("\r[%5.2f%%]",100*((double) nf/ (double) noFactors));
-        //printf("%d ",nf);
       }
-      //printf("\n");
       printf("Reparametrization fixed %d variables\n",fixedVars);
 
       /* Add Message Constraints */
-      //printf("Add Coupling Constraints\n");
       for(auto messageIt = messageBegin; messageIt != messageEnd; ++messageIt) {
         leftSize_ = messageIt->GetLeftFactor()->size();
         rightSize_ = messageIt->GetRightFactor()->size();
@@ -87,7 +80,6 @@ namespace LP_MP {
         messageIt->CreateConstraints(this);
       }
 
-      //printf("Update Gurobi Model");
       model_.update();
     } 
 

@@ -224,20 +224,5 @@ TEST_CASE( "discrete tomography", "[dt]" ) {
       
    }
 
-   SECTION(" Test CreateConstraint  "){
-     DiscreteTomographyFactorCounting bigFactor(3,16,16,30);
-     //std::vector<REAL> bigFactor_pot(bigFactor.size(),0.0);
-     //FactorContainerMock<DiscreteTomographyFactorCounting> bigFactor_cont(bigFactor, bigFactor_pot);
-     
-     LpInterfaceGurobi LpBuilder(100*bigFactor.size());
-     for(INDEX i=0;i<1;i++){
-       printf("factor (%5d)\n",(int) i);
-       LpBuilder.addFactor(bigFactor,i*bigFactor.size());
-     }
-     
-   }
-   
-   
-   
 }
 
