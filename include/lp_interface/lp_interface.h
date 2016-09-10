@@ -24,11 +24,12 @@ namespace LP_MP {
     LpInterfaceAdapter(){ }
     
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
-    LpInterfaceAdapter(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd)
+    LpInterfaceAdapter(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool integer = true)
     { } 
 
     virtual LpVariable CreateAuxiliaryVariable(REAL lb,REAL ub,bool integer = false) = 0;
-
+    virtual LpVariable* CreateAuxiliaryVariables(INDEX n,REAL lb,REAL ub,bool integer = false) = 0;
+    
     virtual INDEX GetFactorSize() const = 0;
     virtual INDEX GetLeftFactorSize() const = 0;
     virtual INDEX GetRightFactorSize() const = 0;
@@ -37,6 +38,8 @@ namespace LP_MP {
     virtual LpVariable GetLeftVariable(const INDEX i) const = 0;
     virtual LpVariable GetRightVariable(const INDEX i) const = 0;
 
+    virtual LpVariable GetAuxVariable(const INDEX i) const = 0;
+    
     virtual REAL GetVariableValue(const INDEX i) const = 0;
     virtual REAL GetObjectiveValue() const = 0;
     virtual REAL GetBestBound() const = 0;

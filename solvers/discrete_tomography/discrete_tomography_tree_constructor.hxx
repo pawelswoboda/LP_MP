@@ -135,7 +135,7 @@ namespace LP_MP {
               pd_.GetLP().AddFactorRelation(f,leftUnaryFactor);
             }
             auto* reg = mrfConstructor.GetPairwiseFactor(mrfConstructor.GetPairwiseFactorId(idxL.b,idxR.a));
-            pd_.GetLP().AddFactorRelation(f,reg);
+            pd_.GetLP().AddFactorRelation(reg,f);
           }
           
           factors.push_back(f);

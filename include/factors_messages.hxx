@@ -1652,9 +1652,14 @@ public:
    void SetPrimalOffset(const INDEX n) final { primalOffset_ = n; } // this function is used in AddFactor in LP class
    INDEX GetPrimalOffset() const final { return primalOffset_; }
 
+  void SetAuxOffset(const INDEX n) final { auxOffset_ = n; }
+  INDEX GetAuxOffset() const final { return auxOffset_; }
+   
 protected:
    FactorType factor_; // the factor operation
    INDEX primalOffset_;
+   INDEX auxOffset_;
+   
 
    // we do this via templates only (no values), as types are incomplete yet. This is more cumbersome than a direct value computation as can be done usually.
    /*
@@ -1756,6 +1761,11 @@ public:
    CreateConstraintsImpl(LpInterfaceAdapter* l) const
    {
       factor_.CreateConstraints(l);
+   }
+   
+   INDEX GetNumberOfAuxVariables() const 
+   { 
+    return factor_.GetNumberOfAuxVariables();
    }
 
    template<bool ENABLE = CanCreateConstraints()>

@@ -38,6 +38,7 @@ namespace LP_MP{
     // --------------------
     // custom public methods 
 
+    INDEX GetNumberOfAuxVariables() const { return leftSize_*rightSize_; } 
     void CreateConstraints(LpInterfaceAdapter* lp) const;
     
     INDEX getSize(NODE) const;
@@ -104,7 +105,7 @@ namespace LP_MP{
     
     regSize_ = pow(numberOfLabels_,2);
   }
-
+ 
   void DiscreteTomographyFactorCounting::CreateConstraints(LpInterfaceAdapter* lp) const {
     REAL inf = std::numeric_limits<REAL>::infinity();
     
@@ -128,7 +129,7 @@ namespace LP_MP{
           // sum_{ i(z) + j(z) = k(z) && i(a) = k(a) && j(b) = k(b) } eta(i,j) = mu_u(k)
           INDEX z = xz(i) + xz(j);
           if( z < z_max ){
-            var = lp->CreateAuxiliaryVariable(0,inf);
+            var = lp->GetAuxVariable(i + j*leftSize_);
             
             INDEX a = xa(i);
             INDEX b = xb(j);
