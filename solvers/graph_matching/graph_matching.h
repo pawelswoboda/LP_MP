@@ -859,10 +859,11 @@ namespace UaiGraphMatchingInput {
       UaiMrfInput::build_mrf(mrf_left, mrf_input);
 
       // build assignment problem
+      /*
       auto& matching = std::get<1>(i);
       for(auto& m : matching) {
          std::copy_if(m.begin(), m.end(), std::back_inserter(s), [](auto i) { return i != std::numeric_limits<INDEX>::max(); });
-         assert(std::is_sorted(s.begin(), s.end());
+         assert(std::is_sorted(s.begin(), s.end()));
       }
       const INDEX no_left_nodes = mrf_left.GetNumberOfVariables();
       const INDEX no_right_nodes = constraints.size();
@@ -899,6 +900,7 @@ namespace UaiGraphMatchingInput {
          auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->starting_arc(i), mcf->no_arcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
          s.GetLP().AddMessage(m);
       }
+      */
    }
 
 

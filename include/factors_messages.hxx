@@ -67,6 +67,7 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential);
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables);
 
 LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(IsAssignable, operator[]);
 }
@@ -934,7 +935,8 @@ public:
 
    constexpr static bool CanCreateConstraints()
    {
-      return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
+      //return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
+      return FunctionExistence::HasCreateConstraints<MessageType,void, LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
    }
    
    template<bool ENABLE = CanCreateConstraints()>
@@ -995,6 +997,9 @@ public:
       //std::cout << "left message list = " << abi::__cxa_demangle(typeid(left_message_list_1).name(),0,0,&status) << "\n";
    
    }
+   template<typename ...ARGS>
+   FactorContainer(const FactorType& factor, ARGS... args) : RepamStorageType(factor,args...), factor_(factor) 
+   {}
    ~FactorContainer() { 
       static_assert(meta::unique<MESSAGE_DISPATCHER_TYPELIST>::size() == MESSAGE_DISPATCHER_TYPELIST::size(), 
             "Message dispatcher typelist must have unique elements");
@@ -1646,14 +1651,19 @@ public:
 
    REAL LowerBound() const final { return factor_.LowerBound(*this); } 
 
-   const FactorType* GetFactor() const { return &factor_; }
+   FactorType* GetFactor() const { return &factor_; }
    FactorType* GetFactor() { return &factor_; }
    void SetPrimalOffset(const INDEX n) final { primalOffset_ = n; } // this function is used in AddFactor in LP class
    INDEX GetPrimalOffset() const final { return primalOffset_; }
 
+  void SetAuxOffset(const INDEX n) final { auxOffset_ = n; }
+  INDEX GetAuxOffset() const final { return auxOffset_; }
+   
 protected:
    FactorType factor_; // the factor operation
    INDEX primalOffset_;
+   INDEX auxOffset_;
+   
 
    // we do this via templates only (no values), as types are incomplete yet. This is more cumbersome than a direct value computation as can be done usually.
    /*
@@ -1746,7 +1756,8 @@ public:
 
    constexpr static bool CanCreateConstraints()
    {
-      return FunctionExistence::HasCreateConstraints<FactorType,LpInterfaceAdapter*>();
+      //return FunctionExistence::HasCreateConstraints<FactorType,LpInterfaceAdapter*>();
+      return FunctionExistence::HasCreateConstraints<FactorType,void,LpInterfaceAdapter*>();
    }
    
    template<bool ENABLE = CanCreateConstraints()>
@@ -1754,6 +1765,28 @@ public:
    CreateConstraintsImpl(LpInterfaceAdapter* l) const
    {
       factor_.CreateConstraints(l);
+   }
+
+   constexpr static bool CanCallGetNumberOfAuxVariables()
+   {
+      return FunctionExistence::HasGetNumberOfAuxVariables<FactorType,INDEX>();
+   }
+   template<bool ENABLE = CanCallGetNumberOfAuxVariables()>
+   typename std::enable_if<!ENABLE,INDEX>::type
+   GetNumberOfAuxVariablesImpl() const
+   {
+      return 0;
+   }
+   template<bool ENABLE = CanCallGetNumberOfAuxVariables()>
+   typename std::enable_if<ENABLE,INDEX>::type
+   GetNumberOfAuxVariablesImpl() const
+   {
+      return factor_.GetNumberOfAuxVariables();
+   }
+  
+   INDEX GetNumberOfAuxVariables() const 
+   { 
+    return GetNumberOfAuxVariablesImpl();
    }
 
    template<bool ENABLE = CanCreateConstraints()>

@@ -17,8 +17,8 @@
 #include "topological_sort.hxx"
 #include <memory>
 #include <iterator>
-#include "lp_interface/lp_interface.h"
 #include "primal_solution_storage.hxx"
+#include "lp_interface/lp_interface.h"
 
 namespace LP_MP {
 
@@ -49,12 +49,17 @@ public:
    // the offset in the primal storage
    virtual void SetPrimalOffset(const INDEX) = 0;
    virtual INDEX GetPrimalOffset() const = 0;
+   
+   virtual void SetAuxOffset(const INDEX n) = 0;
+   virtual INDEX GetAuxOffset() const = 0;
+   
    // do zrobienia: this function is not needed. Evaluation can be performed automatically
    virtual REAL EvaluatePrimal(typename PrimalSolutionStorage::Element primalSolution) const = 0;
    // do zrobienia: this is not needed as well and could be automated. Possibly it is good to keep this to enable solution rewriting.
    //virtual void WritePrimal(PrimalSolutionStorage::Element primalSolution, std::ofstream& fs) const = 0;
 
    // for the LP interface
+   virtual INDEX GetNumberOfAuxVariables() const = 0;
    virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
 };
 

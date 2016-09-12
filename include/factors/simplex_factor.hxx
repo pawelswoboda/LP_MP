@@ -35,14 +35,7 @@ public:
    template<typename REPAM_ARRAY>
    static void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    {
-      /*
-      for(INDEX i=0; i<repam.size(); ++i) { // ensure that primal has been initialized correctly to true
-         std::cout << repam[i] << ",";
-      }
-      for(INDEX i=0; i<repam.size(); ++i) { // ensure that primal has been initialized correctly to true
-         assert(primal[i] == unknownState); // note: more general procedure is possible, but not implemented yet. In general, if already one state is primal, set all unknown states to false. Otherwise choose minimum over unknown states and set primal to it. use randomization?
-      }
-      */
+
       // note: currently possibly also pairwise factors are called here, although this should not be made for SRMP style rounding
       INDEX min_element;
       REAL min_value = std::numeric_limits<REAL>::infinity();
@@ -102,7 +95,6 @@ public:
       INDEX primalSum = 0;
       for(INDEX i=0; i<repam.size(); ++i) {
          if(primal[i] == true) { 
-            //std::cout << i << "\n";
             cost = repam[i];
          }
          primalSum += primal[i];
@@ -115,6 +107,17 @@ public:
       }
    }
 
+  INDEX GetNumberOfAuxVariables() const { return 0; }
+   
+  void CreateConstraints(LpInterfaceAdapter* lp) const { 
+    LinExpr lhs;
+    for(INDEX i=0;i<lp->GetFactorSize();i++){
+      lhs += lp->GetVariable(i);
+    }
+    LinExpr rhs; rhs += 1;
+    lp->addLinearEquality(lhs,rhs);
+  }
+  
    void WritePrimal(const INDEX primal, std::ofstream& fs) const
    {
       fs << primal;
