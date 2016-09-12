@@ -106,7 +106,7 @@ public:
    template<typename VAR_ACCESS_OP, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
    static void MakeFactorUniformParallel(VAR_ACCESS_OP var_access_op, const MSG_ARRAY& msgs, const RIGHT_REPAM& repam, ITERATOR omegaIt)
    {
-      assert(msgs.size() >= 2); // otherwise calling this method makes no sense
+      //assert(msgs.size() >= 2); // otherwise calling this method makes no sense, but it can happen for some trivial problems.
       assert(msgs.size() <= repam.size());
       //assert(msgs.size() == repam.size()-1); // special case of one edge is not assignment in QAP or cosegmentation. For now. Only for hotel and house
       const ITERATOR omegaEnd = omegaIt + msgs.size();

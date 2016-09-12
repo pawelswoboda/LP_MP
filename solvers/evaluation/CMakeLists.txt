@@ -9,7 +9,6 @@ function(DOWNLOAD_AND_UNZIP URL DOWNLOAD_TO EXTRACT_TO)
          WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
          )
    endif()
-
 endfunction(DOWNLOAD_AND_UNZIP)
 
 # download test datasets
@@ -30,7 +29,7 @@ endif()
 
 if(BUILD_GRAPH_MATCHING)
    add_executable(graph_matching graph_matching.cpp ${headers} ${sources})
-   target_link_libraries(graph_matching CS2_CPP Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
+   target_link_libraries(graph_matching Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
 
    message("Download graph matching datasets")
    set(GM_DIRECTORY "solvers/evaluation/graph_matching_datasets")

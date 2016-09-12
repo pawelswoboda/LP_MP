@@ -23,19 +23,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake"
    -DVc_ROOT=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Vc_Project
    )
 
-
-#ExternalProject_Get_Property(Vc_Project Vc_INCLUDE_DIR)
-#ExternalProject_Get_Property(Vc_Project Vc_DEFINITIONS)
-#add_subdirectory(${install_dir}/src/Vc_Project)
-#include_directories(${Vc_INCLUDE_DIR}) 
-#add_definitions(${Vc_DEFINITIONS})
-#link_directories(${Vc_LIB_DIR})
-##include_directories(${install_dir}/src/Vc_Project)
-##include_directories(${install_dir}/src/Vc_Project/include)
-##include_directories(${install_dir}/src/Vc_Project/common)
-
-message("Vc: ${install_dir}")
-
 # boost hana for compile time metaprogramming. However only use when find_package could not find valid hana installation
 list(APPEND DEPENDENCIES Hana_Project)
 ExternalProject_Add(
@@ -57,7 +44,6 @@ find_package_handle_standard_args(Hana
    REQUIRED_VARS Hana_INCLUDE_DIR
    )
 
-
 # meta package for compile time metaprogramming
 list(APPEND DEPENDENCIES meta_Project)
 ExternalProject_Add(
@@ -71,20 +57,6 @@ ExternalProject_Add(
    )
 ExternalProject_Get_Property(meta_Project install_dir)
 include_directories(${install_dir}/Dependencies/Source/meta_Project/include)
-
-# logging library
-#list(APPEND DEPENDENCIES spdlog_Project)
-#ExternalProject_Add(
-#   spdlog_Project
-#   GIT_REPOSITORY "https://github.com/gabime/spdlog.git"
-#   GIT_TAG "master"
-#   UPDATE_COMMAND ""
-#   INSTALL_COMMAND ""
-#   BUILD_COMMAND ""
-#   CONFIGURE_COMMAND ""
-#   )
-#ExternalProject_Get_Property(spdlog_Project install_dir)
-#include_directories(${install_dir}/Dependencies/Source/spdlog_Project/include)
 
 # unit tests framework
 list(APPEND DEPENDENCIES Catch_Project)
@@ -133,7 +105,7 @@ list(APPEND DEPENDENCIES PEGTL_Project)
 ExternalProject_Add(
    PEGTL_Project
    GIT_REPOSITORY "https://github.com/ColinH/PEGTL.git"
-   GIT_TAG "1.3.1"
+   GIT_TAG "master"
    UPDATE_COMMAND ""
    INSTALL_COMMAND ""
    BUILD_COMMAND ""
@@ -183,23 +155,23 @@ ExternalProject_Get_Property(TCLAP_Project install_dir)
 #   )
 #ExternalProject_Get_Property(LEMON_Project install_dir)
 
-# alternative minimum cost flow solver based on Goldberg's implementation
+# minimum cost flow solver based on Goldberg's implementation
 list(APPEND DEPENDENCIES CS2_CPP_Project)
 ExternalProject_ADD(
    CS2_CPP_Project
    GIT_REPOSITORY "https://github.com/pawelswoboda/CS2-CPP.git"
    GIT_TAG "master"
    CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/CS2_CPP_Project"
-   BUILD_COMMAND make
+   BUILD_COMMAND ""
    INSTALL_COMMAND ""
+   CONFIGURE_COMMAND ""
    )
 ExternalProject_Get_Property(CS2_CPP_Project install_dir)
-add_library(CS2_CPP STATIC IMPORTED)
-add_dependencies(CS2_CPP CS2_CPP_Project)
+
 
 ExternalProject_Add (LP_MP
    DEPENDS ${DEPENDENCIES}
    SOURCE_DIR ${PROJECT_SOURCE_DIR}
-   CMAKE_ARGS -DUSE_SUPERBUILD=OFF ${EXTRA_CMAKE_ARGS}
+   CMAKE_ARGS -DDOWNLOAD_DEPENDENCIES=OFF ${EXTRA_CMAKE_ARGS}
    INSTALL_COMMAND ""
    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})

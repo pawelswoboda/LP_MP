@@ -227,6 +227,8 @@ public:
          //std::cout << "primal cost = " << cost << ", solution not improved. in register primal\n";
       }
    }
+
+   REAL lower_bound() const { return lowerBound_; }
 protected:
    TCLAP::CmdLine cmd_;
    LP lp_;
@@ -257,8 +259,8 @@ public:
    {
       if(c.computePrimal) {
          Solver<FMC>::lp_.ComputePassAndPrimal(forwardPrimal_, backwardPrimal_);
-         RegisterPrimal(forwardPrimal_);
-         RegisterPrimal(backwardPrimal_);
+         this->RegisterPrimal(forwardPrimal_);
+         this->RegisterPrimal(backwardPrimal_);
       } else {
          Solver<FMC>::Iterate(c);
       }

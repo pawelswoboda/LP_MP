@@ -13,6 +13,7 @@ using FMC_MP_RIGHT = FMC_MP<PairwiseConstruction::Right>;
 using FMC_MP_BOTH_SIDES = FMC_MP<PairwiseConstruction::BothSides>;
 
 // Torresani et al input
+/*
 static auto TORRESANI_GM_LEFT_INPUT = TorresaniEtAlInput::ParseProblem<FMC_GM_LEFT>;
 static auto TORRESANI_GM_RIGHT_INPUT = TorresaniEtAlInput::ParseProblem<FMC_GM_RIGHT>;
 static auto TORRESANI_MCF_LEFT_INPUT = TorresaniEtAlInput::ParseProblem<FMC_MCF_LEFT>;
@@ -21,11 +22,12 @@ static auto TORRESANI_MCF_BOTH_SIDES_INPUT = TorresaniEtAlInput::ParseProblem<FM
 static auto TORRESANI_MP_LEFT_INPUT = TorresaniEtAlInput::ParseProblem<FMC_MP_LEFT>;
 static auto TORRESANI_MP_RIGHT_INPUT = TorresaniEtAlInput::ParseProblem<FMC_MP_RIGHT>;
 static auto TORRESANI_MP_BOTH_SIDES_INPUT = TorresaniEtAlInput::ParseProblem<FMC_MP_BOTH_SIDES>;
+*/
 
 // UAI input
-static auto UAI_GM_INPUT = UAIInput::ParseProblem<FMC_GM<>>;
-static auto UAI_MCF_INPUT = UAIInput::ParseProblem<FMC_MCF<>>;
-static auto UAI_MP_INPUT = UAIInput::ParseProblem<FMC_MP<>>;
+//static auto UAI_GM_INPUT = UaiGraphMatchingInput::ParseProblemGM<FMC_GM<>>;
+//static auto UAI_MCF_INPUT = UaiGraphMatchingInput::old_format::ParseProblem<FMC_MCF<>>;
+//static auto UAI_MP_INPUT = UaiGraphMatchingInput::ParseProblem<FMC_MP<>>;
 
 //std::vector<std::string> graphMatchingTestDataset = {
 //   {"../../solvers/graph_matching/Large_QAP.txt"}
@@ -260,7 +262,7 @@ std::vector<std::string> graphMatchingHassanDatasets = {
    {hassan_prefix + "walking_torresani.txt"}
 };
 
-std::string worms_prefix = "../../../solvers/graph_matching/allWorms-03-04-1750-uai/";
+std::string worms_prefix = "../../../solvers/graph_matching/graph_matching_datasets/allWorms-03-04-1750-uai/";
 std::vector<std::string> graphMatchingWormsDatasets = {
    { worms_prefix + "C18G1_2L1_1-lowThresh-more-hyp.surf-16-03-04-1750.uai"},
    { worms_prefix + "cnd1threeL1_1213061-lowThresh-more-hyp.surf-16-03-04-1750.uai"},
@@ -347,7 +349,7 @@ int main()
    //RunSolver<FMC_MP_RIGHT,VisitorType>(TORRESANI_MP_RIGHT_INPUT,graphMatchingHassanDatasets,mp_options,"Hassan","AMP-I");
 
    */
-   RunSolver<FMC_MCF_BOTH_SIDES,VisitorType,ProblemConstructorRoundingSolver<FMC_MCF_BOTH_SIDES>>(TORRESANI_MCF_BOTH_SIDES_INPUT,graphMatchingHotelDatasets,mcf_options,"hotel","AMCF-B");
+   //RunSolver<FMC_MCF_BOTH_SIDES,VisitorType,ProblemConstructorRoundingSolver<FMC_MCF_BOTH_SIDES>>(TORRESANI_MCF_BOTH_SIDES_INPUT,graphMatchingHotelDatasets,mcf_options,"hotel","AMCF-B");
    /*
    RunSolver<FMC_MCF_BOTH_SIDES,VisitorType>(TORRESANI_MCF_BOTH_SIDES_INPUT,graphMatchingHouseDatasets,mcf_options,"house","AMCF-B");
    //RunSolver<FMC_MCF_BOTH_SIDES,VisitorType>(TORRESANI_MCF_BOTH_SIDES_INPUT,graphMatchingHassanDatasets,mcf_options,"Hassan","AMCF-B");
@@ -367,10 +369,10 @@ int main()
    RunSolver<FMC_GM_RIGHT,VisitorType>(TORRESANI_GM_RIGHT_INPUT,graphMatchingHotelDatasets,gm_options,"hotel","GM-I");
    RunSolver<FMC_GM_RIGHT,VisitorType>(TORRESANI_GM_RIGHT_INPUT,graphMatchingHouseDatasets,gm_options,"house","GM-I");
    //RunSolver<FMC_GM_RIGHT,VisitorType>(TORRESANI_GM_RIGHT_INPUT,graphMatchingHassanDatasets,gm_options,"Hassan","GM-I");
-
-   RunSolver<FMC_MP_LEFT,VisitorType>(UAI_MP_INPUT,graphMatchingWormsDatasets,mp_options,"worms","AMP-O");
-   RunSolver<FMC_MCF_LEFT,VisitorType>(UAI_MCF_INPUT,graphMatchingWormsDatasets,mcf_options,"worms","AMCF-O");
-   RunSolver<FMC_GM_LEFT,VisitorType>(UAI_GM_INPUT,graphMatchingWormsDatasets,gm_options,"worms","GM-O");
    */
+
+   //RunSolver<FMC_MP_LEFT,VisitorType,Solver<FMC_MP<>>>(UAI_MP_INPUT,graphMatchingWormsDatasets,mp_options,"worms","AMP-O");
+   //RunSolver<FMC_MCF_LEFT,VisitorType>(UAI_MCF_INPUT,graphMatchingWormsDatasets,mcf_options,"worms","AMCF-O");
+   //RunSolver<FMC_GM_LEFT,VisitorType>(UAI_GM_INPUT,graphMatchingWormsDatasets,gm_options,"worms","GM-O");
    return 0;
 }

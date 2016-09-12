@@ -1,11 +1,12 @@
 project(LP_MP)
+
+cmake_minimum_required(VERSION 2.8.12)
+
 set(LP_MP_VERSION_MAJOR 0)
 set(LP_MP_VERSION_MINOR 1)
 
 # C++11
-SET(C++_STD_FLAG "c++14")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${C++_STD_FLAG}")
-MARK_AS_ADVANCED(C++_STD_FLAG)
+add_compile_options(-std=c++14)
 
 # compiler options
 add_definitions(-DIL_STD)
@@ -21,22 +22,26 @@ link_directories(${Vc_LIB_DIR})
 # automatically downloaded repositories
 # can this possibly be done in one place only, i.e. in the superbuild?
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/meta_Project/include")
-#add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/spdlog_Project")
-#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/spdlog_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Catch_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/cpp_sort_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/OpenGM_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/PEGTL_Project")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Andres_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/TCLAP_Project/include")
+
 #add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project")
-#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project")
+#set(LEMON_INCLUDE_DIRS
+#   ${LEMON_SOURCE_ROOT_DIR}
+#   ${CMAKE_BINARY_DIR}/deps/lemon
+#   )
+#include_directories(${LEMON_INCLUDE_DIRS})
+#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project/lemon")
+
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Hana_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/CS2_CPP_Project")
-add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/CS2_CPP_Project")
 
 # manually downloaded repositories of Kolmogorov's code. How to automate?
-add_subdirectory(lib/MinCost)
+#add_subdirectory(lib/MinCost)
 
 # HDF5 for reading OpenGM and Andres models
 find_package(HDF5 1.8.15 REQUIRED)

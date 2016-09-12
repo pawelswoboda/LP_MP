@@ -7,7 +7,7 @@
 using namespace LP_MP;
 using namespace std;
 
-TEST_CASE( "unary/pairwise message between simplex factors", "[unary/pairwise message]" ) {
+TEST_CASE( "unary/pairwise message", "[unary/pairwise message between simplex factors]" ) {
    vector<double> costUnary {0.1, 0.2, 0.05, 1};
    vector<double> costPairwise {  0.1,    0.2,  0.05,
                                   0.3,  0.001,  0.2 ,
@@ -48,6 +48,6 @@ TEST_CASE( "unary/pairwise message between simplex factors", "[unary/pairwise me
 
 
 // do zrobienia: triplet to pairwise marginalization
-TEST_CASE("pairwise/triplet message between simplex factors", "[pairwise/triplet message]") {
+TEST_CASE("pairwise/triplet message", "[pairwise/triplet message between simplex factors]") {
 
 }

@@ -986,7 +986,7 @@ public:
 
    // do zrobienia: templatize cosntructor to allow for more general initialization of reparametrization storage and factor
    template<typename ...ARGS>
-   FactorContainer(const FactorType& factor, ARGS... args) : RepamStorageType(factor,args...), factor_(factor) {
+   FactorContainer(const FactorType&& factor, ARGS... args) : RepamStorageType(factor,args...), factor_(factor) {
       //INDEX status;
       //std::cout << "msg_ type= "  << abi::__cxa_demangle(typeid(msg_).name(),0,0,&status) << "\n";
       //std::cout << "dispatcher list = "  << abi::__cxa_demangle(typeid(MESSAGE_DISPATCHER_TYPELIST).name(),0,0,&status) << "\n";

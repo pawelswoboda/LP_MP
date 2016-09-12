@@ -3,6 +3,8 @@
 
 #include "solver.hxx"
 #include "cycle_inequalities.hxx"
+#include "parse_rules.h"
+#include "pegtl/parse.hh"
 
 #include <string>
 
@@ -38,7 +40,6 @@ public:
    virtual RightMessageType ConstructRightUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
    virtual LeftMessageType ConstructLeftUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
 
-   /*
    INDEX AddUnaryFactor(const std::vector<REAL>& cost)
    {
       UnaryFactorContainer* u = new UnaryFactorContainer(UnaryFactorType(cost), cost);
@@ -46,7 +47,6 @@ public:
       lp_->AddFactor(u);;
       return unaryFactor_.size()-1;
    }
-   */
    UnaryFactorContainer* AddUnaryFactor(const INDEX node_number, const std::vector<REAL>& cost)
    {
       //UnaryFactorContainer* u = new UnaryFactorContainer(UnaryFactorType(cost), cost);
@@ -448,6 +448,227 @@ protected:
    std::vector<MessageTypeAdapter*> tripletMessage_;
    std::map<std::tuple<INDEX,INDEX,INDEX>, INDEX> tripletMap_; // given two sorted indices, return factorId belonging to that index.
 };
+
+
+///////////////////////////////////////////////////////////////////
+//
+// input classes. Given an input (filename, string) construct factors 
+//
+///////////////////////////////////////////////////////////////////
+
+// file format described in http://www.cs.huji.ac.il/project/PASCAL/fileFormat.php
+namespace UaiMrfInput {
+
+   struct MrfInput {
+      INDEX number_of_variables_;
+      INDEX number_of_cliques_;
+      std::vector<INDEX> cardinality_;
+      std::vector<std::vector<INDEX>> clique_scopes_;
+      std::vector<std::vector<REAL>> function_tables_;
+   };
+
+   // import basic parsers
+   using Parsing::opt_whitespace;
+   using Parsing::mand_whitespace;
+   using Parsing::opt_invisible;
+   using Parsing::mand_invisible;
+   using Parsing::positive_integer;
+   using Parsing::real_number;
+
+
+   struct init_line : pegtl::seq< opt_whitespace, pegtl::string<'M','A','R','K','O','V'>, opt_whitespace > {};
+   struct number_of_variables : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace > {};
+   // vector of integers denoting how many labels each variable has
+   struct cardinality : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace > {};
+   struct number_of_cliques : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace> {};
+   // first is the number of variables in the clique, then the actual variables.
+   // the clique_scopes should match number_of_clique_lines, each line consisting of a sequence of integers
+   struct new_clique_scope : pegtl::seq< positive_integer > {};
+   struct clique_scope : pegtl::seq< positive_integer > {};
+   struct clique_scope_line : pegtl::seq< opt_whitespace, new_clique_scope, pegtl::plus< opt_whitespace, clique_scope >, opt_whitespace, pegtl::eol > {};
+   struct clique_scopes_end
+   {
+      template< pegtl::apply_mode A, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+         static bool match( Input & in, MrfInput& input )
+         {
+            return input.number_of_cliques_ == input.clique_scopes_.size();
+         }
+   };
+   struct clique_scopes : pegtl::until< clique_scopes_end, clique_scope_line > {};
+   // a function table is begun by number of entries and then a list of real numbers. Here we record all the values in the real stack
+   // do zrobienia: treat whitespace
+   struct new_function_table : pegtl::seq< positive_integer > {};
+   struct function_table_entry : pegtl::seq< real_number > {};
+   struct function_tables_end
+   {
+      template< pegtl::apply_mode A, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+         static bool match( Input & in, MrfInput& input )
+         {
+            return input.number_of_cliques_ == input.function_tables_.size();
+         }
+   };
+   struct function_table_end
+   {
+      template< pegtl::apply_mode A, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+         static bool match( Input & in, MrfInput& input )
+         {
+            auto& table = input.function_tables_.back();
+            if(table.back() + 1 == table.size()) {
+               table.resize(table.size()-1); // remove last entry which holds the end size of the table
+               return true;
+            } else {
+               return false;
+            }
+         }
+   };
+   struct function_table : pegtl::seq< new_function_table, opt_invisible, pegtl::until< function_table_end, opt_invisible, function_table_entry >, opt_invisible > {};
+   struct function_tables : pegtl::seq< opt_invisible, pegtl::until< function_tables_end, function_table >, opt_invisible > {};//,pegtl::seq<pegtl::star<pegtl::sor<mand_whitespace, pegtl::eol>>, real_number, pegtl::plus<pegtl::star<pegtl::sor<mand_whitespace, pegtl::eol>>, real_number>> {};
+   //template<> struct control< function_table > : pegtl::change_state_and_action< function_table, ..., object_action > {};
+
+
+   struct grammar : pegtl::seq<
+                    init_line, pegtl::eol,
+                    number_of_variables, pegtl::eol,
+                    pegtl::plus< cardinality >, pegtl::eol,
+                    number_of_cliques, pegtl::eol,
+                    clique_scopes,
+                    opt_invisible,
+                    function_tables
+                   > {};
+
+
+   template< typename Rule >
+      struct action
+      : pegtl::nothing< Rule > {};
+
+   template<> struct action< number_of_variables > {
+      static void apply(const pegtl::action_input & in, MrfInput& input) 
+      {
+         input.number_of_variables_ = std::stoul(in.string());
+      }
+   };
+
+   template<> struct action< number_of_cliques > {
+      static void apply(const pegtl::action_input & in, MrfInput& input)
+      {
+         input.number_of_cliques_ = std::stoul(in.string()); 
+      }
+   };
+
+   template<> struct action< cardinality > {
+      static void apply(const pegtl::action_input & in, MrfInput& input)
+      {
+         input.cardinality_.push_back(std::stoul(in.string()));
+      }
+   };
+
+   template<> struct action< new_clique_scope > {
+      static void apply(const pegtl::action_input & in, MrfInput& input)
+      {
+         input.clique_scopes_.push_back(std::vector<INDEX>(0));
+      }
+   };
+   template<> struct action< clique_scope > {
+      static void apply(const pegtl::action_input & in, MrfInput& input)
+      {
+         input.clique_scopes_.back().push_back(std::stoul(in.string()));
+         assert(input.clique_scopes_.back().back() < input.number_of_variables_);
+      }
+   };
+   template<> struct action< new_function_table > {
+      static void apply(const pegtl::action_input & in, MrfInput& input)
+      {
+         const INDEX no_entries = std::stoul(in.string());
+         std::vector<REAL> entries;
+         entries.reserve(no_entries+1);
+         entries.push_back(no_entries);
+         input.function_tables_.push_back(std::move(entries));
+      }
+   };
+   template<> struct action< function_table_entry > {
+      static void apply(const pegtl::action_input & in, MrfInput& input)
+      {
+         auto& table = input.function_tables_.back();
+         table.push_back(std::stod(in.string()));
+         std::swap(table.back(), *(table.rbegin()+1)); // exchange last element, which always denotes the final number of entries in the function table
+      }
+   };
+
+   template<typename MRF_CONSTRUCTOR>
+      void build_mrf(MRF_CONSTRUCTOR& mrf, const MrfInput& input)
+      {
+         assert(input.number_of_cliques_ == input.clique_scopes_.size());
+         assert(input.number_of_cliques_ == input.function_tables_.size());
+         // first input the unaries, as pairwise potentials need them to be able to link to them
+         for(INDEX i=0; i<input.number_of_variables_; ++i) {
+            const INDEX noLabels = input.cardinality_[i];
+            mrf.AddUnaryFactor(i,std::vector<REAL>(noLabels,0.0));
+         }
+
+         for(INDEX i=0; i<input.number_of_cliques_; ++i) {
+            if(input.clique_scopes_[i].size() == 1) {
+               auto* f = mrf.GetUnaryFactor(i);
+               const INDEX var = input.clique_scopes_[i][0];
+               assert(input.function_tables_[i].size() == input.cardinality_[var]);
+               for(INDEX x=0; x<input.function_tables_[var].size(); ++x) {
+                  (*f)[x] = input.function_tables_[var][x];
+               }
+            }
+         }
+         // add unary factors with cost zero whenever
+         // now the pairwise potentials. 
+         for(INDEX i=0; i<input.number_of_cliques_; ++i) {
+            if(input.clique_scopes_[i].size() == 2) {
+               const INDEX var1 = input.clique_scopes_[i][0];
+               const INDEX var2 = input.clique_scopes_[i][1];
+               assert(var1<var2);
+               assert(input.function_tables_[i].size() == input.cardinality_[var1]*input.cardinality_[var2]);
+               mrf.AddPairwiseFactor(var1,var2,input.function_tables_[i]); // or do we have to transpose the values?
+            }
+         }
+         // only unary and pairwise potentials supported right now
+         for(INDEX i=0; i<input.number_of_cliques_; ++i) {
+            assert(input.clique_scopes_[i].size() < 3);
+         }
+      }
+
+
+   template<typename FMC, INDEX PROBLEM_CONSTRUCTOR_NO>
+   bool ParseString(const std::string& instance, Solver<FMC>& s)
+   {
+      std::cout << "parsing string\n";
+      MrfInput input;
+      bool read_suc = pegtl::parse_string<grammar, action>(instance,"",input);
+      if(read_suc) {
+         auto& mrf_constructor = s.template GetProblemConstructor<PROBLEM_CONSTRUCTOR_NO>();
+         build_mrf(mrf_constructor, input);
+      }
+      return read_suc;
+   }
+
+   template<typename FMC, INDEX PROBLEM_CONSTRUCTOR_NO>
+   bool ParseFile(const std::string& filename, Solver<FMC>& s)
+   {
+      std::cout << "parsing " << filename << "\n";
+      pegtl::file_parser problem(filename);
+      MrfInput input;
+      bool read_suc = problem.parse< grammar, action >(input);
+      if(read_suc) {
+         auto& mrf_constructor = s.template GetProblemConstructor<PROBLEM_CONSTRUCTOR_NO>();
+         build_mrf(mrf_constructor, input);
+      }
+      return read_suc;
+   }
+}
+
+// for graphical models in opengm's hdf5 format and with explicit function tables, function-id-16000
+namespace HDF5Input {
+   template<typename MRF_PROBLEM_CONSTRUCTOR>
+   bool ParseProblem(const std::string filename, MRF_PROBLEM_CONSTRUCTOR& mrf)
+   {
+      return ParseGM(filename, mrf);
+   }
+}
 
 } // end namespace LP_MP
 
