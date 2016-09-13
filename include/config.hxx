@@ -1,7 +1,7 @@
 #ifndef LP_MP_CONFIG_HXX
 #define LP_MP_CONFIG_HXX
 
-#include "MinCost/MinCost.h"
+//#include "MinCost/MinCost.h"
 #include "Vc/Vc"
 //#include "Vc/Memory"
 
@@ -52,7 +52,7 @@ namespace LP_MP {
    // do zrobienia: maybe put this into LP_MP.h
    enum class LPReparametrizationMode {Anisotropic, Uniform, Undefined};
 
-   LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
+   inline LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
    {
       if(s == "uniform") {
          return LPReparametrizationMode::Uniform;
@@ -74,7 +74,7 @@ namespace LP_MP {
       bool end = false; // terminate optimization
       bool error = false;
       INDEX tightenConstraints = 0; // when given as return type, indicates how many constraints are to be added. When given as parameter to visitor, indicates how many were added.
-      REAL tightenMinDualIncrease = 0.0;
+      REAL tightenMinDualIncrease = 0.0; // do zrobienia: obsolete
    };
 
 
@@ -88,7 +88,7 @@ namespace LP_MP {
 
 }
 
-template class MinCost<LP_MP::SIGNED_INDEX,LP_MP::REAL>;
+//template class MinCost<LP_MP::SIGNED_INDEX,LP_MP::REAL>;
 
 //template class MinCost<int,int>;
 //template class MinCost<int,size_t>;

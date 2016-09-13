@@ -19,7 +19,7 @@
 #include <queue>
 
 #include "marray.hxx" // check how to replace this
-#include "tolerance.hxx"
+#include "config.hxx"
 
 #define DEBUG_MODE 1
 
@@ -139,6 +139,7 @@ Cycle<MRF_CONSTRUCTOR>::Cycle
 
 /////////////////////////////////////////////////////////////////////////////////
 // Code for union-find data structure (used by FindPartition)
+// do zrobienia: use existing union find class
 
 struct Node { //node for union-find
   int bit; //10, 01, or 11
@@ -159,7 +160,7 @@ struct Node { //node for union-find
   }
 };
   
-Node* find(Node* n) {
+inline Node* find(Node* n) {
 	if (n != n->parent) {
 		n->parent = find(n->parent);
 	}
@@ -167,7 +168,7 @@ Node* find(Node* n) {
 } 
 
 
-Node* merge(Node* x, Node* y) {
+inline Node* merge(Node* x, Node* y) {
   Node* root_x = find(x);
   Node* root_y = find(y);
   if (root_x == root_y) { //x and y have the same head

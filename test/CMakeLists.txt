@@ -1,26 +1,37 @@
 if(BUILD_TESTS)
-   SET(TEST_FILES 
+   # tests that are compiled unconditionally
+   SET(BASE_TEST_FILES 
       simplex.cpp
       simplex_marginalization.cpp
-      multicut.cpp
-      discrete_tomography.cpp
-      graphical_model.cpp
-      graph_matching.cpp
       )
    enable_testing()
 
    add_executable(test_main test_main.cpp ${headers} ${sources})
-   target_link_libraries(test_main Vc m stdc++ pthread ${GUROBI_LIBRARIES})
+   target_link_libraries(test_main Vc m stdc++ pthread ${GUROBI_LIBRARIES}) # do zrobienia: include GUROBI in general?
 
-   foreach( source_file ${TEST_FILES} )
-      string( REPLACE "_unit_test.cpp" "" object ${source_file} )
-      add_library(${object} SHARED ${source_file}) # for some reason only shared library is linked to test_main
-      target_link_libraries(test_main Vc ${object})
-   endforeach( source_file ${TEST_FILES} )
+   target_sources(test_main PUBLIC ${BASE_TEST_FILES})
 
-    target_compile_definitions(discrete_tomography.cpp PUBLIC -DUSE_GUROBI)
-    target_include_directories(discrete_tomography.cpp PUBLIC ${GUROBI_INCLUDE_DIR})
+   if(BUILD_GRAPHICAL_MODEL)
+      target_sources(test_main PUBLIC graphical_model.cpp)
+   endif()
+
+   if(BUILD_GRAPH_MATCHING)
+      target_sources(test_main PUBLIC graph_matching.cpp)
+   endif()
    
+   if(BUILD_MULTICUT)
+      target_sources(test_main PUBLIC multicut.cpp)
+   endif()
+
+   if(BUILD_DISCRETE_TOMOGRAPHY)
+      target_sources(test_main PUBLIC discrete_tomography.cpp)
+      if(BUILD_GUROBI_INTERFACE)
+         target_compile_definitions(discrete_tomography_gurobi.cpp PUBLIC -DUSE_GUROBI)
+         target_include_directories(discrete_tomography_gurobi.cpp PUBLIC ${GUROBI_INCLUDE_DIR})
+         target_sources(test_main PUBLIC discrete_tomography_gurobi.cpp)
+      endif()
+   endif()
+
    add_test(NAME LP_MP_TEST COMMAND test_main)
 
 endif()

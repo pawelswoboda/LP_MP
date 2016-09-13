@@ -2,21 +2,18 @@
 #define LP_MP_STANDARD_VISITOR_HXX
 
 #include "LP_MP.h"
-#include "tolerance.hxx"
+#include "config.hxx"
 #include "mem_use.c"
 #include "tclap/CmdLine.h"
 #include <chrono>
-//#include "spdlog/spdlog.h"
 
 /*
  minimal visitor class:
 class Visitor {
 public:
-   Visitor(TCLAP::CmdLine& cmd, SOLVER& pd);
-   LPVisitorReturnType begin(const LP* lp);
-   template<LPVisitorReturnType LP_STATE>
-   LPVisitorReturnType visit(LP* lp)
-
+   Visitor(TCLAP::CmdLine& cmd);
+   LpControl begin(LP& lp);
+   LpControl visit(LpControl, const REAL lower_bound, const REAL primal)
 };
 */
 

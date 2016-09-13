@@ -1,3 +1,7 @@
+#ifndef LP_MP_MEM_USE_C
+#define LP_MP_MEM_USE_C
+
+
 #ifdef __linux__
 # include <sys/sysinfo.h>
 # include <fstream>
@@ -17,7 +21,7 @@
 /// The amount of memory currently being used by this process, in bytes.
 /// By default, returns the full virtual arena, but if resident=true,
 /// it will report just the resident set in RAM (if supported on that OS).
-size_t memory_used (bool resident=false)
+inline size_t memory_used (bool resident=false)
 {
 #if defined(__linux__)
     // Ugh, getrusage doesn't work well on Linux.  Try grabbing info
@@ -57,3 +61,5 @@ size_t memory_used (bool resident=false)
     return 0;   // Punt
 #endif
 }
+
+#endif // LP_MP_MEM_USE_C

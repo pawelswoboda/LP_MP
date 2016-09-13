@@ -1,7 +1,7 @@
 #ifndef LP_MP_EQUALITY_MESSAGE
 #define LP_MP_EQUALITY_MESSAGE
 
-#include "tolerance.hxx"
+#include "config.hxx"
 
 namespace LP_MP {
 
