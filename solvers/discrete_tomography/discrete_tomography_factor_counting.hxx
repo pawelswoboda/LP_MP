@@ -76,7 +76,7 @@ namespace LP_MP{
     
   }
 
-  INDEX DiscreteTomographyFactorCounting::size() const {
+  inline INDEX DiscreteTomographyFactorCounting::size() const {
        return getSize(DiscreteTomographyFactorCounting::NODE::up) 
           + getSize(DiscreteTomographyFactorCounting::NODE::left) 
           + getSize(DiscreteTomographyFactorCounting::NODE::right) 
@@ -84,7 +84,7 @@ namespace LP_MP{
     }
 
   
-  INDEX DiscreteTomographyFactorCounting::getSize(NODE n) const {
+  inline INDEX DiscreteTomographyFactorCounting::getSize(NODE n) const {
     if( n == NODE::left ){ return leftSize_;  }
     if( n == NODE::right ){ return rightSize_;  }
     if( n == NODE::up ){ return upSize_;  }
@@ -92,7 +92,7 @@ namespace LP_MP{
     return 0;
   }
    
-  DiscreteTomographyFactorCounting::DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX numberOfVarsLeft,INDEX numberOfVarsRight,INDEX SumBound)
+  inline DiscreteTomographyFactorCounting::DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX numberOfVarsLeft,INDEX numberOfVarsRight,INDEX SumBound)
     : numberOfLabels_(numberOfLabels),numberOfVarsLeft_(numberOfVarsLeft),numberOfVarsRight_(numberOfVarsRight),SumBound_(SumBound) {
     assert(numberOfLabels_ > 1);
     assert(numberOfVarsLeft_ > 0);
@@ -106,7 +106,7 @@ namespace LP_MP{
     regSize_ = pow(numberOfLabels_,2);
   }
  
-  void DiscreteTomographyFactorCounting::CreateConstraints(LpInterfaceAdapter* lp) const {
+  inline void DiscreteTomographyFactorCounting::CreateConstraints(LpInterfaceAdapter* lp) const {
     REAL inf = std::numeric_limits<REAL>::infinity();
     
     auto xa = [&](INDEX idx){ return idx % numberOfLabels_;  };
@@ -227,7 +227,7 @@ namespace LP_MP{
   }
 
 
-  void DiscreteTomographyFactorCounting::PropagatePrimal(PrimalSolutionStorage::Element primal) const{
+  inline void DiscreteTomographyFactorCounting::PropagatePrimal(PrimalSolutionStorage::Element primal) const{
     
     struct IdxLbl {
       IdxLbl(INDEX x,INDEX y,INDEX l) : idx(x),c(y),noLabels(l) {

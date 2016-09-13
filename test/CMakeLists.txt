@@ -25,6 +25,7 @@ if(BUILD_TESTS)
 
    if(BUILD_DISCRETE_TOMOGRAPHY)
       target_sources(test_main PUBLIC discrete_tomography.cpp)
+      target_sources(test_main PUBLIC discrete_tomography_file_input.cpp)
       if(BUILD_GUROBI_INTERFACE)
          target_compile_definitions(discrete_tomography_gurobi.cpp PUBLIC -DUSE_GUROBI)
          target_include_directories(discrete_tomography_gurobi.cpp PUBLIC ${GUROBI_INCLUDE_DIR})

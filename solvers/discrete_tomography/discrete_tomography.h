@@ -151,7 +151,7 @@ namespace LP_MP{
           }
        };
 
-    bool ParseProblem(const std::string& filename, Solver<FMC_DT>& pd) {
+    inline bool ParseProblem(const std::string& filename, Solver<FMC_DT>& pd) {
        std::cout << "parsing " << filename << "\n";
        pegtl::file_parser problem(filename);
 

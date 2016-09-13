@@ -607,10 +607,11 @@ namespace UaiMrfInput {
 
          for(INDEX i=0; i<input.number_of_cliques_; ++i) {
             if(input.clique_scopes_[i].size() == 1) {
-               auto* f = mrf.GetUnaryFactor(i);
                const INDEX var = input.clique_scopes_[i][0];
+               auto* f = mrf.GetUnaryFactor(var);
                assert(input.function_tables_[i].size() == input.cardinality_[var]);
-               for(INDEX x=0; x<input.function_tables_[var].size(); ++x) {
+               for(INDEX x=0; x<input.function_tables_[i].size(); ++x) {
+                  assert( (*f)[x] == 0.0);
                   (*f)[x] = input.function_tables_[var][x];
                }
             }
