@@ -671,16 +671,30 @@ namespace TorresaniEtAlInput {
       return std::move(gmInput);
    }
 
-   GraphMatchingInput ParseString(const std::string& input)
+   template<typename FMC>
+   bool ParseProblemGM(const std::string& filename, Solver<FMC>& s)
    {
-      GraphMatchingInput gmInput;
-
-      bool ret = pegtl::parse_string<grammar, action>(input,"",gmInput);
-      if(!ret) {
-         throw std::runtime_error("could not read input"); 
-      }
-      return std::move(gmInput);
+      auto input = ParseFile(filename);
+      construct_gm( s, input );
+      return true;
    }
+
+   template<typename FMC>
+   bool ParseProblemMP(const std::string& filename, Solver<FMC>& s)
+   {
+      auto input = ParseFile(filename);
+      construct_mp( s, input );
+      return true;
+   }
+
+   template<typename FMC>
+   bool ParseProblemMCF(const std::string& filename, Solver<FMC>& s)
+   {
+      auto input = ParseFile(filename);
+      construct_mcf( s, input );
+      return true;
+   }
+
 
 } // end TorresaniEtAlInput
 
@@ -725,9 +739,10 @@ namespace UaiGraphMatchingInput {
       { 
          const std::string slack = "slack";
          if(slack == in.string()) {
-            m.back().push_back(std::numeric_limits<INDEX>::infinity());
+            m.back().push_back(std::numeric_limits<INDEX>::max());
          } else {
             const INDEX label = std::stoul(in.string());
+            assert(label < 100); // do zrobienia: remove this
             m.back().push_back(label);
          }
       }
@@ -757,9 +772,8 @@ namespace UaiGraphMatchingInput {
    {
       constraints m_inv;
       for(INDEX i=0; i<m.size(); ++i) {
-         assert(m[i][0] == i);
-         for(INDEX j=1; j<m.size(); ++j) { // first number is the variable
-            if(m[i][j] != std::numeric_limits<INDEX>::max() && m[i][j] > m_inv.size()) {
+         for(INDEX j=0; j<m[i].size(); ++j) { // first number is the variable
+            if(m[i][j] != std::numeric_limits<INDEX>::max() && m[i][j] >= m_inv.size()) {
                m_inv.resize(m[i][j]+1);
             }
             if(m[i][j] != std::numeric_limits<INDEX>::max()) {
@@ -767,11 +781,11 @@ namespace UaiGraphMatchingInput {
             }
          }
       }
-      return m_inv;
+      return std::move(m_inv);
    }
 
    template<typename FMC>
-   void ParseProblemGM(const std::string& filename, Solver<FMC>& s)
+   bool ParseProblemGM(const std::string& filename, Solver<FMC>& s)
    {
       auto i = ParseFile(filename);
       auto& mrf = s.template GetProblemConstructor<0>();
@@ -823,6 +837,7 @@ namespace UaiGraphMatchingInput {
          const std::vector<REAL> pot = it->second;
          mrf.AddPairwiseFactor(var1,var2,pot);
       }
+      return true;
    }
 
    template<typename FMC>
@@ -855,20 +870,82 @@ namespace UaiGraphMatchingInput {
    void construct_mcf(Solver<FMC>& s, const input& i)
    {
       auto& mrf_left = s.template GetProblemConstructor<1>();
-      auto& mrf_input = std::get<0>(i);
+      const auto& mrf_input = std::get<0>(i);
       UaiMrfInput::build_mrf(mrf_left, mrf_input);
 
       // build assignment problem
-      /*
-      auto& matching = std::get<1>(i);
-      for(auto& m : matching) {
-         std::copy_if(m.begin(), m.end(), std::back_inserter(s), [](auto i) { return i != std::numeric_limits<INDEX>::max(); });
-         assert(std::is_sorted(s.begin(), s.end()));
+      // We have two types of nodes: matching nodes and slack nodes, the latter taking care whenever a label says slack. Because CS2 orders edges, we must insert slack nodes after the matching nodes, when the need arises. Hence we may have to shift matchign node numbers after constructing slack nodes and inserting them between the matching nodes.
+      const auto& matching = std::get<1>(i);
+      for(const auto& m : matching) {
+         // do zrobienia: this should not be done when assert is not called
+         std::vector<INDEX> m_filtered;
+         std::copy_if(m.begin(), m.end(), std::back_inserter(m_filtered), [](auto i) { return i != std::numeric_limits<INDEX>::max(); });
+         assert(std::is_sorted( m_filtered.begin(), m_filtered.end()));
       }
       const INDEX no_left_nodes = mrf_left.GetNumberOfVariables();
-      const INDEX no_right_nodes = constraints.size();
-
+      INDEX no_right_nodes = 0;
+      for(auto& m : matching) {
+         for(auto c : m) {
+            if(c < std::numeric_limits<INDEX>::max()) { // is not a slack node
+               no_right_nodes = std::max(no_right_nodes, c+1);
+            }
+         }
+      }
+      std::vector<INDEX> slack_node_count(no_right_nodes+1,0); // denotes number of slack nodes that come before normal matching node
+      for(INDEX i=0; i<matching.size(); ++i) {
+         SIGNED_INDEX last_matching_node = -1;
+         for(INDEX j=0; j<matching[i].size(); ++j) {
+            if(matching[i][j] == std::numeric_limits<INDEX>::max()) { // is a slack node
+               // increase number of slack nodes coming right after right node matching[i][j-1]
+               slack_node_count[last_matching_node+1]++;
+            } else {
+               last_matching_node = matching[i][j];
+            }
+         }
+      }
+         
+      std::vector<INDEX> matching_node_idx(no_right_nodes+1);
+      std::vector<INDEX> cum_slack_node_count(no_right_nodes+1,0);
+      std::partial_sum(slack_node_count.begin(), slack_node_count.end(), cum_slack_node_count.begin()); 
+      for(INDEX i=0; i<matching_node_idx.size(); ++i) {
+         matching_node_idx[i] = i + cum_slack_node_count[i];
+      }
+      const INDEX total_no_right_nodes = no_right_nodes + std::accumulate(slack_node_count.begin(), slack_node_count.end(), 0);
+      std::vector<INDEX> slack_nodes_used(no_right_nodes+1,0);
       std::vector<typename MinCostFlowFactorCS2::Edge> edges;
+      for(INDEX i=0; i<matching.size(); ++i) {
+         SIGNED_INDEX last_matching_node = -1;
+         for(INDEX j=0; j<matching[i].size(); ++j) {
+            if(matching[i][j] == std::numeric_limits<INDEX>::max()) { // is a slack node
+               const INDEX right_node_no = matching_node_idx[ last_matching_node+1 ] + slack_nodes_used[ last_matching_node+1 ] - slack_node_count[ last_matching_node+1 ];
+               ++(slack_nodes_used[ last_matching_node+1 ]);
+               edges.push_back({i, no_left_nodes + right_node_no, 0, 1, 0.0});
+            } else {
+               edges.push_back({i, no_left_nodes + matching_node_idx[ matching[i][j] ], 0, 1, 0.0});
+               last_matching_node = matching[i][j];
+            }
+         }
+      }
+      for(INDEX i=0; i<total_no_right_nodes; ++i) {
+         edges.push_back({no_left_nodes + i, no_left_nodes + total_no_right_nodes, 0, 1, 0.0});
+      }
+
+      std::vector<SIGNED_INDEX> demands(no_left_nodes + total_no_right_nodes + 1);
+      std::fill(demands.begin(), demands.begin() + no_left_nodes, 1);
+      std::fill(demands.begin() + no_left_nodes, demands.end(), 0);
+      demands.back() = -no_left_nodes;
+
+      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
+      auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
+
+      for(INDEX i=0; i<no_left_nodes; ++i) {
+         auto *u = mrf_left.GetUnaryFactor(i);
+         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->starting_arc(i), mcf->no_arcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+         s.GetLP().AddMessage(m);
+      }
+
+      /*
+
       for(INDEX right_node=0; right_node<constraints.size(); ++right_node) {
          for(INDEX var_label=0; var_label<constraints[right_node].size(); ++var_label) {
             const INDEX var = std::get<0>(constraints[right_node][var_label]);
@@ -905,10 +982,20 @@ namespace UaiGraphMatchingInput {
 
 
 
+   
    template<typename FMC>
-   bool ParseProblemGM(const std::string& filename, Solver<FMC>& pd)
+   bool ParseProblemMP(const std::string& filename, Solver<FMC>& s)
    {
       const auto input = ParseFile(filename);
+      construct_mp(s, input);
+      return true;
+   }
+
+   template<typename FMC>
+   bool ParseProblemMCF(const std::string& filename, Solver<FMC>& s)
+   {
+      const auto input = ParseFile(filename);
+      construct_mcf(s, input);
       return true;
    }
 
@@ -1013,25 +1100,6 @@ namespace UaiGraphMatchingInput {
          }
          m_file.close();
 
-         return std::move(std::make_tuple(std::move(gm_input), std::move(c)));
-      }
-
-      input ParseString(const std::string& input)
-      {
-         UaiMrfInput::MrfInput gm_input;
-
-         bool ret = pegtl::parse_string<UaiMrfInput::grammar, UaiMrfInput::action>(input,"",gm_input);
-         if(!ret) {
-            throw std::runtime_error("could not read mrf input"); 
-         }
-
-         constraints c;
-         ret = pegtl::parse_string<grammar, action>(input,"",c);
-         if(!ret) {
-            throw std::runtime_error("could not read constraints input"); 
-         }
-
-         
          return std::move(std::make_tuple(std::move(gm_input), std::move(c)));
       }
 

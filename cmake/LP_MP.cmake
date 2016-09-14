@@ -52,9 +52,8 @@ set (LINK_LIBS ${LINK_LIBS} ${HDF5_C_STATIC_LIBRARY})
 message(STATUS ${HDF5_INCLUDE_DIR})
 
 # GUROBI
-OPTION(WITH_GUROBI "Activate Gurobi-Code" OFF)
 if(WITH_GUROBI)
-  find_package(Gurobi)
+   find_package(Gurobi REQUIRED)
 endif(WITH_GUROBI)
 
 IF(UNIX AND NOT APPLE)

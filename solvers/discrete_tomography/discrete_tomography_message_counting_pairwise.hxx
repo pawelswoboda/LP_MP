@@ -23,20 +23,20 @@ namespace LP_MP {
     
     /* repam.GetFactor()->&f  */
       
-    template<typename RIGHT_FACTOR, typename G1, typename G2>
-    void ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
-       MakeRightFactorUniform(f_right, repam_right, msg, 1.0);
-    }
+    //template<typename RIGHT_FACTOR, typename G1, typename G2>
+    //void ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
+    //   MakeRightFactorUniform(f_right, repam_right, msg, 1.0);
+    //}
 
     template<typename RIGHT_FACTOR, typename G1, typename G2>
     void SendMessageToLeft(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg, const REAL omega){
        MakeRightFactorUniform(f_right, repam_right, msg, omega);
     }
 
-    template<typename LEFT_FACTOR, typename G1, typename G3>
-    void SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
-       MakeLeftFactorUniform(f_left, repam_left, msg, omega);
-    }
+    //template<typename LEFT_FACTOR, typename G1, typename G3>
+    //void SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
+    //   MakeLeftFactorUniform(f_left, repam_left, msg, omega);
+    //}
 
     template<typename LEFT_FACTOR, typename G1, typename G3>
     void ReceiveMessageFromLeft(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg){

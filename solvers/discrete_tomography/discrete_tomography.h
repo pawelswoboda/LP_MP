@@ -26,6 +26,8 @@ namespace LP_MP{
   typedef PairwiseLoop<0> LeftLoopType;
   typedef PairwiseLoop<1> RightLoopType;
 
+  //typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,true,false,true> LeftMargMessage;
+  //typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,true,false,true> RightMargMessage;
   typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,false,false,true> LeftMargMessage;
   typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false,false,true> RightMargMessage;
 

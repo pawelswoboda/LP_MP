@@ -1,33 +1,30 @@
-SET(SOURCES graph_matching.cpp multicut.cpp)
-
 function(DOWNLOAD_AND_UNZIP URL DOWNLOAD_TO EXTRACT_TO)
    if(NOT EXISTS ${DOWNLOAD_TO})
       message("Download ${URL}")
-      file(DOWNLOAD "${URL}" "${DOWNLOAD_TO}")
+      file(DOWNLOAD ${URL} ${DOWNLOAD_TO})
       execute_process(
-         COMMAND unzip  "${DOWNLOAD_TO}" -d "${EXTRACT_TO}"
-         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+         COMMAND unzip -f ${DOWNLOAD_TO} -d ${EXTRACT_TO}
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
          )
    endif()
 endfunction(DOWNLOAD_AND_UNZIP)
 
-# download test datasets
-if(BUILD_MULTICUT)
+if(BUILD_MULTICUT_EVALUATION)
    add_executable(multicut multicut.cpp ${headers} ${sources})
    target_link_libraries(multicut Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
 
    message("Download multicut datasets")
    set(MC_DIRECTORY "solvers/evaluation/multicut_datasets")
 
-   file(MAKE_DIRECTORY "${MC_DIRECTORY}")
-   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-150.zip" "${MC_DIRECTORY}/knott-3d-150.zip" "${MC_DIRECTORY}")
-   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-300.zip" "${MC_DIRECTORY}/knott-3d-300.zip" "${MC_DIRECTORY}")
-   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-450.zip" "${MC_DIRECTORY}/knott-3d-450.zip" "${MC_DIRECTORY}")
-   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-550.zip" "${MC_DIRECTORY}/knott-3d-550.zip" "${MC_DIRECTORY}/knott-3d-550/")
+   file(MAKE_DIRECTORY ${MC_DIRECTORY})
+   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-150.zip" "${MC_DIRECTORY}/knott-3d-150.zip" ${MC_DIRECTORY})
+   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-300.zip" "${MC_DIRECTORY}/knott-3d-300.zip" ${MC_DIRECTORY})
+   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-450.zip" "${MC_DIRECTORY}/knott-3d-450.zip" ${MC_DIRECTORY})
+   DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/knott-3d-550.zip" "${MC_DIRECTORY}/knott-3d-550.zip" ${MC_DIRECTORY}/knott-3d-550/)
    DOWNLOAD_AND_UNZIP("http://hciweb2.iwr.uni-heidelberg.de/opengm/benchmarks/models/zip/modularity-clustering.zip" "${MC_DIRECTORY}/modularity-clustering.zip" "${MC_DIRECTORY}")
 endif()
 
-if(BUILD_GRAPH_MATCHING)
+if(BUILD_GRAPH_MATCHING_EVALUATION)
    add_executable(graph_matching graph_matching.cpp ${headers} ${sources})
    target_link_libraries(graph_matching Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
 

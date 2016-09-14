@@ -4,12 +4,14 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
 option(DOWNLOAD_DEPENDENCIES "Download and compile dependencies automatically" ON)
 # Options
 OPTION(BUILD_GRAPH_MATCHING "Build graph matching" ON)
+OPTION(BUILD_GRAPH_MATCHING_EVALUATION "Build graph matching evaluation" OFF)
 OPTION(BUILD_MULTICUT "Build multicut" ON)
+OPTION(BUILD_MULTICUT_EVALUATION "Build multicut evaluation" OFF)
 OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" ON)
 OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" ON)
 OPTION(BUILD_EVALUATION "Build evaluation" ON)
 OPTION(BUILD_TESTS "Build tests" ON)
-OPTION(BUILD_GUROBI_INTERFACE "LP interface to gurobi" OFF)
+OPTION(WITH_GUROBI "LP interface to gurobi" OFF)
 
 if(DOWNLOAD_DEPENDENCIES)
    # download external projects here

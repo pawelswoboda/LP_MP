@@ -36,15 +36,15 @@ namespace LP_MP {
        MakeRightFactorUniform(f_right, repam_right, msg, omega);
     }
 
-    template<typename LEFT_FACTOR, typename G1, typename G3>
-    void SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
-       MakeLeftFactorUniform(f_left, repam_left, msg, omega);
-    }
-
     //template<typename LEFT_FACTOR, typename G1, typename G3>
-    //void ReceiveMessageFromLeft(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg){
-    //   MakeLeftFactorUniform(f_left, repam_left, msg, 1.0);
+    //void SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
+    //   MakeLeftFactorUniform(f_left, repam_left, msg, omega);
     //}
+
+    template<typename LEFT_FACTOR, typename G1, typename G3>
+    void ReceiveMessageFromLeft(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg){
+       MakeLeftFactorUniform(f_left, repam_left, msg, 1.0);
+    }
 
     template<typename RIGHT_FACTOR, typename REPAM_ARRAY, typename MSG>
     void MakeRightFactorUniform(RIGHT_FACTOR* const f_right, const REPAM_ARRAY& repam_right, MSG& msg, const REAL omega);
