@@ -50,7 +50,7 @@ public:
    template<typename LEFT_FACTOR, typename G1, typename G2>
    void ReceiveMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg)
    { 
-      auto op = [](const REAL x) { return -x; };
+      auto op = [](const REAL x) { return -x; }; // do zrobienia: is this correct still? Signs should be the same!
       MakeFactorUniform<decltype(op)>(op,leftPot, msg, leftVar_);
       //MakeLeftFactorUniform(leftPot, msg); 
    }

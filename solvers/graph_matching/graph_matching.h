@@ -12,6 +12,7 @@
 #include "problem_constructors/mrf_problem_construction.hxx"
 //#include "factors/min_cost_flow_factor_lemon.hxx"
 #include "factors/min_cost_flow_factor_cs2.hxx"
+// do zrobienia: min cost flow constructors are not used
 #include "../cosegmentation/assignment_via_min_cost_flow_constructor.hxx" // move file to problem_constructors
 #include "../cosegmentation/assignment_via_message_passing_problem_constructor.hxx" // move file to problem_constructors
 
@@ -33,6 +34,8 @@
 // input grammars:
 // TorresaniEtAlInput contains the grammar used by the dual decomposition algorithm of Torresani, Kolmogorov and Rother.
 // UaiGraphMatchingInput contains the grammar in uai MRF format plus constraints section.
+
+// do zrobienia: remove mcf constructors from FMCs and from include
 
 using namespace LP_MP;
 
@@ -630,14 +633,14 @@ namespace TorresaniEtAlInput {
       if(pc == PairwiseConstruction::Left || pc == PairwiseConstruction::BothSides) {
          for(INDEX i=0; i<no_left_nodes; ++i) {
             auto *u = mrf_left.GetUnaryFactor(i);
-            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->starting_arc(i), mcf->no_arcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
             s.GetLP().AddMessage(m);
          }
       }
       if(pc == PairwiseConstruction::Right || pc == PairwiseConstruction::BothSides) {
          for(INDEX i=0; i<no_right_nodes; ++i) {
             auto *u = mrf_right.GetUnaryFactor(i);
-            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->starting_arc(i + no_left_nodes), mcf->no_arcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
+            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->StartingArc(i + no_left_nodes), mcf->NoArcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
             s.GetLP().AddMessage(m);
          }
       }
@@ -787,6 +790,7 @@ namespace UaiGraphMatchingInput {
    template<typename FMC>
    bool ParseProblemGM(const std::string& filename, Solver<FMC>& s)
    {
+      static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left, "in uai format only left construction makes sense"); 
       auto i = ParseFile(filename);
       auto& mrf = s.template GetProblemConstructor<0>();
       auto& mrf_input = std::get<0>(i);
@@ -936,11 +940,12 @@ namespace UaiGraphMatchingInput {
       demands.back() = -no_left_nodes;
 
       auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
+      s.GetLP().AddFactor(f);
       auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
 
       for(INDEX i=0; i<no_left_nodes; ++i) {
          auto *u = mrf_left.GetUnaryFactor(i);
-         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->starting_arc(i), mcf->no_arcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
          s.GetLP().AddMessage(m);
       }
 
@@ -974,7 +979,7 @@ namespace UaiGraphMatchingInput {
       // connect assignment factor with unaries
       for(INDEX i=0; i<no_left_nodes; ++i) {
          auto *u = mrf_left.GetUnaryFactor(i);
-         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->starting_arc(i), mcf->no_arcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
          s.GetLP().AddMessage(m);
       }
       */
@@ -986,6 +991,8 @@ namespace UaiGraphMatchingInput {
    template<typename FMC>
    bool ParseProblemMP(const std::string& filename, Solver<FMC>& s)
    {
+      // do zrobienia: FMC must be left type -> static_assert this
+      static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left, "in uai format only left construction makes sense"); 
       const auto input = ParseFile(filename);
       construct_mp(s, input);
       return true;
@@ -994,6 +1001,7 @@ namespace UaiGraphMatchingInput {
    template<typename FMC>
    bool ParseProblemMCF(const std::string& filename, Solver<FMC>& s)
    {
+      static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left, "in uai format only left construction makes sense"); 
       const auto input = ParseFile(filename);
       construct_mcf(s, input);
       return true;
@@ -1221,7 +1229,7 @@ namespace UaiGraphMatchingInput {
       // connect assignment factor with unaries
       for(INDEX i=0; i<no_left_nodes; ++i) {
          auto *u = mrf_left.GetUnaryFactor(i);
-         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->starting_arc(i), mcf->no_arcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
          s.GetLP().AddMessage(m);
       }
    }
