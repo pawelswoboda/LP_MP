@@ -24,9 +24,9 @@ namespace LP_MP {
     LpInterfaceAdapter(){ }
     
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
-    LpInterfaceAdapter(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool integer = true)
+      LpInterfaceAdapter(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool integer = true)
     { } 
-
+    
     virtual LpVariable CreateAuxiliaryVariable(REAL lb,REAL ub,bool integer = false) = 0;
     virtual LpVariable* CreateAuxiliaryVariables(INDEX n,REAL lb,REAL ub,bool integer = false) = 0;
     

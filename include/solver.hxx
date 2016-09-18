@@ -429,7 +429,7 @@ public:
         lpSolver_->SetNumberOfThreads(threads_.getValue());
         
         lpSolver_->solve();
-      }
+      } else { lpSolver_ = NULL;  }
       
       return c.error;
    }
