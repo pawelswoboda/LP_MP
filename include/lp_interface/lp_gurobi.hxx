@@ -83,9 +83,8 @@ namespace LP_MP {
       model_.update();
     } 
 
-    LpVariable CreateAuxiliaryVariable(REAL lb,REAL ub,bool integer = false);
-    LpVariable* CreateAuxiliaryVariables(INDEX n,REAL lb,REAL ub,bool integer = false);
-
+    LinExpr CreateLinExpr() const { return LinExpr(); }
+    
     INDEX GetFactorSize() const { return size_; }
     INDEX GetLeftFactorSize() const { return leftSize_; }
     INDEX GetRightFactorSize() const { return rightSize_; }
@@ -171,35 +170,6 @@ namespace LP_MP {
 
     void LpInterfaceGurobi::addLinearInequality(LinExpr lhs,LinExpr rhs){
     model_.addConstr(lhs,GRB_LESS_EQUAL,rhs);
-  }
-
-  LpVariable
-  LpInterfaceGurobi::CreateAuxiliaryVariable(REAL lb,REAL ub,bool integer){
-    LpVariable v;
-    if( integer ){
-      v = model_.addVar(lb,ub,0.0,GRB_INTEGER);
-    } else {
-      v = model_.addVar(lb,ub,0.0,GRB_CONTINUOUS);
-    }
-    model_.update();
-    return v;
-  }
-  
-  LpVariable*
-  LpInterfaceGurobi::CreateAuxiliaryVariables(INDEX n,REAL lb,REAL ub,bool integer){
-    LpVariable* v;
-    std::vector<double> obj(n,0.0);
-    std::vector<double> lbs(n,lb);
-    std::vector<double> ubs(n,ub);
-    if( integer ){
-      std::vector<char> types(n,GRB_INTEGER);
-      v = model_.addVars(&lbs[0],&ubs[0],&obj[0],&types[0],NULL,n);
-    } else {
-      std::vector<char> types(n,GRB_CONTINUOUS);   
-      v = model_.addVars(&lbs[0],&ubs[0],&obj[0],&types[0],NULL,n);
-    }
-    model_.update();
-    return v;
   }
   
   

@@ -366,7 +366,8 @@ public:
       LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_,true),
       RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
       timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
-      threads_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_)
+      threads_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_),
+      EXPORT_("","export","export model to file -> export.lp",SOLVER::cmd_)
    {
       this->Init(argc,argv);
    }
@@ -377,7 +378,8 @@ public:
       LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_,true),
       RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
       timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
-      threads_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_)
+      threads_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_),
+      EXPORT_("","export","export model to file -> export.lp",SOLVER::cmd_)
    {
       this->Init(arg);
    }
@@ -428,7 +430,13 @@ public:
         lpSolver_->SetTimeLimit(timelimit_.getValue());
         lpSolver_->SetNumberOfThreads(threads_.getValue());
         
-        lpSolver_->solve();
+        if(EXPORT_.getValue()){
+          lpSolver_->WriteLpModel("export.lp");
+        } else {
+          lpSolver_->solve();
+          printf("\n");
+          printf("Obj: %5.3f    Bound: %5.3f \n",lpSolver_->GetObjectiveValue(),lpSolver_->GetBestBound());
+        }
       } else { lpSolver_ = NULL;  }
       
       return c.error;
@@ -443,6 +451,7 @@ private:
   TCLAP::SwitchArg LP_;
   TCLAP::SwitchArg LPOnly_;
   TCLAP::SwitchArg RELAX_;
+  TCLAP::SwitchArg EXPORT_;
   
 };
 

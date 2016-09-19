@@ -129,11 +129,21 @@ namespace LP_MP{
     auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
     auto xz = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return (idx - xa(idx))/numberOfLabels_; };
    
-    LinExpr lhs_all;
-    std::vector<LinExpr> lhs_up(upSize_);
-    std::vector<LinExpr> lhs_left(leftSize_);
-    std::vector<LinExpr> lhs_right(rightSize_);
-    std::vector<LinExpr> lhs_reg(regSize_);
+    LinExpr lhs_all = lp->CreateLinExpr();
+    std::vector<LinExpr> lhs_up(upSize_);//,lp->CreateLinExpr());
+    std::vector<LinExpr> lhs_left(leftSize_);//,lp->CreateLinExpr());
+    std::vector<LinExpr> lhs_right(rightSize_);//,lp->CreateLinExpr());
+    std::vector<LinExpr> lhs_reg(regSize_);//,lp->CreateLinExpr());
+    
+    auto InitVector = [&](std::vector<LinExpr>& v){
+      for(INDEX i=0;i<v.size();i++){
+        v[i] = lp->CreateLinExpr();
+      }
+    };
+    InitVector(lhs_up);
+    InitVector(lhs_left);
+    InitVector(lhs_right);
+    InitVector(lhs_reg);
     
     INDEX z_max = upSize_/pow(numberOfLabels_,2);
     
@@ -181,13 +191,14 @@ namespace LP_MP{
     auto AddAllConstraints = [&]( std::vector<LinExpr> lhs,
                                   INDEX offset){
       for(INDEX i=0;i<lhs.size();i++){
-        LinExpr rhs;
+        LinExpr rhs = lp->CreateLinExpr();
         rhs += lp->GetVariable(offset + i);
         lp->addLinearEquality(lhs[i],rhs);
       }
     };
   
-    LinExpr rhs_all; rhs_all += 1;
+    LinExpr rhs_all = lp->CreateLinExpr();
+    rhs_all += 1;
     lp->addLinearEquality(lhs_all,rhs_all);
     
     AddAllConstraints(lhs_up,0);

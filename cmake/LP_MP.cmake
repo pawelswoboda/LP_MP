@@ -50,6 +50,12 @@ if(WITH_GUROBI)
   find_package(Gurobi)
 endif(WITH_GUROBI)
 
+# CPLEX
+OPTION(WITH_CPLEX "Activate CPLEX-Code" OFF)
+if(WITH_CPLEX)
+  find_package(Cplex)
+endif(WITH_CPLEX)
+
 IF(UNIX AND NOT APPLE)
    find_library(TR rt)
    set(LINK_RT true)
