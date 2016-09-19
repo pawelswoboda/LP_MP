@@ -599,7 +599,14 @@ namespace UaiMrfInput {
       {
          assert(input.number_of_cliques_ == input.clique_scopes_.size());
          assert(input.number_of_cliques_ == input.function_tables_.size());
+
+         // only unary and pairwise potentials supported right now
+         for(INDEX i=0; i<input.number_of_cliques_; ++i) {
+            assert(input.clique_scopes_[i].size() < 3);
+         }
+
          // first input the unaries, as pairwise potentials need them to be able to link to them
+         // add unary factors with cost zero for each variables. There are models where unaries are not explicitly added.
          for(INDEX i=0; i<input.number_of_variables_; ++i) {
             const INDEX noLabels = input.cardinality_[i];
             mrf.AddUnaryFactor(i,std::vector<REAL>(noLabels,0.0));
@@ -612,24 +619,27 @@ namespace UaiMrfInput {
                assert(input.function_tables_[i].size() == input.cardinality_[var]);
                for(INDEX x=0; x<input.function_tables_[i].size(); ++x) {
                   assert( (*f)[x] == 0.0);
-                  (*f)[x] = input.function_tables_[var][x];
+                  (*f)[x] = input.function_tables_[i][x];
                }
             }
          }
-         // add unary factors with cost zero whenever
          // now the pairwise potentials. 
          for(INDEX i=0; i<input.number_of_cliques_; ++i) {
             if(input.clique_scopes_[i].size() == 2) {
                const INDEX var1 = input.clique_scopes_[i][0];
                const INDEX var2 = input.clique_scopes_[i][1];
-               assert(var1<var2);
+               const INDEX dim1 = mrf.GetNumberOfLabels(var1);
+               const INDEX dim2 = mrf.GetNumberOfLabels(var2);
+               assert(var1<var2 && var2 < input.number_of_variables_);
                assert(input.function_tables_[i].size() == input.cardinality_[var1]*input.cardinality_[var2]);
-               mrf.AddPairwiseFactor(var1,var2,input.function_tables_[i]); // or do we have to transpose the values?
+               std::vector<REAL> pairwise_cost(dim1*dim2);
+               for(INDEX l1=0; l1<dim1; ++l1) {
+                  for(INDEX l2=0; l2<dim2; ++l2) {
+                     pairwise_cost[l1 + l2*dim1] = input.function_tables_[i][l2*dim1 + l1];
+                  }
+               }
+               mrf.AddPairwiseFactor(var1,var2,pairwise_cost); // or do we have to transpose the values?
             }
-         }
-         // only unary and pairwise potentials supported right now
-         for(INDEX i=0; i<input.number_of_cliques_; ++i) {
-            assert(input.clique_scopes_[i].size() < 3);
          }
       }
 

@@ -5,7 +5,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
-#include <vector> // do zrobienia: used for bounds. Replace bounds by normal array
+#include <vector> // do zrobienia: used for cap. Replace cap by normal array
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,6 +59,7 @@ public:
 
 	///////////////////////////////////////////////////
 
+   void SetCap(ArcId e, FlowType new_cap);
 	FlowType GetRCap(EdgeId e) const;
 	void SetRCap(EdgeId e, FlowType new_rcap);
 	FlowType GetReverseRCap(EdgeId e) const;
@@ -70,8 +71,8 @@ public:
    FlowType GetFlow(EdgeId e) const
    {
       assert(0 <= e && e < edgeNumMax);
-      const FlowType ub = bounds[e];
-      const FlowType lb = bounds[N_arc(arcs[e].sister)];
+      const FlowType ub = cap[e];
+      const FlowType lb = cap[N_arc(arcs[e].sister)];
       const FlowType r_cap = GetRCap(e);
       //std::cout << "ub = " << ub << ", residual capacity = " << r_cap << ", lb = " << lb << ", reverse residual capacity = " << reverse_r_cap << std::endl;
       FlowType delta;
@@ -113,7 +114,7 @@ public:
       }
    }
 
-   FlowType GetCap(const ArcId a) const { return bounds[a]; }
+   FlowType GetCap(const ArcId a) const { return cap[a]; }
    void SetCost(const EdgeId e, const CostType c) { UpdateCost(e, c - GetCost(e)); }
 	CostType ShortestPath(const NodeId start_node, const NodeId end_node);
    FlowType GetNodeExcess(const NodeId i) const { return nodes[i].excess; }
@@ -125,8 +126,8 @@ public:
    CostType GetPotential(const NodeId i) const { return nodes[i].pi; }
    const Node& GetNode(const NodeId i) const { return nodes[i]; }
 
-   FlowType GetUpperBound(const EdgeId e) const { return bounds[e].upper; }
-   FlowType GetLowerBound(const EdgeId e) const { return bounds[e].lower; }
+   FlowType GetUpperBound(const EdgeId e) const { return cap[e].upper; }
+   FlowType GetLowerBound(const EdgeId e) const { return cap[e].lower; }
 
    NodeId N_node(Node* i) const { assert(i - nodes >= 0 && i - nodes < nodeNum); return i - nodes; }
    ArcId N_arc(Arc* a) const { assert(a - arcs >= 0 && a-arcs < 2*edgeNum); return a - arcs; }
@@ -182,7 +183,7 @@ public:
 
 	struct Arc
 	{
-      // do zrobienia: possibly remove prev and next and always iterate through full list. arcs are stored contiguously
+      // do zrobienia: possibly remove prev and next and always iterate through full list. arcs are stored contiguously. Then no separate saturated and non satured arc list is held
 		Node* head;
 		Arc*  prev;
 		Arc*  next;
@@ -190,11 +191,10 @@ public:
 
 		FlowType	r_cap;		// residual capacity
 #ifdef MINCOST_DEBUG
-		FlowType	cap_orig;
+		FlowType	cap_orig; // not needed anymore: cap is an array
 #endif
 		CostType	cost;
 		CostType GetRCost() const { return cost + head->pi - sister->head->pi; }
-      //Node* head() const { return head; }
       Node* tail() const { return sister->head; }
 	};
 
@@ -207,7 +207,7 @@ private:
 	Node*	firstActive;
 	int		counter;
 	CostType cost;
-   std::unique_ptr<FlowType[]> bounds; // used to hold original lower and upper bound, such that primal flow can be recomputed. To zrobienia: templatize this, such that this information is not held unless wanted. 
+   std::unique_ptr<FlowType[]> cap; // used to hold original lower and upper bound, such that primal flow can be recomputed. To zrobienia: templatize this, such that this information is not held unless wanted. 
 
 
 	void	(*error_function)(const char *);	// this function is called if a error occurs,
@@ -239,7 +239,7 @@ private:
 	PriorityQueue queue;
 
 	/////////////////////////////////////////////////////////////////////////
-
+ 
 	void SetRCap(Arc* a, FlowType new_rcap);
 	void PushFlow(Arc* a, FlowType delta);
 
@@ -292,8 +292,8 @@ template <typename FlowType, typename CostType>
 	assert(_i!=_j && edgeNum<edgeNumMax);
 	assert(lb < ub);
 
-   bounds[2*edgeNum] = ub;
-   bounds[2*edgeNum+1] = -lb;
+   cap[2*edgeNum] = ub;
+   cap[2*edgeNum+1] = -lb;
 
    FlowType cap = ub;
    FlowType rev_cap = -lb;
@@ -329,6 +329,7 @@ template <typename FlowType, typename CostType>
    a_rev->next = nullptr;
    a_rev->prev = nullptr;
 
+   // do zrobienia: delete
    /*
 	if (cap > 0)
 	{
@@ -414,6 +415,26 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
+void SSP<FlowType, CostType>::SetCap(const ArcId a, const FlowType lb, const FlowType ub)
+{
+   assert(0<=a && a<2*edgeNum);
+   assert(lb < ub);
+   Arc* a = arcs[a];
+   Arc* arc_rev = a->sister;
+   const ArcId a_rev = N_arc(arc_rev);
+   const FlowType ub_delta = cap[a] - ub;
+   const FlowType lb_delta = cap[a_rev] + lb;
+   // note: temporarily bounds may be infeasible. If this is so, the reverse arc will need to be changed as well. Wait until this happens and then set residual capacity etc. correctly
+   if(new_cap < -cap[e]) { // bounds infeasible, wait until reverse bound will make it correct again
+
+   } else { // set residual capacity correctly
+      SetRCap(e, std::max(0, cap[e] - new_cap));
+   }
+   cap[a] = ub;
+   cap[a_rev] = -lb;
+}
+
+template <typename FlowType, typename CostType> 
 	inline FlowType SSP<FlowType, CostType>::GetRCap(EdgeId e) const
 {
    assert(0<=e && e<2*edgeNum);
@@ -456,20 +477,20 @@ template <typename FlowType, typename CostType>
 template <typename FlowType, typename CostType> 
 	inline void SSP<FlowType, CostType>::SetRCap(EdgeId e, FlowType new_rcap)
 {
-	SetRCap(&arcs[2*e], new_rcap);
+	SetRCap(&arcs[e], new_rcap);
 }
 
 template <typename FlowType, typename CostType> 
 	inline FlowType SSP<FlowType, CostType>::GetReverseRCap(EdgeId e) const
 {
-	Arc* a = &arcs[2*e+1];
+	Arc* a = arcs[e].sister;
 	return a->r_cap;
 }
 
 template <typename FlowType, typename CostType> 
 	inline void SSP<FlowType, CostType>::SetReverseRCap(EdgeId e, FlowType new_rcap)
 {
-	SetRCap(&arcs[2*e+1], new_rcap);
+	SetRCap(arcs[e].sister, new_rcap);
 }
 
 template <typename FlowType, typename CostType> 
@@ -499,7 +520,7 @@ template <typename FlowType, typename CostType>
 {
    assert(0<=e && e<edgeNum);
 	Arc* a = &arcs[e];
-	cost += delta*(bounds[e]-a->r_cap);
+	cost += delta*(cap[e]-a->r_cap);
 	a->cost += delta;
 	a->sister->cost = -a->cost;
 
@@ -617,8 +638,8 @@ template <typename FlowType, typename CostType>
 {
 	nodes = (Node*) malloc(nodeNum*sizeof(Node));
 	arcs = (Arc*) malloc(2*edgeNumMax*sizeof(Arc));
-   bounds = std::unique_ptr<FlowType[]>( new FlowType[2*edgeNumMax] );
-	if (!nodes || !arcs ||!bounds.get()) { if (error_function) (*error_function)("Not enough memory!"); exit(1); }
+   cap = std::unique_ptr<FlowType[]>( new FlowType[2*edgeNumMax] );
+	if (!nodes || !arcs ||!cap.get()) { if (error_function) (*error_function)("Not enough memory!"); exit(1); }
 
 	memset(nodes, 0, nodeNum*sizeof(Node));
 	memset(arcs, 0, 2*edgeNumMax*sizeof(Arc));
@@ -636,7 +657,7 @@ SSP<FlowType, CostType>::SSP(const SSP<FlowType, CostType>& other)
 	  counter(0),
 	  cost(0),
 	  error_function(other.error_function),
-     bounds(other.bounds)
+     cap(other.cap)
 {
    assert(false); // not working currently
 	nodes = (Node*) malloc(nodeNum*sizeof(Node));
@@ -645,7 +666,7 @@ SSP<FlowType, CostType>::SSP(const SSP<FlowType, CostType>& other)
 
 	memset(arcs+edgeNum, 0, 2*(edgeNumMax-edgeNum)*sizeof(Arc));
 
-   bounds = std::unique_ptr<FlowType[]>( new FlowType[2*edgeNumMax] );
+   cap = std::unique_ptr<FlowType[]>( new FlowType[2*edgeNumMax] );
    
 	firstActive = &nodes[nodeNum];
 
@@ -674,7 +695,7 @@ template<typename FlowType, typename CostType>
 void SSP<FlowType, CostType>::ExchangeArcs(Arc& a, Arc&b)
 {
    std::swap(a, b);
-   std::swap(bounds[N_arc(&a)], bounds[N_arc(&b)]);
+   std::swap(cap[N_arc(&a)], cap[N_arc(&b)]);
    a.sister->sister = &a;
    b.sister->sister = &b;
 }
@@ -981,6 +1002,7 @@ template <typename FlowType, typename CostType>
 
 	CostType _cost = 0;
 
+   // do zrobienia: this will not work anymore due to different arc ordering
 	for (a=arcs; a<arcs+2*edgeNum; a+=2)
 	{
 		assert(a->r_cap + a->sister->r_cap == a->cap_orig + a->sister->cap_orig);
