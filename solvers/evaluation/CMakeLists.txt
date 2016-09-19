@@ -35,3 +35,12 @@ if(BUILD_GRAPH_MATCHING_EVALUATION)
    DOWNLOAD_AND_UNZIP("http://www.cs.dartmouth.edu/~lorenzo/Papers/tkr_pami13_data.zip" "${GM_DIRECTORY}/tkr_pami13_data.zip" "${GM_DIRECTORY}/tkr_pami13_data/")
 endif()
 
+if(BUILD_DISCRETE_TOMOGRAPHY_EVALUATION)
+   add_executable(discrete_tomography_eval discrete_tomography_eval.cpp ${headers} ${sources})
+   target_link_libraries(discrete_tomography_eval Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
+
+   message("Download discrete tomography datasets")
+   set(DT_DIRECTORY "solvers/evaluation/discrete_tomography_datasets")
+
+   DOWNLOAD_AND_UNZIP("https://datarep.app.ist.ac.at/46/1/discrete_tomography_synthetic.zip" "${DT_DIRECTORY}/discrete_tomography_synthetic.zip" "${DT_DIRECTORY}/discrete_tomography_synthetic/")
+endif()
