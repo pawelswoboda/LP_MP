@@ -6,6 +6,8 @@
 
 #ifdef USE_GUROBI
 #include <gurobi_c++.h>
+#elif USE_CPLEX
+#include <ilcplex/ilocplex.h>
 #else
 #include "lp_auxiliary.hxx"
 #endif
@@ -15,20 +17,25 @@ namespace LP_MP {
 #ifdef USE_GUROBI
   typedef GRBVar LpVariable;
   typedef GRBLinExpr LinExpr;
+#elif USE_CPLEX
+ typedef IloNumVar LpVariable;
+ typedef IloNumExpr LinExpr;
 #endif
 
     
   class LpInterfaceAdapter {
   public:
 
-    LpInterfaceAdapter(){ }
+    LpInterfaceAdapter(){ } 
     
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
-    LpInterfaceAdapter(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool integer = true)
+      LpInterfaceAdapter(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool integer = true)
     { } 
-
-    virtual LpVariable CreateAuxiliaryVariable(REAL lb,REAL ub,bool integer = false) = 0;
-    virtual LpVariable* CreateAuxiliaryVariables(INDEX n,REAL lb,REAL ub,bool integer = false) = 0;
+    
+    //virtual LpVariable CreateAuxiliaryVariable(REAL lb,REAL ub,bool integer = false) = 0;
+    //virtual LpVariable* CreateAuxiliaryVariables(INDEX n,REAL lb,REAL ub,bool integer = false) = 0;
+    
+    virtual LinExpr CreateLinExpr() const = 0;
     
     virtual INDEX GetFactorSize() const = 0;
     virtual INDEX GetLeftFactorSize() const = 0;

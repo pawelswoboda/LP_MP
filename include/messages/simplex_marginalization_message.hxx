@@ -229,7 +229,8 @@ namespace LP_MP {
       }
           
       for(auto i=0; i<no_constraints ; i++){
-        LinExpr lhs,rhs;
+        LinExpr lhs = lp->CreateLinExpr();
+        LinExpr rhs = lp->CreateLinExpr();
         for(auto l=0; l<leftIndices[i].size(); l++){
           lhs += lp->GetLeftVariable(leftIndices[i][l]);
         }

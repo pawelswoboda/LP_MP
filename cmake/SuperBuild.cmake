@@ -106,7 +106,6 @@ ExternalProject_Add(
    PEGTL_Project
    GIT_REPOSITORY "https://github.com/ColinH/PEGTL.git"
    GIT_TAG "master"
-   UPDATE_COMMAND ""
    INSTALL_COMMAND ""
    BUILD_COMMAND ""
    CONFIGURE_COMMAND ""

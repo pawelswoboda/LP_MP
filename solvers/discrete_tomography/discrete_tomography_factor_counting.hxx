@@ -17,8 +17,8 @@ namespace LP_MP{
     
     DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX numberOfVarsLeft,INDEX numberOfVarsRight,INDEX SumBound);
     
-    template<typename REPAM_ARRAY>
-    INDEX ComputeOptimalLabeling(const REPAM_ARRAY& repam) const { }; //--required
+    //template<typename REPAM_ARRAY>
+    //INDEX ComputeOptimalLabeling(const REPAM_ARRAY& repam) const { }; //--required
 
     template<typename REPAM_ARRAY>
     REAL LowerBound(const REPAM_ARRAY& repam) const; //--required
@@ -28,6 +28,9 @@ namespace LP_MP{
     
     void PropagatePrimal(PrimalSolutionStorage::Element primal) const;
 
+    template<typename PROB,typename REPAM_ARRAY>
+    void LabelCertainty(PROB& p,REPAM_ARRAY repam);
+    
     template<typename REPAM_ARRAY>
     REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const; //--required
 
@@ -52,6 +55,19 @@ namespace LP_MP{
     INDEX upSize_,leftSize_,rightSize_,regSize_;
   };
 
+  template<typename PROB,typename REPAM_ARRAY>
+  void DiscreteTomographyFactorCounting::LabelCertainty(PROB& p,REPAM_ARRAY repam){
+    assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
+    assert(p.size() == repam.size());
+
+    INDEX sum_up = std::accumulate(repam.begin(),repam.begin()+upSize_,0);
+    INDEX sum_left = std::accumulate(repam.begin()+upSize_,repam.begin()+upSize_+leftSize_,0);
+    INDEX sum_right = std::accumulate(repam.begin()+upSize_+leftSize_,repam.begin()+upSize_+leftSize_+rightSize_,0);
+    INDEX sum_reg = std::accumulate(repam.begin()+upSize_+leftSize_+rightSize_,repam.end(),0);
+
+    
+  }
+  
   template<typename REPAM_ARRAY>
   REAL DiscreteTomographyFactorCounting::eval(INDEX up,INDEX left,INDEX right,const REPAM_ARRAY& repam){
     assert(up < upSize_);
@@ -113,11 +129,21 @@ namespace LP_MP{
     auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
     auto xz = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return (idx - xa(idx))/numberOfLabels_; };
    
-    LinExpr lhs_all;
-    std::vector<LinExpr> lhs_up(upSize_);
-    std::vector<LinExpr> lhs_left(leftSize_);
-    std::vector<LinExpr> lhs_right(rightSize_);
-    std::vector<LinExpr> lhs_reg(regSize_);
+    LinExpr lhs_all = lp->CreateLinExpr();
+    std::vector<LinExpr> lhs_up(upSize_);//,lp->CreateLinExpr());
+    std::vector<LinExpr> lhs_left(leftSize_);//,lp->CreateLinExpr());
+    std::vector<LinExpr> lhs_right(rightSize_);//,lp->CreateLinExpr());
+    std::vector<LinExpr> lhs_reg(regSize_);//,lp->CreateLinExpr());
+    
+    auto InitVector = [&](std::vector<LinExpr>& v){
+      for(INDEX i=0;i<v.size();i++){
+        v[i] = lp->CreateLinExpr();
+      }
+    };
+    InitVector(lhs_up);
+    InitVector(lhs_left);
+    InitVector(lhs_right);
+    InitVector(lhs_reg);
     
     INDEX z_max = upSize_/pow(numberOfLabels_,2);
     
@@ -165,13 +191,14 @@ namespace LP_MP{
     auto AddAllConstraints = [&]( std::vector<LinExpr> lhs,
                                   INDEX offset){
       for(INDEX i=0;i<lhs.size();i++){
-        LinExpr rhs;
+        LinExpr rhs = lp->CreateLinExpr();
         rhs += lp->GetVariable(offset + i);
         lp->addLinearEquality(lhs[i],rhs);
       }
     };
   
-    LinExpr rhs_all; rhs_all += 1;
+    LinExpr rhs_all = lp->CreateLinExpr();
+    rhs_all += 1;
     lp->addLinearEquality(lhs_all,rhs_all);
     
     AddAllConstraints(lhs_up,0);
