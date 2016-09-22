@@ -43,6 +43,8 @@ namespace LP_MP {
         types_1.resize(noVars_,GRB_CONTINUOUS);
       }
       std::vector<char> types_2(noAuxVars_,GRB_CONTINUOUS);
+      //std::cout << "remove INTEGER again: auxiliary variables should be continuous!\n";
+      //std::vector<char> types_2(noAuxVars_,GRB_INTEGER);
       MainVars_ = model_.addVars(NULL,NULL,&obj_1[0],&types_1[0],NULL,noVars_);
       if( noAuxVars_ > 0){
         MainAuxVars_ = model_.addVars(NULL,NULL,&obj_2[0],&types_2[0],NULL,noAuxVars_);
@@ -110,7 +112,7 @@ namespace LP_MP {
     void addFactor(const factor& f,INDEX offset);
     
     int solve();
-    int solve(PrimalSolutionStorage::Element primal) { return solve(); }
+    int solve(PrimalSolutionStorage::Element primal);
 
     void WriteLpModel(std::string name){ model_.write(name); }
     
@@ -135,6 +137,8 @@ namespace LP_MP {
   int LpInterfaceGurobi::solve(){
     int status = 2;
     try{
+      model_.update();
+
       model_.optimize();
       status = 0;
     }
@@ -143,6 +147,36 @@ namespace LP_MP {
       std::cout << e.getMessage() << std::endl;
     }
     return status;
+  }
+
+  int LpInterfaceGurobi::solve(PrimalSolutionStorage::Element primal){
+     // go through primal and when it is not unknownState, set variables to zero in model
+     for(INDEX i=0; i<noVars_; ++i) {
+        if(primal[i] == true) {
+           GetVariable(i).set(GRB_DoubleAttr_Obj,0);
+           GetVariable(i).set(GRB_DoubleAttr_LB,1);
+           GetVariable(i).set(GRB_DoubleAttr_UB,1);
+        } else if(primal[i] == false) {
+           GetVariable(i).set(GRB_DoubleAttr_Obj,0);
+           GetVariable(i).set(GRB_DoubleAttr_LB,0);
+           GetVariable(i).set(GRB_DoubleAttr_UB,0);
+        } else {
+           assert(primal[i] == unknownState);
+        }
+     }
+     int status = 2;
+     try{
+        model_.update();
+
+        model_.optimize();
+        status = 0;
+     }
+     catch(GRBException e) {
+        std::cout << "Error code = " << e.getErrorCode() << std::endl;
+        std::cout << e.getMessage() << std::endl;
+     }
+     // now return to original model without fixed variables
+     return status;
   }
 
   REAL LpInterfaceGurobi::GetVariableValue(const INDEX i) const{

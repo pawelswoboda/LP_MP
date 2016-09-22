@@ -26,6 +26,9 @@ namespace LP_MP{
     //template<typename REPAM_ARRAY>
     //void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, PrimalSolutionStorage::Element primal) const;
     
+    //template<typename REPAM_ARRAY>
+    //void NarrowPrimal(const REPAM_ARRAY& repam, const REAL epsilon, typename PrimalSolutionStorage::Element primal);
+    
     void PropagatePrimal(PrimalSolutionStorage::Element primal) const;
 
     template<typename PROB,typename REPAM_ARRAY>
@@ -253,6 +256,67 @@ namespace LP_MP{
     return m;
   }
 
+  /*
+  template<typename REPAM_ARRAY>
+  inline void DiscreteTomographyFactorCounting::NarrowPrimal(const REPAM_ARRAY& repam, const REAL epsilon, typename PrimalSolutionStorage::Element primal)
+  {
+     const REAL min_val = LowerBound(repam);
+
+     // go over all labelings and set to false all entries that lead to labelings with value greater than min_val + epsilon
+     // do it as follows: given some entry in repam, go over all combinations such that it is used, and see whether it always leads to labeling costs larger than min_val + epsilon. If so, set primal in the corresponding place to false
+
+     INDEX sum_up = std::accumulate(repam.begin(),repam.begin()+upSize_,0);
+     INDEX sum_left = std::accumulate(repam.begin()+upSize_,repam.begin()+upSize_+leftSize_,0);
+     INDEX sum_right = std::accumulate(repam.begin()+upSize_+leftSize_,repam.begin()+upSize_+leftSize_+rightSize_,0);
+     INDEX sum_reg = std::accumulate(repam.begin()+upSize_+leftSize_+rightSize_,repam.end(),0);
+
+     // (i) up
+     for(INDEX i=0; i<upSize_; ++i) {
+
+     }
+     // (ii) left
+     // (iii) right
+     // (iv) reg
+     INDEX z_up_size = upSize_/pow(numberOfLabels_,2);
+     INDEX z_left_size = leftSize_/pow(numberOfLabels_,2);
+     INDEX z_right_size = rightSize_/pow(numberOfLabels_,2);
+
+     auto op = [&](INDEX i,INDEX j){ return (i+j < z_up_size) ? i+j : z_up_size;  };
+     for( INDEX i=0;i<pow(numberOfLabels_,4);i++ ){
+        INDEX idx = i;
+        INDEX a = idx % numberOfLabels_;
+        idx = ( idx - a )/numberOfLabels_;
+        INDEX b = idx % numberOfLabels_;
+        idx = ( idx - b )/numberOfLabels_;
+        INDEX c = idx % numberOfLabels_;
+        idx = ( idx - c )/numberOfLabels_;
+        INDEX d = idx % numberOfLabels_;
+
+        auto z_up = [&](INDEX k){ return repam[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)]; };
+        auto z_left = [&](INDEX k){ return repam[upSize_ + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+        auto z_right = [&](INDEX k){ return repam[upSize_ + leftSize_ + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
+
+        REAL reg = repam[upSize_ + leftSize_ + rightSize_ + b + c*numberOfLabels_];
+        assert(!std::isnan(reg));
+        assert(reg > -std::numeric_limits<REAL>::max() );
+
+        MinConv mc(z_left,z_right,z_left_size,z_right_size,z_up_size);
+        mc.CalcConv(op,z_left,z_right);
+
+        REAL m_new = 0;
+        for( INDEX j=0;j<z_up_size;j++ ){
+           assert(j == op(mc.getIdxA(j),mc.getIdxB(j)));
+           assert(z_up(j) > -std::numeric_limits<REAL>::max() );
+           assert(!std::isnan(z_up(j)));
+	
+        m_new = mc.getConv(j)+z_up(j)+reg;
+        if(m_new > min_val + epsilon) {
+           //primal[] = false;
+        }
+      }
+    }
+  }
+  */
 
   inline void DiscreteTomographyFactorCounting::PropagatePrimal(PrimalSolutionStorage::Element primal) const{
     

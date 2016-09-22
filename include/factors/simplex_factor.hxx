@@ -35,7 +35,6 @@ public:
    template<typename REPAM_ARRAY>
    static void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    {
-
       // note: currently possibly also pairwise factors are called here, although this should not be made for SRMP style rounding
       INDEX min_element;
       REAL min_value = std::numeric_limits<REAL>::infinity();
@@ -51,6 +50,23 @@ public:
       //std::cout << ";    " << min_element;
       //std::cout << "\n";
    };
+
+   // set to false all elements that are larger by epsilon than the minimal element
+   template<typename REPAM_ARRAY>
+   static void NarrowPrimal(const REPAM_ARRAY& repam, const REAL epsilon, typename PrimalSolutionStorage::Element primal)
+   {
+      REAL min_val = std::numeric_limits<REAL>::infinity();
+      for(INDEX i=0; i<repam.size(); ++i) {
+         if(primal[i] != false) {
+            std::min(repam[i], min_val);
+         }
+      }
+      for(INDEX i=0; i<repam.size(); ++i) {
+         if(repam[i] >= min_val + epsilon) {
+            primal[i] = false;
+         }
+      }
+   }
 
    template<typename REPAM_ARRAY>
    static REAL LowerBound(const REPAM_ARRAY& repamPot) {

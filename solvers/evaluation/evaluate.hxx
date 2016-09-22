@@ -38,7 +38,7 @@ void RunSolver(INPUT_FUNCTION f, const std::vector<std::string>& datasets, std::
       VisitorSolver<SOLVER,VISITOR> s(solverOptions);
       std::cout << "run solver " << FMC::name << " on problem " << dataset << "\n";
       s.ReadProblem(f);
-      //s.Solve();
+      s.Solve();
    }
 }
 

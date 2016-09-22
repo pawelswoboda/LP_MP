@@ -399,10 +399,10 @@ public:
       }
    }
 
-   INDEX Tighten(const REAL epsilon, const INDEX noTripletsToAdd)
+   INDEX Tighten(const INDEX noTripletsToAdd)
    {
       assert(noTripletsToAdd > 0);
-      std::cout << "Tighten mrf with cycle inequalities, epsilon = " << epsilon << ", no triplets to add = " << noTripletsToAdd << "\n";
+      std::cout << "Tighten mrf with cycle inequalities, no triplets to add = " << noTripletsToAdd << "\n";
       // do zrobienia: templatize addTriplet function to avoid this declaration
       //std::function<void(const SIGNED_INDEX,const SIGNED_INDEX, const SIGNED_INDEX, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>)> addTriplet = &MrfConstructorType::AddTighteningTriplet;
 
@@ -414,7 +414,7 @@ public:
       std::cout << this << "\n";
 
       auto fp = [this](const INDEX v1, const INDEX v2, const INDEX v3) { return this->AddTighteningTriplet(v1,v2,v3); }; // do zrobienia: do not give this via template, as Cycle already has gm_ object.
-      INDEX noTripletsAdded = cycle.TightenTriplet(fp, noTripletsToAdd,epsilon,tripletSet);
+      INDEX noTripletsAdded = cycle.TightenTriplet(fp, noTripletsToAdd, eps, tripletSet);
       std::cout << "Added " << noTripletsAdded << " < " << noTripletsToAdd << " triplets by triplet searching\n";
       //std::cout << "return already\n";
       //return noTripletsAdded;
@@ -422,12 +422,12 @@ public:
          std::vector<int> projection_imap;
          std::vector<std::vector<int> > partition_imap;
          std::vector<std::list<int> > cycle_set;
-         const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, epsilon, projection_imap, partition_imap, cycle_set, 1);
+         const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, projection_imap, partition_imap, cycle_set, 1);
          std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (k projection graph)\n";
          noTripletsAdded += noTripletsAddedByCycle;
 
          if(noTripletsAdded < noTripletsToAdd) {
-            const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, epsilon, projection_imap, partition_imap, cycle_set, 2);
+            const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, projection_imap, partition_imap, cycle_set, 2);
             std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (full projection graph)\n";
             noTripletsAdded += noTripletsAddedByCycle;
          }

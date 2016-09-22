@@ -32,6 +32,17 @@ namespace LP_MP {
       constant_ += value;
       return *this;
     }
+
+    LinExpr& operator-=(const LpVariable& var){
+      assert(false);
+      vars_.push_back(var);
+      return *this;
+    }
+    
+    LinExpr& operator-=(const REAL value){
+      constant_ -= value;
+      return *this;
+    }
     
   private:
     std::vector<LpVariable> vars_;

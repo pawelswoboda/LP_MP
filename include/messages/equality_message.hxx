@@ -196,6 +196,16 @@ public:
       else return 0.0;
    }
 
+   template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
+   void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor) const
+   { 
+      LinExpr lhs = lp->CreateLinExpr();
+      LinExpr rhs = lp->CreateLinExpr();
+      lhs += lp->GetLeftVariable(leftVar_);
+      rhs += lp->GetRightVariable(rightVar_);
+      lp->addLinearEquality(lhs,rhs);
+   }
+
    /*
    void ComputeLeftFromRightPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right) 
    {

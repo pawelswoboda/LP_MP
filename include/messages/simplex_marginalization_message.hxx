@@ -239,7 +239,6 @@ namespace LP_MP {
         }
         lp->addLinearEquality(lhs,rhs);
       }
-      
     }
   
   private:

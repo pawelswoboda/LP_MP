@@ -70,7 +70,6 @@ public:
    int TightenCycle(
          ADD_TRIPLET_FUNCTION addTripletFun,
          const int nclus_to_add,  
-         const REAL epsilon,
          std::vector<int>& projection_imap_var,
          std::vector<std::vector<int> >& partition_imap,
          std::vector<std::list<int> >& cycle_set,
@@ -91,9 +90,13 @@ private:
    static bool edge_sorting3(std::pair<std::pair<int, int>, REAL> i, std::pair<std::pair<int, int>, REAL> j);
    void delete_projection_graph(int num_vars, std::vector<std::vector<int> > &projection_map, std::vector<int> &projection_imap_var, adj_type &projection_adjacency_list, REAL* &array_of_sij);
    REAL find_smn( const std::vector<int>& partition_i, const std::vector<int>& partition_j, const int factorId);
-   REAL find_smn_state_i(const SIGNED_INDEX single_i, const std::vector<int>& partition_j, const int factorId, std::vector<std::vector<REAL> >& max_i_bij_not_xi);
-   REAL find_smn_state_j(const SIGNED_INDEX single_j, const std::vector<int>& partition_j, const int factorId, std::vector<std::vector<REAL> >& max_j_bij_not_xj);
+   //REAL find_smn_state_i(const SIGNED_INDEX single_i, const std::vector<int>& partition_j, const int factorId, std::vector<std::vector<REAL> >& max_i_bij_not_xi);
+   //REAL find_smn_state_j(const SIGNED_INDEX single_j, const std::vector<int>& partition_j, const int factorId, std::vector<std::vector<REAL> >& max_j_bij_not_xj);
+   REAL find_smn_state_i(const SIGNED_INDEX single_i, const std::vector<int>& partition_j, const int factorId, const marray::Marray<REAL>& max_i_bij_not_xi);
+   REAL find_smn_state_j(const SIGNED_INDEX single_j, const std::vector<int>& partition_j, const int factorId, const marray::Marray<REAL>& max_j_bij_not_xj);
    void find_partition(std::vector<std::map<std::vector<int>, int> >& partition_set,  const int factorId, int index_i, int index_j);
+   std::tuple<marray::Marray<REAL>, marray::Marray<REAL>, marray::Marray<REAL>>
+      calculate_cond_min_beliefs(const INDEX factor_id);
    int create_expanded_projection_graph(
       std::vector<int>& projection_imap_var,
       std::vector<std::vector<std::pair<int, REAL> > >& projection_adjacency_list, 
@@ -740,7 +743,7 @@ Cycle<MRF_CONSTRUCTOR>::find_smn_state_i(
       const SIGNED_INDEX single_i,
       const std::vector<int>& partition_j,
       const int factorId,
-      std::vector<std::vector<REAL> >& max_i_bij_not_xi) 
+      const marray::Marray<REAL>& max_i_bij_not_xi) 
       //int single_i,
       //int var_i_size,
       //int var_j_size,
@@ -783,10 +786,10 @@ Cycle<MRF_CONSTRUCTOR>::find_smn_state_i(
          REAL tmp = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
 			if (sec_max < tmp) sec_max = tmp; 
 
-			if (max < max_i_bij_not_xi[single_i][j]) max = max_i_bij_not_xi[single_i][j];
+			if (max < max_i_bij_not_xi(single_i,j)) max = max_i_bij_not_xi(single_i,j);
 		}
 		else {
-			if (sec_max < max_i_bij_not_xi[single_i][j]) sec_max = max_i_bij_not_xi[single_i][j];			
+			if (sec_max < max_i_bij_not_xi(single_i,j)) sec_max = max_i_bij_not_xi(single_i,j);			
 		}
 	}	
 	
@@ -800,7 +803,7 @@ Cycle<MRF_CONSTRUCTOR>::find_smn_state_j(
       const SIGNED_INDEX single_j,
       const std::vector<int>& partition_i,
       const int factorId,
-      std::vector<std::vector<REAL> >& max_j_bij_not_xj) 
+      const marray::Marray<REAL>& max_j_bij_not_xj) 
       //const std::vector<int>& partition_i, int var_i_size, int single_j, int var_j_size, MulDimArr* edge_belief, std::vector<std::vector<REAL> >& max_j_bij_not_xj) 
 {
 	REAL max, sec_max;
@@ -839,10 +842,10 @@ Cycle<MRF_CONSTRUCTOR>::find_smn_state_j(
          REAL tmp = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
 			if (sec_max < tmp) sec_max = tmp; 
 
-			if (max < max_j_bij_not_xj[i][single_j]) max = max_j_bij_not_xj[i][single_j];
+			if (max < max_j_bij_not_xj(i,single_j)) max = max_j_bij_not_xj(i,single_j);
 		}
 		else {
-			if (sec_max < max_j_bij_not_xj[i][single_j]) sec_max = max_j_bij_not_xj[i][single_j];			
+			if (sec_max < max_j_bij_not_xj(i,single_j)) sec_max = max_j_bij_not_xj(i,single_j);			
 		}
 	}	
 
@@ -1009,6 +1012,116 @@ Cycle<MRF_CONSTRUCTOR>::find_partition(
   }
 }
 
+template<typename MRF_CONSTRUCTOR>
+std::tuple<marray::Marray<REAL>, marray::Marray<REAL>, marray::Marray<REAL>>
+Cycle<MRF_CONSTRUCTOR>::calculate_cond_min_beliefs(const INDEX factor_id)
+{
+   const int i = std::get<0>(gm_.GetPairwiseVariables(factor_id));
+   const int j = std::get<1>(gm_.GetPairwiseVariables(factor_id));
+
+   // Do some pre-processing for speed.
+   SIGNED_INDEX shape[] = {SIGNED_INDEX(gm_.GetNumberOfLabels(i)), SIGNED_INDEX(gm_.GetNumberOfLabels(j))};
+   // do zrobienia: rename min and change signs etc.
+   marray::Marray<REAL> max_j_bij_not_xj(shape, shape+2);
+   marray::Marray<REAL> max_i_bij_not_xi(shape, shape+2);
+
+   for(int state1=0; state1 < gm_.GetNumberOfLabels(i); state1++) {
+
+      // Find max over state2
+      REAL largest_val = -gm_.GetPairwiseValue(factor_id,state1,0);
+      int largest_ind = 0;
+      for(int state2=1; state2 < gm_.GetNumberOfLabels(j); state2++) {
+         REAL tmp_val = -gm_.GetPairwiseValue(factor_id,state1,state2);
+         if(tmp_val > largest_val) {
+            largest_val = tmp_val;
+            largest_ind = state2;
+         }
+      }
+
+      // Find second largest val over state2
+      REAL sec_largest_val = -gm_.GetPairwiseValue(factor_id,state1,0);
+      for(int state2=1; state2 < gm_.GetNumberOfLabels(j); state2++) {
+
+         REAL tmp_val = -gm_.GetPairwiseValue(factor_id,state1,state2);
+
+         if(tmp_val > sec_largest_val && state2 != largest_ind) {
+            sec_largest_val = tmp_val;
+         }
+      }
+
+      // Assign values
+      for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++)
+         max_j_bij_not_xj(state1,state2) = largest_val;
+      max_j_bij_not_xj(state1,largest_ind) = sec_largest_val;
+   }
+
+
+   for(int state1=0; state1 < gm_.GetNumberOfLabels(j); state1++) {
+
+      // Find max over state2
+      REAL largest_val = -gm_.GetPairwiseValue(factor_id,0,state1);
+      int largest_ind = 0;
+      for(int state2=1; state2 < gm_.GetNumberOfLabels(i); state2++) {
+
+         REAL tmp_val = -gm_.GetPairwiseValue(factor_id,state2,state1);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+
+         if(tmp_val > largest_val) {
+            largest_val = tmp_val;
+            largest_ind = state2;
+         }
+      }
+
+      // Find second largest val over state2
+      REAL sec_largest_val = -gm_.GetPairwiseValue(factor_id,0,state1);
+      for(int state2=1; state2 < gm_.GetNumberOfLabels(i); state2++) {
+
+         REAL tmp_val = -gm_.GetPairwiseValue(factor_id,state2,state1);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+
+         if(tmp_val > sec_largest_val && state2 != largest_ind) {
+            sec_largest_val = tmp_val;
+         }
+      }
+
+      // Assign values
+      for(int state2=0; state2 < gm_.GetNumberOfLabels(i); state2++)
+         max_i_bij_not_xi(state2,state1) = largest_val;
+      max_i_bij_not_xi(largest_ind,state1) = sec_largest_val;
+   }
+
+   // decompose: max_{x_j!=x_j}max_{x_i != x_i'}. Then, use the above computations.
+   marray::Marray<REAL> max_ij_bij_not_xi_xj(shape, shape+2);
+   for(int state1=0; state1 < gm_.GetNumberOfLabels(i); state1++) {
+
+      // Find max over state2
+      REAL largest_val = -std::numeric_limits<REAL>::infinity();
+      int largest_ind = 0;
+      for(int state2=1; state2 < gm_.GetNumberOfLabels(j); state2++) {
+         REAL tmp_val = max_i_bij_not_xi(state1,state2);
+
+         if(tmp_val > largest_val) {
+            largest_val = tmp_val;
+            largest_ind = state2;
+         }
+      }
+
+      // Find second largest val over state2
+      REAL sec_largest_val = -std::numeric_limits<REAL>::infinity();
+      for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
+         REAL tmp_val = max_i_bij_not_xi(state1,state2);
+
+         if(tmp_val > sec_largest_val && state2 != largest_ind) {
+            sec_largest_val = tmp_val;
+         }
+      }
+
+      // Assign values
+      for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++)
+         max_ij_bij_not_xi_xj(state1,state2) = largest_val;
+      max_ij_bij_not_xi_xj(state1,largest_ind) = sec_largest_val;
+   }
+
+   return std::move(std::make_tuple( std::move(max_j_bij_not_xj), std::move(max_i_bij_not_xi), std::move(max_ij_bij_not_xi_xj)));
+}
 
 // Create the expanded projection graph by including all singleton partitions and also
 // all partitions found by calling FindPartition on all edges.
@@ -1100,6 +1213,12 @@ Cycle<MRF_CONSTRUCTOR>::create_expanded_projection_graph(
 
         if(gm_.GetNumberOfLabels(i) <= 1 || gm_.GetNumberOfLabels(j) <= 1) continue;
 
+        auto max_bij_cond = calculate_cond_min_beliefs(factorId);
+        const auto& max_j_bij_not_xj = std::get<0>(max_bij_cond);
+        const auto& max_i_bij_not_xi = std::get<1>(max_bij_cond);
+        const auto& max_ij_bij_not_xi_xj = std::get<2>(max_bij_cond);
+
+        /*
         std::vector<std::vector<REAL> > max_i_bij_not_xi;
         std::vector<std::vector<REAL> > max_j_bij_not_xj;
 
@@ -1213,6 +1332,7 @@ Cycle<MRF_CONSTRUCTOR>::create_expanded_projection_graph(
               max_ij_bij_not_xi_xj(state1,state2) = largest_val;
            max_ij_bij_not_xi_xj(state1,largest_ind) = sec_largest_val;
         }
+        */
 
         // Now, for each partition of node i and each partition of node j, compute edge weights
         // If the edge weight is non-zero, insert edge into adjacency list
@@ -1230,7 +1350,7 @@ Cycle<MRF_CONSTRUCTOR>::create_expanded_projection_graph(
                  std::array<int,2> inds = {{xi,xj}};
                  //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
                  REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-                 smn = std::max(tmp_val, max_ij_bij_not_xi_xj(xi,xj)) - std::max(max_i_bij_not_xi[xi][xj], max_j_bij_not_xj[xi][xj]);
+                 smn = std::max(tmp_val, max_ij_bij_not_xi_xj(xi,xj)) - std::max(max_i_bij_not_xi(xi,xj), max_j_bij_not_xj(xi,xj));
               }
               else if (it_i->first.size() == 1) {
                  int xi = it_i->first[0];
@@ -1246,7 +1366,7 @@ Cycle<MRF_CONSTRUCTOR>::create_expanded_projection_graph(
               }
 
               if (smn != 0) {
-                 set_of_sij.insert(fabs(smn));
+                 set_of_sij.insert(std::abs(smn));
 
                  projection_adjacency_list[m].push_back(std::make_pair(n, smn));
                  projection_adjacency_list[n].push_back(std::make_pair(m, smn));
@@ -1346,6 +1466,11 @@ Cycle<MRF_CONSTRUCTOR>::create_k_projection_graph(
         if(gm_.GetNumberOfLabels(i) <= 1 || gm_.GetNumberOfLabels(j) <= 1)
            continue;
 
+        auto max_bij_cond = calculate_cond_min_beliefs(factorId);
+        const auto& max_j_bij_not_xj = std::get<0>(max_bij_cond);
+        const auto& max_i_bij_not_xi = std::get<1>(max_bij_cond);
+        const auto& max_ij_bij_not_xi_xj = std::get<2>(max_bij_cond);
+        /*
         // Do some pre-processing for speed.
         SIGNED_INDEX shape[] = {SIGNED_INDEX(gm_.GetNumberOfLabels(i)), SIGNED_INDEX(gm_.GetNumberOfLabels(j))};
         marray::Marray<REAL> max_j_bij_not_xj(shape, shape+2);
@@ -1460,27 +1585,32 @@ Cycle<MRF_CONSTRUCTOR>::create_k_projection_graph(
               max_ij_bij_not_xi_xj(state1,state2) = largest_val;
            max_ij_bij_not_xi_xj(state1,largest_ind) = sec_largest_val;
         }
+        */
 
         // For each of their states
         for(int xi=0; xi < gm_.GetNumberOfLabels(i); xi++) {
            int m = projection_map[i][xi];
 
            for(int xj=0; xj < gm_.GetNumberOfLabels(j); xj++) {
-              int n = projection_map[j][xj];
+              const int n = projection_map[j][xj];
 
               //std::vector<int> inds; inds.push_back(xi); inds.push_back(xj);
-              std::array<int,2> inds = {{xi,xj}};
-              //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
+              const REAL tmp_val = -gm_.GetPairwiseValue(factorId,xi,xj);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
 
               // Compute s_mn for this edge
               REAL val_s = std::max(tmp_val, max_ij_bij_not_xi_xj(xi,xj)) - std::max(max_i_bij_not_xi(xi,xj), max_j_bij_not_xj(xi,xj));
+              //if(std::max(tmp_val, max_ij_bij_not_xi_xj(xi,xj)) == std::numeric_limits<REAL>::infinity()
+              //      && std::max(max_i_bij_not_xi(xi,xj), max_j_bij_not_xj(xi,xj)) == std::numeric_limits<REAL>::infinity()) {
+              //      val_s = 0.0;
+              //      }
+
+              //assert(std::isnan(val_s) == false);
 
               // TODO: use threshold here, to make next stage faster
-              if(val_s != 0) {          
+              if(val_s != 0 && !std::isnan(val_s)) {          
                  projection_adjacency_list[m].push_back(std::make_pair(n, val_s));
                  projection_adjacency_list[n].push_back(std::make_pair(m, val_s));
-                 set_of_sij.insert(fabs(val_s));
+                 set_of_sij.insert(std::abs(val_s));
               }
 
               // Insert into edge weight std::map
@@ -1528,9 +1658,10 @@ Cycle<MRF_CONSTRUCTOR>::find_optimal_R(adj_type &projection_adjacency_list, REAL
     // TODO: do not allocate memory for this every time! Just re-initialize.
     
     std::vector<int> node_sign(num_projection_nodes);
-    for(int m=0; m<num_projection_nodes; m++) {
-      node_sign[m] = 0; // denotes "not yet seen"      
-    }
+    std::fill(node_sign.begin(), node_sign.end(), 0); // denotes "not yet seen"      
+    //for(int m=0; m<num_projection_nodes; m++) {
+    //  node_sign[m] = 0; // denotes "not yet seen"      
+    //}
     
     // Graph may be disconnected, so check from all nodes    
     for(int i = 0; i < num_projection_nodes && !found_odd_signed_cycle; i++) {
@@ -1540,20 +1671,22 @@ Cycle<MRF_CONSTRUCTOR>::find_optimal_R(adj_type &projection_adjacency_list, REAL
         q.push(i);
         
         while (!q.empty() && !found_odd_signed_cycle) {
-          int current = q.front();
+          const int current = q.front();
+          assert(node_sign[current] != 0); // do zrobienia: correct?
           q.pop();
           
           for (int j = 0; j < projection_adjacency_list[current].size(); j++) {
-            REAL smn = projection_adjacency_list[current][j].second;
+            const REAL smn = projection_adjacency_list[current][j].second;
             // Ignore edges with weight less than R
-            if (fabs(smn) < R)
+            if (std::abs(smn) < R)
               continue;
             
-            int next = projection_adjacency_list[current][j].first;
-            int sign_of_smn = (smn > 0) - (smn < 0);
+            const int next = projection_adjacency_list[current][j].first;
+            const int sign_of_smn = (smn > 0) - (smn < 0);
             
             if (node_sign[next] == 0) {
               node_sign[next] = node_sign[current] * sign_of_smn;
+              assert(node_sign[next] != 0);
               q.push(next);
             }
             else if(node_sign[next] == -node_sign[current] * sign_of_smn) {
@@ -1573,6 +1706,7 @@ Cycle<MRF_CONSTRUCTOR>::find_optimal_R(adj_type &projection_adjacency_list, REAL
     else
       bin_search_upper_bound = R_pos-1;
   }
+  assert(sij_min >= 0);
 
   return sij_min;
 }
@@ -1638,7 +1772,7 @@ Cycle<MRF_CONSTRUCTOR>::FindCycles(std::vector<std::list<int> > &cycle_set, cons
           int next = projection_adjacency_list[current][j].first;
           if (node_sign[next] == 0) {
             REAL smn = projection_adjacency_list[current][j].second;
-            if (fabs(smn) < R) {
+            if (std::abs(smn) < R) {
               ;
             }
             else {
@@ -1668,7 +1802,7 @@ Cycle<MRF_CONSTRUCTOR>::FindCycles(std::vector<std::list<int> > &cycle_set, cons
       }
       REAL smn = projection_adjacency_list[i][j].second;
 
-      if (fabs(smn) < R) {
+      if (std::abs(smn) < R) {
         continue;
       }
       int jj = projection_adjacency_list[i][j].first;
@@ -2006,7 +2140,6 @@ int
 Cycle<MRF_CONSTRUCTOR>::TightenCycle(
       ADD_TRIPLET_FUNCTION addTripletFun,
       const int nclus_to_add,  
-      const REAL epsilon,
       std::vector<int>& projection_imap_var,
       std::vector<std::vector<int> >& partition_imap,
       std::vector<std::list<int> >& cycle_set,
@@ -2038,9 +2171,6 @@ Cycle<MRF_CONSTRUCTOR>::TightenCycle(
       return 0;
    }
 
-   // add cycles with bound > epsilon
-   FindCycles(cycle_set, epsilon, nclus_to_add, projection_adjacency_list);
-   /*
    //std::vector<std::list<int> > cycle_set;
    REAL optimal_R = find_optimal_R(projection_adjacency_list, array_of_sij, array_of_sij_size);
    if (DEBUG_MODE) std::cout << "R_optimal = " << optimal_R << std::endl;
@@ -2069,7 +2199,6 @@ Cycle<MRF_CONSTRUCTOR>::TightenCycle(
      std::cout << " -- FindCycles. Took " << total_time << " seconds" << std::endl;
      std::cout << " Added " << cycle_set.size() << " cycles." << std::endl;
   } 
-  */
 
   
   // Add all cycles that we've found to the relaxation!

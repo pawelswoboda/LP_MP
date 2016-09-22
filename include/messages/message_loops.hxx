@@ -261,6 +261,23 @@ public:
 
    const INDEX GetDim(const INDEX i) const { assert(i==0 || i==1 || i==2); return iter_limit_[i]; }
 
+   const INDEX GetMsgIndex(const INDEX potIndex) const {  // for dimension i of potential, which message dimension acts on that point?
+      assert(false); // test this method!
+      const INDEX i1 = potIndex%iter_limit_[0]; 
+      const INDEX i2 = (potIndex/iter_limit_[0])%iter_limit_[1]; 
+      const INDEX i3 = potIndex/(iter_limit_[0]*iter_limit_[1]);
+      if(tripletIdx == 0) {
+         return i2*i3;
+      }
+      if(tripletIdx == 1) {
+         return i1*i3;
+      }
+      if(tripletIdx == 2) {
+         return i1*i2;
+      }
+      assert(false);
+   }
+
    const INDEX TripletLabel(const std::array<INDEX,3>& i) const 
    { 
       assert(i[0] < iter_limit_[0]);

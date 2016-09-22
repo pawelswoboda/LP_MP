@@ -55,8 +55,6 @@ namespace LP_MP {
             minDualImprovementIntervalArg_("","minDualImprovementInterval","the interval between which at least minimum dual improvement must occur",false,10,"positive integer",cmd),
             standardReparametrizationArg_("","standardReparametrization","mode of reparametrization: {anisotropic,uniform}",false,"anisotropic","{anisotropic|uniform}",cmd),
             roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution: {anisotropic|uniform}",false,"uniform","{anisotropic|uniform}",cmd),
-            protocolateConsoleArg_("","protocolateConsole","protocolate on console (stdout)",cmd,false),
-            protocolateFileArg_("","protocolateFile","file into which to protocolate progress of algorithm",false,"","file name",cmd),
             primalTime_(0)
       {}
 
@@ -75,8 +73,6 @@ namespace LP_MP {
 
             standardReparametrization_ = LPReparametrizationModeConvert( standardReparametrizationArg_.getValue() );
             roundingReparametrization_ = LPReparametrizationModeConvert( roundingReparametrizationArg_.getValue() );
-            protocolateConsole_ = protocolateConsoleArg_.getValue();
-            protocolateFile_ = protocolateFileArg_.getValue();
          } catch (TCLAP::ArgException &e) {
             std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
             exit(1);
@@ -231,8 +227,6 @@ namespace LP_MP {
       TCLAP::ValueArg<INDEX> minDualImprovementIntervalArg_;
       TCLAP::ValueArg<std::string> standardReparametrizationArg_;
       TCLAP::ValueArg<std::string> roundingReparametrizationArg_;
-      TCLAP::ValueArg<std::string> protocolateFileArg_;
-      TCLAP::SwitchArg protocolateConsoleArg_;
 
       // command line arguments read out
       INDEX maxIter_;
@@ -244,11 +238,9 @@ namespace LP_MP {
       REAL minDualImprovement_;
       INDEX minDualImprovementInterval_;
       std::vector<REAL> lowerBound_; // do zrobienia: possibly make circular list out of this
-      std::string protocolateFile_;
       // do zrobienia: make enum for reparametrization mode
       LPReparametrizationMode standardReparametrization_;
       LPReparametrizationMode roundingReparametrization_;
-      bool protocolateConsole_;
 
       // internal state of visitor
       INDEX remainingIter_;
