@@ -10,7 +10,7 @@ We provide solvers for the following optimization problems:
 * **Graph matching**, input accepted in the format as used by the [dual decomposition graph matching solver of Vladimir Kolmogorov](http://pub.ist.ac.at/~vnk/software/GraphMatching-v1.02.src.zip) or in a custom uai format (both text).
 * **Multi-label discrete tomography**, with input accpeted in a custom uai format (text).
 
-Additionally, an interface to the (I)LP-solver [gurobi](http://www.gurobi.com) is available for solving the above optimization problems. In this case the message passing solvers can act as pre-solvers and initial bound providers, improving performance of the subsequent optimization performed by gurobi.
+Additionally, interfaces to the (I)LP-solvers [gurobi](http://www.gurobi.com) and [cplex](http://www.ibm.com/software/integration/optimization/cplex-optimizer/) are available for solving the above optimization problems. In this case the message passing solvers can act as pre-solvers and initial bound providers, improving performance of the subsequent optimization performed by the LP-solvers.
 
 A large number of datasets can be automatically downloaded for evaluating solvers.
 
@@ -21,5 +21,9 @@ Prerequisites:
 * Clang 3.8
 * HDF5 (for inputs in hdf5 format)
 * Gurobi (for the gurobi interface. Compile libgurobi_c++ with clang)
+* CPlex (for the cplex interface)
 * Sqlite3 (for evaluation)
 
+## Contact
+* [Paul Swoboda](https://github.com/pawelswoboda)
+* [Jan Kuske](https://github.com/DerJFK)
