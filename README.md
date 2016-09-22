@@ -1,7 +1,7 @@
 LP_MP
 ========
 
-LP_MP is a C++ framework for developing scalable convergent message passing solvers for a wide range of relaxations to discrete optimization problems.
+LP_MP is a C++ framework for developing scalable convergent message passing solvers for a wide range of LP-relaxations to discrete optimization problems.
 
 ## Solvers
 We provide solvers for the following optimization problems:
