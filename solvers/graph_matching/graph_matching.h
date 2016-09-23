@@ -104,9 +104,9 @@ struct FMC_MP_T {
    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRight;
 
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 2 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 4> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 5> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 6> PairwiseTriplet23MessageContainer;
+   typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 3> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 4> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 5> PairwiseTriplet23MessageContainer;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor>;//McfLabelingFactor, EmptyTripletFactor >;
    using MessageList = meta::list< 
@@ -120,7 +120,7 @@ struct FMC_MP_T {
 
    using assignment = AssignmentViaMessagePassingProblemConstructor<FMC_MP_PARAM,0,0>;
    using mrf = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
-   using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,4,5,6>;
+   using tighteningMrf = TighteningMRFProblemConstructor<mrf,2,3,4,5>;
    using mrfLeft = tighteningMrf;
    using mrfRight = tighteningMrf;
    //using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
@@ -254,9 +254,9 @@ struct FMC_GM_T {
 
    // tightening
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 2 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
+   typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor >;
    using MessageList = meta::list<
