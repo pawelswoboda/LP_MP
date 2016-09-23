@@ -109,46 +109,23 @@ namespace LP_MP {
   template<typename RIGHT_FACTOR, typename REPAM_ARRAY, typename MSG>
   void DiscreteTomographyMessageCountingPairwise::MakeRightFactorUniform(RIGHT_FACTOR* f_right, const REPAM_ARRAY& repam_right, MSG& msg, const REAL omega)
   {
-     assert(msg.size() == pow(numberOfLabels_,2));
-     assert(repam_right.size() == ((*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up) +
-              (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left) +
-              (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right) +
-              (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::reg)));
+    assert(msg.size() == pow(numberOfLabels_,2));
+    assert(repam_right.size() == ((*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up) +
+                                  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left) +
+                                  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right) +
+                                  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::reg)));
 
-     INDEX left_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left)/pow(numberOfLabels_,2);
-     INDEX right_size =(*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right)/pow(numberOfLabels_,2);
-     INDEX up_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up)/pow(numberOfLabels_,2);
+    std::vector<REAL> msg_v(pow(numberOfLabels_,2),std::numeric_limits<REAL>::infinity());
+    if( DiscreteTomo::AlgorithmThreshold < (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up) ){
+      DiscreteTomo::MessageCalculation_MinConv_Reg(f_right,repam_right, msg_v,numberOfLabels_);
+    } else {
+      DiscreteTomo::MessageCalculation_Naive_Reg(f_right,repam_right, msg_v,numberOfLabels_);
+    }
 
-     auto op = [&](INDEX i,INDEX j){ return (i+j < up_size) ? i+j : up_size; };
-
-     for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
-        REAL m = std::numeric_limits<REAL>::infinity();
-        INDEX b = i % numberOfLabels_;
-        INDEX c = ((i-b)/numberOfLabels_) % numberOfLabels_;
-
-        REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
-
-        for(INDEX j=0;j<pow(numberOfLabels_,2);j++){
-           INDEX a = j % numberOfLabels_;
-           INDEX d = ((j-a)/numberOfLabels_) % numberOfLabels_;
-
-           auto z_up = [&](INDEX k){ return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-           auto z_left = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-           auto z_right = [&](INDEX k){ return repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-
-           MinConv mc(z_left,z_right,left_size,right_size,up_size);
-           mc.CalcConv(op,z_left,z_right);
-
-           for(INDEX k=0;k<up_size;k++){
-              assert( k == (mc.getIdxA(k) + mc.getIdxB(k)));
-
-              REAL val = mc.getConv(k) + z_up(k);
-              m = std::min(m,val);
-           }
-        }
-        assert( (m + reg) > -eps);
-        msg[i] -= omega*(m + reg);
-     }    
+    for(INDEX i=0;i<msg_v.size();i++){
+      msg[i] -= omega*msg_v[i];
+    }
+    
   }
 
   template<typename G>
