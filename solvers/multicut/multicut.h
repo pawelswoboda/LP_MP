@@ -262,6 +262,12 @@ namespace MulticutOpenGmInput {
 }
 
 namespace MulticutTextInput {
+
+   using Parsing::opt_whitespace;
+   using Parsing::mand_whitespace;
+   using Parsing::positive_integer;
+   using Parsing::real_number;
+
    struct init_line : pegtl::seq< opt_whitespace, pegtl::string<'M','U','L','T','I','C','U','T'>, opt_whitespace > {};
    struct numberOfVariables_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace > {};
    struct edge_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace, positive_integer, opt_whitespace, real_number, opt_whitespace > {};
@@ -303,19 +309,19 @@ namespace MulticutTextInput {
 
 
    template<typename FMC> struct action<FMC, positive_integer > {
-      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
+      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
       {
          integer_stack.push(std::stoul(in.string())); 
       }
    };
    template<typename FMC> struct action<FMC, real_number > {
-      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
+      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
       {
          real_stack.push(std::stod(in.string())); 
       }
    };
    template<typename FMC> struct action<FMC, numberOfVariables_line > {
-      static void apply(const pegtl::input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 1);
          mcInput.numberOfVariables_ = integer_stack.top();
@@ -323,7 +329,7 @@ namespace MulticutTextInput {
       }
    };
    template<typename FMC> struct action<FMC, edge_line > {
-      static void apply(const pegtl::input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const pegtl::action_input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 2);
          assert(real_stack.size() == 1);
@@ -343,7 +349,7 @@ namespace MulticutTextInput {
       }
    };
    template<typename FMC> struct action<FMC, pegtl::eof> {
-      static void apply(const pegtl::input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput& mcInput)
+      static void apply(const pegtl::action_input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput& mcInput)
       {}
    };
 
@@ -354,7 +360,7 @@ namespace MulticutTextInput {
 
 
    template<typename FMC> struct action<FMC, lifted_edge_line > {
-      static void apply(const pegtl::input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const pegtl::action_input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 2);
          assert(real_stack.size() == 1);
