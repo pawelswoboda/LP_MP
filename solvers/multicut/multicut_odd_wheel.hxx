@@ -3,7 +3,6 @@
 
 #include "LP_MP.h"
 #include "multicut_triplet_factor.hxx"
-#include "permutation.hxx"
 
 namespace LP_MP {
 
