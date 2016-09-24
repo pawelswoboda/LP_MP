@@ -15,6 +15,11 @@ matrix:
           sources: 
             - llvm-toolchain-precise-3.8
             - ubuntu-toolchain-r-test
+            - hdf5-tools 
+            - libhdf5-dev
+            - sqlite3 
+            - libsqlite3-dev 
+            - libsqlite3-0
 
 before_install:
   - sudo apt-get update -qq
