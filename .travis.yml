@@ -12,14 +12,14 @@ matrix:
           packages:
             - g++-5
             - clang-3.8
-          sources: 
-            - llvm-toolchain-precise-3.8
-            - ubuntu-toolchain-r-test
             - hdf5-tools 
             - libhdf5-dev
             - sqlite3 
             - libsqlite3-dev 
             - libsqlite3-0
+          sources: 
+            - llvm-toolchain-precise-3.8
+            - ubuntu-toolchain-r-test
 
 before_install:
   - sudo apt-get update -qq
