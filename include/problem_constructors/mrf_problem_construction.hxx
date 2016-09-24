@@ -658,7 +658,7 @@ namespace UaiMrfInput {
    }
 
    template<typename FMC, INDEX PROBLEM_CONSTRUCTOR_NO>
-   bool ParseFile(const std::string& filename, Solver<FMC>& s)
+   bool ParseProblem(const std::string& filename, Solver<FMC>& s)
    {
       std::cout << "parsing " << filename << "\n";
       pegtl::file_parser problem(filename);
@@ -674,9 +674,10 @@ namespace UaiMrfInput {
 
 // for graphical models in opengm's hdf5 format and with explicit function tables, function-id-16000
 namespace HDF5Input {
-   template<typename MRF_PROBLEM_CONSTRUCTOR>
-   bool ParseProblem(const std::string filename, MRF_PROBLEM_CONSTRUCTOR& mrf)
+   template<typename FMC>
+   bool ParseProblem(const std::string filename, Solver<FMC>& s)
    {
+      auto& mrf = s.template GetProblemConstructor<0>();
       return ParseGM(filename, mrf);
    }
 }

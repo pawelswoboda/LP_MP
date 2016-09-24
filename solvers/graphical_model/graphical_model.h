@@ -12,8 +12,6 @@
 
 #include "parse_rules.h"
 #include "hdf5_routines.hxx"
-#include "nstate.hpp"
-#include "packed_vector.hxx"
 
 // this file contains solvers for graphical models, among them SRMP and MPLP
 
