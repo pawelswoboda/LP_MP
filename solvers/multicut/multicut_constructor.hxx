@@ -4,7 +4,6 @@
 #include "LP_MP.h"
 #include "multicut_unary_factor.hxx"
 #include "multicut_triplet_factor.hxx"
-#include "permutation.hxx"
 #include "multicut_odd_wheel.hxx"
 
 #include "union_find.hxx"
