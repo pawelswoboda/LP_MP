@@ -12,9 +12,6 @@
 #include "problem_constructors/mrf_problem_construction.hxx"
 //#include "factors/min_cost_flow_factor_lemon.hxx"
 #include "factors/min_cost_flow_factor_cs2.hxx"
-// do zrobienia: min cost flow constructors are not used
-#include "../cosegmentation/assignment_via_min_cost_flow_constructor.hxx" // move file to problem_constructors
-#include "../cosegmentation/assignment_via_message_passing_problem_constructor.hxx" // move file to problem_constructors
 
 #include "problem_constructors/cycle_inequalities.hxx"
 
@@ -79,11 +76,9 @@ struct FMC_MP {
    using FactorList = meta::list< UnaryFactor, PairwiseFactor>;//, McfLabelingFactor >;
    using MessageList = meta::list< AssignmentConstraintMessage, UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight>;//, UnaryMcfLabelingMessage >;
 
-   using assignment = AssignmentViaMessagePassingProblemConstructor<FMC_MP_PARAM,0,0>;
    using mrfLeft = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
    using mrfRight = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
-   //using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
-   using ProblemDecompositionList = meta::list<assignment, mrfLeft, mrfRight>;//, mcfLabeling>;
+   using ProblemDecompositionList = meta::list<mrfLeft, mrfRight>;//, mcfLabeling>;
 };
 
 // graph matching with assignment via message passing + tightening triplets
@@ -118,13 +113,12 @@ struct FMC_MP_T {
       PairwiseTriplet23MessageContainer 
          >;
 
-   using assignment = AssignmentViaMessagePassingProblemConstructor<FMC_MP_PARAM,0,0>;
    using mrf = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,2,3,4,5>;
    using mrfLeft = tighteningMrf;
    using mrfRight = tighteningMrf;
    //using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
-   using ProblemDecompositionList = meta::list<assignment, mrfLeft, mrfRight>;//, mcfLabeling>;
+   using ProblemDecompositionList = meta::list<mrfLeft, mrfRight>;//, mcfLabeling>;
 };
 
 
@@ -552,8 +546,8 @@ namespace TorresaniEtAlInput {
    template<typename FMC>
    void construct_mp(Solver<FMC>& s, GraphMatchingInput& gm_input)
    {
-      auto& mrf_left = s.template GetProblemConstructor<1>();
-      auto& mrf_right = s.template GetProblemConstructor<2>();
+      auto& mrf_left = s.template GetProblemConstructor<0>();
+      auto& mrf_right = s.template GetProblemConstructor<1>();
       constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
       if(pc == PairwiseConstruction::Left) {
          construct_left_mrf(gm_input, mrf_left, 0.5, 1.0);
@@ -588,8 +582,8 @@ namespace TorresaniEtAlInput {
    template<typename FMC>
    void construct_mcf(Solver<FMC>& s, GraphMatchingInput& gm_input)
    {
-      auto& mrf_left = s.template GetProblemConstructor<1>();
-      auto& mrf_right = s.template GetProblemConstructor<2>();
+      auto& mrf_left = s.template GetProblemConstructor<0>();
+      auto& mrf_right = s.template GetProblemConstructor<1>();
       constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
       if(pc == PairwiseConstruction::Left) {
          construct_left_mrf(gm_input, mrf_left, 1.0, 1.0);
@@ -847,12 +841,12 @@ namespace UaiGraphMatchingInput {
    template<typename FMC>
    void construct_mp(Solver<FMC>& s, const input& i)
    {
-      auto& mrf_left = s.template GetProblemConstructor<1>();
+      auto& mrf_left = s.template GetProblemConstructor<0>();
       auto& mrf_input = std::get<0>(i);
       UaiMrfInput::build_mrf(mrf_left, mrf_input);
 
       // now build unaries for mrf_right. There will be as many unaries (=labels) on the right as constraints
-      auto& mrf_right = s.template GetProblemConstructor<2>();
+      auto& mrf_right = s.template GetProblemConstructor<1>();
       auto& matching = std::get<1>(i);
       auto constraints = invert_matching(matching);
       for(auto& c : constraints) {
@@ -873,7 +867,7 @@ namespace UaiGraphMatchingInput {
    template<typename FMC>
    void construct_mcf(Solver<FMC>& s, const input& i)
    {
-      auto& mrf_left = s.template GetProblemConstructor<1>();
+      auto& mrf_left = s.template GetProblemConstructor<0>();
       const auto& mrf_input = std::get<0>(i);
       UaiMrfInput::build_mrf(mrf_left, mrf_input);
 
