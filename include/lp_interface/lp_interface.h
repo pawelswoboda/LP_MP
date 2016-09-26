@@ -18,8 +18,8 @@ namespace LP_MP {
   typedef GRBVar LpVariable;
   typedef GRBLinExpr LinExpr;
 #elif USE_CPLEX
- typedef IloNumVar LpVariable;
- typedef IloNumExpr LinExpr;
+  typedef IloNumVar LpVariable;
+  typedef IloNumExpr LinExpr;
 #endif
 
     
@@ -29,11 +29,8 @@ namespace LP_MP {
     LpInterfaceAdapter(){ } 
     
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
-      LpInterfaceAdapter(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool integer = true)
+    LpInterfaceAdapter(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool integer = true)
     { } 
-    
-    //virtual LpVariable CreateAuxiliaryVariable(REAL lb,REAL ub,bool integer = false) = 0;
-    //virtual LpVariable* CreateAuxiliaryVariables(INDEX n,REAL lb,REAL ub,bool integer = false) = 0;
     
     virtual LinExpr CreateLinExpr() const = 0;
     
@@ -46,6 +43,11 @@ namespace LP_MP {
     virtual LpVariable GetRightVariable(const INDEX i) const = 0;
 
     virtual LpVariable GetAuxVariable(const INDEX i) const = 0;
+
+    virtual REAL GetEpsilon() const = 0;
+    
+    template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
+    void ReduceLp(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,REAL epsilon){ };
     
     virtual REAL GetVariableValue(const INDEX i) const = 0;
     virtual REAL GetObjectiveValue() const = 0;

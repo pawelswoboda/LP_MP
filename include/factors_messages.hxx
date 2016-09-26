@@ -1766,6 +1766,10 @@ public:
       factor_.CreateConstraints(l);
    }
 
+  void ReduceLp(LpInterfaceAdapter* l) const {
+    factor_.ReduceLp(l,GetReparametrizedPotential());
+  }
+  
    constexpr static bool CanCallGetNumberOfAuxVariables()
    {
       return FunctionExistence::HasGetNumberOfAuxVariables<FactorType,INDEX>();

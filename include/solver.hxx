@@ -411,6 +411,7 @@ public:
       LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_,true),
       RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
       timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
+      roundBound_("","LpRoundValue","A small value removes many variables",false,std::numeric_limits<REAL>::infinity(),"positive real number",SOLVER::cmd_),
       threads_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_),
       EXPORT_("","export","export model to file -> export.lp",SOLVER::cmd_)
    {
@@ -423,6 +424,7 @@ public:
       LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_,true),
       RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
       timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
+      roundBound_("","LpRoundValue","A small value removes many variables",false,std::numeric_limits<REAL>::infinity(),"positive real number",SOLVER::cmd_),
       threads_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_),
       EXPORT_("","export","export model to file -> export.lp",SOLVER::cmd_)
    {
@@ -470,17 +472,21 @@ public:
         auto MessageWrapper = [&](INDEX i){ return SOLVER::lp_.GetMessage(i);};
         FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
         FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,SOLVER::lp_.GetNumberOfMessages());
-        
-        lpSolver_ = new LpSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
+
+        LpSolver* solver = new LpSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
+        lpSolver_ = solver;//new LpSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
+        solver->ReduceLp(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,roundBound_.getValue());
         lpSolver_->SetTimeLimit(timelimit_.getValue());
         lpSolver_->SetNumberOfThreads(threads_.getValue());
         
         if(EXPORT_.getValue()){
           lpSolver_->WriteLpModel("export.lp");
         } else {
-          lpSolver_->solve();
-          printf("\n");
-          printf("Obj: %5.3f    Bound: %5.3f \n",lpSolver_->GetObjectiveValue(),lpSolver_->GetBestBound());
+          auto status = lpSolver_->solve();
+          if(status == 0){
+            printf("\n");
+            printf("Obj: %5.3f    Bound: %5.3f \n",lpSolver_->GetObjectiveValue(),lpSolver_->GetBestBound());
+          }
         }
       } else { lpSolver_ = NULL;  }
       
@@ -492,6 +498,7 @@ private:
   LpInterfaceAdapter* lpSolver_;
   
   TCLAP::ValueArg<REAL> timelimit_;
+  TCLAP::ValueArg<REAL> roundBound_;
   TCLAP::ValueArg<INDEX> threads_;
   TCLAP::SwitchArg LP_;
   TCLAP::SwitchArg LPOnly_;

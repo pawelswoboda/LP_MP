@@ -61,6 +61,7 @@ public:
    // for the LP interface
    virtual INDEX GetNumberOfAuxVariables() const = 0;
    virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
+   virtual void ReduceLp(LpInterfaceAdapter* lpInterface) const = 0;
 };
 
 class MessageTypeAdapter

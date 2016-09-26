@@ -23,4 +23,20 @@ if(WITH_CPLEX)
 
   target_compile_definitions(discrete_tomography_cplex PUBLIC -DUSE_CPLEX)
   target_include_directories(discrete_tomography_cplex PUBLIC ${CPLEX_INCLUDE_DIRS})
+
+  INSTALL(TARGETS discrete_tomography_cplex
+    ARCHIVE DESTINATION ${PROJECT_BINARY_DIR}/install/discrete_tomography_cplex/lib
+    LIBRARY DESTINATION ${PROJECT_BINARY_DIR}/install/discrete_tomography_cplex/lib
+    RUNTIME DESTINATION ${PROJECT_BINARY_DIR}/install/discrete_tomography_cplex/bin)  
+  
+  SET(_files ${Vc_LIBRARIES} ${CPLEX_LIBRARIES})
+  SET(_resolvedFiles "")
+  foreach (_file ${_files})
+    get_filename_component(_resolvedFile "${_file}" REALPATH)
+    list (APPEND _resolvedFiles "${_resolvedFile}")
+  endforeach()
+
+  INSTALL(FILES ${_resolvedFiles} DESTINATION ${PROJECT_BINARY_DIR}/install/discrete_tomography_cplex/lib)
 endif()
+
+
