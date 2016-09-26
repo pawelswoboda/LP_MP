@@ -13,6 +13,7 @@
 #include "discrete_tomography_message_counting.hxx"
 #include "discrete_tomography_message_counting_pairwise.hxx"
 #include "discrete_tomography_tree_constructor.hxx"
+#include "discrete_tomography_counting_naive.hxx"
 
 #include "parse_rules.h"
 
@@ -82,6 +83,31 @@ namespace LP_MP{
     using dt = DiscreteTomographyTreeConstructor<FMC_DT,0,2,2,3,4>;
     using ProblemDecompositionList = meta::list<tighteningMrf,dt>;
 	  
+  };
+
+  struct FMC_DT_NAIVE {
+    static constexpr char* name = "Discrete Tomography, naive LP model";
+
+    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 0, true, true> UnaryFactor;
+    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 1> PairwiseFactor;
+    typedef FactorContainer<DiscreteTomographyFactorCountingNaive, ExplicitRepamStorage, FMC_DT_NAIVE, 2> DiscreteTomographyCountingFactorContainer;
+   
+    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_NAIVE, 0 > UnaryPairwiseMessageLeft;
+    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_NAIVE, 1 > UnaryPairwiseMessageRight;
+    
+    typedef MessageContainer<DiscreteTomographyUnaryToFactorCountingNaiveMessage, 0, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT_NAIVE, 2>
+      DiscreteTomographyCountingMessage;
+
+    using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer >;
+    using MessageList = meta::list<
+      UnaryPairwiseMessageLeft,
+      UnaryPairwiseMessageRight,
+      DiscreteTomographyCountingMessage
+      >;
+
+    using mrf = StandardMrfConstructor<FMC_DT_NAIVE,0,1,0,1>;
+    using dt = DiscreteTomographyNaiveConstructor<FMC_DT_NAIVE,0,0,2,2>;
+    using ProblemDecompositionList = meta::list<mrf,dt>;
   };
 
   namespace DiscreteTomographyTextInput {

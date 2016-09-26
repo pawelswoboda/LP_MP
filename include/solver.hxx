@@ -90,7 +90,45 @@ public:
       return success;
    }
 
-   //spdlog::logger& GetLogger() const { return logger_; }
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasWritePrimal,WritePrimal);
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   constexpr static bool
+   CanWritePrimal()
+   {
+      // do zrobienia: this is not nice. CanTighten should only be called with valid PROBLEM_CONSTRUCTOR_NO
+      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
+      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
+      else return HasWritePrimal<meta::at_c<ProblemDecompositionList,n>, void, std::ofstream, PrimalSolutionStorage>();
+      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
+   }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size()>::type
+   WritePrimal(std::ofstream s) {}
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanWritePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
+   WritePrimal(std::ofstream s)
+   {
+      return WritePrimal<PROBLEM_CONSTRUCTOR_NO+1>(s);
+   }
+   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanWritePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
+   WritePrimal(std::ofstream s) 
+   {
+      std::cout << "WritePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
+      std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).WritePrimal(s,bestPrimal_);
+   }
+
+   void WritePrimal()
+   {
+      if(outputFileArg_.isSet()) {
+         std::ofstream output_file;
+         output_file.open(outputFile_);
+         if(!output_file.is_open()) {
+            throw std::runtime_error("could not open file " + outputFile_);
+         }
+         Tighten<0>(output_file);
+      }
+   }
 
 
    // invoke the corresponding functions of problem constructors
