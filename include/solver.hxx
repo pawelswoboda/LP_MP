@@ -11,7 +11,6 @@
 
 namespace LP_MP {
 
-namespace hana = boost::hana; // put this somewhere more central
 // class containing the LP, problem constructor list, input function
 // takes care of logging
 // binds together problem constructors and solver and organizes input/output

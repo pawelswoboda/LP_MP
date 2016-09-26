@@ -256,7 +256,7 @@ public:
    }
    void ComputePass();
 
-   void ComputePassAndPrimal(LPReparametrizationMode repam, PrimalSolutionStorage& forwardPrimal, PrimalSolutionStorage& backwardPrimal);
+   void ComputePassAndPrimal(PrimalSolutionStorage& forwardPrimal, PrimalSolutionStorage& backwardPrimal);
 
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename PRIMAL_SOLUTION_STORAGE_ITERATOR>
    void ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, PRIMAL_SOLUTION_STORAGE_ITERATOR primalIt);
@@ -665,15 +665,12 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
    omega.shrink_to_fit();
 }
 
-inline void LP::ComputePassAndPrimal(LPReparametrizationMode repam, PrimalSolutionStorage& forwardPrimal, PrimalSolutionStorage& backwardPrimal)
+inline void LP::ComputePassAndPrimal(PrimalSolutionStorage& forwardPrimal, PrimalSolutionStorage& backwardPrimal)
 {
-   if(repam == LPReparametrizationMode::Anisotropic) {
-      ComputeAnisotropicWeights();
-   } else if(repam == LPReparametrizationMode::Uniform) {
-      ComputeUniformWeights();
-   } else {
-      throw std::runtime_error("repam mode not recognized");
-   }
+   // do zrobienia: this is often superfluous!
+   InitializePrimalVector(forwardPrimal);
+   InitializePrimalVector(backwardPrimal);
+
    forwardPrimal.Initialize();
    ComputePassAndPrimal(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omegaForward_.begin(), forwardPrimal.begin()); 
    

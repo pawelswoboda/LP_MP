@@ -860,7 +860,7 @@ void
 Cycle<MRF_CONSTRUCTOR>::find_partition(
       std::vector<std::map<std::vector<int>, int> >& partition_set, 
       const int factorId,
-      int index_i, 
+      int index_i,  // do zrobienia: index_i and index_j not needed
       int index_j) 
 {
    const int var_i = std::get<0>(gm_.GetPairwiseVariables(factorId));
@@ -887,10 +887,7 @@ Cycle<MRF_CONSTRUCTOR>::find_partition(
   std::vector<std::pair<std::pair<int, int>, REAL> > sorted_edge_set;
   for (int i = 0; i < size_i; i++) {
     for (int j = 0; j < size_j; j++) {
-      //std::vector<int> inds; inds.push_back(i); inds.push_back(j);
-      std::array<int,2> inds = {{i,j}};
-      //REAL temp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-      REAL temp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);
+      REAL temp_val = -gm_.GetPairwiseValue(factorId,i,j);
       sorted_edge_set.push_back(std::pair<std::pair<int, int>, REAL>(std::make_pair(std::make_pair(i, j), temp_val)));
     }
   }
@@ -1218,122 +1215,6 @@ Cycle<MRF_CONSTRUCTOR>::create_expanded_projection_graph(
         const auto& max_i_bij_not_xi = std::get<1>(max_bij_cond);
         const auto& max_ij_bij_not_xi_xj = std::get<2>(max_bij_cond);
 
-        /*
-        std::vector<std::vector<REAL> > max_i_bij_not_xi;
-        std::vector<std::vector<REAL> > max_j_bij_not_xj;
-
-        for(int state1=0; state1 < gm_.GetNumberOfLabels(i); state1++) {
-
-           // Find max over state2
-           REAL largest_val = -Inf;
-           int largest_ind = -1;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
-
-              //std::vector<int> inds; inds.push_back(state1); inds.push_back(state2);
-              std::array<int,2> inds = {{state1,state2}};
-              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-
-              if(tmp_val > largest_val) {
-                 largest_val = tmp_val;
-                 largest_ind = state2;
-              }
-           }
-
-           // Find second largest val over state2
-           REAL sec_largest_val = -Inf;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
-
-              //std::vector<int> inds; inds.push_back(state1); inds.push_back(state2);
-              std::array<int,2> inds = {{state1,state2}};// inds.push_back(state1); inds.push_back(state2);
-              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-
-              if(tmp_val > sec_largest_val && state2 != largest_ind) {
-                 sec_largest_val = tmp_val;
-              }
-           }
-
-           // Assign values
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
-              std::vector<REAL> state_j; max_j_bij_not_xj.push_back(state_j);
-              max_j_bij_not_xj[state1].push_back(largest_val);
-           }
-           max_j_bij_not_xj[state1][largest_ind] = sec_largest_val;
-        }
-
-
-        for(int state1=0; state1 < gm_.GetNumberOfLabels(j); state1++) {
-
-           // Find max over state2
-           REAL largest_val = -Inf;
-           int largest_ind = -1;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(i); state2++) {
-
-              //std::vector<int> inds; inds.push_back(state2); inds.push_back(state1);
-              std::array<int,2> inds = {{state2,state1}};
-              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-
-              if(tmp_val > largest_val) {
-                 largest_val = tmp_val;
-                 largest_ind = state2;
-              }
-           }
-
-           // Find second largest val over state2
-           REAL sec_largest_val = -Inf;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(i); state2++) {
-
-              //std::vector<int> inds; inds.push_back(state2); inds.push_back(state1);
-              std::array<int,2> inds {{state2,state1}};
-              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-
-              if(tmp_val > sec_largest_val && state2 != largest_ind) {
-                 sec_largest_val = tmp_val;
-              }
-           }
-
-           // Assign values
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(i); state2++) {
-              std::vector<REAL> state_i; max_i_bij_not_xi.push_back(state_i);
-              max_i_bij_not_xi[state2].push_back(largest_val);
-           }
-           max_i_bij_not_xi[largest_ind][state1] = sec_largest_val;
-        }
-
-
-        // decompose: max_{x_j!=x_j}max_{x_i != x_i'}. Then, use the above computations.
-        SIGNED_INDEX shape[] = {SIGNED_INDEX(gm_.GetNumberOfLabels(i)), SIGNED_INDEX(gm_.GetNumberOfLabels(j))};
-        marray::Marray<REAL> max_ij_bij_not_xi_xj(shape, shape+2);
-        for(int state1=0; state1 < gm_.GetNumberOfLabels(i); state1++) {
-
-           // Find max over state2
-           REAL largest_val = -Inf;
-           int largest_ind = -1;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
-              REAL tmp_val = max_i_bij_not_xi[state1][state2];
-
-              if(tmp_val > largest_val) {
-                 largest_val = tmp_val;
-                 largest_ind = state2;
-              }
-           }
-
-           // Find second largest val over state2
-           REAL sec_largest_val = -Inf;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
-              REAL tmp_val = max_i_bij_not_xi[state1][state2];
-
-              if(tmp_val > sec_largest_val && state2 != largest_ind) {
-                 sec_largest_val = tmp_val;
-              }
-           }
-
-           // Assign values
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++)
-              max_ij_bij_not_xi_xj(state1,state2) = largest_val;
-           max_ij_bij_not_xi_xj(state1,largest_ind) = sec_largest_val;
-        }
-        */
-
         // Now, for each partition of node i and each partition of node j, compute edge weights
         // If the edge weight is non-zero, insert edge into adjacency list
 
@@ -1470,122 +1351,6 @@ Cycle<MRF_CONSTRUCTOR>::create_k_projection_graph(
         const auto& max_j_bij_not_xj = std::get<0>(max_bij_cond);
         const auto& max_i_bij_not_xi = std::get<1>(max_bij_cond);
         const auto& max_ij_bij_not_xi_xj = std::get<2>(max_bij_cond);
-        /*
-        // Do some pre-processing for speed.
-        SIGNED_INDEX shape[] = {SIGNED_INDEX(gm_.GetNumberOfLabels(i)), SIGNED_INDEX(gm_.GetNumberOfLabels(j))};
-        marray::Marray<REAL> max_j_bij_not_xj(shape, shape+2);
-        marray::Marray<REAL> max_i_bij_not_xi(shape, shape+2);
-
-        for(int state1=0; state1 < gm_.GetNumberOfLabels(i); state1++) {
-
-           // Find max over state2
-           REAL largest_val = -Inf;
-           int largest_ind = -1;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
-
-              //std::vector<int> inds; inds.push_back(state1); inds.push_back(state2);
-              std::array<int,2> inds = {{state1,state2}};
-              //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-
-              if(tmp_val > largest_val) {
-                 largest_val = tmp_val;
-                 largest_ind = state2;
-              }
-           }
-
-           // Find second largest val over state2
-           REAL sec_largest_val = -Inf;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
-
-              //std::vector<int> inds; inds.push_back(state1); inds.push_back(state2);
-              std::array<int,2> inds = {{state1,state2}};
-              //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-
-              if(tmp_val > sec_largest_val && state2 != largest_ind) {
-                 sec_largest_val = tmp_val;
-              }
-           }
-
-           // Assign values
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++)
-              max_j_bij_not_xj(state1,state2) = largest_val;
-           max_j_bij_not_xj(state1,largest_ind) = sec_largest_val;
-        }
-
-
-        for(int state1=0; state1 < gm_.GetNumberOfLabels(j); state1++) {
-
-           // Find max over state2
-           REAL largest_val = -Inf;
-           int largest_ind = -1;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(i); state2++) {
-
-              //std::vector<int> inds; inds.push_back(state2); inds.push_back(state1);
-              std::array<int,2> inds = {{state2,state2}};
-              //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-
-              if(tmp_val > largest_val) {
-                 largest_val = tmp_val;
-                 largest_ind = state2;
-              }
-           }
-
-           // Find second largest val over state2
-           REAL sec_largest_val = -Inf;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(i); state2++) {
-
-              //std::vector<int> inds; inds.push_back(state2); inds.push_back(state1);
-              std::array<int,2> inds = {{state2,state1}};
-              //REAL tmp_val = gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-              REAL tmp_val = -gm_.GetPairwiseValue(factorId,inds[0],inds[1]);//gm_[factorId](inds.begin());//edge_belief->GetVal(inds);
-
-              if(tmp_val > sec_largest_val && state2 != largest_ind) {
-                 sec_largest_val = tmp_val;
-              }
-           }
-
-           // Assign values
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(i); state2++)
-              max_i_bij_not_xi(state2,state1) = largest_val;
-           max_i_bij_not_xi(largest_ind,state1) = sec_largest_val;
-        }
-
-        // decompose: max_{x_j!=x_j}max_{x_i != x_i'}. Then, use the above computations.
-        //int shape[] = {gm_.numberOfLabels(i),gm_.numberOfLabels(j)};
-        marray::Marray<REAL> max_ij_bij_not_xi_xj(shape,shape+2);//mplp.m_var_sizes[i]][mplp.m_var_sizes[j]];
-        for(int state1=0; state1 < gm_.GetNumberOfLabels(i); state1++) {
-
-           // Find max over state2
-           REAL largest_val = -Inf;
-           int largest_ind = -1;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
-              REAL tmp_val = max_i_bij_not_xi(state1,state2);
-
-              if(tmp_val > largest_val) {
-                 largest_val = tmp_val;
-                 largest_ind = state2;
-              }
-           }
-
-           // Find second largest val over state2
-           REAL sec_largest_val = -Inf;
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++) {
-              REAL tmp_val = max_i_bij_not_xi(state1,state2);
-
-              if(tmp_val > sec_largest_val && state2 != largest_ind) {
-                 sec_largest_val = tmp_val;
-              }
-           }
-
-           // Assign values
-           for(int state2=0; state2 < gm_.GetNumberOfLabels(j); state2++)
-              max_ij_bij_not_xi_xj(state1,state2) = largest_val;
-           max_ij_bij_not_xi_xj(state1,largest_ind) = sec_largest_val;
-        }
-        */
 
         // For each of their states
         for(int xi=0; xi < gm_.GetNumberOfLabels(i); xi++) {
@@ -1706,7 +1471,7 @@ Cycle<MRF_CONSTRUCTOR>::find_optimal_R(adj_type &projection_adjacency_list, REAL
     else
       bin_search_upper_bound = R_pos-1;
   }
-  assert(sij_min >= 0);
+  //assert(sij_min >= 0);
 
   return sij_min;
 }
@@ -1914,6 +1679,7 @@ Cycle<MRF_CONSTRUCTOR>::shortcut(
       std::map<std::pair<int, int>, REAL>& projection_edge_weights,
       int& num_projection_nodes) 
 {
+   assert(cycle.size() >= 3);
   bool exist_duplicates = true;
   std::vector<int> cycle_array(cycle.size()); int tmp_ind = 0;
   std::vector<int> cycle_sign(cycle.size());
@@ -2001,7 +1767,7 @@ Cycle<MRF_CONSTRUCTOR>::add_cycle(
       std::map<std::vector<int>, bool >& triplet_set, 
       int& num_projection_nodes) 
 {
-
+   assert(cycle.size() >= 3);
   int nClustersAdded = 0;
 
   // Number of clusters we're adding is length_cycle - 2
@@ -2204,6 +1970,7 @@ Cycle<MRF_CONSTRUCTOR>::TightenCycle(
   // Add all cycles that we've found to the relaxation!
   //start_time = clock();
   for (int z = 0; z < cycle_set.size() && nClustersAdded < nclus_to_add; z++) {
+     assert(cycle_set[z].size() >= 3);
 
      // Check to see if there are any duplicate nodes, and, if so, shortcut
      shortcut(cycle_set[z], projection_imap_var, projection_edge_weights, num_projection_nodes);
