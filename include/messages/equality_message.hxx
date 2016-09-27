@@ -2,6 +2,7 @@
 #define LP_MP_EQUALITY_MESSAGE
 
 #include "config.hxx"
+#include <type_traits>
 
 namespace LP_MP {
 
@@ -9,6 +10,7 @@ namespace LP_MP {
 // assume FactorType is Simplex. 
 // do zrobienia: or multiplex
 // do zrobienia: use breakpoINDEX cost for message updates
+template<Chirality C>
 class EqualityMessage 
 {
 public:
@@ -61,7 +63,7 @@ public:
       if(rightPrimal[rightVar_] == false) {
          msg[0] -= std::numeric_limits<REAL>::infinity();
       } else if(rightPrimal[rightVar_] == true) {
-         msg[0] += std::numeric_limits<REAL>::infinity();
+         msg[0] -= -std::numeric_limits<REAL>::infinity();
       }
    }
 
@@ -71,7 +73,7 @@ public:
       if(leftPrimal[leftVar_] == false) {
          msg[0] -= std::numeric_limits<REAL>::infinity();
       } else if(leftPrimal[leftVar_] == true) {
-         msg[0] += std::numeric_limits<REAL>::infinity();
+         msg[0] -= -std::numeric_limits<REAL>::infinity();
       }
    }
    /*
@@ -206,8 +208,8 @@ public:
       lp->addLinearEquality(lhs,rhs);
    }
 
-   /*
-   void ComputeLeftFromRightPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right) 
+   typename std::enable_if<C == Chirality::right>
+   ComputeLeftFromRightPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right) 
    {
       if(right[rightVar_] == true) { 
          left[leftVar_] = true;
@@ -216,9 +218,9 @@ public:
          left[leftVar_] = false;
       }
    }
-   */
 
-   void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right)
+   typename std::enable_if<C == Chirality::left>
+   ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right)
    {
       if(left[leftVar_] == true) { 
          right[rightVar_] = true;

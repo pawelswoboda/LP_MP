@@ -291,9 +291,11 @@ namespace LP_MP {
 	       delta = std::numeric_limits<REAL>::infinity();
 	     },
 	     [&](const INDEX full_idx, const INDEX outer_idx){ 
-	       if(primal[ full_idx ] == unknownState || primal[ full_idx ] == true) { // i.e. may be true or unknown. do zrobienia: if true, then go back, set delta to infinity for all other coordinates and this coordinate let be -infinity
-		 delta = std::min(delta, pot[ full_idx ]);
-	       } 
+	       if(primal[ full_idx ] == unknownState) { // i.e. may be true or unknown. do zrobienia: if true, then go back, set delta to infinity for all other coordinates and this coordinate let be -infinity
+          delta = std::min(delta, pot[ full_idx ]);
+          } else if(primal[ full_idx ] == true) {
+          delta = -std::numeric_limits<REAL>::max();
+          }
 	       //if(primal[ full_idx ] == true) {
 	       //assert(false); // need to implement the above described behaviour
 	       //delta = -std::numeric_limits<REAL>::infinity();

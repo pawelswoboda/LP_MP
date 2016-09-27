@@ -797,9 +797,9 @@ public:
       RestrictedMsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
       {
          if(CHIRALITY == Chirality::right) { // message is computed by right factor
-            msg_->RepamRight(-x, dim_);
+            msg_->RepamRight(+x, dim_);
          } else if (CHIRALITY == Chirality::left) { // message is computed by left factor
-            msg_->RepamLeft(-x, dim_);
+            msg_->RepamLeft(+x, dim_);
          } else {
             assert(false);
          }
@@ -1085,7 +1085,6 @@ public:
    // do zrobienia: remove this function, obsolete: New primal computation mode
    void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal) final
    {
-
       if(CanComputePrimal()) { // do zrobienia: for now
          if(CanReceiveRestrictedMessages()) {
             std::vector<REAL> tmpRepam(this->size()); // temporary structure where repam is stored before it is reverted back.

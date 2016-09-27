@@ -103,16 +103,16 @@ public:
    }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size()>::type
-   WritePrimal(std::ofstream s) {}
+   WritePrimal(std::ofstream& s) {}
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanWritePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   WritePrimal(std::ofstream s)
+   WritePrimal(std::ofstream& s)
    {
       return WritePrimal<PROBLEM_CONSTRUCTOR_NO+1>(s);
    }
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanWritePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   WritePrimal(std::ofstream s) 
+   WritePrimal(std::ofstream& s) 
    {
       std::cout << "WritePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
       std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).WritePrimal(s,bestPrimal_);
@@ -126,7 +126,7 @@ public:
          if(!output_file.is_open()) {
             throw std::runtime_error("could not open file " + outputFile_);
          }
-         Tighten<0>(output_file);
+         WritePrimal<0>(output_file);
       }
    }
 
@@ -251,7 +251,7 @@ public:
    {
       //std::cout << "size of primal = " << p.size() << "\n";
       const REAL cost = lp_.EvaluatePrimal(p.begin());
-      if(cost <= bestPrimalCost_) {
+      if(cost <= bestPrimalCost_) { // we need to change the primal also when it has changed it's size (e.g. after tightening), otherwise WritePrimal etc. will not work.
          // check constraints
          if(CheckPrimalConsistency(p.begin())) {
             //std::cout << "primal cost = " << cost << ",, solution improved, primal solution feasible. in register primal\n";
@@ -260,8 +260,13 @@ public:
          } else {
             //std::cout << "primal cost = " << cost << ", solution improved, primal solution infeasible. in register primal\n";
          }
-      } else {
-         //std::cout << "primal cost = " << cost << ", solution not improved. in register primal\n";
+      } else if(p.size() != bestPrimal_.size()) {
+         std::swap(bestPrimal_, p); 
+         if(CheckPrimalConsistency(p.begin())) {
+            bestPrimalCost_ = cost;
+         } else {
+            bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
+         }
       }
    }
 
@@ -388,6 +393,7 @@ public:
          this->PostIterate(c);
          c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
       }
+      this->WritePrimal();
       return c.error;
    }
 
@@ -577,6 +583,15 @@ using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
    VisitorSolver<Solver<FMC>,VISITOR> solver(argc,argv); \
+   solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
+   return solver.Solve(); \
+}
+
+#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_MP_ROUNDING(FMC,PARSE_PROBLEM_FUNCTION,VISITOR) \
+using namespace LP_MP; \
+int main(int argc, char* argv[]) \
+{ \
+   VisitorSolver<MpRoundingSolver<FMC>,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }

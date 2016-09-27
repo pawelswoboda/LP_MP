@@ -4,6 +4,7 @@ SET(SOURCE_FILES
    graph_matching_via_gm_left.cpp graph_matching_via_gm_right.cpp 
    graph_matching_via_mp_uai.cpp graph_matching_via_mcf_uai.cpp graph_matching_via_gm_uai.cpp
    graph_matching_via_mp_tightening_uai.cpp graph_matching_via_mcf_tightening_uai.cpp graph_matching_via_gm_tightening_uai.cpp
+   hungarian_bp_left.cpp hungarian_bp_right.cpp hungarian_bp_both_sides.cpp hungarian_bp_uai.cpp
    )
 
 foreach( source_file ${SOURCE_FILES} )

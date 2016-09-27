@@ -154,7 +154,7 @@ public:
    }
 
    template<typename STREAM>
-   void WritePrimal(STREAM s, PrimalSolutionStorage& primal) const 
+   void WritePrimal(STREAM& s, PrimalSolutionStorage& primal) const 
    {
       for(INDEX i=0; i<unaryFactor_.size(); ++i) {
          auto* f = unaryFactor_[i];

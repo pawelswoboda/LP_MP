@@ -39,16 +39,22 @@ public:
       INDEX min_element;
       REAL min_value = std::numeric_limits<REAL>::infinity();
       for(INDEX i=0; i<repam.size(); ++i) {
-         primal[i] = false;
-         if(min_value >= repam[i]) {
-            min_value = repam[i];
-            min_element = i;
+         assert(primal[i] == unknownState);
+         if(primal[i] == true) {
+            return;
+         } else if(primal[i] == false) {
+            // do nothing
+         } else {
+            assert(primal[i] == unknownState);
+            primal[i] = false;
+            if(min_value >= repam[i]) {
+               min_value = repam[i];
+               min_element = i;
+            }
          }
       }
       assert(min_element < repam.size());
       primal[min_element] = true;
-      //std::cout << ";    " << min_element;
-      //std::cout << "\n";
    };
 
    // set to false all elements that are larger by epsilon than the minimal element
