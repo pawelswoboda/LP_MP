@@ -17,6 +17,21 @@ public:
       return 0.0;
    }
 
+   template<typename REPAM_ARRAY>
+   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
+   {
+      INDEX sum=0;
+      for(INDEX i=0; i<no_vars_; ++i) {
+         for(INDEX s=1; s<no_labels_; ++s) {
+            sum += s*primal[i*no_labels_ + s];
+         }
+      }
+      if(sum_ == sum) {
+         return 0.0;
+      } else {
+         return std::numeric_limits<REAL>::infinity();
+      }
+   }
    void CreateConstraints(LpInterfaceAdapter* lp) const;
 
    INDEX GetNumberOfLabels() const { return no_labels_; }
@@ -33,8 +48,8 @@ DiscreteTomographyFactorCountingNaive::CreateConstraints(LpInterfaceAdapter* lp)
 {
    LinExpr lhs = lp->CreateLinExpr();
    for(INDEX i=0; i<no_vars_; ++i) {
-      for(INDEX s=1; s<no_vars_; ++s) {
-         lhs += REAL(s)*lp->GetVariable(i);
+      for(INDEX s=1; s<no_labels_; ++s) {
+         lhs += REAL(s)*lp->GetVariable(i*no_labels_ + s);
       }
    }
    LinExpr rhs = lp->CreateLinExpr();
@@ -98,12 +113,12 @@ public:
       // create new counting factor
       auto f = DiscreteTomographyFactorCountingNaive(noLabels_, projectionVar.size(), sum);
       auto* fc = new DiscreteTomographyCountingFactorContainer(f, std::vector<REAL>(f.size(),0.0));
-      s_.GetLP().AddFactor(f);
+      s_.GetLP().AddFactor(fc);
       // connect unaries with counting factor
       auto& mrf = s_.template GetProblemConstructor<0>();
       for(INDEX i=0; i<projectionVar.size(); ++i) {
          auto* u = mrf.GetUnaryFactor(projectionVar[i]);
-         auto *m = new DiscreteTomographyCountingMessage(DiscreteTomographyUnaryToFactorCountingNaiveMessage(i), u, fc);
+         auto *m = new DiscreteTomographyCountingMessage(DiscreteTomographyUnaryToFactorCountingNaiveMessage(i), u, fc, u->size());
          s_.GetLP().AddMessage(m);
       }
    }

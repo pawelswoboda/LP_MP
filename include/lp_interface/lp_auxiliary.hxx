@@ -22,11 +22,10 @@ namespace LP_MP {
     REAL coeff;
   };
 
-  inline LpVariable operator*(REAL lhs, const LpVariable& rhs)
+  inline LpVariable operator*(REAL lhs, LpVariable rhs)
   {
-     LpVariable r = rhs;
-     r.coeff *= lhs;
-     return r;
+     rhs.coeff *= lhs;
+     return rhs;
   }
   // to do: other operator overloading operations
 

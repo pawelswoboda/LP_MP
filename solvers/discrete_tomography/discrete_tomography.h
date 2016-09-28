@@ -119,7 +119,8 @@ namespace LP_MP{
 
     struct ProjectionPreamble : pegtl::string<'P','R','O','J','E','C','T','I','O','N','S'> {};
     struct ProjectionVector : pegtl::seq< pegtl::string<'('>, opt_whitespace, real_number, opt_whitespace, pegtl::star< pegtl::string<','>, opt_whitespace, real_number, opt_whitespace >, opt_whitespace, pegtl::string<')'> > {};
-    struct ProjectionLine : pegtl::seq<positive_integer,pegtl::plus<opt_whitespace,pegtl::string<'+'>,opt_whitespace,positive_integer>,opt_whitespace,pegtl::string<'='>,opt_whitespace,ProjectionVector> {};
+    struct first_positive_integer : positive_integer {};
+    struct ProjectionLine : pegtl::seq<first_positive_integer,pegtl::plus<opt_whitespace,pegtl::string<'+'>,opt_whitespace,positive_integer>,opt_whitespace,pegtl::string<'='>,opt_whitespace,ProjectionVector> {};
 
    
     // projection grammar
@@ -128,58 +129,51 @@ namespace LP_MP{
       pegtl::star<pegtl::sor<pegtl::seq<opt_whitespace,pegtl::eol>,ProjectionLine>>,
       pegtl::eof> {};
 
+    struct Projections {
+       std::vector<std::vector<INDEX>> projectionVar;
+       std::vector<std::vector<REAL>> projectionCost;
+    };
+
     template<typename Rule>
       struct action : pegtl::nothing<Rule> {};
-
-
     
     template<>
-       struct action<real_number> {
-          static void apply(const pegtl::action_input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack)
+       struct action<pegtl::string<'('>> {
+          static void apply(const pegtl::action_input& in, Projections& p)
           {
-             realStack.push(std::stod(in.string()));
+             p.projectionCost.push_back({});
           }
        };
+
+    template<>
+       struct action<real_number> {
+          static void apply(const pegtl::action_input& in, Projections& p)
+          {
+             p.projectionCost.back().push_back(std::stod(in.string()));
+             //realStack.push(std::stod(in.string()));
+          }
+       };
+
+    template<>
+       struct action<first_positive_integer> {
+          static void apply(const pegtl::action_input& in, Projections& p)
+          {
+             p.projectionVar.push_back({});
+             p.projectionVar.back().push_back(std::stoul(in.string()));
+          }
+       };
+
     template<>
        struct action<positive_integer> {
-          static void apply(const pegtl::action_input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack)
+          static void apply(const pegtl::action_input& in, Projections& p)
           {
-             integerStack.push(std::stoul(in.string()));
+             p.projectionVar.back().push_back(std::stoul(in.string()));
+             //integerStack.push(std::stoul(in.string()));
           }
        };
 
-
-    template<>
-       struct action<ProjectionPreamble> {
-          static void apply(const pegtl::action_input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack)
-          {
-             assert(integerStack.empty());
-             assert(realStack.empty());
-          }
-       };
-
-    template<>
-       struct action<ProjectionLine> {
-          static void apply(const pegtl::action_input& in, Solver<FMC_DT>& pd, std::stack<SIGNED_INDEX>& integerStack, std::stack<REAL>& realStack)
-          {
-             std::vector<INDEX> projectionVar;
-             while(!integerStack.empty()) {
-                projectionVar.push_back(integerStack.top());
-                integerStack.pop();
-             }
-             std::reverse(projectionVar.begin(),projectionVar.end());
-
-             std::vector<REAL> projectionCost;
-             while(!realStack.empty()) {
-                projectionCost.push_back(realStack.top());
-                realStack.pop(); 
-             }
-             std::reverse(projectionCost.begin(), projectionCost.end());
-             pd.template GetProblemConstructor<1>().AddProjection(projectionVar,projectionCost);
-          }
-       };
-
-    inline bool ParseProblem(const std::string& filename, Solver<FMC_DT>& pd) {
+    template<typename FMC>
+    inline bool ParseProblem(const std::string& filename, Solver<FMC>& pd) {
        std::cout << "parsing " << filename << "\n";
        pegtl::file_parser problem(filename);
 
@@ -192,11 +186,14 @@ namespace LP_MP{
 
        pd.template GetProblemConstructor<1>().SetNumberOfLabels(mrfInput.cardinality_[0]);
 
-       std::stack<SIGNED_INDEX> integerStack;
-       std::stack<REAL> realStack;
-       ret = problem.parse< grammar, action>(pd, integerStack, realStack);
+       Projections p;
+       ret = problem.parse< grammar, action>(p);
        if(ret != true) {
           throw std::runtime_error("could not read projection constraints for discrete tomography");
+       }
+       assert(p.projectionVar.size() == p.projectionCost.size());
+       for(INDEX i=0; i<p.projectionVar.size(); ++i) {
+          pd.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i]);
        }
        return true;
     }
