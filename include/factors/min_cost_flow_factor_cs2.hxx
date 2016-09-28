@@ -4,19 +4,11 @@
 #include "mcmf.hxx"
 #include "lib/MinCost/MinCost.h"
 #include "config.hxx"
-//#include "problem_constructors/minimum_cost_flow_constructor.hxx"
 
 namespace LP_MP {
 
-// do zrobienia: rename file to minimum_cost_flow_cs2.hxx
 
-// (i) implement interface for MinCostFlowFactors
-// (ii) build factor consisting of min cost network flow graph. Solve mcf problems with cs2 algorithm ported to C++
-// the reparametrization storage holds the min cost flow solver
-// (iii) build message holding all edges emanating from a given node
-
-
-// CS2 holds reverse copies of edges. arcs are ordered lexicographically by (tail,node) and there are reverse arcs for every arc.
+// mcf holds reverse copies of edges. arcs are ordered lexicographically by (tail,node).
 // this creates problems for some applications, where only one direction of arcs is needed, but it may be advantageous for other applications.
 class MinCostFlowFactorCS2 {
 public:
@@ -76,7 +68,10 @@ public:
       // check whether primal indeed belongs to a flow
       // the below is wrong whenever primal and repam have different sizes.
       for(INDEX e=0; e<repam.size(); e++) {
-         cost += repam[e]*primal[e];
+         if(minCostFlow_->GetCap(e) == 1) {
+            assert(primal[e] == primal[ minCostFlow_->GetReverseArcId(e) ]);
+            cost += repam[e]*primal[e]; 
+         }
       }
       return cost;
    }
@@ -107,6 +102,7 @@ public:
    template<typename REPAM_ARRAY>
    void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    { 
+      std::cout << "round mcf\n";
       // we assume here that repam is the current one as well
       //MaximizePotential(repam);
       //for(INDEX e; e<repam.size(); ++e) {
@@ -115,8 +111,21 @@ public:
       minCostFlow_->Solve();
       for(INDEX e=0; e<repam.size(); ++e) {
          // here we assume that flow is 0/1
-         assert(0 <= minCostFlow_->GetFlow(e) && minCostFlow_->GetFlow(e) <= 1);
-         primal[e] = minCostFlow_->GetFlow(e);
+         // but there may be edges that are not 0/1, e.g. slack edges, which are auxiliary ones
+         //assert(-1 <= minCostFlow_->GetFlow(e) && minCostFlow_->GetFlow(e) <= 1);
+         primal[e] = std::abs(minCostFlow_->GetFlow(e));
+      }
+   }
+
+   // sometimes reverse edges have to be set as well
+   void PropagatePrimal(PrimalSolutionStorage::Element primal)
+   {
+      for(INDEX a=0; a<size(); ++a) {
+         if(primal[a] != unknownState) {
+            const INDEX a_rev = minCostFlow_->GetReverseArcId(a);
+            assert(primal[a_rev] == primal[a] || primal[a_rev] == unknownState);
+            primal[a_rev] = primal[a];
+         }
       }
    }
 
@@ -304,7 +313,7 @@ public:
                  || minCostFlow_->GetCap(a) == 0 && minCostFlow_->GetCap(a_rev) == 1);
            LinExpr lhs = lp->CreateLinExpr();
            lhs += lp->GetVariable(a);
-           lhs -= lp->GetVariable(a_rev);
+           lhs -= lp->GetVariable(a_rev); // this is not the flow formulation, but one based on "undirected flow"
            LinExpr rhs = lp->CreateLinExpr();
            lp->addLinearEquality(lhs,rhs);
         }
@@ -359,7 +368,6 @@ public:
 
    const REAL operator[](const INDEX i) const 
    {
-      assert(false); // is this ever needed?
       return minCostFlow_->GetCost(i);
    }
 
@@ -380,12 +388,15 @@ public:
       // when we write to the mcf factor, the cost of the reverse arc is also modified
       // do zrobienia: introduce function for changing cost by constant
       WriteBackProxy operator+=(const REAL x) {
-         minCostFlow_->UpdateCost(i_, x);
+         // sign is necessary, as we may write cost to reverse edges -> reverse costs
+         const REAL sign = minCostFlow_->GetCap(i_) == 1 ? 1.0 : -1.0;
+         minCostFlow_->UpdateCost(i_, sign*x);
          return *this;
       }
 
       WriteBackProxy operator-=(const REAL x) {
-         minCostFlow_->UpdateCost(i_, -x); // do zrobienia: capacity is possibly wrong! reverse has cap 0
+         const REAL sign = minCostFlow_->GetCap(i_) == 1 ? 1.0 : -1.0;
+         minCostFlow_->UpdateCost(i_, sign*(-x)); // do zrobienia: capacity is possibly wrong! reverse has cap 0
          return *this;
       }
 
@@ -413,7 +424,7 @@ private:
 
 // used in graph matching via mcf. 
 // do zrobienia: rename
-template<INDEX COVERING_FACTOR> // COVERING_FACTOR specifies how often an mcf edge is covered at most. Usually, either one or two
+template<INDEX COVERING_FACTOR, Chirality PRIMAL_ROUNDING_DIRECTION> // COVERING_FACTOR specifies how often an mcf edge is covered at most. Usually, either one or two
 class UnaryToAssignmentMessageCS2 {
 // right factor is MinCostFlowFactor describing an 1:1 assignment as constructed above
 // left factors are the left and right simplex corresponding to it. 
@@ -455,6 +466,40 @@ public:
       MakeLeftFactorUniform(leftPot, msg);
    }
 
+   // for hungarian BP
+   template<typename LEFT_FACTOR, typename G1, typename G2>
+   void
+   ReceiveRestrictedMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg, typename PrimalSolutionStorage::Element leftPrimal)
+   { 
+      // we assume that leftPrimal is all unknownState
+      for(INDEX i=0; i<no_arcs_; ++i) {
+         assert(leftPrimal[i] == unknownState);
+      }
+      MakeLeftFactorUniform(leftPot, msg);
+   }
+
+   // for rounding based on unaries
+   template<typename RIGHT_FACTOR, typename G1, typename G2>
+   void
+   ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* r, const G1& rightPot, G2& msg, typename PrimalSolutionStorage::Element rightPrimal)
+   { 
+      auto* mcf = r->GetMinCostFlowSolver();
+      // if an arc is true, enforce it. If an arc is false, forbid it. Otherwise, get reduced costs
+      for(INDEX l=0; l<no_arcs_; ++l) {
+         //msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(-mcf->GetReducedCost(start_arc + l) + mcf->GetCost(start_arc + l));
+         const INDEX e = start_arc_ + l;
+         assert(mcf->GetCap(e) == 0 || mcf->GetCap(e) == 1); // only {0,1}-flow accepted here!
+         const REAL sign = mcf->GetCap(e) == 1 ? 1.0 : -1.0;
+         if(rightPrimal[e] == unknownState) {
+            msg[l] -= (sign*mcf->GetReducedCost(e) );  // do zrobienia: this only works for left side models, not for right hand side ones!
+         } else if(rightPrimal[e] == true) {
+            msg[l] -= -std::numeric_limits<REAL>::max();
+         } else {
+            assert(rightPrimal[e] == false);
+            msg[l] -= std::numeric_limits<REAL>::max();
+         }
+      }
+   }
    /*
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G2, typename G3>
    void SendMessageToRight(LEFT_FACTOR* const l, RIGHT_FACTOR* const r, const G1& leftPot, const G2& rightPot, G3& msg, const REAL omega)
@@ -487,25 +532,41 @@ public:
       std::vector<REAL> repam = rightFactor.MaximallyPerturbCosts(rightRepam, active_edges);
       */
 
-
-
-
       // the technique applied in Max-Weight Bipartite Matching ... CVPR16
       for(INDEX i=0; i<msgs.size(); ++i, ++omegaIt) {
          INDEX start_arc = msgs[i].GetMessageOp().start_arc_;
          INDEX no_arcs = msgs[i].GetMessageOp().no_arcs_;
          for(INDEX l=0; l<no_arcs; ++l) {
-            msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(-mcf->GetReducedCost(start_arc + l) + mcf->GetCost(start_arc + l)); // the technique applied in Max-Weight Bipartite Matching ... CVPR16
+            //msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(-mcf->GetReducedCost(start_arc + l) + mcf->GetCost(start_arc + l));
+            const INDEX e = start_arc + l;
+            assert(mcf->GetCap(e) == 0 || mcf->GetCap(e) == 1); // only {0,1}-flow accepted here!
+            const REAL sign = mcf->GetCap(e) == 1 ? 1.0 : -1.0;
+            msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(sign*mcf->GetReducedCost(e) );  // do zrobienia: this only works for left side models, not for right hand side ones!
          }
          //msgs[i].GetMessageOp().MakeRightFactorUniform(rightFactor, repam, msgs[i], omega_sum*1.0/REAL(COVERING_FACTOR));
       }
    }
 
    // do zrobienia: possibly automatically query solution type of min cost flow factor and set type of right argument automatically
-   void ComputeLeftFromRightPrimal(typename PrimalSolutionStorage::Element left, const typename PrimalSolutionStorage::Element right)
+
+   template<bool ENABLE = (PRIMAL_ROUNDING_DIRECTION == Chirality::right), typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   typename std::enable_if<ENABLE,void>::type
+   ComputeLeftFromRightPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
    {
       for(INDEX e=0; e<no_arcs_; ++e) {
          left[e] = right[start_arc_ + e];
+      }
+   }
+
+   template<bool ENABLE = (PRIMAL_ROUNDING_DIRECTION == Chirality::left), typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   typename std::enable_if<ENABLE,void>::type
+   ComputeRightFromLeftPrimal(typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, const typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+   {
+      auto* mcf = r->GetMinCostFlowSolver();
+      for(INDEX e=0; e<no_arcs_; ++e) {
+         right[start_arc_ + e] = left[e];
+         const INDEX a_rev = mcf->GetReverseArcId(start_arc_ + e);
+         right[a_rev] = left[e];
       }
    }
 

@@ -156,20 +156,22 @@ public:
    template<typename STREAM>
    void WritePrimal(STREAM& s, PrimalSolutionStorage& primal) const 
    {
-      for(INDEX i=0; i<unaryFactor_.size(); ++i) {
-         auto* f = unaryFactor_[i];
+      if(unaryFactor_.size() > 0) {
+         for(INDEX i=0; i<unaryFactor_.size(); ++i) {
+            auto* f = unaryFactor_[i];
+            const INDEX primal_offset = f->GetPrimalOffset();
+            for(INDEX x=0; x<f->size(); ++x) {
+               if(primal[primal_offset + x] == true) {
+                  s << x << ", ";
+               }
+            }
+         }
+         auto* f = unaryFactor_.back();
          const INDEX primal_offset = f->GetPrimalOffset();
          for(INDEX x=0; x<f->size(); ++x) {
             if(primal[primal_offset + x] == true) {
-               s << x << ", ";
+               s << x;
             }
-         }
-      }
-      auto* f = unaryFactor_.back();
-      const INDEX primal_offset = f->GetPrimalOffset();
-      for(INDEX x=0; x<f->size(); ++x) {
-         if(primal[primal_offset + x] == true) {
-            s << x;
          }
       }
    }

@@ -2,8 +2,8 @@
 #define LP_MP_SIMPLEX_FACTOR_HXX
 
 #include "LP_MP.h"
-#include "factors_messages.hxx"
-#include "const_array_types.h"
+//#include "factors_messages.hxx"
+//#include "const_array_types.h"
 
 // rename this class to SimplexFactor
 // Investigate contingency tables (Knuth) for more general tabular structures.
@@ -35,11 +35,9 @@ public:
    template<typename REPAM_ARRAY>
    static void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    {
-      // note: currently possibly also pairwise factors are called here, although this should not be made for SRMP style rounding
       INDEX min_element;
       REAL min_value = std::numeric_limits<REAL>::infinity();
       for(INDEX i=0; i<repam.size(); ++i) {
-         assert(primal[i] == unknownState);
          if(primal[i] == true) {
             return;
          } else if(primal[i] == false) {
@@ -141,10 +139,6 @@ public:
     lp->addLinearEquality(lhs,rhs);
   }
   
-   void WritePrimal(const INDEX primal, std::ofstream& fs) const
-   {
-      fs << primal;
-   }
 };
 
 } // end namespace LP_MP

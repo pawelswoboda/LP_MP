@@ -208,23 +208,26 @@ public:
       lp->addLinearEquality(lhs,rhs);
    }
 
-   typename std::enable_if<C == Chirality::right>
-   ComputeLeftFromRightPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right) 
+   template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = C == Chirality::left, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   typename std::enable_if<PROPAGATE_PRIMAL_TO_LEFT_TMP,void>::type
+   ComputeLeftFromRightPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
    {
       if(right[rightVar_] == true) { 
          left[leftVar_] = true;
-         // it would be nice to set all other entries to false
+         // do zrobienia: it would be nice to set all other entries to false
       } else if(right[rightVar_] == false) {
          left[leftVar_] = false;
       }
+
    }
 
-   typename std::enable_if<C == Chirality::left>
-   ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right)
+   template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = C == Chirality::right, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   typename std::enable_if<PROPAGATE_PRIMAL_TO_RIGHT_TMP,void>::type
+   ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
    {
       if(left[leftVar_] == true) { 
          right[rightVar_] = true;
-         // it would be nice to set all other entries to false
+         // do zrobienia: it would be nice to set all other entries to false
       } else if(left[leftVar_] == false) {
          right[rightVar_] = false;
       }

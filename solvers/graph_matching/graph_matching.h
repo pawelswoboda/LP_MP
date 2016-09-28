@@ -150,7 +150,8 @@ struct FMC_MCF {
 
    typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
    typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
-   typedef MessageContainer<UnaryToAssignmentMessageCS2<McfCoveringFactor>, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,Chirality::left>;
+   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor>;
    using MessageList = meta::list<
@@ -187,7 +188,8 @@ struct FMC_MCF_T {
 
    typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
    typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
-   typedef MessageContainer<UnaryToAssignmentMessageCS2<McfCoveringFactor>, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,Chirality::left>;
+   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
 
    typedef MessageContainer<PairwiseTriplet12Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 3> PairwiseTriplet12MessageContainer;
    typedef MessageContainer<PairwiseTriplet13Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 4> PairwiseTriplet13MessageContainer;
@@ -295,9 +297,10 @@ struct FMC_HUNGARIAN_BP {
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_PARAM, 1, false > UnaryFactor;
    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_PARAM, 2 > PairwiseFactor;
 
-   typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 1 > UnaryPairwiseMessageRight;
-   typedef MessageContainer<UnaryToAssignmentMessageCS2<McfCoveringFactor>, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_PARAM, 2> UnaryToAssignmentMessageContainer;
+   typedef MessageContainer<LeftMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 0 > UnaryPairwiseMessageLeft;
+   typedef MessageContainer<RightMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 1 > UnaryPairwiseMessageRight;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,Chirality::right>;
+   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_PARAM, 2> UnaryToAssignmentMessageContainer;
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor>;
    using MessageList = meta::list<
@@ -311,6 +314,51 @@ struct FMC_HUNGARIAN_BP {
    using mrfRight = mrf;
    using ProblemDecompositionList = meta::list<mrfLeft,mrfRight>;
 };
+
+template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left> // note: both sides makes no sense here
+struct FMC_HUNGARIAN_BP_T {
+   using FMC_PARAM = FMC_HUNGARIAN_BP_T<PAIRWISE_CONSTRUCTION>;
+
+   constexpr static const char* name =
+      PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left ? "HBP-O-T"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "HBP-I-T"
+      : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "HBP-B-T"
+      : "unknown variant"));
+      
+   constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
+
+   // rounding is done by the mcf factor
+   typedef FactorContainer<MinCostFlowFactorCS2, MinCostFlowReparametrizationStorageCS2, FMC_PARAM, 0, true > MinCostFlowAssignmentFactor;
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_PARAM, 1, false > UnaryFactor;
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_PARAM, 2 > PairwiseFactor;
+
+   typedef MessageContainer<LeftMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 0 > UnaryPairwiseMessageLeft;
+   typedef MessageContainer<RightMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 1 > UnaryPairwiseMessageRight;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,Chirality::right>;
+   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_PARAM, 2> UnaryToAssignmentMessageContainer;
+
+   // tightening
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_PARAM, 3 > EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTriplet12MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 3> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTriplet13MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 4> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTriplet23MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 5> PairwiseTriplet23MessageContainer;
+
+   using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor, EmptyTripletFactor>;
+   using MessageList = meta::list<
+       UnaryPairwiseMessageLeft,  
+       UnaryPairwiseMessageRight, 
+       UnaryToAssignmentMessageContainer,
+       PairwiseTriplet12MessageContainer, 
+       PairwiseTriplet13MessageContainer, 
+       PairwiseTriplet23MessageContainer 
+      >;
+
+   using mrf = StandardMrfConstructor<FMC_PARAM,1,2,0,1>;
+   using mrfLeft = mrf;
+   using mrfRight = mrf;
+   using ProblemDecompositionList = meta::list<mrfLeft,mrfRight>;
+};
+
 
 
 // helper function for extracting types from FMC
@@ -659,7 +707,7 @@ namespace TorresaniEtAlInput {
          demands.push_back(1);
       }
       for(INDEX i=0; i<no_right_nodes; ++i) {
-         edges.push_back({no_left_nodes + no_right_nodes, i, 0, 1, 0.0}); // for non-assignment
+         edges.push_back({no_left_nodes + no_right_nodes, no_left_nodes + i, 0, 1, 0.0}); // for non-assignment
          demands.push_back(-1);
       }
       edges.push_back({no_left_nodes + no_right_nodes, no_left_nodes + no_right_nodes + 1, 0, std::max(no_left_nodes, no_right_nodes), 0.0});
@@ -668,19 +716,24 @@ namespace TorresaniEtAlInput {
 
       auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
       auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
+      s.GetLP().AddFactor(f);
 
       // connect assignment factor with unaries
       if(pc == PairwiseConstruction::Left || pc == PairwiseConstruction::BothSides) {
          for(INDEX i=0; i<no_left_nodes; ++i) {
+            assert(mrf_left.GetNumberOfLabels(i) == mcf->NoArcs(i));
             auto *u = mrf_left.GetUnaryFactor(i);
-            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+            using MessageType = typename FMC::UnaryToAssignmentMessageType;
+            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
             s.GetLP().AddMessage(m);
          }
       }
       if(pc == PairwiseConstruction::Right || pc == PairwiseConstruction::BothSides) {
          for(INDEX i=0; i<no_right_nodes; ++i) {
+            assert(mrf_right.GetNumberOfLabels(i) == mcf->NoArcs(no_left_nodes + i));
             auto *u = mrf_right.GetUnaryFactor(i);
-            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->StartingArc(i + no_left_nodes), mcf->NoArcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
+            using MessageType = typename FMC::UnaryToAssignmentMessageType;
+            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i + no_left_nodes), mcf->NoArcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
             s.GetLP().AddMessage(m);
          }
       }
@@ -985,7 +1038,8 @@ namespace UaiGraphMatchingInput {
 
       for(INDEX i=0; i<no_left_nodes; ++i) {
          auto *u = mrf_left.GetUnaryFactor(i);
-         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+         using MessageType = typename FMC::UnaryToAssignmentMessageType;
+         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
          s.GetLP().AddMessage(m);
       }
 
@@ -1263,13 +1317,15 @@ namespace UaiGraphMatchingInput {
       demands.push_back(-no_left_nodes);
 
       auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
+      s.GetLP().AddFactor(f);
       auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
 
       // do zrobienia: is this correct? this means that all labels have been used in constraints
       // connect assignment factor with unaries
       for(INDEX i=0; i<no_left_nodes; ++i) {
          auto *u = mrf_left.GetUnaryFactor(i);
-         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+         using MessageType = typename FMC::UnaryToAssignmentMessageType;
+         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
          s.GetLP().AddMessage(m);
       }
    }
