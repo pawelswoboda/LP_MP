@@ -656,7 +656,7 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
       // do zrobienia: let the factor below be variable and specified on the command line
       // better for rounding
       if((*factorIt)->FactorUpdated()) {
-         omega.push_back(std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 0.001) ));
+         omega.push_back(std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() ) ));
       }
       //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 1.0) );
       // better for dual convergence

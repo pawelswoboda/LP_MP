@@ -10,15 +10,25 @@ namespace LP_MP {
     LpVariable() : index(0),coeff(0) {}
     LpVariable(INDEX idx,REAL obj) : index(idx),coeff(obj) {}
 
+    // can be removed
+    /*
     LpVariable operator* (REAL value){
       coeff = value;
       return *this;
     }
+    */
     
     INDEX index;
     REAL coeff;
   };
-    
+
+  inline LpVariable operator*(REAL lhs, LpVariable rhs)
+  {
+     rhs.coeff *= lhs;
+     return rhs;
+  }
+  // to do: other operator overloading operations
+
   class LinExpr {
   public:
     LinExpr(){};

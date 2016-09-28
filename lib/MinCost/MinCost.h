@@ -71,11 +71,13 @@ public:
    // functions added by Paul Swoboda //
    FlowType GetFlow(EdgeId e) const
    {
-      assert(0 <= e && e < edgeNumMax);
+      assert(0 <= e && e < 2*edgeNumMax);
       const FlowType ub = cap[e];
       const FlowType lb = cap[N_arc(arcs[e].sister)];
       const FlowType r_cap = GetRCap(e);
       //std::cout << "ub = " << ub << ", residual capacity = " << r_cap << ", lb = " << lb << ", reverse residual capacity = " << reverse_r_cap << std::endl;
+      return ub - r_cap;
+      /*
       FlowType delta;
       if(ub < 0) {
          delta += ub;
@@ -85,6 +87,7 @@ public:
          delta = 0;
       }
       return ub + delta - r_cap;
+      */
    }
    FlowType ExcessSum() const
    {
@@ -534,7 +537,7 @@ template <typename FlowType, typename CostType>
 template <typename FlowType, typename CostType> 
 	inline void SSP<FlowType, CostType>::UpdateCost(EdgeId e, CostType delta)
 {
-   assert(0<=e && e<edgeNum);
+   assert(0<=e && e<2*edgeNum);
 	Arc* a = &arcs[e];
 	cost += delta*(cap[e]-a->r_cap);
 	a->cost += delta;
@@ -711,10 +714,20 @@ template <typename FlowType, typename CostType>
 template<typename FlowType, typename CostType>
 void SSP<FlowType, CostType>::ExchangeArcs(Arc& a, Arc&b)
 {
-   std::swap(a, b);
-   std::swap(cap[N_arc(&a)], cap[N_arc(&b)]);
-   a.sister->sister = &a;
-   b.sister->sister = &b;
+   if(a.sister != &b) {
+      assert(b.sister != &a);
+      std::swap(a, b);
+      std::swap(cap[N_arc(&a)], cap[N_arc(&b)]);
+      a.sister->sister = &a;
+      b.sister->sister = &b;
+   } else {
+      assert(a.sister == &b && b.sister == &a);
+      std::swap(a, b);
+      std::swap(cap[N_arc(&a)], cap[N_arc(&b)]);
+      // restore sister pointers
+      a.sister = &b;
+      b.sister = &a;
+   }
 }
 
 // sort arcs lexicographically.

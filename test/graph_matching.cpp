@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include <string>
-#include <cstdio>
 #include <fstream>
 #include "solver.hxx"
 #include "visitors/standard_visitor.hxx"
@@ -52,6 +51,7 @@ matching
 2 0 1 slack
 )";
 
+// to do: devise harder test instances which need more iterations to converge
 
 std::vector<std::string> solver_options = {
    {"graph matching test"},
@@ -71,10 +71,12 @@ using FMC_MCF_BOTH_SIDES = FMC_MCF<PairwiseConstruction::BothSides>;
 using FMC_MP_LEFT = FMC_MP<PairwiseConstruction::Left>;
 using FMC_MP_RIGHT = FMC_MP<PairwiseConstruction::Right>;
 using FMC_MP_BOTH_SIDES = FMC_MP<PairwiseConstruction::BothSides>;
+using FMC_HUNGARIAN_BP_LEFT = FMC_HUNGARIAN_BP<PairwiseConstruction::Left>;
+using FMC_HUNGARIAN_BP_RIGHT = FMC_HUNGARIAN_BP<PairwiseConstruction::Right>;
+using FMC_HUNGARIAN_BP_BOTH_SIDES = FMC_HUNGARIAN_BP<PairwiseConstruction::BothSides>;
 
 using VisitorType = StandardVisitor;
 
-/*
    SECTION("input in format used by Torresani et al") {
 
       std::string tmp_file_name = std::tmpnam(nullptr);
@@ -92,57 +94,74 @@ using VisitorType = StandardVisitor;
       const REAL opt_val = 2.0;
 
       SECTION( "mp left" ) {
-         VisitorSolver<Solver<FMC_MP_LEFT>,VisitorType> s(torresani_options);
+         VisitorSolver<MpRoundingSolver<FMC_MP_LEFT>,VisitorType> s(torresani_options);
          s.ReadProblem(TorresaniEtAlInput::ParseProblemMP<FMC_MP_LEFT>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
       }
       SECTION( "mp right" ) {
-         VisitorSolver<Solver<FMC_MP_RIGHT>,VisitorType> s(torresani_options);
+         VisitorSolver<MpRoundingSolver<FMC_MP_RIGHT>,VisitorType> s(torresani_options);
          s.ReadProblem(TorresaniEtAlInput::ParseProblemMP<FMC_MP_RIGHT>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
       }
       SECTION( "mp both sides" ) {
-         VisitorSolver<Solver<FMC_MP_BOTH_SIDES>,VisitorType> s(torresani_options);
+         VisitorSolver<MpRoundingSolver<FMC_MP_BOTH_SIDES>,VisitorType> s(torresani_options);
          s.ReadProblem(TorresaniEtAlInput::ParseProblemMP<FMC_MP_BOTH_SIDES>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
       }
       SECTION( "mcf left" ) {
-         VisitorSolver<Solver<FMC_MCF_LEFT>,VisitorType> s(torresani_options);
+         VisitorSolver<MpRoundingSolver<FMC_MCF_LEFT>,VisitorType> s(torresani_options);
          s.ReadProblem(TorresaniEtAlInput::ParseProblemMCF<FMC_MCF_LEFT>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
       }
       SECTION( "mcf right" ) {
-         VisitorSolver<Solver<FMC_MCF_RIGHT>,VisitorType> s(torresani_options);
+         VisitorSolver<MpRoundingSolver<FMC_MCF_RIGHT>,VisitorType> s(torresani_options);
          s.ReadProblem(TorresaniEtAlInput::ParseProblemMCF<FMC_MCF_RIGHT>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
       }
       SECTION( "mcf both sides" ) {
-         VisitorSolver<Solver<FMC_MCF_BOTH_SIDES>,VisitorType> s(torresani_options);
+         VisitorSolver<MpRoundingSolver<FMC_MCF_BOTH_SIDES>,VisitorType> s(torresani_options);
          s.ReadProblem(TorresaniEtAlInput::ParseProblemMCF<FMC_MCF_BOTH_SIDES>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
       }
       SECTION( "gm left" ) {
-         VisitorSolver<Solver<FMC_GM_LEFT>,VisitorType> s(torresani_options);
+         VisitorSolver<MpRoundingSolver<FMC_GM_LEFT>,VisitorType> s(torresani_options);
          s.ReadProblem(TorresaniEtAlInput::ParseProblemGM<FMC_GM_LEFT>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
       }
       SECTION( "gm right" ) {
-         VisitorSolver<Solver<FMC_GM_RIGHT>,VisitorType> s(torresani_options);
+         VisitorSolver<MpRoundingSolver<FMC_GM_RIGHT>,VisitorType> s(torresani_options);
          s.ReadProblem(TorresaniEtAlInput::ParseProblemGM<FMC_GM_RIGHT>);
+         s.Solve();
+         REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
+      }
+      SECTION( "hungarian bp left" ) {
+         VisitorSolver<MpRoundingSolver<FMC_HUNGARIAN_BP_LEFT>,VisitorType> s(torresani_options);
+         s.ReadProblem(TorresaniEtAlInput::ParseProblemMCF<FMC_HUNGARIAN_BP_LEFT>);
+         s.Solve();
+         REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
+      }
+      SECTION( "hungarian bp right" ) {
+         VisitorSolver<MpRoundingSolver<FMC_HUNGARIAN_BP_RIGHT>,VisitorType> s(torresani_options);
+         s.ReadProblem(TorresaniEtAlInput::ParseProblemMCF<FMC_HUNGARIAN_BP_RIGHT>);
+         s.Solve();
+         REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
+      }
+      SECTION( "hungarian bp both sides" ) {
+         VisitorSolver<MpRoundingSolver<FMC_HUNGARIAN_BP_BOTH_SIDES>,VisitorType> s(torresani_options);
+         s.ReadProblem(TorresaniEtAlInput::ParseProblemMCF<FMC_HUNGARIAN_BP_BOTH_SIDES>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - -opt_val) < LP_MP::eps);
       }
 
       std::remove(tmp_file_name.c_str());
    }
-   */
 
    SECTION("input in uai format") {
 
@@ -161,20 +180,26 @@ using VisitorType = StandardVisitor;
       const REAL opt_val = 0.833;
 
       SECTION( "mp left" ) {
-         VisitorSolver<Solver<FMC_MP_LEFT>,VisitorType> s(uai_options);
+         VisitorSolver<MpRoundingSolver<FMC_MP_LEFT>,VisitorType> s(uai_options);
          s.ReadProblem(UaiGraphMatchingInput::ParseProblemMP<FMC_MP_LEFT>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - opt_val) < LP_MP::eps);
       }
       SECTION( "mcf left" ) {
-         VisitorSolver<Solver<FMC_MCF_LEFT>,VisitorType> s(uai_options);
+         VisitorSolver<MpRoundingSolver<FMC_MCF_LEFT>,VisitorType> s(uai_options);
          s.ReadProblem(UaiGraphMatchingInput::ParseProblemMCF<FMC_MCF_LEFT>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - opt_val) < LP_MP::eps);
       }
       SECTION( "gm left" ) {
-         VisitorSolver<Solver<FMC_GM_LEFT>,VisitorType> s(uai_options);
+         VisitorSolver<MpRoundingSolver<FMC_GM_LEFT>,VisitorType> s(uai_options);
          s.ReadProblem(UaiGraphMatchingInput::ParseProblemGM<FMC_GM_LEFT>);
+         s.Solve();
+         REQUIRE(std::abs(s.lower_bound() - opt_val) < LP_MP::eps);
+      }
+      SECTION( "hungarian bp left" ) {
+         VisitorSolver<MpRoundingSolver<FMC_HUNGARIAN_BP_LEFT>,VisitorType> s(uai_options);
+         s.ReadProblem(UaiGraphMatchingInput::ParseProblemMCF<FMC_HUNGARIAN_BP_LEFT>);
          s.Solve();
          REQUIRE(std::abs(s.lower_bound() - opt_val) < LP_MP::eps);
       }

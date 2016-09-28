@@ -2,6 +2,7 @@
 #define LP_MP_EQUALITY_MESSAGE
 
 #include "config.hxx"
+#include <type_traits>
 
 namespace LP_MP {
 
@@ -9,6 +10,7 @@ namespace LP_MP {
 // assume FactorType is Simplex. 
 // do zrobienia: or multiplex
 // do zrobienia: use breakpoINDEX cost for message updates
+template<Chirality C>
 class EqualityMessage 
 {
 public:
@@ -61,7 +63,7 @@ public:
       if(rightPrimal[rightVar_] == false) {
          msg[0] -= std::numeric_limits<REAL>::infinity();
       } else if(rightPrimal[rightVar_] == true) {
-         msg[0] += std::numeric_limits<REAL>::infinity();
+         msg[0] -= -std::numeric_limits<REAL>::infinity();
       }
    }
 
@@ -71,7 +73,7 @@ public:
       if(leftPrimal[leftVar_] == false) {
          msg[0] -= std::numeric_limits<REAL>::infinity();
       } else if(leftPrimal[leftVar_] == true) {
-         msg[0] += std::numeric_limits<REAL>::infinity();
+         msg[0] -= -std::numeric_limits<REAL>::infinity();
       }
    }
    /*
@@ -206,23 +208,26 @@ public:
       lp->addLinearEquality(lhs,rhs);
    }
 
-   /*
-   void ComputeLeftFromRightPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right) 
+   template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = C == Chirality::left, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   typename std::enable_if<PROPAGATE_PRIMAL_TO_LEFT_TMP,void>::type
+   ComputeLeftFromRightPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
    {
       if(right[rightVar_] == true) { 
          left[leftVar_] = true;
-         // it would be nice to set all other entries to false
+         // do zrobienia: it would be nice to set all other entries to false
       } else if(right[rightVar_] == false) {
          left[leftVar_] = false;
       }
-   }
-   */
 
-   void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, PrimalSolutionStorage::Element right)
+   }
+
+   template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = C == Chirality::right, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   typename std::enable_if<PROPAGATE_PRIMAL_TO_RIGHT_TMP,void>::type
+   ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
    {
       if(left[leftVar_] == true) { 
          right[rightVar_] = true;
-         // it would be nice to set all other entries to false
+         // do zrobienia: it would be nice to set all other entries to false
       } else if(left[leftVar_] == false) {
          right[rightVar_] = false;
       }

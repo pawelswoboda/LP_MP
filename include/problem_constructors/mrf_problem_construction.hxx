@@ -28,13 +28,7 @@ public:
 
 
    MRFProblemConstructor(Solver<FMC>& solver) : lp_(&solver.GetLP()) {}
-   // do zrobienia: this object is not movable
-   /*
-   MRFProblemConstructor(const MRFProblemConstructor& other)
-   {
-      assert(false);
-   }
-   */
+
    virtual UnaryFactorType ConstructUnaryFactor(const std::vector<REAL>& cost) = 0;
    virtual PairwiseFactorType ConstructPairwiseFactor(const std::vector<REAL>& cost, const INDEX leftDim, const INDEX rightDim) = 0;
    virtual RightMessageType ConstructRightUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
@@ -93,22 +87,7 @@ public:
 
       return p;
    }
-   /*
-   void LinkLeftUnaryPairwiseFactor(UnaryFactorContainer* const left, PairwiseFactorContainer* const p, LeftMessageType msg)
-   {
-      //assert(false); // left->size need not be msg size. Use instead message size
-      auto* m = new LeftMessageContainer(msg, left, p, left->size());
-      leftMessage_.push_back(m);
-      lp_->AddMessage(m);
-   }
-   void LinkRightUnaryPairwiseFactor(UnaryFactorContainer* const right, PairwiseFactorContainer* const p, RightMessageType msg)
-   {
-      //assert(false); // left->size need not be msg size. Use instead message size
-      auto* m = new RightMessageContainer(msg, right, p, right->size());
-      rightMessage_.push_back(m);
-      lp_->AddMessage(m);
-   }
-   */
+
    void LinkUnaryPairwiseFactor(UnaryFactorContainer* const left, PairwiseFactorContainer* const p, UnaryFactorContainer* right)
    {
       auto* l = new LeftMessageContainer(ConstructLeftUnaryPairwiseMessage(left, p), left, p, left->size());
@@ -117,25 +96,6 @@ public:
       auto* r = new RightMessageContainer(ConstructRightUnaryPairwiseMessage(right, p), right, p, right->size());
       rightMessage_.push_back(r);
       lp_->AddMessage(r);
-      /*
-      using LeftUnaryLoopType = typename LeftMessageType::LeftLoopType;
-      using LeftPairwiseLoopType = typename LeftMessageType::RightLoopType;
-      using RightUnaryLoopType = typename RightMessageType::LeftLoopType;
-      using RightPairwiseLoopType = typename RightMessageType::RightLoopType;
-
-      const INDEX leftDim = left->size();
-      const INDEX rightDim = right->size();
-      if(leftDim*rightDim != p->size()) throw std::runtime_error("dimensions for pairwise potential do not match");
-
-      LeftUnaryLoopType leftUnaryLoop(leftDim);
-      RightUnaryLoopType rightUnaryLoop(rightDim);
-      std::array<INDEX,2> pairwiseDim = {{leftDim, rightDim}};
-      LeftPairwiseLoopType leftPairwiseLoop( pairwiseDim );
-      RightPairwiseLoopType rightPairwiseLoop( pairwiseDim );
-
-      LinkLeftUnaryPairwiseFactor(left, p, LeftMessageType(leftUnaryLoop, leftPairwiseLoop));
-      LinkRightUnaryPairwiseFactor(right, p, RightMessageType(rightUnaryLoop, rightPairwiseLoop));
-      */
    }
 
 
@@ -191,24 +151,29 @@ public:
       }
 
       assert(pairwiseIndices_.size() == pairwiseFactor_.size());
-      /*
-      auto pairwiseFactorIt = pairwiseFactor_.begin();
-      auto pairwiseIndicesIt = pairwiseIndices_.begin();
-      for(; pairwiseFactorIt != pairwiseFactor_.end(); ++pairwiseFactorIt, ++pairwiseIndicesIt) {
-         const INDEX i = std::get<0>(*pairwiseIndicesIt);
-         const INDEX j = std::get<1>(*pairwiseIndicesIt);
-         lp->AddFactorRelation(unaryFactor_[i], *pairwiseFactorIt);
-         lp->AddFactorRelation(*pairwiseFactorIt, unaryFactor_[j]);
+   }
+
+   template<typename STREAM>
+   void WritePrimal(STREAM& s, PrimalSolutionStorage& primal) const 
+   {
+      if(unaryFactor_.size() > 0) {
+         for(INDEX i=0; i<unaryFactor_.size(); ++i) {
+            auto* f = unaryFactor_[i];
+            const INDEX primal_offset = f->GetPrimalOffset();
+            for(INDEX x=0; x<f->size(); ++x) {
+               if(primal[primal_offset + x] == true) {
+                  s << x << ", ";
+               }
+            }
+         }
+         auto* f = unaryFactor_.back();
+         const INDEX primal_offset = f->GetPrimalOffset();
+         for(INDEX x=0; x<f->size(); ++x) {
+            if(primal[primal_offset + x] == true) {
+               s << x;
+            }
+         }
       }
-      */
-      /*
-      for(LeftMessageContainer* messageIt : leftMessage_) {
-         lp->AddMessage(messageIt);
-      }
-      for(RightMessageContainer* messageIt : rightMessage_) {
-         lp->AddMessage(messageIt);
-      }
-      */
    }
 
 protected:

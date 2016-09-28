@@ -111,7 +111,7 @@ PROJECTIONS
    };
 
    VisitorSolver<Solver<FMC_DT>,StandardVisitor> s(options);
-   s.ReadProblem(DiscreteTomographyTextInput::ParseProblem);
+   s.ReadProblem(DiscreteTomographyTextInput::ParseProblem<FMC_DT>);
    s.Solve();
    REQUIRE(s.lower_bound() >= 0);
 
