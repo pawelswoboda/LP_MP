@@ -533,9 +533,10 @@ namespace TorresaniEtAlInput {
       // always assume that node1 < node2 in q
       //assert(node1 != node2);
       if(node1 == node2) {
-         std::cout << "This value is not useful, due to matching constraint\n";
+         std::cout << "This value is not useful, due to matching constraint: " << cost << "\n";
          cost = 1e10;
       }
+
       if(node1>node2) {
          std::swap(node1,node2);
          std::swap(index1,index2);

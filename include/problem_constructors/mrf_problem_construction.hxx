@@ -391,11 +391,14 @@ public:
          std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (k projection graph)\n";
          noTripletsAdded += noTripletsAddedByCycle;
 
+         // does not work currently
+         /*
          if(noTripletsAdded < noTripletsToAdd) {
             const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, projection_imap, partition_imap, cycle_set, 2);
             std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (full projection graph)\n";
             noTripletsAdded += noTripletsAddedByCycle;
          }
+         */
 
          std::cout << this->GetNumberOfVariables() << "\n";
          std::cout << this->GetNumberOfPairwiseFactors() << "\n";

@@ -6,7 +6,11 @@ SET(SOURCE_FILES
    hungarian_bp_left.cpp hungarian_bp_right.cpp hungarian_bp_both_sides.cpp hungarian_bp_uai.cpp
 
    # with frustrated cycle tightening
-   graph_matching_via_mp_tightening_uai.cpp graph_matching_via_mcf_tightening_uai.cpp graph_matching_via_gm_tightening_uai.cpp
+   graph_matching_via_mp_left_tightening.cpp graph_matching_via_mp_right_tightening.cpp graph_matching_via_mp_both_sides_tightening.cpp 
+   graph_matching_via_mcf_left_tightening.cpp graph_matching_via_mcf_right_tightening.cpp graph_matching_via_mcf_both_sides_tightening.cpp 
+   graph_matching_via_gm_left_tightening.cpp graph_matching_via_gm_right_tightening.cpp 
+   graph_matching_via_mp_uai_tightening.cpp graph_matching_via_mcf_uai_tightening.cpp graph_matching_via_gm_uai_tightening.cpp
+   hungarian_bp_left_tightening.cpp hungarian_bp_right_tightening.cpp hungarian_bp_both_sides_tightening.cpp hungarian_bp_uai_tightening.cpp
 
    # lp solver
    )

@@ -8,6 +8,7 @@
 #include "tclap/CmdLine.h"
 #include "lp_interface/lp_interface.h"
 #include "boost/hana.hpp"
+#include <fstream>
 
 namespace LP_MP {
 
