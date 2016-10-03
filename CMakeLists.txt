@@ -15,7 +15,7 @@ OPTION(BUILD_TESTS "Build tests" ON)
 OPTION(WITH_GUROBI "LP interface to gurobi" OFF)
 
 if(DOWNLOAD_DEPENDENCIES)
-   # download external projects here
+   # download external projects here 
    project(DOWNLOAD_DEPENDENCIES_PROJECT NONE)
    include(cmake/SuperBuild.cmake)
    return()

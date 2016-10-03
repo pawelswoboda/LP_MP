@@ -8,6 +8,8 @@
 #include <gurobi_c++.h>
 #elif USE_CPLEX
 #include <ilcplex/ilocplex.h>
+#elif USE_LOCALSOLVER
+#include "localsolver.h"
 #else
 #include "lp_auxiliary.hxx"
 #endif
@@ -20,6 +22,9 @@ namespace LP_MP {
 #elif USE_CPLEX
   typedef IloNumVar LpVariable;
   typedef IloNumExpr LinExpr;
+#elif USE_LOCALSOLVER
+  typedef localsolver::LSExpression LpVariable;
+  typedef localsolver::LSExpression LinExpr;
 #endif
 
     
@@ -32,11 +37,11 @@ namespace LP_MP {
     LpInterfaceAdapter(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool integer = true)
     { } 
     
-    virtual LinExpr CreateLinExpr() const = 0;
+    virtual LinExpr CreateLinExpr() = 0;
     
     virtual INDEX GetFactorSize() const = 0;
     virtual INDEX GetLeftFactorSize() const = 0;
-    virtual INDEX GetRightFactorSize() const = 0;
+    virtual INDEX GetRightFactorSize() const = 0; 
     
     virtual LpVariable GetVariable(const INDEX i) const = 0;
     virtual LpVariable GetLeftVariable(const INDEX i) const = 0;

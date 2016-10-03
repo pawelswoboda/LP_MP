@@ -43,7 +43,7 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/CS2_CPP_Pro
 # manually downloaded repositories of Kolmogorov's code. How to automate?
 #add_subdirectory(lib/MinCost)
 
-# HDF5 for reading OpenGM and Andres models
+# HDF5 for reading OpenGM and Andres models 
 find_package(HDF5 1.8.15 REQUIRED)
 #find_package(HDF5 NAMES hdf5 )
 #find_package (HDF5 NAMES hdf5 COMPONENTS C static)
@@ -61,6 +61,12 @@ OPTION(WITH_CPLEX "Activate CPLEX-Code" OFF)
 if(WITH_CPLEX)
   find_package(Cplex)
 endif(WITH_CPLEX)
+
+# LOCALSOLVER
+OPTION(WITH_LOCALSOLVER "Activate LocalSolver-Code" OFF)
+if(WITH_LOCALSOLVER)
+  find_package(LocalSolver)
+endif(WITH_LOCALSOLVER)
 
 IF(UNIX AND NOT APPLE)
    find_library(TR rt)
