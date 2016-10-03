@@ -56,6 +56,7 @@ namespace LP_MP {
     virtual void SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer = false) = 0;
     virtual void SetTimeLimit(REAL t) = 0;
     virtual void SetNumberOfThreads(INDEX t) = 0;
+    virtual void SetDisplayLevel(INDEX t) = 0;
     
     virtual void addLinearEquality(LinExpr lhs,LinExpr rhs) = 0;
     virtual void addLinearInequality(LinExpr lhs,LinExpr rhs) = 0;

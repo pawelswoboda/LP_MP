@@ -43,8 +43,6 @@ namespace LP_MP {
         types_1.resize(noVars_,GRB_CONTINUOUS);
       }
       std::vector<char> types_2(noAuxVars_,GRB_CONTINUOUS);
-      //std::cout << "remove INTEGER again: auxiliary variables should be continuous!\n";
-      //std::vector<char> types_2(noAuxVars_,GRB_INTEGER);
       MainVars_ = model_.addVars(NULL,NULL,&obj_1[0],&types_1[0],NULL,noVars_);
       if( noAuxVars_ > 0){
         MainAuxVars_ = model_.addVars(NULL,NULL,&obj_2[0],&types_2[0],NULL,noAuxVars_);
@@ -72,7 +70,7 @@ namespace LP_MP {
         }
         factorIt->CreateConstraints(this);
       }
-      printf("Reparametrization fixed %d variables\n",fixedVars);
+      //printf("Reparametrization fixed %d variables\n",fixedVars);
 
       /* Add Message Constraints */
       for(auto messageIt = messageBegin; messageIt != messageEnd; ++messageIt) {
@@ -120,6 +118,7 @@ namespace LP_MP {
     void SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer = false);
     void SetTimeLimit(REAL t){ model_.getEnv().set(GRB_DoubleParam_TimeLimit,t); }
     void SetNumberOfThreads(INDEX t){ model_.getEnv().set(GRB_IntParam_Threads,t); };
+    void SetDisplayLevel(INDEX t){ assert(t <= 1); model_.getEnv().set(GRB_IntParam_OutputFlag,t); };
     
     void addLinearEquality(LinExpr lhs,LinExpr rhs);
     void addLinearInequality(LinExpr lhs,LinExpr rhs);
@@ -158,11 +157,14 @@ namespace LP_MP {
 
       model_.optimize();
       auto stat = model_.get(GRB_IntAttr_Status);
-      std::cout << "Gurobi Status: " << stat << std::endl;
-      if(stat == GRB_OPTIMAL){
+      //std::cout << "Gurobi Status: " << stat << std::endl;
+      if(stat == GRB_OPTIMAL ){
         status = 0;
       }
-      if(stat == GRB_INFEASIBLE){
+      else if(model_.get(GRB_IntAttr_SolCount) > 0){
+        status = 3;
+      }
+      else if(stat == GRB_INFEASIBLE){
         status = 1;
       }
       

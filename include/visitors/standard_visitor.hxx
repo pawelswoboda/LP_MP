@@ -132,9 +132,9 @@ namespace LP_MP {
             if(c.computeLowerBound) {
                std::cout << ", lower bound = " << lowerBound;
             }
-            if(c.computePrimal) {
+            //if(c.computePrimal) {
                std::cout << ", upper bound = " << primalBound;
-            }
+            //}
             std::cout << ", time elapsed = " << timeElapsed << "\n";
          }
          if(c.end == true) {

@@ -64,7 +64,7 @@ namespace LP_MP {
         }
         factorIt->CreateConstraints(this);
       }
-      printf("Reparametrization fixed %d variables\n",fixedVars);
+      //printf("Reparametrization fixed %d variables\n",fixedVars);
       IloObjective obj = IloMinimize(env_);
       obj.setLinearCoefs(MainVars_, ObjValues);
       model_.add(obj);
@@ -116,6 +116,11 @@ namespace LP_MP {
     void SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer = false);
     void SetTimeLimit(REAL t){ cplex_.setParam(IloCplex::TiLim,t); }
     void SetNumberOfThreads(INDEX t){ cplex_.setParam(IloCplex::Threads,t); };
+    void SetDisplayLevel(INDEX t){ 
+      assert(t <= 1); 
+      //cplex_.setParam(IloCplex::TuningDisplay,t);
+      if( t == 0){ cplex_.setOut(env_.getNullStream()); }
+    };
     
     void addLinearEquality(LinExpr lhs,LinExpr rhs);
     void addLinearInequality(LinExpr lhs,LinExpr rhs);
@@ -153,11 +158,14 @@ namespace LP_MP {
     try{
       cplex_.solve();
       auto stat = cplex_.getCplexStatus();
-      std::cout << "Cplex Status: " << stat << std::endl;
+      //std::cout << "Cplex Status: " << stat << std::endl;
       if(stat == CPX_STAT_OPTIMAL){
         status = 0;
       }
-      if(stat == CPX_STAT_INFEASIBLE){
+      else if(cplex_.getSolnPoolNsolns() > 0){
+        status = 3;
+      }
+      else if(stat == CPX_STAT_INFEASIBLE){
         status = 1;
       }
     }
