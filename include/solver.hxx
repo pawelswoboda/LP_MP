@@ -18,11 +18,6 @@ namespace LP_MP {
 
 namespace hana = boost::hana; // put this somewhere more central
 
-  std::mutex RegisterPrimalMutex;
-  std::mutex BuildLpMutex;
-  std::mutex UpdateUbLpMutex;
-  std::condition_variable WakeLpSolverCond;
-
 // class containing the LP, problem constructor list, input function
 // takes care of logging
 // binds together problem constructors and solver and organizes input/output
@@ -298,6 +293,7 @@ protected:
    REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
    PrimalSolutionStorage bestPrimal_; // these vectors are stored in the order of forwardOrdering_
 
+   std::mutex RegisterPrimalMutex;
 };
 
 // local rounding interleaved with message passing 
@@ -595,6 +591,10 @@ private:
   TCLAP::SwitchArg RELAX_;
   //TCLAP::SwitchArg EXPORT_;
   
+  std::mutex BuildLpMutex;
+  std::mutex UpdateUbLpMutex;
+  std::condition_variable WakeLpSolverCond;
+
 };
 
   // solver for rounding with standard (I)LP-solver
