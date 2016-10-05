@@ -10,16 +10,12 @@ namespace LP_MP {
 
     LpInterfaceCplex(INDEX noVars) : env_(IloEnv()),model_(IloModel(env_)),noVars_(noVars) {
       MainVars_ = IloNumVarArray(env_,noVars_,0.0,1.0,LpVariable::Float);
-      //cplex_ = IloCplex(model_);
     }
     
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
     LpInterfaceCplex(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool MIP = true)
       : env_(IloEnv()),model_(IloModel(env_)) {
 
-      // Standard Parameter for Cplex
-      //model_.getEnv().set(GRB_DoubleParam_TimeLimit,3600);
-      //model_.getEnv().set(GRB_IntParam_Threads,1);
       
       noVars_ = 0;
       noAuxVars_ = 0;
@@ -39,7 +35,7 @@ namespace LP_MP {
       }
       model_.add(MainVars_);
       if( noAuxVars_ > 0){
-        MainAuxVars_ = IloNumVarArray(env_,noAuxVars_,0.0,IloInfinity,LpVariable::Float);
+        MainAuxVars_ = IloNumVarArray(env_,noAuxVars_,-IloInfinity,IloInfinity,LpVariable::Float);
         model_.add(MainAuxVars_);
       }
 
@@ -95,7 +91,7 @@ namespace LP_MP {
       }
     }
     
-    LinExpr CreateLinExpr() const { return LinExpr(env_); }
+    LinExpr CreateLinExpr() { return LinExpr(env_); }
     
     INDEX GetFactorSize() const { return size_; }
     INDEX GetLeftFactorSize() const { return leftSize_; }
@@ -167,6 +163,9 @@ namespace LP_MP {
       }
       else if(stat == CPX_STAT_INFEASIBLE){
         status = 1;
+      }
+      else if(stat == CPX_STAT_ABORT_TIME_LIM){
+        status = 4;
       }
     }
     catch (IloException& e) {

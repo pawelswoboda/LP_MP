@@ -146,7 +146,7 @@ namespace LP_MP{
         
         REAL value = repam[u] + repam[upSize_+l] + repam[upSize_+leftSize_+r] + repam[upSize_+leftSize_+rightSize_+p];
         if(value >= lb + epsi){
-          lp->SetVariableBound(lp->GetAuxVariable(i + j*leftSize_),0.0,0.0,false);
+          lp->SetVariableBound(lp->GetAuxVariable(i + j*leftSize_),0.0,0.0);
         }        
       }
     }    
@@ -186,6 +186,7 @@ namespace LP_MP{
           INDEX z = xz(i) + xz(j);
           if( z < z_max ){
             var = lp->GetAuxVariable(i + j*leftSize_);
+            lp->SetVariableBound(var,0.0,1.0);
             
             INDEX a = xa(i);
             INDEX b = xb(j);

@@ -516,13 +516,21 @@ public:
             }
             
             std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
-            // if solution found, decrease number of variables  
+            // if solution found, decrease number of variables
+            std::cout << "feas decrease" << std::endl;
             VariableThreshold *= 0.75;
             ub = std::min(ub,solver.GetObjectiveValue());
-          } else {
+          }
+          else if( status == 4){ // hit the timelimit
+            std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
+            VariableThreshold *= 0.6;
+            std::cout << "time decrease" << std::endl;
+          }
+          else {
             std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
             // if ilp infeasible, increase number of variables
-            VariableThreshold *= 1.2;
+            std::cout << "infeas increase" << std::endl;
+            VariableThreshold *= 1.3;
           }
           if(LPOnly_.getValue() || RELAX_.getValue()){
             break;

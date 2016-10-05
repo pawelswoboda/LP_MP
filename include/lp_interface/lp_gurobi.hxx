@@ -12,7 +12,8 @@ namespace LP_MP {
     LpInterfaceGurobi(INDEX noVars) : env_(GRBEnv()),model_(GRBModel(env_)),noVars_(noVars),epsilon_(std::numeric_limits<REAL>::infinity()) {
       std::vector<double> obj(noVars_,1);
       std::vector<char> types(noVars_,GRB_INTEGER);
-      MainVars_ = model_.addVars(NULL,NULL,&obj[0],&types[0],NULL,noVars_);
+      std::vector<REAL> lb(noVars_,-std::numeric_limits<REAL>::infinity());
+      MainVars_ = model_.addVars(&lb[0],NULL,&obj[0],&types[0],NULL,noVars_);
     }
     
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
@@ -34,7 +35,7 @@ namespace LP_MP {
         preAuxVars = noAuxVars_;
         noFactors++;
       }
-      std::vector<double> obj_1(noVars_,1);
+      std::vector<double> obj_1(noVars_,1.0);
       std::vector<double> obj_2(noAuxVars_,0.0);
       std::vector<char> types_1;
       if(MIP){
@@ -45,7 +46,8 @@ namespace LP_MP {
       std::vector<char> types_2(noAuxVars_,GRB_CONTINUOUS);
       MainVars_ = model_.addVars(NULL,NULL,&obj_1[0],&types_1[0],NULL,noVars_);
       if( noAuxVars_ > 0){
-        MainAuxVars_ = model_.addVars(NULL,NULL,&obj_2[0],&types_2[0],NULL,noAuxVars_);
+        std::vector<REAL> lb (noAuxVars_,-std::numeric_limits<REAL>::infinity());
+        MainAuxVars_ = model_.addVars(&lb[0],NULL,&obj_2[0],&types_2[0],NULL,noAuxVars_);
       }
       model_.update();
 
@@ -97,7 +99,7 @@ namespace LP_MP {
       model_.update();
     }
     
-    LinExpr CreateLinExpr() const { return LinExpr(); }
+    LinExpr CreateLinExpr() { return LinExpr(); }
     
     INDEX GetFactorSize() const { return size_; }
     INDEX GetLeftFactorSize() const { return leftSize_; }
@@ -166,6 +168,9 @@ namespace LP_MP {
       }
       else if(stat == GRB_INFEASIBLE){
         status = 1;
+      }
+      else if(stat == GRB_TIME_LIMIT){
+        status = 4;
       }
       
     }

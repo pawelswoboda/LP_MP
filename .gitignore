@@ -1,6 +1,3 @@
 build_debug/*
 build_release/*
-build_release_2/*
-solvers/discrete_tomography/matlab_problem_converter/*
-solvers/discrete_tomography/matlab_standard_relaxation/*
 *~
