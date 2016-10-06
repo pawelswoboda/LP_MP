@@ -9,13 +9,15 @@ namespace LP_MP {
   class LpInterfaceGurobi : public LpInterfaceAdapter {
   public:
 
+    LpInterfaceGurobi() : env_(GRBEnv()),model_(GRBModel(env_)){}
+  
     LpInterfaceGurobi(INDEX noVars) : env_(GRBEnv()),model_(GRBModel(env_)),noVars_(noVars),epsilon_(std::numeric_limits<REAL>::infinity()) {
       std::vector<double> obj(noVars_,1);
       std::vector<char> types(noVars_,GRB_INTEGER);
       std::vector<REAL> lb(noVars_,-std::numeric_limits<REAL>::infinity());
       MainVars_ = model_.addVars(&lb[0],NULL,&obj[0],&types[0],NULL,noVars_);
     }
-    
+        
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
     LpInterfaceGurobi(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool MIP = true)
       : env_(GRBEnv()),model_(GRBModel(env_)),epsilon_(std::numeric_limits<REAL>::infinity()) {

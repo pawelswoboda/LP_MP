@@ -617,7 +617,7 @@ private:
     }
     
     ~LpRoundingSolver(){
-      delete lpSolver_;
+      //delete lpSolver_;
     }
     
     template<class T,class E>
@@ -636,7 +636,7 @@ private:
       T wrapper_;
     };
 
-    LpInterfaceAdapter* GetLpSolver(){ return lpSolver_; };
+    LpInterfaceAdapter* GetLpSolver(){ return &solveLp_; };
     
     int Solve(){
       
@@ -651,19 +651,19 @@ private:
       FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
       FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,Solver<FMC>::lp_.GetNumberOfMessages());
       
-      lpSolver_ = new LpSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,MIP_.getValue());
+      LpSolver solveLp_ = LpSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,MIP_.getValue());
       
       if( LpOutputFile_.isSet() ){
-        lpSolver_->WriteLpModel(LpOutputFile_.getValue());
+        solveLp_.WriteLpModel(LpOutputFile_.getValue());
       } else {
-        status = lpSolver_->solve();
+        status = solveLp_.solve();
       }
       
       return status;
     }
   
   private:
-    LpInterfaceAdapter* lpSolver_;
+    LpSolver solveLp_;
     PrimalSolutionStorage lpPrimal_;
 
     TCLAP::ValueArg<std::string> LpOutputFile_;
