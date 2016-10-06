@@ -4,8 +4,9 @@ function(DOWNLOAD_AND_UNZIP URL DOWNLOAD_TO EXTRACT_TO)
       message("Download ${URL} to ${CMAKE_CURRENT_BINARY_DIR}/${DOWNLOAD_TO}")
       file(DOWNLOAD ${URL} "${CMAKE_CURRENT_BINARY_DIR}/${DOWNLOAD_TO}"
          )
+      message(unzip "${CMAKE_CURRENT_BINARY_DIR}/${DOWNLOAD_TO}" -d "${CMAKE_CURRENT_BINARY_DIR}/${EXTRACT_TO}")
       execute_process(
-         COMMAND unzip -f "${CMAKE_CURRENT_BINARY_DIR}/${DOWNLOAD_TO}" -d "${CMAKE_CURRENT_BINARY_DIR}/${EXTRACT_TO}"
+         COMMAND unzip "${CMAKE_CURRENT_BINARY_DIR}/${DOWNLOAD_TO}" -d "${CMAKE_CURRENT_BINARY_DIR}/${EXTRACT_TO}"
          )
    endif()
 endfunction(DOWNLOAD_AND_UNZIP)
@@ -43,5 +44,5 @@ if(BUILD_DISCRETE_TOMOGRAPHY_EVALUATION)
    message("Download discrete tomography datasets")
    set(DT_DIRECTORY "discrete_tomography_datasets")
 
-   DOWNLOAD_AND_UNZIP("https://datarep.app.ist.ac.at/46/1/discrete_tomography_synthetic.zip" "${DT_DIRECTORY}/discrete_tomography_synthetic.zip" "${DT_DIRECTORY}/discrete_tomography_synthetic/")
+   DOWNLOAD_AND_UNZIP("https://datarep.app.ist.ac.at/46/1/discrete_tomography_synthetic.zip" "${DT_DIRECTORY}/discrete_tomography_synthetic.zip" "${DT_DIRECTORY}/")
 endif()
