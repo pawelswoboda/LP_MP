@@ -1768,7 +1768,8 @@ public:
 
    constexpr static bool CanReduceLp()
    {
-           return FunctionExistence::HasReduceLp<FactorType,LpInterfaceAdapter*,FactorContainerType>();
+           //return FunctionExistence::HasReduceLp<FactorType,LpInterfaceAdapter*,FactorContainerType>();
+           return FunctionExistence::HasReduceLp<FactorType,void,LpInterfaceAdapter*, FactorContainerType&>();
    }
    template<bool ENABLE = CanReduceLp()>
    typename std::enable_if<!ENABLE>::type
