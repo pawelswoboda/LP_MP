@@ -26,10 +26,10 @@ private: \
       Ret \
          >::type { return typename std::is_same<Ret,Ret>::type{}; }; \
 \
-   template<typename T> \
+   template<typename> \
    static constexpr std::false_type check(...) { return std::false_type{}; }; \
 \
-   typedef decltype(check<C>(0)) type; \
+   typedef decltype(check<C>(nullptr)) type; \
 \
 public: \
    static constexpr bool value = type::value; \
@@ -59,7 +59,7 @@ private: \
    template<typename> \
       static constexpr std::false_type check(...) { return std::false_type{}; }; \
  \
-   typedef decltype(check<C>(0)) type; \
+   typedef decltype(check<C>(nullptr)) type; \
 public: \
    static constexpr bool value = type::value; \
 }; \
@@ -80,7 +80,7 @@ private: \
    -> typename std::is_class<typename T::CLASS_NAME>::type; \
    template<typename> \
       static constexpr std::false_type check(...); \
-   typedef decltype(check<C>(0)) type; \
+   typedef decltype(check<C>(nullptr)) type; \
 public: \
    static constexpr bool value = type::value; \
 }; \
