@@ -6,7 +6,6 @@
 
 // generates helper classes and constexpr function with which it is possible to detect existence and callability of member functions
 // question: does this also help with inherited member functions?
-// do zrobienia: currently compiler generates lots of warnings. Rewrite such that it compiles silently.
 
 #define LP_MP_FUNCTION_EXISTENCE_CLASS(TESTER_NAME, MEMBER) \
 template<typename, typename T> \
@@ -25,12 +24,12 @@ private: \
       std::is_same< \
       decltype( std::declval<T>() .MEMBER ( std::declval<Args>()...) ), \
       Ret \
-         >::type; \
+         >::type { return typename std::is_same<Ret,Ret>::type{}; }; \
 \
    template<typename> \
-   static constexpr std::false_type check(...); \
+   static constexpr std::false_type check(...) { return std::false_type{}; }; \
 \
-   typedef decltype(check<C>(0)) type; \
+   typedef decltype(check<C>(nullptr)) type; \
 \
 public: \
    static constexpr bool value = type::value; \
@@ -39,6 +38,7 @@ template<class C, typename RET, typename... ARGS> \
 constexpr static bool TESTER_NAME () { \
   return struct_##TESTER_NAME<C,RET(ARGS&...)>::value; \
 } \
+
 
 
 
@@ -54,12 +54,12 @@ private: \
       std::is_same< \
       decltype( VALUE_TYPE (std::declval<T>(). MEMBER (std::declval<Args>()...) = std::declval<VALUE_TYPE>() ) ), \
       VALUE_TYPE \
-         >::type; \
+         >::type { return typename std::is_same<bool,bool>::type{}; }; \
  \
    template<typename> \
-      static constexpr std::false_type check(...); \
+      static constexpr std::false_type check(...) { return std::false_type{}; }; \
  \
-   typedef decltype(check<C>(0)) type; \
+   typedef decltype(check<C>(nullptr)) type; \
 public: \
    static constexpr bool value = type::value; \
 }; \
@@ -80,7 +80,7 @@ private: \
    -> typename std::is_class<typename T::CLASS_NAME>::type; \
    template<typename> \
       static constexpr std::false_type check(...); \
-   typedef decltype(check<C>(0)) type; \
+   typedef decltype(check<C>(nullptr)) type; \
 public: \
    static constexpr bool value = type::value; \
 }; \

@@ -10,16 +10,12 @@ namespace LP_MP {
 
     LpInterfaceCplex(INDEX noVars) : env_(IloEnv()),model_(IloModel(env_)),noVars_(noVars) {
       MainVars_ = IloNumVarArray(env_,noVars_,0.0,1.0,LpVariable::Float);
-      //cplex_ = IloCplex(model_);
     }
     
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
     LpInterfaceCplex(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool MIP = true)
       : env_(IloEnv()),model_(IloModel(env_)) {
 
-      // Standard Parameter for Cplex
-      //model_.getEnv().set(GRB_DoubleParam_TimeLimit,3600);
-      //model_.getEnv().set(GRB_IntParam_Threads,1);
       
       noVars_ = 0;
       noAuxVars_ = 0;
@@ -39,7 +35,7 @@ namespace LP_MP {
       }
       model_.add(MainVars_);
       if( noAuxVars_ > 0){
-        MainAuxVars_ = IloNumVarArray(env_,noAuxVars_,0.0,IloInfinity,LpVariable::Float);
+        MainAuxVars_ = IloNumVarArray(env_,noAuxVars_,-IloInfinity,IloInfinity,LpVariable::Float);
         model_.add(MainAuxVars_);
       }
 
@@ -51,8 +47,9 @@ namespace LP_MP {
         size_ = factorIt->size();
         OffsetAux_ = factorIt->GetAuxOffset();
         sizeAux_ = factorIt->GetNumberOfAuxVariables();
+        auto pot = factorIt->GetReparametrizedPotential();
         for(INDEX i=0;i<size_;++i) {
-          REAL value = factorIt->GetReparametrizedPotential()[i];
+          REAL value = pot[i];
           if( std::isfinite(value) ){
             ObjValues[Offset_ + i] = value;
           } else {
@@ -63,7 +60,7 @@ namespace LP_MP {
         }
         factorIt->CreateConstraints(this);
       }
-      printf("Reparametrization fixed %d variables\n",fixedVars);
+      //printf("Reparametrization fixed %d variables\n",fixedVars);
       IloObjective obj = IloMinimize(env_);
       obj.setLinearCoefs(MainVars_, ObjValues);
       model_.add(obj);
@@ -81,10 +78,20 @@ namespace LP_MP {
       cplex_.setParam(IloCplex::TiLim,3600); 
       cplex_.setParam(IloCplex::Threads,1);
     } 
- 
-    //LpVariable CreateAuxiliaryVariable(REAL lb,REAL ub,bool integer = false);
-    //LpVariable* CreateAuxiliaryVariables(INDEX n,REAL lb,REAL ub,bool integer = false);
-    LinExpr CreateLinExpr() const { return LinExpr(env_); }
+
+    template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
+    void ReduceLp(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,REAL epsilon){
+      epsilon_ = epsilon;
+      for(auto factorIt = factorBegin; factorIt != factorEnd; ++factorIt) {
+        Offset_ = factorIt->GetPrimalOffset();
+        size_ = factorIt->size();
+        OffsetAux_ = factorIt->GetAuxOffset();
+        sizeAux_ = factorIt->GetNumberOfAuxVariables();
+        factorIt->ReduceLp(this);
+      }
+    }
+    
+    LinExpr CreateLinExpr() { return LinExpr(env_); }
     
     INDEX GetFactorSize() const { return size_; }
     INDEX GetLeftFactorSize() const { return leftSize_; }
@@ -95,6 +102,8 @@ namespace LP_MP {
     LpVariable GetRightVariable(const INDEX i) const { assert(i < rightSize_); assert(OffsetRight_ + i < noVars_); return MainVars_[OffsetRight_ + i]; }
 
     LpVariable GetAuxVariable(const INDEX i) const { assert(i < sizeAux_); return MainAuxVars_[OffsetAux_ + i]; }
+
+    REAL GetEpsilon() const { return epsilon_; }
     
     REAL GetVariableValue(const INDEX i) const;
     REAL GetObjectiveValue() const;
@@ -103,6 +112,11 @@ namespace LP_MP {
     void SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer = false);
     void SetTimeLimit(REAL t){ cplex_.setParam(IloCplex::TiLim,t); }
     void SetNumberOfThreads(INDEX t){ cplex_.setParam(IloCplex::Threads,t); };
+    void SetDisplayLevel(INDEX t){ 
+      assert(t <= 1); 
+      //cplex_.setParam(IloCplex::TuningDisplay,t);
+      if( t == 0){ cplex_.setOut(env_.getNullStream()); }
+    };
     
     void addLinearEquality(LinExpr lhs,LinExpr rhs);
     void addLinearInequality(LinExpr lhs,LinExpr rhs);
@@ -124,7 +138,8 @@ namespace LP_MP {
     
     INDEX Offset_,OffsetAux_,OffsetLeft_,OffsetRight_;
     INDEX size_,sizeAux_,leftSize_,rightSize_;
-    INDEX noVars_,noAuxVars_;    
+    INDEX noVars_,noAuxVars_;
+    REAL epsilon_;
   };
 
   template<class factor>
@@ -138,15 +153,27 @@ namespace LP_MP {
     int status = 2;
     try{
       cplex_.solve();
-      status = 0;
+      auto stat = cplex_.getCplexStatus();
+      //std::cout << "Cplex Status: " << stat << std::endl;
+      if(stat == CPX_STAT_OPTIMAL){
+        status = 0;
+      }
+      else if(cplex_.getSolnPoolNsolns() > 0){
+        status = 3;
+      }
+      else if(stat == CPX_STAT_INFEASIBLE){
+        status = 1;
+      }
+      else if(stat == CPX_STAT_ABORT_TIME_LIM){
+        status = 4;
+      }
     }
-   catch (IloException& e) {
+    catch (IloException& e) {
       std::cerr << "Concert exception caught: " << e << std::endl;
-   }
-   catch (...) {
+    }
+    catch (...) {
       std::cerr << "Unknown exception caught" << std::endl;
-   }
-   
+    }
     return status;
   }
 

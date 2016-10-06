@@ -9,15 +9,16 @@ namespace LP_MP {
   class LpInterfaceGurobi : public LpInterfaceAdapter {
   public:
 
-    LpInterfaceGurobi(INDEX noVars) : env_(GRBEnv()),model_(GRBModel(env_)),noVars_(noVars) {
+    LpInterfaceGurobi(INDEX noVars) : env_(GRBEnv()),model_(GRBModel(env_)),noVars_(noVars),epsilon_(std::numeric_limits<REAL>::infinity()) {
       std::vector<double> obj(noVars_,1);
       std::vector<char> types(noVars_,GRB_INTEGER);
-      MainVars_ = model_.addVars(NULL,NULL,&obj[0],&types[0],NULL,noVars_);
+      std::vector<REAL> lb(noVars_,-std::numeric_limits<REAL>::infinity());
+      MainVars_ = model_.addVars(&lb[0],NULL,&obj[0],&types[0],NULL,noVars_);
     }
     
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
     LpInterfaceGurobi(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool MIP = true)
-      : env_(GRBEnv()),model_(GRBModel(env_)) {
+      : env_(GRBEnv()),model_(GRBModel(env_)),epsilon_(std::numeric_limits<REAL>::infinity()) {
 
       // Standard Parameter for Gurobi
       model_.getEnv().set(GRB_DoubleParam_TimeLimit,3600);
@@ -34,7 +35,7 @@ namespace LP_MP {
         preAuxVars = noAuxVars_;
         noFactors++;
       }
-      std::vector<double> obj_1(noVars_,1);
+      std::vector<double> obj_1(noVars_,1.0);
       std::vector<double> obj_2(noAuxVars_,0.0);
       std::vector<char> types_1;
       if(MIP){
@@ -43,11 +44,10 @@ namespace LP_MP {
         types_1.resize(noVars_,GRB_CONTINUOUS);
       }
       std::vector<char> types_2(noAuxVars_,GRB_CONTINUOUS);
-      //std::cout << "remove INTEGER again: auxiliary variables should be continuous!\n";
-      //std::vector<char> types_2(noAuxVars_,GRB_INTEGER);
       MainVars_ = model_.addVars(NULL,NULL,&obj_1[0],&types_1[0],NULL,noVars_);
       if( noAuxVars_ > 0){
-        MainAuxVars_ = model_.addVars(NULL,NULL,&obj_2[0],&types_2[0],NULL,noAuxVars_);
+        std::vector<REAL> lb (noAuxVars_,-std::numeric_limits<REAL>::infinity());
+        MainAuxVars_ = model_.addVars(&lb[0],NULL,&obj_2[0],&types_2[0],NULL,noAuxVars_);
       }
       model_.update();
 
@@ -58,8 +58,9 @@ namespace LP_MP {
         size_ = factorIt->size();
         OffsetAux_ = factorIt->GetAuxOffset();
         sizeAux_ = factorIt->GetNumberOfAuxVariables();
+        auto pot = factorIt->GetReparametrizedPotential();
         for(INDEX i=0;i<size_;++i) {
-          REAL value = factorIt->GetReparametrizedPotential()[i];
+          REAL value = pot[i];
           if( std::isfinite(value) ){
             GetVariable(i).set(GRB_DoubleAttr_Obj,value);
           } else {
@@ -71,7 +72,7 @@ namespace LP_MP {
         }
         factorIt->CreateConstraints(this);
       }
-      printf("Reparametrization fixed %d variables\n",fixedVars);
+      //printf("Reparametrization fixed %d variables\n",fixedVars);
 
       /* Add Message Constraints */
       for(auto messageIt = messageBegin; messageIt != messageEnd; ++messageIt) {
@@ -85,7 +86,20 @@ namespace LP_MP {
       model_.update();
     } 
 
-    LinExpr CreateLinExpr() const { return LinExpr(); }
+    template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
+    void ReduceLp(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,REAL epsilon){
+      epsilon_ = epsilon;
+      for(auto factorIt = factorBegin; factorIt != factorEnd; ++factorIt) {
+        Offset_ = factorIt->GetPrimalOffset();
+        size_ = factorIt->size();
+        OffsetAux_ = factorIt->GetAuxOffset();
+        sizeAux_ = factorIt->GetNumberOfAuxVariables();
+        factorIt->ReduceLp(this);
+      }
+      model_.update();
+    }
+    
+    LinExpr CreateLinExpr() { return LinExpr(); }
     
     INDEX GetFactorSize() const { return size_; }
     INDEX GetLeftFactorSize() const { return leftSize_; }
@@ -96,6 +110,8 @@ namespace LP_MP {
     LpVariable GetRightVariable(const INDEX i) const { assert(i < rightSize_); assert(OffsetRight_ + i < noVars_); return MainVars_[OffsetRight_ + i]; }
 
     LpVariable GetAuxVariable(const INDEX i) const { assert(i < sizeAux_); return MainAuxVars_[OffsetAux_ + i]; }
+
+    REAL GetEpsilon() const { return epsilon_; }
     
     REAL GetVariableValue(const INDEX i) const;
     REAL GetObjectiveValue() const;
@@ -104,6 +120,7 @@ namespace LP_MP {
     void SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer = false);
     void SetTimeLimit(REAL t){ model_.getEnv().set(GRB_DoubleParam_TimeLimit,t); }
     void SetNumberOfThreads(INDEX t){ model_.getEnv().set(GRB_IntParam_Threads,t); };
+    void SetDisplayLevel(INDEX t){ assert(t <= 1); model_.getEnv().set(GRB_IntParam_OutputFlag,t); };
     
     void addLinearEquality(LinExpr lhs,LinExpr rhs);
     void addLinearInequality(LinExpr lhs,LinExpr rhs);
@@ -125,6 +142,7 @@ namespace LP_MP {
     INDEX Offset_,OffsetAux_,OffsetLeft_,OffsetRight_;
     INDEX size_,sizeAux_,leftSize_,rightSize_;
     INDEX noVars_,noAuxVars_;    
+    REAL epsilon_;
   };
 
   template<class factor>
@@ -140,7 +158,21 @@ namespace LP_MP {
       model_.update();
 
       model_.optimize();
-      status = 0;
+      auto stat = model_.get(GRB_IntAttr_Status);
+      //std::cout << "Gurobi Status: " << stat << std::endl;
+      if(stat == GRB_OPTIMAL ){
+        status = 0;
+      }
+      else if(model_.get(GRB_IntAttr_SolCount) > 0){
+        status = 3;
+      }
+      else if(stat == GRB_INFEASIBLE){
+        status = 1;
+      }
+      else if(stat == GRB_TIME_LIMIT){
+        status = 4;
+      }
+      
     }
     catch(GRBException e) {
       std::cout << "Error code = " << e.getErrorCode() << std::endl;

@@ -26,7 +26,6 @@
 
 #include "LP_MP.h"
 
-
 // do zrobienia: remove these
 #include <fstream>
 #include <sstream>
@@ -68,6 +67,7 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential);
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasReduceLp, ReduceLp);
 
 LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(IsAssignable, operator[]);
 }
@@ -1766,6 +1766,25 @@ public:
       factor_.CreateConstraints(l);
    }
 
+   constexpr static bool CanReduceLp()
+   {
+           //return FunctionExistence::HasReduceLp<FactorType,LpInterfaceAdapter*,FactorContainerType>();
+           return FunctionExistence::HasReduceLp<FactorType,void,LpInterfaceAdapter*, FactorContainerType&>();
+   }
+   template<bool ENABLE = CanReduceLp()>
+   typename std::enable_if<!ENABLE>::type
+   ReduceLpImpl(LpInterfaceAdapter* l) const
+   {}  
+   template<bool ENABLE = CanReduceLp()>
+   typename std::enable_if<ENABLE>::type
+   ReduceLpImpl(LpInterfaceAdapter* l) const
+   {
+           factor_.ReduceLp(l, *this); 
+   }  
+   void ReduceLp(LpInterfaceAdapter* l) const {
+           ReduceLpImpl(l);
+   }
+  
    constexpr static bool CanCallGetNumberOfAuxVariables()
    {
       return FunctionExistence::HasGetNumberOfAuxVariables<FactorType,INDEX>();

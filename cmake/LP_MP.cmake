@@ -62,6 +62,12 @@ if(WITH_CPLEX)
   find_package(Cplex)
 endif(WITH_CPLEX)
 
+# LOCALSOLVER
+OPTION(WITH_LOCALSOLVER "Activate LocalSolver-Code" OFF)
+if(WITH_LOCALSOLVER)
+  find_package(LocalSolver)
+endif(WITH_LOCALSOLVER)
+
 IF(UNIX AND NOT APPLE)
    find_library(TR rt)
    set(LINK_RT true)

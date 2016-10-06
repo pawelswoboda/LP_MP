@@ -2,8 +2,11 @@
 #define LP_MP_DT_COUNTING_MESSAGE_HXX
 
 #include "LP_MP.h"
-#include "minConv.hxx"
+
 #include <math.h> 
+
+#include "minConv.hxx"
+#include "discrete_tomography_algorithms.hxx"
 
 namespace LP_MP {
     
@@ -147,183 +150,79 @@ namespace LP_MP {
   template<typename RIGHT_FACTOR, typename REPAM_ARRAY, typename MSG>
   void DiscreteTomographyMessageCounting<DR>::MakeRightFactorUniform(RIGHT_FACTOR* const f_right, const REPAM_ARRAY& repam_right, MSG& msg, const REAL omega)
   {
-     assert(repam_right.size() == ((*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up) +
-              (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left) +
-              (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right) +
-              (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::reg)));
+    assert(repam_right.size() == ((*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up) +
+                                  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left) +
+                                  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right) +
+                                  (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::reg)));
 
-     INDEX left_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left)/pow(numberOfLabels_,2);
-     INDEX right_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right)/pow(numberOfLabels_,2);
-     INDEX up_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up)/pow(numberOfLabels_,2);
+    INDEX up_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::up)/pow(numberOfLabels_,2);
+    INDEX right_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right)/pow(numberOfLabels_,2);
+    INDEX left_size = (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left)/pow(numberOfLabels_,2);
+     
+    if( DR == DIRECTION::left ){
+      assert(msg.size() == (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left));
 
-     if( DR == DIRECTION::left ){
-        assert(msg.size() == (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::left));
+      std::vector<REAL> msg_v(left_size*pow(numberOfLabels_,2),std::numeric_limits<REAL>::infinity());
+      if( DiscreteTomo::AlgorithmThreshold < msg_v.size() ){
+        DiscreteTomo::MessageCalculation_MinConv_Left(f_right, repam_right, msg_v,numberOfLabels_);
+      } else {
+        DiscreteTomo::MessageCalculation_Naive_Left(f_right, repam_right, msg_v,numberOfLabels_);
+      }
+      for(INDEX i=0;i<msg_v.size();i++){
+        assert(msg_v[i] > -eps);
+        msg[i] -= omega*msg_v[i];
+      }
+       
+    }
+    else{
+      assert(msg.size() == (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right));
 
-        auto op = [&](INDEX i,INDEX j){ // 0 <= i-j < left_size
-           if( i < j ){ // i-j < 0
-              return left_size;
-           }
-           else{
-              return (i-j < left_size) ? i-j : left_size;
-           }
-        };
-
-        std::vector<REAL> msg_v(left_size*pow(numberOfLabels_,2),std::numeric_limits<REAL>::infinity());
-        for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
-           INDEX idx = i;
-           INDEX a = idx % numberOfLabels_;
-           idx = ( idx - a )/numberOfLabels_;
-           INDEX b = idx % numberOfLabels_;
-           idx = ( idx - b )/numberOfLabels_;
-           INDEX c = idx % numberOfLabels_;
-           idx = ( idx - c )/numberOfLabels_;
-           INDEX d = idx % numberOfLabels_;
-
-           auto z_up = [&](INDEX k){
-              return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-           auto z_left = [&](INDEX k){
-              return repam_right[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-           auto z_right = [&](INDEX k){
-              return repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-
-           REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
-           assert(reg > -std::numeric_limits<REAL>::max());
-
-           MinConv mc(z_up,z_right,up_size,right_size,left_size);
-           mc.CalcConv(op,z_up,z_right);
-
-           for(INDEX k=0;k<left_size;k++){
-              assert(k == (mc.getIdxA(k) - mc.getIdxB(k)));
-              assert(!std::isnan(reg));
-
-              REAL val = mc.getConv(k) + z_left(k) + reg;
-              INDEX kidx = a + numberOfLabels_*b + k*pow(numberOfLabels_,2);
-
-              assert(kidx < (left_size*pow(numberOfLabels_,2)));
-              assert(!std::isnan(val));
-
-              msg_v[kidx] = std::min(msg_v[kidx],val);
-           }
-        }
-        for(INDEX i=0;i<msg_v.size();i++){
-           assert(msg_v[i] > -eps);
-           msg[i] -= omega*msg_v[i];
-        }
-     }
-     else{
-        assert(msg.size() == (*f_right).getSize(DiscreteTomographyFactorCounting::NODE::right));
-
-        auto op = [&](INDEX i,INDEX j){ // 0 <= i-j <= right_size
-           if( i < j ){ 
-              return right_size;
-           }
-           else{
-              return (i-j < right_size) ? i-j : right_size;
-           }
-        };
-
-        std::vector<REAL> msg_v(right_size*pow(numberOfLabels_,2),std::numeric_limits<REAL>::infinity());
-        for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
-           INDEX idx = i;
-           INDEX a = idx % numberOfLabels_;
-           idx = ( idx - a )/numberOfLabels_;
-           INDEX b = idx % numberOfLabels_;
-           idx = ( idx - b )/numberOfLabels_;
-           INDEX c = idx % numberOfLabels_;
-           idx = ( idx - c )/numberOfLabels_;
-           INDEX d = idx % numberOfLabels_;
-
-           auto z_up = [&](INDEX k){
-              return repam_right[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-           auto z_left = [&](INDEX k){
-              return repam_right[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-           auto z_right = [&](INDEX k){
-              return repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-
-           REAL reg = repam_right[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
-           assert(reg > -std::numeric_limits<REAL>::max());
-
-           MinConv mc(z_up,z_left,up_size,left_size,right_size);
-           mc.CalcConv(op,z_up,z_left);
-
-           for(INDEX k=0;k<right_size;k++){
-              assert(k == op(mc.getIdxA(k),mc.getIdxB(k)));//(mc.getIdxA(k) - mc.getIdxB(k)));
-              assert(!std::isnan(reg));
-
-              REAL val = mc.getConv(k) + z_right(k) + reg;
-              INDEX kidx = c + numberOfLabels_*d + k*pow(numberOfLabels_,2);
-
-              assert(kidx < (right_size*pow(numberOfLabels_,2)));
-              assert(!std::isnan(val));
-
-              msg_v[kidx] = std::min(msg_v[kidx],val);
-           }
-        }
-        for(INDEX i=0;i<msg_v.size();i++){
-           assert(msg_v[i] > -eps);
-           msg[i] -= omega*msg_v[i];
-        }
-     }      
+      std::vector<REAL> msg_v(right_size*pow(numberOfLabels_,2),std::numeric_limits<REAL>::infinity());
+      if( DiscreteTomo::AlgorithmThreshold < msg_v.size() ){
+        DiscreteTomo::MessageCalculation_MinConv_Right(f_right, repam_right, msg_v,numberOfLabels_);
+      } else {
+        DiscreteTomo::MessageCalculation_Naive_Right(f_right, repam_right, msg_v,numberOfLabels_);
+      }
+      for(INDEX i=0;i<msg_v.size();i++){
+        assert(msg_v[i] > -eps);
+        msg[i] -= omega*msg_v[i];
+      }
+       
+    }      
   }
 
   template<DIRECTION DR>
   template<typename LEFT_FACTOR, typename REPAM_ARRAY, typename MSG>
   void DiscreteTomographyMessageCounting<DR>::MakeLeftFactorUniform(LEFT_FACTOR* const f_left, const REPAM_ARRAY& repam_left, MSG& msg, const REAL omega)
   {
-     assert(msg.size() == (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up));
-     assert(repam_left.size() == ((*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up) +
-              (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::left) +
-              (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::right) +
-              (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::reg)));
+    assert(msg.size() == (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up));
+    assert(repam_left.size() == ((*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up) +
+                                 (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::left) +
+                                 (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::right) +
+                                 (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::reg)));
 
-     INDEX up_size = (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up)/pow(numberOfLabels_,2);
-     INDEX right_size = (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::right)/pow(numberOfLabels_,2);
-     INDEX left_size = (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::left)/pow(numberOfLabels_,2);
-
-     auto op = [&](INDEX i,INDEX j){ return (i+j < up_size) ? i+j : up_size;  }; // 0 <= i+j < up_size
-
-     std::vector<REAL> msg_v(up_size*pow(numberOfLabels_,2),std::numeric_limits<REAL>::infinity());
-     for(INDEX i=0;i<pow(numberOfLabels_,4);i++){
-        INDEX idx = i;
-        INDEX a = idx % numberOfLabels_;
-        idx = ( idx - a )/numberOfLabels_;
-        INDEX b = idx % numberOfLabels_;
-        idx = ( idx - b )/numberOfLabels_;
-        INDEX c = idx % numberOfLabels_;
-        idx = ( idx - c )/numberOfLabels_;
-        INDEX d = idx % numberOfLabels_;
-
-        auto z_up = [&](INDEX k){
-           return repam_left[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-        auto z_left = [&](INDEX k){
-           return repam_left[up_size*pow(numberOfLabels_,2) + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-        auto z_right = [&](INDEX k){
-           return repam_left[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-
-        REAL reg = repam_left[up_size*pow(numberOfLabels_,2) + left_size*pow(numberOfLabels_,2) + right_size*pow(numberOfLabels_,2) + b + c*numberOfLabels_];
-        assert(reg > -std::numeric_limits<REAL>::max());
-
-        MinConv mc(z_left,z_right,left_size,right_size,up_size);
-        mc.CalcConv(op,z_left,z_right);
-
-        for(INDEX k=0;k<up_size;k++){
-           assert(k == (mc.getIdxA(k) + mc.getIdxB(k)));
-           assert(!std::isnan(reg));
-
-           REAL val = mc.getConv(k) + z_up(k)  + reg;
-           INDEX kidx = a + numberOfLabels_*d + k*pow(numberOfLabels_,2);
-
-           assert(kidx < (up_size*pow(numberOfLabels_,2)));
-           assert(!std::isnan(val));
-           msg_v[kidx] = std::min(msg_v[kidx],val);
-        }
-     }
-     for(INDEX i=0;i<msg_v.size();i++){
-        assert(msg_v[i] > -eps);
-        msg[i] -= omega*msg_v[i];
-     }
+    INDEX up_size = (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up)/pow(numberOfLabels_,2);
+    INDEX right_size = (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::right)/pow(numberOfLabels_,2);
+    INDEX left_size = (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::left)/pow(numberOfLabels_,2);
+    
+    std::vector<REAL> msg_v(up_size*pow(numberOfLabels_,2),std::numeric_limits<REAL>::infinity());
+    if( DiscreteTomo::AlgorithmThreshold < msg_v.size() ){
+      DiscreteTomo::MessageCalculation_MinConv_Up(f_left, repam_left, msg_v,numberOfLabels_);
+    } else {
+      DiscreteTomo::MessageCalculation_Naive_Up(f_left, repam_left, msg_v,numberOfLabels_);
+    }
+    
+    assert(msg.size() == (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up));
+    assert(repam_left.size() == ((*f_left).getSize(DiscreteTomographyFactorCounting::NODE::up) +
+                                 (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::left) +
+                                 (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::right) +
+                                 (*f_left).getSize(DiscreteTomographyFactorCounting::NODE::reg)));
+      
+    for(INDEX i=0;i<msg_v.size();i++){
+      assert(msg_v[i] > -eps);
+      msg[i] -= omega*msg_v[i];
+    }
  
-  
   }
 
   template<DIRECTION DR>

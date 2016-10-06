@@ -30,9 +30,6 @@ namespace LP_MP{
     //void NarrowPrimal(const REPAM_ARRAY& repam, const REAL epsilon, typename PrimalSolutionStorage::Element primal);
     
     void PropagatePrimal(PrimalSolutionStorage::Element primal) const;
-
-    template<typename PROB,typename REPAM_ARRAY>
-    void LabelCertainty(PROB& p,REPAM_ARRAY repam);
     
     template<typename REPAM_ARRAY>
     REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const; //--required
@@ -41,11 +38,12 @@ namespace LP_MP{
     
     //void WritePrimal(const PrimalSolutionStorage::Element, std::ofstream& fs) const; //
 
-    // --------------------
-    // custom public methods 
-
+    // Lp Interface related
     INDEX GetNumberOfAuxVariables() const { return leftSize_*rightSize_; } 
     void CreateConstraints(LpInterfaceAdapter* lp) const;
+
+    template<typename REPAM_ARRAY>
+    void ReduceLp(LpInterfaceAdapter* lp,const REPAM_ARRAY& repam) const;
     
     INDEX getSize(NODE) const;
 
@@ -57,19 +55,6 @@ namespace LP_MP{
     const INDEX numberOfLabels_,numberOfVarsLeft_,numberOfVarsRight_,SumBound_;
     INDEX upSize_,leftSize_,rightSize_,regSize_;
   };
-
-  template<typename PROB,typename REPAM_ARRAY>
-  void DiscreteTomographyFactorCounting::LabelCertainty(PROB& p,REPAM_ARRAY repam){
-    assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
-    assert(p.size() == repam.size());
-
-    INDEX sum_up = std::accumulate(repam.begin(),repam.begin()+upSize_,0);
-    INDEX sum_left = std::accumulate(repam.begin()+upSize_,repam.begin()+upSize_+leftSize_,0);
-    INDEX sum_right = std::accumulate(repam.begin()+upSize_+leftSize_,repam.begin()+upSize_+leftSize_+rightSize_,0);
-    INDEX sum_reg = std::accumulate(repam.begin()+upSize_+leftSize_+rightSize_,repam.end(),0);
-
-    
-  }
   
   template<typename REPAM_ARRAY>
   REAL DiscreteTomographyFactorCounting::eval(INDEX up,INDEX left,INDEX right,const REPAM_ARRAY& repam){
@@ -96,11 +81,11 @@ namespace LP_MP{
   }
 
   inline INDEX DiscreteTomographyFactorCounting::size() const {
-       return getSize(DiscreteTomographyFactorCounting::NODE::up) 
-          + getSize(DiscreteTomographyFactorCounting::NODE::left) 
-          + getSize(DiscreteTomographyFactorCounting::NODE::right) 
-          + getSize(DiscreteTomographyFactorCounting::NODE::reg); 
-    }
+    return getSize(DiscreteTomographyFactorCounting::NODE::up) 
+      + getSize(DiscreteTomographyFactorCounting::NODE::left) 
+      + getSize(DiscreteTomographyFactorCounting::NODE::right) 
+      + getSize(DiscreteTomographyFactorCounting::NODE::reg); 
+  }
 
   
   inline INDEX DiscreteTomographyFactorCounting::getSize(NODE n) const {
@@ -124,7 +109,49 @@ namespace LP_MP{
     
     regSize_ = pow(numberOfLabels_,2);
   }
- 
+
+
+  template<typename REPAM_ARRAY>
+  inline void DiscreteTomographyFactorCounting::ReduceLp(LpInterfaceAdapter* lp,const REPAM_ARRAY& repam) const {
+    assert(repam.size() == (upSize_+leftSize_+rightSize_+regSize_));
+
+    auto xa = [&](INDEX idx){ return idx % numberOfLabels_;  };
+    auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
+    auto xz = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return (idx - xa(idx))/numberOfLabels_; };
+
+    INDEX z_up_size = upSize_/pow(numberOfLabels_,2);
+    REAL epsi = lp->GetEpsilon();
+    REAL lb = LowerBound(repam);
+    
+    for(INDEX i=0;i<leftSize_;i++){
+      INDEX lz = xz(i);
+      for(INDEX j=0;j<rightSize_ && lz + xz(j) < z_up_size;j++){
+        INDEX a = xa(i);
+        INDEX b = xb(i);
+        INDEX c = xa(j);
+        INDEX d = xb(j);
+
+        INDEX rz = xz(j);
+        INDEX uz = lz+rz;
+
+        INDEX l = a + b*numberOfLabels_ + lz*pow(numberOfLabels_,2);
+        INDEX r = c + d*numberOfLabels_ + rz*pow(numberOfLabels_,2);
+        INDEX u = a + d*numberOfLabels_ + uz*pow(numberOfLabels_,2);
+        INDEX p = b + c*numberOfLabels_;
+        
+        assert(l < leftSize_);
+        assert(r < rightSize_);
+        assert(u < upSize_);
+        assert(p < pow(numberOfLabels_,2));
+        
+        REAL value = repam[u] + repam[upSize_+l] + repam[upSize_+leftSize_+r] + repam[upSize_+leftSize_+rightSize_+p];
+        if(value >= lb + epsi){
+          lp->SetVariableBound(lp->GetAuxVariable(i + j*leftSize_),0.0,0.0);
+        }        
+      }
+    }    
+  }
+      
   inline void DiscreteTomographyFactorCounting::CreateConstraints(LpInterfaceAdapter* lp) const {
     REAL inf = std::numeric_limits<REAL>::infinity();
     
@@ -159,6 +186,7 @@ namespace LP_MP{
           INDEX z = xz(i) + xz(j);
           if( z < z_max ){
             var = lp->GetAuxVariable(i + j*leftSize_);
+            lp->SetVariableBound(var,0.0,1.0);
             
             INDEX a = xa(i);
             INDEX b = xb(j);
@@ -214,46 +242,82 @@ namespace LP_MP{
   template<typename REPAM_ARRAY>
   REAL DiscreteTomographyFactorCounting::LowerBound(const REPAM_ARRAY& repam) const{
     assert(repam.size() == (upSize_ + leftSize_ + rightSize_ + regSize_));
-    REAL m = std::numeric_limits<REAL>::infinity();
+
+    const INDEX noLabels = numberOfLabels_;
+    const INDEX up_size = upSize_/pow(noLabels,2);
+    const INDEX left_size = leftSize_/pow(noLabels,2);
+    const INDEX right_size = rightSize_/pow(noLabels,2);
     
-    INDEX z_up_size = upSize_/pow(numberOfLabels_,2);
-    INDEX z_left_size = leftSize_/pow(numberOfLabels_,2);
-    INDEX z_right_size = rightSize_/pow(numberOfLabels_,2);
-
-    auto op = [&](INDEX i,INDEX j){ return (i+j < z_up_size) ? i+j : z_up_size;  };
-    for( INDEX i=0;i<pow(numberOfLabels_,4);i++ ){
-      INDEX idx = i;
-      INDEX a = idx % numberOfLabels_;
-      idx = ( idx - a )/numberOfLabels_;
-      INDEX b = idx % numberOfLabels_;
-      idx = ( idx - b )/numberOfLabels_;
-      INDEX c = idx % numberOfLabels_;
-      idx = ( idx - c )/numberOfLabels_;
-      INDEX d = idx % numberOfLabels_;
-
-      auto z_up = [&](INDEX k){ return repam[a + d*numberOfLabels_ + k*pow(numberOfLabels_,2)]; };
-      auto z_left = [&](INDEX k){ return repam[upSize_ + a + b*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
-      auto z_right = [&](INDEX k){ return repam[upSize_ + leftSize_ + c + d*numberOfLabels_ + k*pow(numberOfLabels_,2)];  };
- 
-      REAL reg = repam[upSize_ + leftSize_ + rightSize_ + b + c*numberOfLabels_];
-      assert(!std::isnan(reg));
-      assert(reg > -std::numeric_limits<REAL>::max() );
+    REAL bound = std::numeric_limits<REAL>::infinity();
+    
+    if( 5000 < upSize_ ){
+      auto op = [&](INDEX i,INDEX j){ return (i+j < up_size) ? i+j : up_size;  }; // 0 <= i+j < up_size
       
-      MinConv mc(z_left,z_right,z_left_size,z_right_size,z_up_size);
-      mc.CalcConv(op,z_left,z_right);
+      for(INDEX i=0;i<pow(noLabels,4);i++){
+        INDEX idx = i;
+        INDEX a = idx % noLabels;
+        idx = ( idx - a )/noLabels;
+        INDEX b = idx % noLabels;
+        idx = ( idx - b )/noLabels;
+        INDEX c = idx % noLabels;
+        idx = ( idx - c )/noLabels;
+        INDEX d = idx % noLabels;
 
-      REAL m_new = 0;
-      for( INDEX j=0;j<z_up_size;j++ ){
-        assert(j == op(mc.getIdxA(j),mc.getIdxB(j)));
-        assert(z_up(j) > -std::numeric_limits<REAL>::max() );
-        assert(!std::isnan(z_up(j)));
-	
-        m_new = mc.getConv(j)+z_up(j)+reg;
-        m = std::min(m,m_new);
-        assert(m > -eps);
+        auto z_up = [&](INDEX k){
+          return repam[a + d*noLabels + k*pow(noLabels,2)];  };
+        auto z_left = [&](INDEX k){
+          return repam[up_size*pow(noLabels,2) + a + b*noLabels + k*pow(noLabels,2)];  };
+        auto z_right = [&](INDEX k){
+          return repam[up_size*pow(noLabels,2) + left_size*pow(noLabels,2) + c + d*noLabels + k*pow(noLabels,2)];  };
+
+        REAL reg = repam[up_size*pow(noLabels,2) + left_size*pow(noLabels,2) + right_size*pow(noLabels,2) + b + c*noLabels];
+        assert(reg > -std::numeric_limits<REAL>::max());
+
+        MinConv mc(z_left,z_right,left_size,right_size,up_size);
+        mc.CalcConv(op,z_left,z_right);
+
+        for(INDEX k=0;k<up_size;k++){
+          assert(k == op(mc.getIdxA(k),mc.getIdxB(k)));
+          assert(k == (mc.getIdxA(k) + mc.getIdxB(k)));
+          assert(!std::isnan(reg));
+
+          REAL val = mc.getConv(k) + z_up(k)  + reg;
+          
+          assert(!std::isnan(val));
+          assert(val > -eps);
+          bound = std::min(bound,val);
+          assert(bound > -eps);
+        }
+      }
+    } else{
+      for(INDEX lz=0;lz<left_size;lz++){
+        for(INDEX rz=0;rz<right_size && rz+lz<up_size;rz++){
+          for(INDEX i=0;i<pow(noLabels,4);i++){
+            INDEX idx = i;
+            INDEX a = idx % noLabels;
+            idx = (idx - a)/noLabels;
+            INDEX b = idx % noLabels;
+            idx = (idx - b)/noLabels;
+            INDEX c = idx % noLabels;
+            INDEX d = (idx - c)/noLabels;
+
+            assert(a + d*noLabels + (lz+rz)*pow(noLabels,2) < up_size*pow(noLabels,2));
+            assert(a + b*noLabels + lz*pow(noLabels,2) < left_size*pow(noLabels,2));
+            assert(c + d*noLabels + rz*pow(noLabels,2) < right_size*pow(noLabels,2));
+            assert(b + c*noLabels < pow(noLabels,2));
+            
+            REAL value = repam[a + d*noLabels + (lz+rz)*pow(noLabels,2)];
+            value += repam[up_size*pow(noLabels,2) + a + b*noLabels + lz*pow(noLabels,2)];
+            value += repam[up_size*pow(noLabels,2) + left_size*pow(noLabels,2) + c + d*noLabels + rz*pow(noLabels,2)];
+            value += repam[up_size*pow(noLabels,2) + left_size*pow(noLabels,2) + right_size*pow(noLabels,2) + b + c*noLabels];
+
+            assert(value > -eps);
+            bound = std::min(bound,value);
+          }
+        }
       }
     }
-    return m;
+    return bound;
   }
 
   /*

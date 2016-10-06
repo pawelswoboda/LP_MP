@@ -55,23 +55,6 @@ public:
       primal[min_element] = true;
    };
 
-   // set to false all elements that are larger by epsilon than the minimal element
-   template<typename REPAM_ARRAY>
-   static void NarrowPrimal(const REPAM_ARRAY& repam, const REAL epsilon, typename PrimalSolutionStorage::Element primal)
-   {
-      REAL min_val = std::numeric_limits<REAL>::infinity();
-      for(INDEX i=0; i<repam.size(); ++i) {
-         if(primal[i] != false) {
-            std::min(repam[i], min_val);
-         }
-      }
-      for(INDEX i=0; i<repam.size(); ++i) {
-         if(repam[i] >= min_val + epsilon) {
-            primal[i] = false;
-         }
-      }
-   }
-
    template<typename REPAM_ARRAY>
    static REAL LowerBound(const REPAM_ARRAY& repamPot) {
       REAL min_val = repamPot[0];
@@ -128,7 +111,18 @@ public:
    }
 
   INDEX GetNumberOfAuxVariables() const { return 0; }
-   
+
+  template<typename REPAM_ARRAY>
+  void ReduceLp(LpInterfaceAdapter* lp,const REPAM_ARRAY& repam) const {
+    REAL lb = LowerBound(repam);
+    REAL epsi = lp->GetEpsilon();
+    for(INDEX i=0;i<repam.size();i++){
+      if(repam[i] >= lb + epsi){
+        lp->SetVariableBound(lp->GetVariable(i),0.0,0.0,false);
+      }
+    }
+  }
+  
   void CreateConstraints(LpInterfaceAdapter* lp) const { 
     LinExpr lhs = lp->CreateLinExpr();
     for(INDEX i=0;i<lp->GetFactorSize();i++){

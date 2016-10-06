@@ -42,7 +42,7 @@ end
 
 % Unary Factor Tables
 un = zeros(1,l);
-unI = un; unI(2) = Inf; unI(3) = Inf;
+unI = Inf*ones(1,l); unI(1) = 0;
 for i=1:n
   fprintf(f,'%d\n',l);
   if( check(i) > 0 )

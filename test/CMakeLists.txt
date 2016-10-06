@@ -3,8 +3,8 @@ if(BUILD_TESTS)
    SET(BASE_TEST_FILES 
       simplex.cpp
       simplex_marginalization.cpp
-      min_cost_flow_cs2.cpp
-      min_cost_flow.cpp
+      #min_cost_flow_cs2.cpp
+      #min_cost_flow.cpp
       )
    enable_testing()
 
