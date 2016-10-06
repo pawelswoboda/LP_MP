@@ -53,7 +53,7 @@ DiscreteTomographyFactorCountingNaive::CreateConstraints(LpInterfaceAdapter* lp)
       }
    }
    LinExpr rhs = lp->CreateLinExpr();
-   rhs += sum_;
+   rhs += (REAL) sum_;
    lp->addLinearEquality(lhs,rhs);
 }
 
