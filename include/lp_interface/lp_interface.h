@@ -36,7 +36,7 @@ namespace LP_MP {
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
     LpInterfaceAdapter(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,bool integer = true)
     { } 
-    
+        
     virtual LinExpr CreateLinExpr() = 0;
     
     virtual INDEX GetFactorSize() const = 0;
