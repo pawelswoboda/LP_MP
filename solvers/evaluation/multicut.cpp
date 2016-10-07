@@ -94,11 +94,11 @@ int main()
       using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
       using SolverType = ProblemConstructorRoundingSolver<FMC>;
       static auto Input = MulticutOpenGmInput::ParseProblem<FMC>;
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-C");
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-C");
+      RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-C");
+      RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-C");
       //RunSolver<FMC,VisitorType,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-C");
       //RunSolver<FMC,VisitorType,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-C");
-      RunSolver<FMC,VisitorType,SolverType>(Input,modularity_clustering_dataset,options,"modularity_clustering","MPMC-C");
+      RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,modularity_clustering_dataset,options,"modularity_clustering","MPMC-C");
    }
 
    {
@@ -106,11 +106,11 @@ int main()
       using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
       using SolverType = ProblemConstructorRoundingSolver<FMC>;
       static auto Input = MulticutOpenGmInput::ParseProblem<FMC>;
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-COW");
-      RunSolver<FMC,VisitorType,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-COW");
+      RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-COW");
+      RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-COW");
       //RunSolver<FMC,VisitorType,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-COW");
       //RunSolver<FMC,VisitorType,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-COW");
-      RunSolver<FMC,VisitorType,SolverType>(Input,modularity_clustering_dataset,options,"modularity_clustering","MPMC-COW");
+      RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,modularity_clustering_dataset,options,"modularity_clustering","MPMC-COW");
    }
    return 0;
 }
