@@ -14,9 +14,9 @@
 #include "solver.hxx"
 
 
-namespace LP_MP {
+namespace LP_MP { 
 
-template<typename FMC, class VISITOR, typename SOLVER, typename INPUT_FUNCTION>
+template<typename FMC, typename SOLVER, typename INPUT_FUNCTION>
 void RunSolver(INPUT_FUNCTION f, const std::vector<std::string>& datasets, std::vector<std::string> options, const std::string& datasetName, const std::string& algorithmName)
 {
    options.push_back("--datasetName");
@@ -35,7 +35,7 @@ void RunSolver(INPUT_FUNCTION f, const std::vector<std::string>& datasets, std::
    
       // do zrobienia: fetch version number automatically from CMakeLists.txt
       //TCLAP::CmdLine cmd(std::string("Command line options for evaluation run"), ' ', "0.0.1");
-      VisitorSolver<SOLVER,VISITOR> s(solverOptions);
+      SOLVER s(solverOptions);
       std::cout << "run solver " << FMC::name << " on problem " << dataset << "\n";
       s.ReadProblem(f);
       s.Solve();
