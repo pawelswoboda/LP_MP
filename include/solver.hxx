@@ -446,7 +446,7 @@ public:
       T wrapper_;
     };
    
-    void RunLpSolver()
+    void RunLpSolver(int displayLevel=0)
     {
             std::unique_lock<std::mutex> guard(this->LpChangeMutex);
             // Jan: lp can change its number of factors, e.g. after tightening. We must synchronize here as well!
@@ -465,11 +465,7 @@ public:
 
             solver.SetTimeLimit(timelimit_.getValue());
             solver.SetNumberOfThreads(LpThreadsArg_.getValue());
-            if(LPOnly_.getValue() || RELAX_.getValue()){
-                    solver.SetDisplayLevel(1);
-            } else {
-                    solver.SetDisplayLevel(0);
-            }
+            solver.SetDisplayLevel(displayLevel);
 
             auto status = solver.solve();
             std::cout << "solved lp instance\n";
@@ -560,11 +556,11 @@ public:
       WakeUpGuard.unlock();
 
       SOLVER::End();
-      if(LPOnly_.isSet() || RELAX_.isSet()){
+      //if(LPOnly_.isSet() || RELAX_.isSet()){
           std::cout << "construct final lp solver\n";
-          std::thread th([this]() { this->RunLpSolver(); });
+          std::thread th([this]() { this->RunLpSolver(1); });
           th.join();
-      } 
+      //} 
 
       for(INDEX i=0;i<threads_.getValue();i++){
               if(LpThreads_[i].joinable()){
@@ -594,7 +590,7 @@ private:
   std::vector<std::thread> LpThreads_;
   REAL VariableThreshold_;
   REAL ub_ = std::numeric_limits<REAL>::infinity();
-  INDEX curIter_ = 0;
+  INDEX curIter_ = 1;
 };
 
 // Macro for generating main function 
@@ -639,14 +635,14 @@ int main(int argc, char* argv[]) \
 }
 
 // Macro for generating main function with specific solver with additional LP option
-#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_LP(FMC,PARSE_PROBLEM_FUNCTION,VISITOR,LPSOLVER) \
+#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_LP(FMC,PARSE_PROBLEM_FUNCTION,VISITOR,LPSOLVER) \
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
    VisitorSolver<LpSolver<Solver<FMC>,LPSOLVER>,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
-
+}
 
 } // end namespace LP_MP
 

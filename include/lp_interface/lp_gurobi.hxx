@@ -23,6 +23,7 @@ namespace LP_MP {
       // Standard Parameter for Gurobi
       model_.getEnv().set(GRB_DoubleParam_TimeLimit,3600);
       model_.getEnv().set(GRB_IntParam_Threads,1);
+      model_.getEnv().set(GRB_IntParam_MIPFocus, 1);
       
       noVars_ = 0;
       noAuxVars_ = 0;

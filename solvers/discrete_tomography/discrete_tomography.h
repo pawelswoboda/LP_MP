@@ -46,7 +46,7 @@ namespace LP_MP{
   struct FMC_DT {
     static constexpr char* name = "Discrete Tomography";
 
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 0, true> UnaryFactor;
+    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 0, false> UnaryFactor;
     typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 1> PairwiseFactor;
     typedef FactorContainer<DiscreteTomographyFactorCounting, ExplicitRepamStorage, FMC_DT, 2> DiscreteTomographyCountingFactorContainer;
    
@@ -88,7 +88,7 @@ namespace LP_MP{
   struct FMC_DT_NAIVE {
     static constexpr char* name = "Discrete Tomography, naive LP model";
 
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 0, true, true> UnaryFactor;
+    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 0, false> UnaryFactor;
     typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 1> PairwiseFactor;
     typedef FactorContainer<DiscreteTomographyFactorCountingNaive, ExplicitRepamStorage, FMC_DT_NAIVE, 2> DiscreteTomographyCountingFactorContainer;
    
@@ -108,6 +108,56 @@ namespace LP_MP{
     using mrf = StandardMrfConstructor<FMC_DT_NAIVE,0,1,0,1>;
     using dt = DiscreteTomographyNaiveConstructor<FMC_DT_NAIVE,0,0,2,2>;
     using ProblemDecompositionList = meta::list<mrf,dt>;
+  };
+
+
+  struct FMC_DT_COMBINED {
+    static constexpr char* name = "Discrete Tomography, naive LP and tight model combined";
+
+    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_COMBINED, 0, true> UnaryFactor;
+    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_COMBINED, 1> PairwiseFactor;
+    typedef FactorContainer<DiscreteTomographyFactorCounting, ExplicitRepamStorage, FMC_DT_COMBINED, 2> DiscreteTomographyCountingFactorContainer;
+   
+    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 0 > UnaryPairwiseMessageLeft;
+    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 1 > UnaryPairwiseMessageRight;
+    
+    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::left>, 2, 2, atMostOneMessage, atMostOneMessage, variableMessageSize, FMC_DT_COMBINED, 2>
+      DiscreteTomographyCountingMessageLeft;
+    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::right>, 2, 2, atMostOneMessage, atMostOneMessage, variableMessageSize, FMC_DT_COMBINED, 3>
+      DiscreteTomographyCountingMessageRight;
+    typedef MessageContainer<DiscreteTomographyMessageCountingPairwise, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 4>
+      DiscreteTomographyCountingPairwiseMessageContainer;
+
+   // tightening
+   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_COMBINED, 3> EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 5> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 6> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 7> PairwiseTriplet23MessageContainer;
+
+   // naive factors
+   typedef FactorContainer<DiscreteTomographyFactorCountingNaive, ExplicitRepamStorage, FMC_DT_COMBINED, 4> DiscreteTomographyCountingFactorNaiveContainer;
+   typedef MessageContainer<DiscreteTomographyUnaryToFactorCountingNaiveMessage, 0, 4, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT_COMBINED, 8>
+      DiscreteTomographyCountingNaiveMessage;
+
+    using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer, EmptyTripletFactor, DiscreteTomographyCountingFactorNaiveContainer >;
+    using MessageList = meta::list<
+      UnaryPairwiseMessageLeft,
+      UnaryPairwiseMessageRight,
+      DiscreteTomographyCountingMessageLeft,
+      DiscreteTomographyCountingMessageRight,
+      DiscreteTomographyCountingPairwiseMessageContainer,
+      PairwiseTriplet12MessageContainer,
+      PairwiseTriplet13MessageContainer,
+      PairwiseTriplet23MessageContainer,
+      DiscreteTomographyCountingNaiveMessage
+      >;
+
+    using mrf = StandardMrfConstructor<FMC_DT_COMBINED,0,1,0,1>;
+    using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,5,6,7>;
+    using dt = DiscreteTomographyTreeConstructor<FMC_DT_COMBINED,0,2,2,3,4>;
+    using dt_naive = DiscreteTomographyNaiveConstructor<FMC_DT_COMBINED,0,0,4,8>;
+    using ProblemDecompositionList = meta::list<tighteningMrf,dt,dt_naive>;
+	  
   };
 
   namespace DiscreteTomographyTextInput {
@@ -194,6 +244,36 @@ namespace LP_MP{
        assert(p.projectionVar.size() == p.projectionCost.size());
        for(INDEX i=0; i<p.projectionVar.size(); ++i) {
           pd.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i]);
+       }
+       return true;
+    }
+
+    template<typename FMC>
+    inline bool ParseProblemCombined(const std::string& filename, Solver<FMC>& pd) {
+       std::cout << "parsing " << filename << "\n";
+       pegtl::file_parser problem(filename);
+
+       UaiMrfInput::MrfInput mrfInput;
+       bool ret = problem.parse< UaiMrfInput::grammar, UaiMrfInput::action>(mrfInput);
+       if(ret != true) {
+          throw std::runtime_error("could not read mrf problem in uai format for discrete tomography");
+       }
+       UaiMrfInput::build_mrf(pd.template GetProblemConstructor<0>(), mrfInput);
+
+       pd.template GetProblemConstructor<1>().SetNumberOfLabels(mrfInput.cardinality_[0]);
+       pd.template GetProblemConstructor<2>().SetNumberOfLabels(mrfInput.cardinality_[0]);
+
+       Projections p;
+       ret = problem.parse< grammar, action>(p);
+       if(ret != true) {
+          throw std::runtime_error("could not read projection constraints for discrete tomography");
+       }
+       assert(p.projectionVar.size() == p.projectionCost.size());
+       for(INDEX i=0; i<p.projectionVar.size(); ++i) {
+          pd.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i]);
+       }
+       for(INDEX i=0; i<p.projectionVar.size(); ++i) {
+          pd.template GetProblemConstructor<2>().AddProjection(p.projectionVar[i], p.projectionCost[i]);
        }
        return true;
     }
