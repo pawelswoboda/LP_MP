@@ -12,16 +12,16 @@
 #include "template_utilities.hxx"
 #include "tclap/CmdLine.h"
 #include "lp_interface/lp_interface.h"
-#include "boost/hana.hpp"
 
 namespace LP_MP {
-
-namespace hana = boost::hana; // put this somewhere more central
 
 // class containing the LP, problem constructor list, input function
 // takes care of logging
 // binds together problem constructors and solver and organizes input/output
 // base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
+
+// do zrobienia: currently we synchronize in all solvers. However, strictly speaking, this is only needed by  LpSolver and MpRoundingSolver. Should only they synchronize?
+
 template<typename FMC>
 class Solver {
    // initialize a tuple uniformly
@@ -60,7 +60,7 @@ public:
 
       }
 
-   virtual ~Solver() {}
+   ~Solver() {}
 
    // needed, as more arguments could be passed to cmd_, and then we need to parse again
    void Init(std::vector<std::string> arg)
@@ -88,6 +88,7 @@ public:
    template<typename INPUT_FUNCTION, typename... ARGS>
    bool ReadProblem(INPUT_FUNCTION inputFct, ARGS... args)
    {
+      std::unique_lock<std::mutex> guard(LpChangeMutex);
       const bool success = inputFct(inputFile_,*this,args...);
 
       assert(success);
@@ -222,41 +223,43 @@ public:
       return std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_);
    }
 
-   /* for hana
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   auto& GetProblemConstructor()
-   {   
-      std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_); 
-   }
-   */
-
    LP& GetLP() { return lp_; }
    
+   // called before first iterations
+   void Begin() {}
+
    // what to do before improving lower bound, e.g. setting reparametrization mode
-   virtual void PreIterate(LpControl c) 
+   void PreIterate(LpControl c) 
    {
+      std::unique_lock<std::mutex> guard(LpChangeMutex);
       lp_.ComputeWeights(c.repam);
    } 
 
    // what to do for improving lower bound, typically ComputePass or ComputePassAndPrimal
-   virtual void Iterate(LpControl c) {
+   void Iterate(LpControl c) {
+      std::unique_lock<std::mutex> guard(LpChangeMutex);
       lp_.ComputePass();
    } 
 
    // what to do after one iteration of message passing, e.g. primal computation and/or tightening
-   virtual void PostIterate(LpControl c) 
+   void PostIterate(LpControl c) 
    {
       if(c.computeLowerBound) {
+         std::unique_lock<std::mutex> guard(LpChangeMutex);
          lowerBound_ = lp_.LowerBound();
       }
       if(c.tighten) {
+         std::unique_lock<std::mutex> guard(LpChangeMutex);
          Tighten(c.tightenConstraints);
       }
    } 
 
+   // called after last iteration
+   void End() {}
+
    void RegisterPrimal(PrimalSolutionStorage& p)
    {
-    std::lock_guard<std::mutex> guard(RegisterPrimalMutex);
+    std::unique_lock<std::mutex> guard(LpChangeMutex);
     //std::cout << "size of primal = " << p.size() << "\n";
     const REAL cost = lp_.EvaluatePrimal(p.begin());
     if(cost <= bestPrimalCost_) {
@@ -277,8 +280,6 @@ public:
 protected:
    TCLAP::CmdLine cmd_;
    LP lp_;
-   //std::shared_ptr<spdlog::logger> logger_;
-   //typename FMC::ProblemDecompositionListHana problemConstructor_;
 
    tuple_from_list<ProblemDecompositionList> problemConstructor_;
 
@@ -293,7 +294,7 @@ protected:
    REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
    PrimalSolutionStorage bestPrimal_; // these vectors are stored in the order of forwardOrdering_
 
-   std::mutex RegisterPrimalMutex;
+   std::mutex LpChangeMutex;
 };
 
 // local rounding interleaved with message passing 
@@ -304,7 +305,10 @@ public:
    void Iterate(LpControl c)
    {
       if(c.computePrimal) {
-         Solver<FMC>::lp_.ComputePassAndPrimal(forwardPrimal_, backwardPrimal_);
+         {
+                 std::unique_lock<std::mutex> guard(this->LpChangeMutex);
+                 Solver<FMC>::lp_.ComputePassAndPrimal(forwardPrimal_, backwardPrimal_);
+         }
          this->RegisterPrimal(forwardPrimal_);
          this->RegisterPrimal(backwardPrimal_);
       } else {
@@ -355,10 +359,12 @@ public:
       ComputePrimal<0>(primal);
    }
 
-   virtual void PostIterate(LpControl c)
+   void PostIterate(LpControl c)
    {
       if(c.computePrimal) {
+         std::unique_lock<std::mutex> guard(this->LpChangeMutex);
          this->lp_.InitializePrimalVector(primal_); // do zrobienia: this is not nice: reallocation might occur
+         // do zrobienia: possibly run this in own thread similar to lp solver
          ComputePrimal(primal_.begin());
          this->RegisterPrimal(primal_);
       }
@@ -390,14 +396,20 @@ public:
    int Solve()
    {
       this->lp_.Init();
+      this->Begin();
       LpControl c = visitor_.begin(this->lp_);
-      while(!c.end) {
+      while(!c.end && !c.error) {
          this->PreIterate(c);
          this->Iterate(c);
          this->PostIterate(c);
          c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
       }
-      this->WritePrimal();
+      if(!c.error) {
+         this->End();
+         // possibly primal has been computed in end. Call visitor again
+         visitor_.end(this->lowerBound_, this->bestPrimalCost_);
+         this->WritePrimal();
+      }
       return c.error;
    }
 
@@ -405,40 +417,21 @@ private:
    VISITOR visitor_;
 };
 
-template<typename SOLVER, typename VISITOR, typename LpSolver>
-class VisitorLpSolver : public SOLVER {
+template<typename SOLVER, typename LP_INTERFACE>
+class LpSolver : public SOLVER {
 public:
-   VisitorLpSolver(int argc, char** argv) :
+   LpSolver() :
       SOLVER(),
-      visitor_(SOLVER::cmd_),
       LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_),
       RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
       timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
       roundBound_("","LpRoundValue","A small value removes many variables",false,std::numeric_limits<REAL>::infinity(),"positive real number",SOLVER::cmd_),
       threads_("","LpSolverThreads","number of threads to call Lp solver routine",false,1,"integer",SOLVER::cmd_),
-      LpThreads_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_),
+      LpThreadsArg_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_),
       LpInterval_("","LpInterval","each n steps the lp solver will be executed if possible",false,1,"integer",SOLVER::cmd_)
-  {
-     this->Init(argc,argv);
-  }
+  {}
       
-   VisitorLpSolver(const std::vector<std::string>& arg) :
-      SOLVER(),
-      visitor_(SOLVER::cmd_),
-      LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_),
-      RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
-      timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
-      roundBound_("","LpRoundValue","A small value removes many variables",false,std::numeric_limits<REAL>::infinity(),"positive real number",SOLVER::cmd_),
-      threads_("","LpSolverThreads","number of threads to call Lp solver routine",false,1,"integer",SOLVER::cmd_),
-      LpThreads_("","LpThreads","number of threads used by each lp solver call",false,1,"integer",SOLVER::cmd_),
-      LpInterval_("","LpInterval","each n steps the lp solver will be executed if possible",false,1,"integer",SOLVER::cmd_)
-   {
-      this->Init(arg);
-   }
-   
-   ~VisitorLpSolver(){
-     //delete lpSolver_;
-   }
+   ~LpSolver(){}
    
     template<class T,class E>
     class FactorMessageIterator {
@@ -456,222 +449,153 @@ public:
       T wrapper_;
     };
    
-   int Solve() 
-   {
-     this->lp_.Init(); 
+    void RunLpSolver(int displayLevel=0)
+    {
+            std::unique_lock<std::mutex> guard(this->LpChangeMutex);
+            // Jan: lp can change its number of factors, e.g. after tightening. We must synchronize here as well!
+            auto FactorWrapper = [&](INDEX i){ return SOLVER::lp_.GetFactor(i);};
+            FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItBegin(FactorWrapper,0);
+            FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItEnd(FactorWrapper,SOLVER::lp_.GetNumberOfFactors());
 
-      auto FactorWrapper = [&](INDEX i){ return SOLVER::lp_.GetFactor(i);};
-      FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItBegin(FactorWrapper,0);
-      FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItEnd(FactorWrapper,SOLVER::lp_.GetNumberOfFactors());
+            auto MessageWrapper = [&](INDEX i){ return SOLVER::lp_.GetMessage(i);};
+            FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
+            FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,SOLVER::lp_.GetNumberOfMessages());
 
-      auto MessageWrapper = [&](INDEX i){ return SOLVER::lp_.GetMessage(i);};
-      FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
-      FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,SOLVER::lp_.GetNumberOfMessages());
+            LP_INTERFACE solver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
 
-      std::vector<std::thread> LpThreads(threads_.getValue());
-      REAL VariableThreshold = roundBound_.getValue();
-      REAL ub = std::numeric_limits<REAL>::infinity();
-      
-      LpControl c = visitor_.begin(this->lp_);
-      
-      auto LpLambda = [&,this](){
-        while(!c.end){
-          std::unique_lock<std::mutex> LpGuard(BuildLpMutex);
-          if(!RELAX_.getValue() && !LPOnly_.getValue()){
-            WakeLpSolverCond.wait(LpGuard);
-          } 
-          if(c.end){ break; }
-          LpSolver solver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
-          LpGuard.unlock();
+            solver.ReduceLp(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold_);
+            guard.unlock();
 
-          solver.SetTimeLimit(timelimit_.getValue());
-          solver.SetNumberOfThreads(LpThreads_.getValue());
-          if(LPOnly_.getValue() || RELAX_.getValue()){
-            solver.SetDisplayLevel(1);
-          } else {
-            solver.SetDisplayLevel(0);
-          }
-          solver.ReduceLp(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold);
-          auto status = solver.solve();
-          /*
-            TODO: we need a better way to decide, when the number of variables get increased/decreased
-            e.g. What to do if the solver hit the timelimit? 
-          */
-          if( status == 0 || status == 3 ){            
-            PrimalSolutionStorage x(FactorItBegin,FactorItEnd);
-            for(INDEX i=0;i<x.size();i++){
-              x[i] = solver.GetVariableValue(i);
+            solver.SetTimeLimit(timelimit_.getValue());
+            solver.SetNumberOfThreads(LpThreadsArg_.getValue());
+            solver.SetDisplayLevel(displayLevel);
+
+            auto status = solver.solve();
+            std::cout << "solved lp instance\n";
+            //  TODO: we need a better way to decide, when the number of variables get increased/decreased
+            //  e.g. What to do if the solver hit the timelimit? 
+            if( status == 0 || status == 3 ){     
+                    // Jan: this is only admissible when we have an integral solution, not in RELAXed mode!       
+                    PrimalSolutionStorage x(FactorItBegin,FactorItEnd);
+                    for(INDEX i=0;i<x.size();i++){
+                            x[i] = solver.GetVariableValue(i);
+                    }
+                    this->RegisterPrimal(x);
+                    //std::lock_guard<std::mutex> WriteGuard(BuildLpMutex);
+
+
+                    if( status == 0){
+                            std::cout << "Optimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
+                    } else {
+                            std::cout << "Suboptimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
+                    }
+
+                    std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
+                    // if solution found, decrease number of variables
+                    std::cout << "feas decrease" << std::endl;
+                    VariableThreshold_ *= 0.75;
+                    ub_ = std::min(ub_,solver.GetObjectiveValue());
             }
-            this->RegisterPrimal(x);
-            std::lock_guard<std::mutex> WriteGuard(BuildLpMutex);
-            
-            
-            if( status == 0){
-              std::cout << "Optimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
-            } else {
-              std::cout << "Suboptimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
+            else if( status == 4){ // hit the timelimit
+                    std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
+                    VariableThreshold_ *= 0.6;
+                    std::cout << "time decrease" << std::endl;
             }
-            
-            std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
-            // if solution found, decrease number of variables
-            std::cout << "feas decrease" << std::endl;
-            VariableThreshold *= 0.75;
-            ub = std::min(ub,solver.GetObjectiveValue());
-          }
-          else if( status == 4){ // hit the timelimit
-            std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
-            VariableThreshold *= 0.6;
-            std::cout << "time decrease" << std::endl;
-          }
-          else {
-            std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
-            // if ilp infeasible, increase number of variables
-            std::cout << "infeas increase" << std::endl;
-            VariableThreshold *= 1.3;
-          }
-          if(LPOnly_.getValue() || RELAX_.getValue()){
-            break;
-          }
-        }
-      };
-  
-      auto IterLambda = [&,this]{
-        INDEX i=1;
-        while(!c.end) {
-          std::unique_lock<std::mutex> IterGuard(BuildLpMutex);
-          this->PreIterate(c);
-          this->Iterate(c);
-          this->PostIterate(c);
-          c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
-          IterGuard.unlock();      
-                    
-          if( i % LpInterval_.getValue() == 0 ){
-            WakeLpSolverCond.notify_one();
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-          }
-          i++;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        WakeLpSolverCond.notify_all();        
-      };
-      
-      if(LPOnly_.getValue() || RELAX_.getValue()){
-          std::thread th(LpLambda);
-          th.join();
-      } else {
-        for(INDEX i=0;i<threads_.getValue();i++){
-          LpThreads[i] = std::thread(LpLambda);
-        }
-        
-        std::thread IterThread(IterLambda);
-        
-        IterThread.join();
-        for(INDEX i=0;i<threads_.getValue();i++){
-          if(LpThreads[i].joinable()){
-            LpThreads[i].join();
-          }        
-        }
-        
-        printf("\n");
-        printf("The best objective yield by ILP was %.5f\n",ub);
+            else {
+                    std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
+                    // if ilp infeasible, increase number of variables
+                    std::cout << "infeas increase" << std::endl;
+                    VariableThreshold_ *= 1.3;
+            }
+    }
+
+    void IterateLpSolver()
+    {
+            while(runLp_) {
+
+                    std::unique_lock<std::mutex> WakeLpGuard(WakeLpSolverMutex_);
+                    WakeLpSolverCond.wait(WakeLpGuard);
+                    WakeLpGuard.unlock();
+                    if(!runLp_) { break; }
+                    RunLpSolver();
+            }
+    }
+
+    void Begin()
+    {
+            LpThreads_.resize(threads_.getValue());
+            for(INDEX i=0;i<threads_.getValue();i++){
+                    LpThreads_[i] = std::thread([this] () { this->IterateLpSolver(); });
+            }
+
+            VariableThreshold_ = roundBound_.getValue();
+            SOLVER::Begin();
+    }
+
+    void Iterate(LpControl c)
+    {
+          // wait if some lp solver constructs lp. Reparametrization is not allowed to change then?
+          SOLVER::Iterate(c);
+    }
+    void PostIterate(LpControl c)
+    {
+      // wait, as in PostIterate tightening can take place
+      SOLVER::PostIterate(c);
+
+      if( curIter_ % LpInterval_.getValue() == 0 ){
+              std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
+              WakeLpSolverCond.notify_one();
+              //std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Jan: why sleep here?
       }
-      return c.error;
-   }
+      ++curIter_;
+    }
+
+    void End()
+    {
+      runLp_ = false;
+      std::cout << "stop lp solvers\n";
+      std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
+      WakeLpSolverCond.notify_all();
+      WakeUpGuard.unlock();
+
+      SOLVER::End();
+      //if(LPOnly_.isSet() || RELAX_.isSet()){
+          std::cout << "construct final lp solver\n";
+          std::thread th([this]() { this->RunLpSolver(1); });
+          th.join();
+      //} 
+
+      for(INDEX i=0;i<threads_.getValue();i++){
+              if(LpThreads_[i].joinable()){
+                      LpThreads_[i].join();
+              }
+      }
+
+      std::cout << "\n";
+      std::cout << "The best objective computed by ILP is " << ub_ << "\n";
+    }
 
 private:
-  VISITOR visitor_;
-  //LpInterfaceAdapter* lpSolver_;
-  
   TCLAP::ValueArg<REAL> timelimit_;
   TCLAP::ValueArg<REAL> roundBound_;
   TCLAP::ValueArg<INDEX> threads_;
-  TCLAP::ValueArg<INDEX> LpThreads_;
+  TCLAP::ValueArg<INDEX> LpThreadsArg_;
   TCLAP::ValueArg<INDEX> LpInterval_;
   TCLAP::SwitchArg LPOnly_;
   TCLAP::SwitchArg RELAX_;
   //TCLAP::SwitchArg EXPORT_;
   
-  std::mutex BuildLpMutex;
   std::mutex UpdateUbLpMutex;
+  std::mutex WakeLpSolverMutex_;
   std::condition_variable WakeLpSolverCond;
 
+  bool runLp_ = true;
+  std::vector<std::thread> LpThreads_;
+  REAL VariableThreshold_;
+  REAL ub_ = std::numeric_limits<REAL>::infinity();
+  INDEX curIter_ = 1;
 };
 
-  // solver for rounding with standard (I)LP-solver
-  template<typename FMC,class LpSolver>
-  class LpRoundingSolver : public Solver<FMC> {
-
-  public:
-    LpRoundingSolver(int argc, char** argv)
-      : Solver<FMC>(),
-      LpOutputFile_("","lpFile","write LP model",false,"","file name",Solver<FMC>::cmd_),
-      MIP_("","relax","solve the mip relaxation",Solver<FMC>::cmd_,true){
-      Solver<FMC>::Init(argc,argv);
-    }
-
-    LpRoundingSolver(const std::vector<std::string>& arg)
-      : Solver<FMC>(),
-        LpOutputFile_("","lpFile","write LP model",false,"","file name",Solver<FMC>::cmd_),
-        MIP_("","relax","solve the mip relaxation",Solver<FMC>::cmd_,true){
-      Solver<FMC>::Init(arg);
-    }
-    
-    ~LpRoundingSolver(){
-      //delete lpSolver_;
-    }
-    
-    template<class T,class E>
-    class FactorMessageIterator {
-    public:
-      FactorMessageIterator(T w,INDEX i)
-        : wrapper_(w),idx(i){ }
-      FactorMessageIterator& operator++() {++idx;return *this;}
-      FactorMessageIterator operator++(int) {FactorMessageIterator tmp(*this); operator++(); return tmp;}
-      bool operator==(const FactorMessageIterator& rhs) {return idx==rhs.idx;}
-      bool operator!=(const FactorMessageIterator& rhs) {return idx!=rhs.idx;}
-      E* operator*() {return wrapper_(idx);}
-      E* operator->() {return wrapper_(idx);}
-      INDEX idx;
-    private:
-      T wrapper_;
-    };
-
-    LpInterfaceAdapter* GetLpSolver(){ return &solveLp_; };
-    
-    int Solve(){
-      
-      Solver<FMC>::lp_.Init();
-      int status = 0;
-      
-      auto FactorWrapper = [&](INDEX i){ return Solver<FMC>::lp_.GetFactor(i);};
-      FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItBegin(FactorWrapper,0);
-      FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItEnd(FactorWrapper,Solver<FMC>::lp_.GetNumberOfFactors());
-
-      auto MessageWrapper = [&](INDEX i){ return Solver<FMC>::lp_.GetMessage(i);};
-      FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
-      FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,Solver<FMC>::lp_.GetNumberOfMessages());
-      
-      LpSolver solveLp_ = LpSolver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,MIP_.getValue());
-      
-      if( LpOutputFile_.isSet() ){
-        solveLp_.WriteLpModel(LpOutputFile_.getValue());
-      } else {
-        status = solveLp_.solve();
-      }
-      
-      return status;
-    }
-  
-  private:
-    LpSolver solveLp_;
-    PrimalSolutionStorage lpPrimal_;
-
-    TCLAP::ValueArg<std::string> LpOutputFile_;
-    TCLAP::SwitchArg MIP_;
-    //TCLAP::SwitchArg intConstr ("","integer","solving a mip",cmd);
-  
-  };
-  
 // Macro for generating main function 
 // do zrobienia: get version number automatically from CMake 
 // do zrobienia: version number for individual solvers?
@@ -704,15 +628,14 @@ int main(int argc, char* argv[]) \
 }
 
 // Macro for generating main function with specific solver with additional LP option
-#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_LPVISITOR(FMC,PARSE_PROBLEM_FUNCTION,VISITOR,LPSOLVER) \
+#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_LP(FMC,PARSE_PROBLEM_FUNCTION,VISITOR,LPSOLVER) \
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   VisitorLpSolver<Solver<FMC>,VISITOR,LPSOLVER> solver(argc,argv); \
+   VisitorSolver<LpSolver<Solver<FMC>,LPSOLVER>,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }
-
 
 } // end namespace LP_MP
 

@@ -1082,7 +1082,6 @@ public:
       return FunctionExistence::HasMaximizePotential<FactorType,void,FactorContainerType>();
    }
 
-   // do zrobienia: remove this function, obsolete: New primal computation mode
    void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal) final
    {
       if(CanComputePrimal()) { // do zrobienia: for now
@@ -1112,6 +1111,16 @@ public:
       ReceiveMessages(omega);
       SendMessages(omega);
    }
+
+   /*
+   void UpdateFactor(const std::vector<REAL>& omega, LpInterfaceAdapter* l)
+   {
+      ReceiveMessages(omega);
+      MaximizePotential();
+      ReduceLp(l);
+      SendMessages(omega);
+   }
+   */
 
    template<bool ENABLE=CanMaximizePotential()>
    typename std::enable_if<ENABLE,void>::type
