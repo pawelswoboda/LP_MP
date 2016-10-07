@@ -46,7 +46,7 @@ namespace LP_MP{
   struct FMC_DT {
     static constexpr char* name = "Discrete Tomography";
 
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 0, true, true> UnaryFactor;
+    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 0, true> UnaryFactor;
     typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 1> PairwiseFactor;
     typedef FactorContainer<DiscreteTomographyFactorCounting, ExplicitRepamStorage, FMC_DT, 2> DiscreteTomographyCountingFactorContainer;
    

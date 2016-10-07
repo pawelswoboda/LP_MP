@@ -72,9 +72,10 @@ namespace LP_MP {
 
     /*------*/
 
-    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, LEFT_FACTOR* l,
-                                    PrimalSolutionStorage::Element right, RIGHT_FACTOR* r);
+    // not used currently, as primal rounding does not give good results
+    //template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    //void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, LEFT_FACTOR* l,
+    //                                PrimalSolutionStorage::Element right, RIGHT_FACTOR* r);
 
     INDEX size() const {
        if(DR == DIRECTION::left) {
@@ -281,7 +282,7 @@ namespace LP_MP {
      }
   }
 
-      
+  /* 
   template<DIRECTION DR>  
   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void DiscreteTomographyMessageCounting<DR>::ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, LEFT_FACTOR* leftFactor,
@@ -319,6 +320,7 @@ namespace LP_MP {
     }
 
   }
+  */
 
 }
 

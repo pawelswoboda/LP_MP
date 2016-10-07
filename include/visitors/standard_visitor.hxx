@@ -106,7 +106,6 @@ namespace LP_MP {
          //}
 
          //spdlog::get("logger")->info() << "Initial number of factors = " << lp->GetNumberOfFactors();
-         std::cout << "Initial lower bound before optimizing = " << curLowerBound_ << "\n";
          beginTime_ = std::chrono::steady_clock::now();
 
 

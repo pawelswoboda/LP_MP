@@ -58,9 +58,10 @@ namespace LP_MP {
     template<typename G>
     void RepamRight(G& repam, const REAL msg, const INDEX msg_dim);
 
-    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, LEFT_FACTOR* l,
-                                    PrimalSolutionStorage::Element right, RIGHT_FACTOR* r);
+    // not used currently, as primal rounding does not give good results
+    //template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    //void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, LEFT_FACTOR* l,
+    //                                PrimalSolutionStorage::Element right, RIGHT_FACTOR* r);
 
     
   private:
@@ -176,6 +177,7 @@ namespace LP_MP {
     }
   }
 
+  /*
   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void DiscreteTomographyMessageCountingPairwise::ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, LEFT_FACTOR* leftFactor,
                                                                              PrimalSolutionStorage::Element right, RIGHT_FACTOR* rightFactor){
@@ -189,7 +191,7 @@ namespace LP_MP {
     INDEX count = 0;
     INDEX noUnkwn = 0;
 
-    /* Check if there is one "true" label for the pairwise term */
+    // Check if there is one "true" label for the pairwise term
     for(INDEX i=0;i<pow(numberOfLabels_,2);i++){
       if( left[i] == true ){
         opt = i; count++;
@@ -203,16 +205,14 @@ namespace LP_MP {
     assert(noUnkwn != 0 || count == 1);
     assert(noUnkwn != 0 || count != 0);
     
-    /* Calculate left and right label  */
+    // Calculate left and right label 
     INDEX b = opt % numberOfLabels_;
     INDEX c = ((opt - b)/numberOfLabels_) % numberOfLabels_;
 
-    /*
-      Check for leafs
-    */
+    // Check for leafs
     if(noUnkwn == 1 && count == 0){ count = 1; }
 
-    /* If the left variable is a leaf  */
+    // If the left variable is a leaf
     INDEX lIdx = b + b*numberOfLabels_ + b*pow(numberOfLabels_,2);
     if(numberOfVarsLeft_ == 1 && count == 1 && lIdx < leftSize_){
       for(INDEX i=0;i<leftSize_;i++){
@@ -222,7 +222,7 @@ namespace LP_MP {
       right[upSize_ + lIdx]=true;
     }
 
-    /* If the right variable is a leaf  */
+    // If the right variable is a leaf
     INDEX rIdx = c + c*numberOfLabels_ + c*pow(numberOfLabels_,2);
     if(numberOfVarsRight_ == 1 && count == 1 && rIdx < rightSize_){
       for(INDEX i=0;i<rightSize_;i++){
@@ -233,6 +233,7 @@ namespace LP_MP {
     }
      
   }
+  */
 
 }
 
