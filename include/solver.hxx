@@ -210,7 +210,6 @@ public:
    // maxConstraints gives maximum number of constraints to add
    INDEX Tighten(const INDEX maxConstraints) 
    {
-      std::unique_lock<std::mutex> guard(LpChangeMutex);
       INDEX noConstraintsAdded = Tighten<0>(maxConstraints);
       if(noConstraintsAdded > 0) { // tell lp to rebuild omegas etc
          lp_.Init();
@@ -399,14 +398,18 @@ public:
       this->lp_.Init();
       this->Begin();
       LpControl c = visitor_.begin(this->lp_);
-      while(!c.end) {
+      while(!c.end && !c.error) {
          this->PreIterate(c);
          this->Iterate(c);
          this->PostIterate(c);
          c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
       }
-      this->End();
-      this->WritePrimal();
+      if(!c.error) {
+         this->End();
+         // possibly primal has been computed in end. Call visitor again
+         visitor_.end(this->lowerBound_, this->bestPrimalCost_);
+         this->WritePrimal();
+      }
       return c.error;
    }
 
@@ -620,16 +623,6 @@ using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
    VisitorSolver<SOLVER,VISITOR> solver(argc,argv); \
-   solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
-   return solver.Solve(); \
-}
-
-// Macro for generating main function with specific solver with additional LP option
-#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_LPVISITOR(FMC,PARSE_PROBLEM_FUNCTION,VISITOR,LPSOLVER) \
-using namespace LP_MP; \
-int main(int argc, char* argv[]) \
-{ \
-   VisitorLpSolver<Solver<FMC>,VISITOR,LPSOLVER> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }

@@ -77,6 +77,8 @@ namespace LP_MP {
       cplex_ = IloCplex(model_);
       cplex_.setParam(IloCplex::TiLim,3600); 
       cplex_.setParam(IloCplex::Threads,1);
+      cplex_.setParam(IloCplex::MIPEmphasis, CPX_MIPEMPHASIS_FEASIBILITY); // Jan: have not tested this! find good solutions fast, don't care so much about bound
+      cplex_.setParam(IloCplex::Param::MIP::Strategy::Probe, 0); // probing
     } 
 
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>

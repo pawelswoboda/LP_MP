@@ -321,7 +321,7 @@ public:
 
       if(!overwriteDbRecord_ && CheckIterationsPresent(solver_id_, instance_id_)) { 
          std::cout << "Not performing optimization, as instance was already optimized with same algorithm\n";
-         ret.end = true;
+         ret.error = true;
       }
 
       return ret;
@@ -331,17 +331,20 @@ public:
    {
       auto ret_state = this->BaseVisitor::visit(c, lowerBound, upperBound);
       
-      if(!(ret_state.error || ret_state.end)) {
-         const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - BaseVisitor::GetBeginTime()).count();
-         const INDEX curIter = BaseVisitor::GetIter();
-         iterationStatistics_.push_back({curIter,timeElapsed,lowerBound,upperBound});
-      }
-      if(ret_state.end) {
-         std::cout << "write bounds to database\n";
-         WriteBounds(iterationStatistics_);
-      }
+      const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - BaseVisitor::GetBeginTime()).count();
+      const INDEX curIter = BaseVisitor::GetIter();
+      iterationStatistics_.push_back({curIter,timeElapsed,lowerBound,upperBound});
 
       return ret_state;
+   }
+   void end(const REAL lowerBound, const REAL upperBound)
+   {
+      const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - BaseVisitor::GetBeginTime()).count();
+      const INDEX curIter = BaseVisitor::GetIter();
+      iterationStatistics_.push_back({curIter+1,timeElapsed,lowerBound,upperBound}); // additional fake iteration, e.g. for post-processing
+
+      std::cout << "write bounds to database\n";
+      WriteBounds(iterationStatistics_);
    }
 
    void WriteBounds(const std::vector<IterationStatistics>& iterStats)

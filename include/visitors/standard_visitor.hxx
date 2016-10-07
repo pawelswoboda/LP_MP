@@ -32,6 +32,13 @@ namespace LP_MP {
          std::string shortID() const { return "positive real number smaller 1"; };
          bool check(const REAL& value) const { return value > 0.0 && value < 1.0; };
    };
+   class PositiveIntegerConstraint : public TCLAP::Constraint<INDEX>
+   {
+      public:
+         std::string description() const { return "strictly positive integer constraint"; };
+         std::string shortID() const { return "strictly positive integer"; };
+         bool check(const INDEX& value) const { return value > 0; };
+   };
 
    // standard visitor class for LP_MP solver, when no custom visitor is given
    // do zrobienia: add xor arguments primalBoundComputationInterval, dualBoundComputationInterval with boundComputationInterval
@@ -42,17 +49,18 @@ namespace LP_MP {
       public:
       StandardVisitor(TCLAP::CmdLine& cmd)
          :
-            maxIterArg_("","maxIter","maximum number of iterations of LP_MP, default = 1000",false,1000,"positive integer",cmd),
+            posRealConstraint_(),
+            posIntegerConstraint_(),
+            maxIterArg_("","maxIter","maximum number of iterations of LP_MP, default = 1000",false,1000,&posIntegerConstraint_,cmd),
             maxMemoryArg_("","maxMemory","maximum amount of memory (MB) LP_MP is allowed to use",false,std::numeric_limits<INDEX>::max(),"positive integer",cmd),
-            timeoutArg_("","timeout","time after which algorithm is stopped, in seconds, default = never, should this be type double?",false,std::numeric_limits<INDEX>::max(),"positive integer",cmd),
+            timeoutArg_("","timeout","time after which algorithm is stopped, in seconds, default = never, should this be type double?",false,std::numeric_limits<INDEX>::max(),&posIntegerConstraint_,cmd),
             // xor those //
             //boundComputationIntervalArg_("","boundComputationInterval","lower bound computation performed every x-th iteration, default = 5",false,5,"positive integer",cmd),
-            primalComputationIntervalArg_("","primalComputationInterval","primal computation performed every x-th iteration, default = 5",false,5,"positive integer",cmd),
-            lowerBoundComputationIntervalArg_("","lowerBoundComputationInterval","lower bound computation performed every x-th iteration, default = 1",false,1,"positive integer",cmd),
+            primalComputationIntervalArg_("","primalComputationInterval","primal computation performed every x-th iteration, default = 5",false,5,&posIntegerConstraint_,cmd),
+            lowerBoundComputationIntervalArg_("","lowerBoundComputationInterval","lower bound computation performed every x-th iteration, default = 1",false,1, &posIntegerConstraint_,cmd),
             ///////////////
-            posConstraint_(),
-            minDualImprovementArg_("","minDualImprovement","minimum dual improvement between iterations of LP_MP",false,0.0,&posConstraint_,cmd),
-            minDualImprovementIntervalArg_("","minDualImprovementInterval","the interval between which at least minimum dual improvement must occur",false,10,"positive integer",cmd),
+            minDualImprovementArg_("","minDualImprovement","minimum dual improvement between iterations of LP_MP",false,0.0,&posRealConstraint_,cmd),
+            minDualImprovementIntervalArg_("","minDualImprovementInterval","the interval between which at least minimum dual improvement must occur",false,10,&posIntegerConstraint_,cmd),
             standardReparametrizationArg_("","standardReparametrization","mode of reparametrization: {anisotropic,uniform}",false,"anisotropic","{anisotropic|uniform}",cmd),
             roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution: {anisotropic|uniform}",false,"uniform","{anisotropic|uniform}",cmd),
             primalTime_(0)
@@ -136,12 +144,6 @@ namespace LP_MP {
             }
             std::cout << ", time elapsed = " << timeElapsed << "\n";
          }
-         if(c.end == true) {
-            auto endTime = std::chrono::steady_clock::now();
-            std::cout << "Optimization took " <<  std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations.\n";
-         } else if(c.error == true) {
-            assert(false); // this case is currently not handled
-         }
 
          curIter_++;
          remainingIter_--;
@@ -176,9 +178,10 @@ namespace LP_MP {
             }
          }
          if(c.computeLowerBound && curIter_ >= minDualImprovementInterval_ && minDualImprovementArg_.isSet()) {
+            assert(lowerBound_.size() >= minDualImprovementInterval_);
             const REAL prevLowerBound = lowerBound_[lowerBound_.size() - minDualImprovementInterval_];
-            if(minDualImprovement_ > 0 && curLowerBound_ - prevLowerBound < minDualImprovement_) {
-               std::cout << "Dual improvement smaller than " << minDualImprovement_ << " after " << minDualImprovementInterval_ << ", terminating optimization\n";
+            if(minDualImprovement_ > 0 && lowerBound - prevLowerBound < minDualImprovement_) {
+               std::cout << "Dual improvement smaller than " << minDualImprovement_ << " after " << minDualImprovementInterval_ << " iterations, terminating optimization\n";
                remainingIter_ = std::min(INDEX(1),remainingIter_);
             }
          }
@@ -207,6 +210,12 @@ namespace LP_MP {
          }
          return ret;
       }
+
+      void end(const REAL lower_bound, const REAL upper_bound)
+      {
+         auto endTime = std::chrono::steady_clock::now();
+         std::cout << "Optimization took " <<  std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations.\n";
+      }
       
       using TimeType = decltype(std::chrono::steady_clock::now());
       TimeType GetBeginTime() const { return beginTime_; }
@@ -214,6 +223,8 @@ namespace LP_MP {
       INDEX GetIter() const { return curIter_; }
 
       protected:
+      PositiveRealConstraint posRealConstraint_;
+      PositiveIntegerConstraint posIntegerConstraint_;
       // command line arguments TCLAP
       TCLAP::ValueArg<INDEX> maxIterArg_;
       TCLAP::ValueArg<INDEX> maxMemoryArg_;
@@ -221,7 +232,6 @@ namespace LP_MP {
       //TCLAP::ValueArg<INDEX> boundComputationIntervalArg_;
       TCLAP::ValueArg<INDEX> primalComputationIntervalArg_;
       TCLAP::ValueArg<INDEX> lowerBoundComputationIntervalArg_;
-      PositiveRealConstraint posConstraint_;
       TCLAP::ValueArg<REAL> minDualImprovementArg_;
       TCLAP::ValueArg<INDEX> minDualImprovementIntervalArg_;
       TCLAP::ValueArg<std::string> standardReparametrizationArg_;
@@ -273,9 +283,9 @@ namespace LP_MP {
             tightenIntervalArg_("","tightenInterval","number of iterations between tightenings",false,std::numeric_limits<INDEX>::max(),"positive integer", cmd),
             tightenConstraintsMaxArg_("","tightenConstraintsMax","maximal number of constraints to be added during tightening",false,20,"positive integer",cmd),
             tightenConstraintsPercentageArg_("","tightenConstraintsPercentage","maximal number of constraints to be added during tightening as percentage of number of initial factors",false,0.01,"positive real",cmd),
-            posConstraint_(),
+            posRealConstraint_(),
             // do zrobienia: remove minDualIncrease and minDualDecreaseFactor
-            tightenMinDualIncreaseArg_("","tightenMinDualIncrease","minimum increase which additional constraint must guarantee",false,0.0,&posConstraint_, cmd),
+            tightenMinDualIncreaseArg_("","tightenMinDualIncrease","minimum increase which additional constraint must guarantee",false,0.0,&posRealConstraint_, cmd),
             unitIntervalConstraint_(),
             tightenMinDualDecreaseFactorArg_("","tightenMinDualDecreaseFactor","factor by which to decrease minimum dual increase during tightening",false,0.5,&unitIntervalConstraint_, cmd)
       {
@@ -350,7 +360,8 @@ namespace LP_MP {
       TCLAP::ValueArg<INDEX> tightenIntervalArg_; // interval between tightening operations.
       TCLAP::ValueArg<INDEX> tightenConstraintsMaxArg_; // How many constraints to add in tightening maximally
       TCLAP::ValueArg<REAL> tightenConstraintsPercentageArg_; // How many constraints to add in tightening maximally
-      PositiveRealConstraint posConstraint_;
+      PositiveRealConstraint posRealConstraint_;
+      PositiveIntegerConstraint posIntegerlConstraint_;
       TCLAP::ValueArg<REAL> tightenMinDualIncreaseArg_; // only include constraints which guarantee increase larger than specified value
       OpenUnitIntervalConstraint unitIntervalConstraint_;
       TCLAP::ValueArg<REAL> tightenMinDualDecreaseFactorArg_; 

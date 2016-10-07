@@ -1,6 +1,7 @@
 #include "evaluate.hxx"
 #include "visitors/sqlite_visitor.hxx"
 #include "solvers/discrete_tomography/discrete_tomography.h"
+#include "lp_interface/lp_gurobi.hxx"
 
 using namespace LP_MP;
 
@@ -950,15 +951,19 @@ int main()
       {"--maxIter"}, {"1000"},
       {"--timeout"}, {"3600"}, // one hour
       {"--minDualImprovement"}, {"0.00001"},
-      {"--minDualImprovementInterval"}, {"5"},
+      {"--minDualImprovementInterval"}, {"50"},
       {"--lowerBoundComputationInterval"}, {"10"},
       {"--primalComputationInterval"}, {"100000"},
       //{"--overwriteDbRecord"}, // do zrobienia: possibly deactivate this. Then we do not overwrite
-      {"--databaseFile"}, {"discrete_tomography.db"},
-      {"--tighten"},
-      {"--tightenIteration"}, {"500"},
-      {"--tightenInterval"}, {"20"},
-      {"--tightenConstraintsMax"}, {"50"}
+      //{"--tighten"},
+      //{"--tightenIteration"}, {"500"},
+      //{"--tightenInterval"}, {"20"},
+      //{"--tightenConstraintsMax"}, {"50"},
+      {"--LpInterval"}, {"50"},
+      {"--LpTimelimit"}, {"100"},
+      {"--LpSolverThreads"}, {"1"},
+      {"--LpRoundValue"}, {"1"},
+      {"--databaseFile"}, {"discrete_tomography.db"}
    };
 
    using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
@@ -982,7 +987,7 @@ int main()
          for(auto& i : s) {
             i = "discrete_tomography_datasets/discrete_tomography_synthetic/mp/" + p + "/" + i;
          }
-         RunSolver<FMC_DT,VisitorSolver<Solver<FMC_DT>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT>,s,options,p + " projections, sparsity " + std::to_string(sparsity) ,"MP");
+         RunSolver<FMC_DT,VisitorSolver<LpSolver<Solver<FMC_DT>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT>,s,options,p + " projections, sparsity " + std::to_string(sparsity) ,"MP");
 
       }
       sparsity++;
