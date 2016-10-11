@@ -254,14 +254,14 @@ std::vector<std::string> graphMatchingHotelDatasets = {
    {hotel_prefix + "energy_hotel_frame92frame99.txt"}
 };
 
-std::string hassan_prefix = "../../../solvers/graph_matching/Abu_Hassan/torresani/";
+std::string hassan_prefix = "../../../solvers/graph_matching/Hassan/";
 std::vector<std::string> graphMatchingHassanDatasets = {
    {hassan_prefix + "board_torresani.txt"},
    {hassan_prefix + "books_torresani.txt"},
    {hassan_prefix + "hammer_torresani.txt"},
    {hassan_prefix + "party_torresani.txt"},
    {hassan_prefix + "table_torresani.txt"},
-   {hassan_prefix + "tea_torresani.txt"},
+   //{hassan_prefix + "tea_torresani.txt"}, 
    {hassan_prefix + "walking_torresani.txt"}
 };
 
@@ -298,7 +298,6 @@ std::vector<std::string> graphMatchingWormsDatasets = {
    { worms_prefix + "unc54L1_0123071-lowThresh-more-hyp.surf-16-03-04-1750.uai"},
    { worms_prefix + "unc54L1_0123072-lowThresh-more-hyp.surf-16-03-04-1750.uai"}
 };
-
 
 int main()
 {

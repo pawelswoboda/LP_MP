@@ -2,6 +2,10 @@
 #include "solvers/graphical_model/graphical_model.h"
 #include "visitors/standard_visitor.hxx"
 
+#ifdef USE_GUROBI
+#include "lp_interface/lp_gurobi.hxx"
+#endif
+
 // UAI test input. Note: not all unaries are present, hence zero unaries must be added.
 std::string uai_test_input = 
 R"(MARKOV
@@ -73,17 +77,50 @@ TEST_CASE("gm", "[graphical model]") {
 
       SECTION("triplet") {
          mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
-         mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
-         mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+         mrf.AddUnaryFactor(std::vector<REAL>(3,0.0));
+         mrf.AddUnaryFactor(std::vector<REAL>(4,0.0));
 
          // make a cycle of length 3 visiting each label once -> one negative Potts and two positive Potts
-         mrf.AddPairwiseFactor(0,1,negPotts);
-         mrf.AddPairwiseFactor(0,2,posPotts);
-         mrf.AddPairwiseFactor(1,2,posPotts);
+         // make number of labels varying to check whether bounds work alright
+         std::vector<REAL> negPotts23 = {1,0,2, 1,0,2};
+         std::vector<REAL> posPotts24 = {0,1,2,2, 1,0,2,2};
+         std::vector<REAL> posPotts34 = {0,1,2,2, 1,0,2,2, 2,2,2,2};
+         mrf.AddPairwiseFactor(0,1,negPotts23);
+         mrf.AddPairwiseFactor(0,2,posPotts24);
+         mrf.AddPairwiseFactor(1,2,posPotts34);
 
          s.Solve();
-         assert(s.lower_bound() == 1.0);
+         REQUIRE(s.lower_bound() == 1.0);
       }
+
+#ifdef USE_GUROBI
+      SECTION("triplet with cplex") {
+         auto cplex_options = solver_options;
+         cplex_options.push_back("--onlyLp");
+         cplex_options.push_back("--relax");
+         VisitorLpSolver<SolverType,VisitorType,LpInterfaceGurobi> s(cplex_options);
+         auto& mrf = s.template GetProblemConstructor<0>();
+
+         mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+         mrf.AddUnaryFactor(std::vector<REAL>(3,0.0));
+         mrf.AddUnaryFactor(std::vector<REAL>(4,0.0));
+
+         // make a cycle of length 3 visiting each label once -> one negative Potts and two positive Potts
+         // make number of labels varying to check whether bounds work alright
+         std::vector<REAL> negPotts23 = {1,0,2, 1,0,2};
+         std::vector<REAL> posPotts24 = {0,1,2,2, 1,0,2,2};
+         std::vector<REAL> posPotts34 = {0,1,2,2, 1,0,2,2, 2,2,2,2};
+         mrf.AddPairwiseFactor(0,1,negPotts23);
+         mrf.AddPairwiseFactor(0,2,posPotts24);
+         mrf.AddPairwiseFactor(1,2,posPotts34);
+
+         mrf.AddTighteningTriplet(0,1,2);
+
+         s.Solve();
+         REQUIRE(s.lower_bound() == 1.0);
+      }
+#endif
+
 
       SECTION("cycle: k projection graph") { // k projection graph (individual labels) can find violated cycle
          mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
@@ -98,7 +135,7 @@ TEST_CASE("gm", "[graphical model]") {
          mrf.AddPairwiseFactor(0,3,posPotts);
 
          s.Solve();
-         assert(s.lower_bound() == 1.0);
+         REQUIRE(s.lower_bound() == 1.0);
       }
 
       // to do: add test problem where only create_expanded_projection_graph, but not create_k_projection_graph, can find a violated cycle.
@@ -126,7 +163,7 @@ TEST_CASE("gm", "[graphical model]") {
 
          s.Solve();
          assert(false);
-         assert(s.lower_bound() == 1.0);
+         REQUIRE(s.lower_bound() == 1.0);
       }
       */
    }

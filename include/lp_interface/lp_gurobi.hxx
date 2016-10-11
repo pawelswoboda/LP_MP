@@ -128,13 +128,13 @@ namespace LP_MP {
   };
 
   template<class factor>
-  void LpInterfaceGurobi::addFactor(const factor& f,INDEX offset){
+  inline void LpInterfaceGurobi::addFactor(const factor& f,INDEX offset){
     Offset_ = offset;
     size_ = f.size();
     f.CreateConstraints(this);
   }
   
-  int LpInterfaceGurobi::solve(){
+  inline int LpInterfaceGurobi::solve(){
     int status = 2;
     try{
       model_.update();
@@ -149,7 +149,7 @@ namespace LP_MP {
     return status;
   }
 
-  int LpInterfaceGurobi::solve(PrimalSolutionStorage::Element primal){
+  inline int LpInterfaceGurobi::solve(PrimalSolutionStorage::Element primal){
      // go through primal and when it is not unknownState, set variables to zero in model
      for(INDEX i=0; i<noVars_; ++i) {
         if(primal[i] == true) {
@@ -179,16 +179,16 @@ namespace LP_MP {
      return status;
   }
 
-  REAL LpInterfaceGurobi::GetVariableValue(const INDEX i) const{
+  inline REAL LpInterfaceGurobi::GetVariableValue(const INDEX i) const{
     assert(i < noVars_);
     return MainVars_[i].get(GRB_DoubleAttr_X);
   }
 
-  REAL LpInterfaceGurobi::GetObjectiveValue() const{
+  inline REAL LpInterfaceGurobi::GetObjectiveValue() const{
     return model_.get(GRB_DoubleAttr_ObjVal);
   }
   
-  void LpInterfaceGurobi::SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer){
+  inline void LpInterfaceGurobi::SetVariableBound(LpVariable v,REAL lb,REAL ub,bool integer){
     v.set(GRB_DoubleAttr_LB,lb);
     v.set(GRB_DoubleAttr_UB,ub);
     if(integer){
@@ -198,16 +198,16 @@ namespace LP_MP {
     }
   }
   
-  void LpInterfaceGurobi::addLinearEquality(LinExpr lhs,LinExpr rhs){
+  inline void LpInterfaceGurobi::addLinearEquality(LinExpr lhs,LinExpr rhs){
     model_.addConstr(lhs,GRB_EQUAL,rhs);
   }
 
-    void LpInterfaceGurobi::addLinearInequality(LinExpr lhs,LinExpr rhs){
+  inline void LpInterfaceGurobi::addLinearInequality(LinExpr lhs,LinExpr rhs){
     model_.addConstr(lhs,GRB_LESS_EQUAL,rhs);
   }
   
   
-  REAL LpInterfaceGurobi::GetBestBound() const{
+  inline REAL LpInterfaceGurobi::GetBestBound() const{
     REAL bound = 0.0;
     if(model_.get(GRB_IntAttr_IsMIP)){
       bound = model_.get(GRB_DoubleAttr_ObjBound);

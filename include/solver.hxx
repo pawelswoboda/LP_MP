@@ -7,7 +7,6 @@
 #include "template_utilities.hxx"
 #include "tclap/CmdLine.h"
 #include "lp_interface/lp_interface.h"
-#include "boost/hana.hpp"
 #include <fstream>
 
 namespace LP_MP {
@@ -290,7 +289,6 @@ protected:
    // while Solver does not know how to compute primal, derived solvers do know. After computing a primal, they are expected to register their primals with the base solver
    REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
    PrimalSolutionStorage bestPrimal_; // these vectors are stored in the order of forwardOrdering_
-
 };
 
 // local rounding interleaved with message passing 
@@ -454,7 +452,7 @@ public:
    {
       this->lp_.Init(); 
       LpControl c = visitor_.begin(this->lp_);
-      if(LPOnly_.getValue()){        
+      if(LPOnly_.getValue()){
         while(!c.end) {
            this->PreIterate(c);
            this->Iterate(c);
@@ -482,9 +480,23 @@ public:
           lpSolver_->solve();
           printf("\n");
           printf("Obj: %5.3f    Bound: %5.3f \n",lpSolver_->GetObjectiveValue(),lpSolver_->GetBestBound());
+
+          // read out bound and solution.
+          this->lowerBound_ = std::max(this->lowerBound_, lpSolver_->GetObjectiveValue());
+          std::cout << "lower bound after LP optimization is = " << lpSolver_->GetBestBound() << "\n";
+          if(!this->RELAX_.isSet()) {
+             const REAL primal_value = lpSolver_->GetObjectiveValue();
+             PrimalSolutionStorage primal;
+             this->lp_.InitializePrimalVector(primal);
+             for(INDEX i=0; i<primal.size(); ++i) {
+                assert(lpSolver_->GetVariableValue(i) == 0.0 || lpSolver_->GetVariableValue(i) == 1.0);
+                primal[i] = lpSolver_->GetVariableValue(i);
+             }
+             this->RegisterPrimal(primal);
+          }
         }
       } else { lpSolver_ = NULL;  }
-      
+
       return c.error;
    }
 
@@ -498,7 +510,6 @@ private:
   TCLAP::SwitchArg LPOnly_;
   TCLAP::SwitchArg RELAX_;
   TCLAP::SwitchArg EXPORT_;
-  
 };
 
   // solver for rounding with standard (I)LP-solver
@@ -562,7 +573,6 @@ private:
       } else {
         status = lpSolver_->solve();
       }
-      
       return status;
     }
   

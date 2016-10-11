@@ -23,8 +23,8 @@ public:
    template<typename G1, typename G2>
    void MakeLeftFactorUniform(const G1& leftPot, G2& msg, const REAL omega = 1.0);
 
-   template<typename OP, typename REPAM_ARRAY, typename MSG>
-   void MakeFactorUniform(const OP op, const REPAM_ARRAY& repamPot, MSG& msg, const INDEX var_idx, const REAL omega = 1.0)
+   template<typename REPAM_ARRAY, typename MSG>
+   void MakeFactorUniform(const REPAM_ARRAY& repamPot, MSG& msg, const INDEX var_idx, const REAL omega = 1.0)
    {
       assert(msg.size() == 1);
       assert(var_idx < repamPot.size());
@@ -38,23 +38,18 @@ public:
       }
 
       msg[0] -= omega*(repamPot[var_idx] - min_val);
-      return;
    }
 
    template<typename RIGHT_FACTOR, typename G1, typename G2>
    void ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg)
    { 
-      auto op = [](const REAL x) { return +x; };
-      MakeFactorUniform<decltype(op)>(op,rightPot, msg, rightVar_);
-      //MakeRightFactorUniform(rightPot, msg); 
+      MakeFactorUniform(rightPot, msg, rightVar_);
    }
 
    template<typename LEFT_FACTOR, typename G1, typename G2>
    void ReceiveMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg)
    { 
-      auto op = [](const REAL x) { return -x; }; // do zrobienia: is this correct still? Signs should be the same!
-      MakeFactorUniform<decltype(op)>(op,leftPot, msg, leftVar_);
-      //MakeLeftFactorUniform(leftPot, msg); 
+      MakeFactorUniform(leftPot, msg, leftVar_);
    }
 
    template<typename RIGHT_FACTOR, typename G1, typename G2>
@@ -76,28 +71,11 @@ public:
          msg[0] -= -std::numeric_limits<REAL>::infinity();
       }
    }
-   /*
-   template<typename LEFT_FACTOR, typename G1, typename G3>
-   void SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega)
-   { //std::cout << "Send message to right equal\n";
-      auto op = [](const REAL x) { return -x; };
-      MakeFactorUniform<decltype(op)>(op,leftPot, msg, leftVar_, omega);
-      //MakeLeftFactorUniform(leftPot,msg,omega); 
-   }
-   
-   template<typename RIGHT_FACTOR, typename G2, typename G3>
-   void SendMessageToLeft(RIGHT_FACTOR* const r, const G2& rightPot, G3& msg, const REAL omega)
-   { 
-      auto op = [](const REAL x) { return +x; };
-      MakeFactorUniform<decltype(op)>(op,rightPot, msg, rightVar_, omega);
-      //MakeRightFactorUniform(rightPot,msg,omega); 
-   }
-   */
 
    // send all messages of the same type at once
    // possibly templatize this so that case, where all variables of left factor are accessed exatly once, is processed with greater speed (only one minimum searching required then)
    // template specialization is also possible for every dimension accessed except for last one
-   // assume that all attached factors have different endpoINDEXs
+   // assume that all attached factors have different endpoints
 
    // do zrobienia: not best encapsulation: we have access to MessageTypeCRTP holding EqualityMessage, not to the EqualityMessage
    // idea: construct proxy object that will give access directly to EqualityMessage, but has no need to construct  the array explicitly
@@ -116,6 +94,7 @@ public:
       // do zrobienia:
       const REAL omega_sum = 0.5 * std::accumulate(omegaIt, omegaEnd, 0.0); // strangely, a smaller factor makes the algorithm faster
       //const REAL omega_sum = std::accumulate(omegaIt, omegaEnd, 0.0);
+      //const REAL omega_sum = 0.0;
       assert(omega_sum <= 1.0 + eps);
 
       // find minimal value of potential over all indices accessed by messages
@@ -184,20 +163,6 @@ public:
       rightRepamPot[rightVar_] += msg; 
    }
 
-   // for implicit repam storage, not really needed, only test
-   template<typename M>
-   const REAL GetLeftMessage(const INDEX i, const M& msg) const
-   {
-      if(i==leftVar_) return msg[0];
-      else return 0.0;
-   }
-   template<typename M>
-   const REAL GetRightMessage(const INDEX i, const M& msg) const
-   {
-      if(i==rightVar_) return msg[0];
-      else return 0.0;
-   }
-
    template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
    void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor) const
    { 
@@ -218,7 +183,6 @@ public:
       } else if(right[rightVar_] == false) {
          left[leftVar_] = false;
       }
-
    }
 
    template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = C == Chirality::right, typename LEFT_FACTOR, typename RIGHT_FACTOR>
@@ -237,9 +201,7 @@ public:
    // note: If we build an LP-model, this could be checked automatically!
    bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, PrimalSolutionStorage::Element rightPrimal) const
    {
-      if(leftPrimal[leftVar_]) { return rightPrimal[rightVar_] == true; }
-      if(rightPrimal[rightVar_]) { return leftPrimal[leftVar_] == true; }
-      return true;
+      return leftPrimal[leftVar_] == rightPrimal[rightVar_];
    }
 
 

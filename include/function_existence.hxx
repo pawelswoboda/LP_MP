@@ -25,10 +25,10 @@ private: \
       std::is_same< \
       decltype( std::declval<T>() .MEMBER ( std::declval<Args>()...) ), \
       Ret \
-         >::type; \
+         >::type { return typename std::is_same<Ret,Ret>::type{}; }; \
 \
-   template<typename> \
-   static constexpr std::false_type check(...); \
+   template<typename T> \
+   static constexpr std::false_type check(...) { return std::false_type{}; }; \
 \
    typedef decltype(check<C>(0)) type; \
 \
@@ -39,6 +39,7 @@ template<class C, typename RET, typename... ARGS> \
 constexpr static bool TESTER_NAME () { \
   return struct_##TESTER_NAME<C,RET(ARGS&...)>::value; \
 } \
+
 
 
 
@@ -54,10 +55,10 @@ private: \
       std::is_same< \
       decltype( VALUE_TYPE (std::declval<T>(). MEMBER (std::declval<Args>()...) = std::declval<VALUE_TYPE>() ) ), \
       VALUE_TYPE \
-         >::type; \
+         >::type { return typename std::is_same<bool,bool>::type{}; }; \
  \
    template<typename> \
-      static constexpr std::false_type check(...); \
+      static constexpr std::false_type check(...) { return std::false_type{}; }; \
  \
    typedef decltype(check<C>(0)) type; \
 public: \

@@ -30,7 +30,6 @@ ExternalProject_Add(
    GIT_REPOSITORY "https://github.com/boostorg/hana.git"
    GIT_TAG "v1.0.0"
    #CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/Hana_Project --target install"
-  UPDATE_COMMAND ""
    BUILD_COMMAND ""
    INSTALL_COMMAND ""
    #BUILD_COMMAND cmake --build
@@ -50,7 +49,6 @@ ExternalProject_Add(
    meta_Project
    GIT_REPOSITORY "https://github.com/ericniebler/meta.git"
    GIT_TAG "master"
-   UPDATE_COMMAND ""
    INSTALL_COMMAND ""
    BUILD_COMMAND ""
    CONFIGURE_COMMAND ""
@@ -64,7 +62,6 @@ ExternalProject_Add(
    Catch_Project
    GIT_REPOSITORY "https://github.com/philsquared/Catch.git"
    GIT_TAG "v1.5.6"
-   UPDATE_COMMAND ""
    INSTALL_COMMAND ""
    BUILD_COMMAND ""
    CONFIGURE_COMMAND ""
@@ -78,7 +75,6 @@ ExternalProject_Add(
    cpp_sort_Project
    GIT_REPOSITORY "https://github.com/Morwenn/cpp-sort.git"
    GIT_TAG "master"
-   UPDATE_COMMAND ""
    INSTALL_COMMAND ""
    BUILD_COMMAND ""
    CONFIGURE_COMMAND ""
@@ -92,7 +88,6 @@ ExternalProject_Add(
    OpenGM_Project
    GIT_REPOSITORY "https://github.com/opengm/opengm.git"
    GIT_TAG "master"
-   UPDATE_COMMAND ""
    INSTALL_COMMAND ""
    BUILD_COMMAND ""
    CONFIGURE_COMMAND ""
@@ -120,7 +115,6 @@ ExternalProject_Add(
    Andres_Project
    GIT_REPOSITORY "https://github.com/bjoern-andres/graph.git"
    GIT_TAG "master"
-   UPDATE_COMMAND ""
    INSTALL_COMMAND "" 
    BUILD_COMMAND ""
    CONFIGURE_COMMAND ""
@@ -135,7 +129,6 @@ ExternalProject_ADD(
    TCLAP_Project
    URL "http://downloads.sourceforge.net/project/tclap/tclap-1.2.1.tar.gz"
    # or http://kent.dl.sourceforge.net/project/tclap/tclap-1.2.1.tar.gz
-   UPDATE_COMMAND ""
    INSTALL_COMMAND ""
    BUILD_COMMAND ""
    CONFIGURE_COMMAND ""
@@ -166,7 +159,6 @@ ExternalProject_ADD(
    CONFIGURE_COMMAND ""
    )
 ExternalProject_Get_Property(CS2_CPP_Project install_dir)
-
 
 ExternalProject_Add (LP_MP
    DEPENDS ${DEPENDENCIES}

@@ -4,11 +4,7 @@
 
 #include <string.h>
 #include <assert.h>
-#include <stdlib.h>
-#include <vector> // do zrobienia: used for cap. Replace cap by normal array
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
+
 #include <algorithm>
 #include <memory>
 
@@ -18,157 +14,48 @@
 
 //#define MINCOST_DEBUG
 
-namespace MCF {
-
-// do zrobienia: 
-// - rename to min_cost_flow.hxx
-// - we have many parallel edges next to each other each with same capacities. Handle this better (i.e. sort parallel edges), so that pushing flow along shortest path can be possibly done faster.
-//   possibly hold such edges in a heap sorted by edge cost. Have two of them for each edge with one containing all edges with some residual capacity left and the other one with reversed residual capacity left
-//   for this have in each arc a pointer to left and right element of heap.
-// - use double ended dijkstra search to speed up shortest path computation. Reuse? Global source and sink node? Search from all nodes with positive excess simultaneously?
-// - improve function names: currently "R" can stand for residual or reduced. Substitute R by correct meaning
-// - static_assert for integral type for FlowType and for either integral or floating point type f or CostType in destructor
-// - could other priority queues be better than the one used for shortest path computation?
-// - replace NULL by nullptr everywhere.
-// - support various heaps for Dijkstra via template
-// - reorder arcs, such that outgoing arcs are consecutive. Better runtime?
-
-template <typename FlowType, typename CostType> class SSP
+template <typename FlowType, typename CostType> class MinCost
 {
 public:
 	typedef int NodeId;
-	typedef int EdgeId; // do zrobienia: remove, as there will be no such thing anymore
-	typedef int ArcId;
+	typedef int EdgeId;
 
-	struct Node;
-	struct Arc;
-
-	SSP(int NodeNum, int edgeNumMax, void (*err_function)(const char *) = NULL);
-   SSP(const SSP<FlowType, CostType>& other); // copy constructor
+	MinCost(int NodeNum, int edgeNumMax, void (*err_function)(const char *) = NULL);
 
 	// Destructor
-	~SSP();
+	~MinCost();
 
 	void AddNodeExcess(NodeId i, FlowType excess);
 
 	// first call returns 0, second 1, and so on.
-	// lower_bound < upper_bound
+	// cap, rev_cap must be non-negative. 
 	// cost can be negative.
-	EdgeId AddEdge(NodeId i, NodeId j, FlowType lower_bound, FlowType upper_bound, CostType cost);
+	EdgeId AddEdge(NodeId i, NodeId j, FlowType cap, FlowType rev_cap, CostType cost);
 
 	CostType Solve();
 
 	///////////////////////////////////////////////////
 
-   void SetCap(ArcId e, FlowType new_cap);
-	FlowType GetRCap(EdgeId e) const;
+	FlowType GetRCap(EdgeId e);
 	void SetRCap(EdgeId e, FlowType new_rcap);
-	FlowType GetReverseRCap(EdgeId e) const;
+	FlowType GetReverseRCap(EdgeId e);
 	void SetReverseRCap(EdgeId e, FlowType new_rcap);
 	void PushFlow(EdgeId e, FlowType delta);
 	void UpdateCost(EdgeId e, CostType delta);
 
-   // functions added by Paul Swoboda //
-   FlowType GetFlow(EdgeId e) const
-   {
-      assert(0 <= e && e < 2*edgeNumMax);
-      const FlowType ub = cap[e];
-      const FlowType lb = cap[N_arc(arcs[e].sister)];
-      const FlowType r_cap = GetRCap(e);
-      //std::cout << "ub = " << ub << ", residual capacity = " << r_cap << ", lb = " << lb << ", reverse residual capacity = " << reverse_r_cap << std::endl;
-      return ub - r_cap;
-      /*
-      FlowType delta;
-      if(ub < 0) {
-         delta += ub;
-      } else if(lb > 0) {
-         delta -= lb;
-      } else {
-         delta = 0;
-      }
-      return ub + delta - r_cap;
-      */
-   }
-   FlowType ExcessSum() const
-   {
-      FlowType sum = 0;
-      for(int i=0; i<nodeNum; ++i) {
-         sum += nodes[i].excess;
-      }
-      return sum;
-   }
-
-   ArcId StartingArc(NodeId i) const {
-      assert(0 <= i && i < nodeNum);
-      ArcId idx = std::numeric_limits<ArcId>::max();
-      for(Arc* a=nodes[i].firstSaturated; a!=nullptr; a=a->next) {
-         idx = std::min(N_arc(a),idx);
-      }
-      for(Arc* a=nodes[i].firstNonsaturated; a!=nullptr; a=a->next) {
-         idx = std::min(N_arc(a),idx);
-      }
-      return idx;
-      
-   }
-   FlowType NoArcs(NodeId i) const {
-      if(i < nodeNum-1) {
-         return StartingArc(i+1) - StartingArc(i);
-      } else {
-         return 2*edgeNum - StartingArc(i);
-      }
-   }
-
-   FlowType GetCap(const ArcId a) const { return cap[a]; }
-   FlowType GetDemand(const NodeId i) const { return demand[i]; }
-   void SetCost(const EdgeId e, const CostType c) { UpdateCost(e, c - GetCost(e)); }
-	CostType ShortestPath(const NodeId start_node, const NodeId end_node);
-   FlowType GetNodeExcess(const NodeId i) const { return nodes[i].excess; }
-   NodeId GetTailNodeId(const ArcId e) const { return N_node(arcs[e].sister->head); }
-   NodeId GetHeadNodeId(const ArcId e) const { return N_node(arcs[e].head); }
-   ArcId GetReverseArcId(const ArcId a) const { return N_arc(arcs[a].sister); }
-   CostType GetCost(const EdgeId e) const { return arcs[e].cost; }
-   CostType GetReducedCost(const EdgeId e) const { assert(e<2*edgeNum); return arcs[e].GetRCost(); }
-   void SetPotential(const NodeId i, const FlowType pi) { nodes[i].pi = pi; }
-   CostType GetPotential(const NodeId i) const { return nodes[i].pi; }
-   const Node& GetNode(const NodeId i) const { return nodes[i]; }
-
-   FlowType GetUpperBound(const EdgeId e) const { return cap[e].upper; }
-   FlowType GetLowerBound(const EdgeId e) const { return cap[e].lower; }
-
-   NodeId N_node(Node* i) const { assert(i - nodes >= 0 && i - nodes < nodeNum); return i - nodes; }
-   ArcId N_arc(Arc* a) const { assert(a - arcs >= 0 && a-arcs < 2*edgeNum); return a - arcs; }
-
-   int GetNodeNum() const { return nodeNum; }
-   int GetEdgeNum() const { return edgeNum; }
-   int GetArcNum() const { return 2*edgeNum; }
-
-
-   // do zrobienia: make private
-   void SortArcs();
-   void ExchangeArcs(Arc& a, Arc&b);
-
-   // delete all edges and reset all nodes
-   void Reset() 
-   {
-	  edgeNum = 0;
-	  counter = 0;
-	  cost = 0;
-     memset(nodes, 0, nodeNum*sizeof(Node));
-     memset(arcs, 0, 2*edgeNumMax*sizeof(Arc));
-     firstActive = &nodes[nodeNum];
-#ifdef MINCOST_DEBUG
-     for (int i=0; i<nodeNum; i++) nodes[i].id = i;
-#endif
-   }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 	
+private:
 	// internal variables and functions
 
-   struct Node
-   {
+	struct Node;
+	struct Arc;
+
+	struct Node
+	{
 		Arc			*firstNonsaturated;
 		Arc			*firstSaturated;
 
@@ -190,32 +77,26 @@ public:
 
 	struct Arc
 	{
-      // do zrobienia: possibly remove prev and next and always iterate through full list. arcs are stored contiguously. Then no separate saturated and non satured arc list is held
-		Node* head;
-		Arc*  prev;
-		Arc*  next;
-		Arc*  sister; // reverse arc
+		Node		*head;
+		Arc			*prev;
+		Arc			*next;
+		Arc			*sister;	// reverse arc
 
 		FlowType	r_cap;		// residual capacity
 #ifdef MINCOST_DEBUG
-		FlowType	cap_orig; // not needed anymore: cap is an array
+		FlowType	cap_orig;
 #endif
 		CostType	cost;
-		CostType GetRCost() const { return cost + head->pi - sister->head->pi; }
-      Node* tail() const { return sister->head; }
+		CostType GetRCost() { return cost + head->pi - sister->head->pi; }
 	};
 
-private:
-
 	int		nodeNum, edgeNum, edgeNumMax;
-   // make std::unique_ptr out of nodes and arcs
 	Node	*nodes;
 	Arc		*arcs;
+  std::unique_ptr<FlowType[]> cap; // used to hold original lower and upper bound, such that primal flow can be recomputed. To zrobienia: templatize this, such that this information is not held unless wanted. 
 	Node*	firstActive;
 	int		counter;
 	CostType cost;
-   std::unique_ptr<FlowType[]> cap; // used to hold original lower and upper bound, such that primal flow can be recomputed. To zrobienia: templatize this, such that this information is not held unless wanted. 
-   std::unique_ptr<FlowType[]> demand; // used to hold original node excess
 
 
 	void	(*error_function)(const char *);	// this function is called if a error occurs,
@@ -247,7 +128,7 @@ private:
 	PriorityQueue queue;
 
 	/////////////////////////////////////////////////////////////////////////
- 
+
 	void SetRCap(Arc* a, FlowType new_rcap);
 	void PushFlow(Arc* a, FlowType delta);
 
@@ -261,6 +142,46 @@ private:
 #ifdef MINCOST_DEBUG
 	void TestCosts();
 #endif
+
+public:
+   // functions added by Paul Swoboda //
+   FlowType GetFlow(EdgeId e) const
+   {
+      assert(0 <= e && e < edgeNumMax);
+      return cap[e] - arcs[2*e].r_cap;
+   }
+   FlowType GetCap(EdgeId e) const
+   {
+      assert(0 <= e && e < edgeNumMax);
+      return cap[2*e];
+   }
+   FlowType GetRCap(EdgeId e) const
+   {
+      assert(0 <= e && e < edgeNumMax);
+      return cap[2*e+1];
+   }
+
+   void SetCost(const EdgeId e, const CostType c);
+   NodeId GetTailNodeId(const EdgeId e) const { return N_node(arcs[2*e].sister->head); }
+   NodeId GetHeadNodeId(const EdgeId e) const { return N_node(arcs[2*e].head); }
+   EdgeId GetReverseEdgeId(const EdgeId e) const { return N_arc(arcs[2*e].sister); }
+   CostType GetCost(const EdgeId e) const { return arcs[2*e].cost; }
+   CostType GetReducedCost(const EdgeId e) const { assert(e<edgeNum); return arcs[2*e].GetRCost(); }
+   NodeId N_node(Node* i) const { assert(i - nodes >= 0 && i - nodes < nodeNum); return i - nodes; }
+   EdgeId N_arc(Arc* a) const { assert(a - arcs >= 0 && a-arcs < 2*edgeNum); return a - arcs; }
+   int GetNodeNum() const { return nodeNum; }
+   int GetEdgeNum() const { return edgeNum; }
+
+   CostType Objective() const
+   {
+      CostType c = 0.0;
+      NodeId a;
+      Arc* arc;
+      for(arc=arcs, a=0; a<edgeNum; ++arc, ++a) {
+         c += GetFlow(2*a)*(arc->cost);
+      }
+      return 0.5*c; // we have counted objective for arcs and reverse arcs
+   }
 };
 
 
@@ -280,9 +201,8 @@ private:
 
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::AddNodeExcess(NodeId _i, FlowType excess)
+	inline void MinCost<FlowType, CostType>::AddNodeExcess(NodeId _i, FlowType excess)
 {
-   demand[_i] += excess;
 	assert(_i>=0 && _i<nodeNum);
 	nodes[_i].excess += excess;
 	if (nodes[_i].excess > 0 && !nodes[_i].next)
@@ -292,55 +212,27 @@ template <typename FlowType, typename CostType>
 	}
 }
 
-// alternative definition in terms of lower and upper bound
 template <typename FlowType, typename CostType> 
-	inline typename SSP<FlowType, CostType>::EdgeId SSP<FlowType, CostType>::AddEdge(const NodeId _i, const NodeId _j, const FlowType lb, const FlowType ub, CostType cost)
+	inline typename MinCost<FlowType, CostType>::EdgeId MinCost<FlowType, CostType>::AddEdge(NodeId _i, NodeId _j, FlowType cap_orig, FlowType rev_cap, CostType cost)
 {
 	assert(_i>=0 && _i<nodeNum);
 	assert(_j>=0 && _j<nodeNum);
 	assert(_i!=_j && edgeNum<edgeNumMax);
-	assert(lb < ub);
-
-   cap[2*edgeNum] = ub;
-   cap[2*edgeNum+1] = -lb;
-
-   FlowType cap = ub;
-   FlowType rev_cap = -lb;
+	assert(cap >= 0);
+	assert(rev_cap >= 0);
 
 	Arc *a = &arcs[2*edgeNum];
 	Arc *a_rev = a+1;
+  cap[2*edgeNum] = cap_orig;
+  cap[2*edgeNum+1] = rev_cap;
 	edgeNum ++;
-
-   // if either lb > 0 or ub < 0, shift both by the minimal amount so that the previous constraints are satisfied and modify excess on either end node
-   FlowType delta = 0;
-   if(ub < 0) {
-      delta = -ub;
-   } else if(lb > 0) {
-      delta = -lb;
-   }
-   if(delta != 0) {
-      cap += delta;
-      rev_cap -= delta;
-      AddNodeExcess(_j, +delta);
-      AddNodeExcess(_i, -delta);
-      cost += -delta*cost;
-   }
-   assert(cap >= 0 && rev_cap >= 0);
 
 	Node* i = nodes + _i;
 	Node* j = nodes + _j;
 
 	a -> sister = a_rev;
 	a_rev -> sister = a;
-
-   a->next = nullptr;
-   a->prev = nullptr;
-   a_rev->next = nullptr;
-   a_rev->prev = nullptr;
-
-   // do zrobienia: delete
-   /*
-	if (cap > 0)
+	if (cap_orig > 0)
 	{
 		if (i->firstNonsaturated) i->firstNonsaturated->prev = a;
 		a -> next = i -> firstNonsaturated;
@@ -366,21 +258,20 @@ template <typename FlowType, typename CostType>
 		j -> firstSaturated = a_rev;
 	}
 	a_rev->prev = NULL;
-   */
 
 	a -> head = j;
 	a_rev -> head = i;
-	a -> r_cap = cap;
+	a -> r_cap = cap_orig;
 	a_rev -> r_cap = rev_cap;
 	a -> cost = cost;
 	a_rev -> cost = -cost;
 #ifdef MINCOST_DEBUG
-	a->cap_orig = cap;
+	a->cap_orig = cap_orig;
 	a_rev->cap_orig = rev_cap;
 #endif
 
-	//if (a->r_cap > 0 && a->GetRCost() < 0) PushFlow(a, a->r_cap);
-	//if (a_rev->r_cap > 0 && a_rev->GetRCost() < 0) PushFlow(a_rev, a_rev->r_cap);
+	if (a->r_cap > 0 && a->GetRCost() < 0) PushFlow(a, a->r_cap);
+	if (a_rev->r_cap > 0 && a_rev->GetRCost() < 0) PushFlow(a_rev, a_rev->r_cap);
 
 	return edgeNum-1;
 }
@@ -390,9 +281,8 @@ template <typename FlowType, typename CostType>
 ///////////////////////////////////////
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::DecreaseRCap(Arc* a, FlowType delta)
+	inline void MinCost<FlowType, CostType>::DecreaseRCap(Arc* a, FlowType delta)
 {
-   assert(delta > 0);
 	a->r_cap -= delta;
 	if (a->r_cap == 0)
 	{
@@ -408,9 +298,8 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::IncreaseRCap(Arc* a, FlowType delta)
+	inline void MinCost<FlowType, CostType>::IncreaseRCap(Arc* a, FlowType delta)
 {
-   assert(delta > 0);
 	if (a->r_cap == 0)
 	{
 		Node* i = a->sister->head;
@@ -426,43 +315,14 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-void SSP<FlowType, CostType>::SetCap(const ArcId a, const FlowType new_cap)
+	inline FlowType MinCost<FlowType, CostType>::GetRCap(EdgeId e)
 {
-   assert(0<=a && a<2*edgeNum);
-   Arc* arc = arcs[a];
-   Arc* arc_rev = arc->sister;
-   const ArcId a_rev = N_arc(arc_rev);
-
-   if(new_cap < -cap[a_rev]) { // make bounds feasible
-      IncreaseRCap(arc_rev, -new_cap + cap[a_rev]);
-      cap[a_rev] = -new_cap;
-   }
-
-   const FlowType delta = new_cap - GetFlow(a);
-   if(delta < 0) {
-      if(arc->rev_cap < -delta) { // residual capacity and flow has to be decreased
-         DecreaseRCap(arc, arc->rev_cap); // set residual capacity to zero
-         DecreaseRCap(arc_rev, arc->rev_cap);
-         assert(GetFlow(a) == new_cap);
-      } else { // residual capacity has to be decreased, but flow stays feasible
-         DecreaseRCap(arc, -delta);
-      }
-   } else { // residual capacity has to be increased.
-      IncreaseRCap(arc, delta);
-   }
-   cap[a] = new_cap;
-}
-
-template <typename FlowType, typename CostType> 
-inline FlowType SSP<FlowType, CostType>::GetRCap(ArcId e) const
-{
-   assert(0<=e && e<2*edgeNum);
-	Arc* a = &arcs[e];
+	Arc* a = &arcs[2*e];
 	return a->r_cap;
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::SetRCap(Arc* a, FlowType new_rcap)
+	inline void MinCost<FlowType, CostType>::SetRCap(Arc* a, FlowType new_rcap)
 {
 	assert(new_rcap >= 0);
 #ifdef MINCOST_DEBUG
@@ -494,26 +354,26 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::SetRCap(EdgeId e, FlowType new_rcap)
+	inline void MinCost<FlowType, CostType>::SetRCap(EdgeId e, FlowType new_rcap)
 {
-	SetRCap(&arcs[e], new_rcap);
+	SetRCap(&arcs[2*e], new_rcap);
 }
 
 template <typename FlowType, typename CostType> 
-	inline FlowType SSP<FlowType, CostType>::GetReverseRCap(EdgeId e) const
+	inline FlowType MinCost<FlowType, CostType>::GetReverseRCap(EdgeId e)
 {
-	Arc* a = arcs[e].sister;
+	Arc* a = &arcs[2*e+1];
 	return a->r_cap;
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::SetReverseRCap(EdgeId e, FlowType new_rcap)
+	inline void MinCost<FlowType, CostType>::SetReverseRCap(EdgeId e, FlowType new_rcap)
 {
-	SetRCap(arcs[e].sister, new_rcap);
+	SetRCap(&arcs[2*e+1], new_rcap);
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::PushFlow(Arc* a, FlowType delta)
+	inline void MinCost<FlowType, CostType>::PushFlow(Arc* a, FlowType delta)
 {
 	if (delta < 0) { a = a->sister; delta = -delta; }
 	DecreaseRCap(a, delta);
@@ -529,17 +389,28 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::PushFlow(EdgeId e, FlowType delta)
+	inline void MinCost<FlowType, CostType>::PushFlow(EdgeId e, FlowType delta)
 {
 	PushFlow(&arcs[2*e], delta);
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::UpdateCost(EdgeId e, CostType delta)
+inline void MinCost<FlowType, CostType>::SetCost(EdgeId e, CostType c)
 {
-   assert(0<=e && e<2*edgeNum);
-	Arc* a = &arcs[e];
-	cost += delta*(cap[e]-a->r_cap);
+   assert(0<=e && e<edgeNum);
+   Arc* arc = &arcs[2*e];
+   arc->cost = c;
+   arc->sister->cost = -c;
+
+	if (arc->GetRCost() > 0) arc = arc->sister;
+	if (arc->r_cap > 0 && arc->GetRCost() < 0) PushFlow(arc, arc->r_cap);
+}
+
+template <typename FlowType, typename CostType> 
+	inline void MinCost<FlowType, CostType>::UpdateCost(EdgeId e, CostType delta)
+{
+	Arc* a = &arcs[2*e];
+	cost += delta*(cap[2*e]-a->r_cap);
 	a->cost += delta;
 	a->sister->cost = -a->cost;
 
@@ -552,7 +423,7 @@ template <typename FlowType, typename CostType>
 ///////////////////////////////////////
 
 template <typename FlowType, typename CostType> 
-	inline SSP<FlowType, CostType>::PriorityQueue::PriorityQueue()
+	inline MinCost<FlowType, CostType>::PriorityQueue::PriorityQueue()
 {
 	N = 0;
 	arraySize = 16;
@@ -560,25 +431,25 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-	inline SSP<FlowType, CostType>::PriorityQueue::~PriorityQueue()
+	inline MinCost<FlowType, CostType>::PriorityQueue::~PriorityQueue()
 {
 	free(array);
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::PriorityQueue::Reset()
+	inline void MinCost<FlowType, CostType>::PriorityQueue::Reset()
 {
 	N = 0;
 }
 
 template <typename FlowType, typename CostType> 
-	inline CostType SSP<FlowType, CostType>::PriorityQueue::GetKey(Node* i)
+	inline CostType MinCost<FlowType, CostType>::PriorityQueue::GetKey(Node* i)
 {
 	return array[i->heap_ptr].key;
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::PriorityQueue::Swap(int k1, int k2)
+	inline void MinCost<FlowType, CostType>::PriorityQueue::Swap(int k1, int k2)
 {
 	Item* a = array+k1;
 	Item* b = array+k2;
@@ -589,7 +460,7 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::PriorityQueue::Add(Node* i, CostType key)
+	inline void MinCost<FlowType, CostType>::PriorityQueue::Add(Node* i, CostType key)
 {
 	if (N == arraySize)
 	{
@@ -609,7 +480,7 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-	inline void SSP<FlowType, CostType>::PriorityQueue::DecreaseKey(Node* i, CostType key)
+	inline void MinCost<FlowType, CostType>::PriorityQueue::DecreaseKey(Node* i, CostType key)
 {
 	int k = i->heap_ptr;
 	array[k].key = key;
@@ -623,7 +494,7 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-	inline typename SSP<FlowType, CostType>::Node* SSP<FlowType, CostType>::PriorityQueue::RemoveMin(CostType& key)
+	inline typename MinCost<FlowType, CostType>::Node* MinCost<FlowType, CostType>::PriorityQueue::RemoveMin(CostType& key)
 {
 	if (N == 0) return NULL;
 
@@ -647,7 +518,7 @@ template <typename FlowType, typename CostType>
 
 
 template <typename FlowType, typename CostType> 
-	inline SSP<FlowType, CostType>::SSP(int _nodeNum, int _edgeNumMax, void (*err_function)(const char *))
+	inline MinCost<FlowType, CostType>::MinCost(int _nodeNum, int _edgeNumMax, void (*err_function)(const char *))
 	: nodeNum(_nodeNum),
 	  edgeNum(0),
 	  edgeNumMax(_edgeNumMax),
@@ -657,9 +528,8 @@ template <typename FlowType, typename CostType>
 {
 	nodes = (Node*) malloc(nodeNum*sizeof(Node));
 	arcs = (Arc*) malloc(2*edgeNumMax*sizeof(Arc));
-   cap = std::unique_ptr<FlowType[]>( new FlowType[2*edgeNumMax] );
-   demand = std::unique_ptr<FlowType[]>( new FlowType[nodeNum] );
-	if (!nodes || !arcs ||!cap.get() || !demand.get()) { if (error_function) (*error_function)("Not enough memory!"); exit(1); }
+  cap = std::unique_ptr<FlowType[]>( new FlowType[2*edgeNumMax] );
+	if (!nodes || !arcs || !cap) { if (error_function) (*error_function)("Not enough memory!"); exit(1); }
 
 	memset(nodes, 0, nodeNum*sizeof(Node));
 	memset(arcs, 0, 2*edgeNumMax*sizeof(Arc));
@@ -670,123 +540,14 @@ template <typename FlowType, typename CostType>
 }
 
 template <typename FlowType, typename CostType> 
-SSP<FlowType, CostType>::SSP(const SSP<FlowType, CostType>& other)
-	: nodeNum(other.nodeNum),
-	  edgeNum(other.edgeNum),
-	  edgeNumMax(other.edgeNumMax),
-	  counter(0),
-	  cost(0),
-	  error_function(other.error_function),
-     cap(other.cap)
-{
-   assert(false); // not working currently
-	nodes = (Node*) malloc(nodeNum*sizeof(Node));
-	arcs = (Arc*) malloc(2*edgeNumMax*sizeof(Arc));
-	if (!nodes || !arcs) { if (error_function) (*error_function)("Not enough memory!"); exit(1); }
-
-	memset(arcs+edgeNum, 0, 2*(edgeNumMax-edgeNum)*sizeof(Arc));
-
-   cap = std::unique_ptr<FlowType[]>( new FlowType[2*edgeNumMax] );
-   
-	firstActive = &nodes[nodeNum];
-
-	for (int i=0; i<nodeNum; i++) {
-      AddNodeExcess(i, other.GetNodeExcess(i));
-      SetPotential(i, other.GetPotential(i));
-   }
-   for(int e=0; e<edgeNum; e++) {
-      // AddEdge has been modified.
-      exit(1);
-      AddEdge(other.GetTailNodeId(e), other.GetHeadNodeId(e), other.GetRCap(e), other.GetReverseRCap(e), other.GetCost(e));
-   }
-#ifdef MINCOST_DEBUG
-	for (int i=0; i<nodeNum; i++) nodes[i].id = i;
-#endif
-}
-
-template <typename FlowType, typename CostType> 
-	SSP<FlowType, CostType>::~SSP()
+	MinCost<FlowType, CostType>::~MinCost()
 {
 	free(nodes);
 	free(arcs);
 }
 
-template<typename FlowType, typename CostType>
-void SSP<FlowType, CostType>::ExchangeArcs(Arc& a, Arc&b)
-{
-   if(a.sister != &b) {
-      assert(b.sister != &a);
-      std::swap(a, b);
-      std::swap(cap[N_arc(&a)], cap[N_arc(&b)]);
-      a.sister->sister = &a;
-      b.sister->sister = &b;
-   } else {
-      assert(a.sister == &b && b.sister == &a);
-      std::swap(a, b);
-      std::swap(cap[N_arc(&a)], cap[N_arc(&b)]);
-      // restore sister pointers
-      a.sister = &b;
-      b.sister = &a;
-   }
-}
-
-// sort arcs lexicographically.
-template<typename FlowType, typename CostType>
-void SSP<FlowType, CostType>::SortArcs()
-{
-   auto perm = std::unique_ptr<ArcId[]>({ new FlowType[2*edgeNum] });
-   for(int c=0; c<2*edgeNum; ++c) {
-      perm[c] = c;
-   }
-   std::sort(perm.get(), perm.get()+2*edgeNum, [this](ArcId i, ArcId j) {
-         auto tail_i = GetTailNodeId(i);
-         auto tail_j = GetTailNodeId(j);
-         if(tail_i != tail_j) {
-            return tail_i < tail_j;
-         } 
-         return GetHeadNodeId(i) < GetHeadNodeId(j);
-         });
-   // follow cycles in permutation. negative permutation entries signify visited indices
-   for(int c=0; c<2*edgeNum; ++c) {
-      int next_idx = perm[c];
-      if(next_idx == c || next_idx < 0) {
-         continue;
-      }
-      int cur_idx = c;
-      while(perm[next_idx] >= 0) {
-         ExchangeArcs(arcs[cur_idx], arcs[next_idx]);
-         perm[cur_idx] -= 2*edgeNum; // mark as visited
-         cur_idx = next_idx;
-         next_idx = perm[next_idx];
-      }
-   }
-   // set firstSaturated and firstNonSaturated in nodes correctly.
-   // set next and prev fields in Arc correctly
-   for(Arc* a = arcs; a<arcs+2*edgeNum; ++a) {
-      Node* tail = a->tail();
-      if(a->r_cap > 0) { // put into non-saturated list
-         if(tail->firstNonsaturated) {
-            tail->firstNonsaturated->prev = a;
-         }
-         a->next = tail->firstNonsaturated;
-         tail->firstNonsaturated = a;
-      } else { // put into saturated list
-         if(tail->firstSaturated) {
-            tail->firstSaturated->prev = a;
-         }
-         a->next = tail->firstSaturated;
-         a->prev = nullptr;
-         tail->firstSaturated = a;
-      }
-   }
-   // push flow
-   for(Arc* a = arcs; a<arcs+2*edgeNum; ++a) {
-      if (a->r_cap > 0 && a->GetRCost() < 0) PushFlow(a, a->r_cap);
-   }
-}
-
 template <typename FlowType, typename CostType> 
-	void SSP<FlowType, CostType>::Init()
+	void MinCost<FlowType, CostType>::Init()
 {
 	Node* i;
 	Arc* a;
@@ -811,7 +572,7 @@ template <typename FlowType, typename CostType>
 
 
 template <typename FlowType, typename CostType> 
-	FlowType SSP<FlowType, CostType>::Augment(Node* start, Node* end)
+	FlowType MinCost<FlowType, CostType>::Augment(Node* start, Node* end)
 {
 	FlowType delta = (start->excess < -end->excess) ? start->excess : -end->excess;
 	Arc* a;
@@ -834,78 +595,8 @@ template <typename FlowType, typename CostType>
 	return delta;
 }
 
-
-// function which computes cost of a shortest path between specified nodes given optimal primal/dual values (i.e. after solve) for computing marginals
-// do zrobienia: not tested
 template <typename FlowType, typename CostType> 
-	CostType SSP<FlowType, CostType>::ShortestPath(const NodeId start_node, const NodeId end_node)
-{
-   Node* start = &nodes[start_node];
-   Node* end = &nodes[end_node];
-
-   int FLAG0 = ++ counter; // permanently labelled
-   int FLAG1 = ++ counter; // temporarily labelled
-
-   start->parent = NULL;
-   start->flag = FLAG1;
-   queue.Reset();
-   queue.Add(start, 0.0);
-
-   Node* i;
-
-	CostType d; // the current minimum distance
-	while ( (i=queue.RemoveMin(d)) )
-   {
-      if(i == end) break; // do zrobienia: possibly directly return d - start->pi + end-pi (albo -+ odwrotnie)
-      i->flag = FLAG0;
-
-      for(Arc* a=i->firstNonsaturated; a; a=a->next)
-      {
-         assert(a->r_cap > 0);
-         Node* j = a->head;
-         if (j->flag == FLAG0) continue;
-         CostType reduced_cost = a->GetRCost(); // must use reduced cost, otherwise cost might be negative and then Dijkstra's algorithm would not work
-         assert(reduced_cost > -1e-10);
-         if (j->flag == FLAG1)
-         {
-            if (reduced_cost + d >= queue.GetKey(j)) continue;
-            queue.DecreaseKey(j, reduced_cost + d);
-         }
-         else
-         {
-            queue.Add(j, reduced_cost + d);
-            j->flag = FLAG1;
-         }
-         j->parent = a;
-      }
-   }
-   assert(i == end);
-
-   // trace back to start node via parent pointers and record cost of shortest path
-   CostType path_cost = 0.0;
-   while(i != start) 
-   {
-      Arc* a = i->parent;
-      // do zrobienia: possibly use reduced cost. but this has to be done everywhere
-      //path_cost += a->GetRCost();
-      path_cost += a->cost;
-      i = a->sister->head; // the tail
-   }
-   /*
-   assert(i->parent == NULL);
-   assert(path_cost >= -1e-7);
-   if(path_cost < -1e-7) { // kwaskwas
-      printf("error: negative path cost = %f\n", path_cost);  
-      exit(1);
-   }
-   assert((d - path_cost) < 1e-7 || (path_cost - d) < 1e-7);
-   */
-
-   return path_cost;
-}
-
-template <typename FlowType, typename CostType> 
-	void SSP<FlowType, CostType>::Dijkstra(Node* start)
+	void MinCost<FlowType, CostType>::Dijkstra(Node* start)
 {
 	assert(start->excess > 0);
 
@@ -963,7 +654,7 @@ template <typename FlowType, typename CostType>
 
 
 template <typename FlowType, typename CostType> 
-	CostType SSP<FlowType, CostType>::Solve()
+	CostType MinCost<FlowType, CostType>::Solve()
 {
 	Node* i;
 	//Init();
@@ -978,7 +669,6 @@ template <typename FlowType, typename CostType>
 			Dijkstra(i);
 			if (i->excess > 0 && !i->next) 
 			{ 
-            assert(i != firstActive);
 				i->next = firstActive; 
 				firstActive = i; 
 			}
@@ -994,7 +684,7 @@ template <typename FlowType, typename CostType>
 
 
 template <typename FlowType, typename CostType> 
-	void SSP<FlowType, CostType>::TestOptimality()
+	void MinCost<FlowType, CostType>::TestOptimality()
 {
 	Node* i;
 	Arc* a;
@@ -1026,13 +716,12 @@ template <typename FlowType, typename CostType>
 #ifdef MINCOST_DEBUG
 
 template <typename FlowType, typename CostType> 
-	void SSP<FlowType, CostType>::TestCosts()
+	void MinCost<FlowType, CostType>::TestCosts()
 {
 	Arc* a;
 
 	CostType _cost = 0;
 
-   // do zrobienia: this will not work anymore due to different arc ordering
 	for (a=arcs; a<arcs+2*edgeNum; a+=2)
 	{
 		assert(a->r_cap + a->sister->r_cap == a->cap_orig + a->sister->cap_orig);
@@ -1048,7 +737,5 @@ template <typename FlowType, typename CostType>
 }
 
 #endif
-
-} // end namespace MCF
 
 #endif

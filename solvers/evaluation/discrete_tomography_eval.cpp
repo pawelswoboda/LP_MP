@@ -982,7 +982,7 @@ int main()
          for(auto& i : s) {
             i = "discrete_tomography_datasets/discrete_tomography_synthetic/mp/" + p + "/" + i;
          }
-         RunSolver<FMC_DT,VisitorType,Solver<FMC_DT>>(DiscreteTomographyTextInput::ParseProblem,s,options,p + " projections, sparsity " + std::to_string(sparsity) ,"MP");
+         RunSolver<FMC_DT,VisitorType,Solver<FMC_DT>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT>,s,options,p + " projections, sparsity " + std::to_string(sparsity) ,"MP");
       }
       sparsity++;
    }
@@ -991,7 +991,7 @@ int main()
    for(auto& i : sheep_logan) {
       i = "discrete_tomography_datasets/discrete_tomography_synthetic/mp/" + i;
    }
-   RunSolver<FMC_DT,VisitorType,Solver<FMC_DT>>(DiscreteTomographyTextInput::ParseProblem,sheep_logan,options,"sheep logan","MP");
+   RunSolver<FMC_DT,VisitorType,Solver<FMC_DT>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT>,sheep_logan,options,"sheep logan","MP");
 
    return 0;
 }

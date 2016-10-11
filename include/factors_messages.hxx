@@ -449,7 +449,7 @@ public:
    }
    void ReceiveRestrictedMessageFromRightContainer(PrimalSolutionStorage::Element primal)
    {
-      msg_op_.ReceiveRestrictedMessageFromRight(rightFactor_->GetFactor(), *rightFactor_, *static_cast<RestrictedMessageContainerView<Chirality::left>*>(this), primal + rightFactor_->GetPrimalOffset());
+      msg_op_.ReceiveRestrictedMessageFromRight(rightFactor_->GetFactor(), *rightFactor_, *static_cast<OneSideMessageContainerView<Chirality::left>*>(this), primal + rightFactor_->GetPrimalOffset());
    }
 
    constexpr static bool 
@@ -461,7 +461,6 @@ public:
    void ReceiveMessageFromLeftContainer()
    { msg_op_.ReceiveMessageFromLeft(leftFactor_->GetFactor(), *leftFactor_, *static_cast<MessageContainerView<Chirality::left>*>(this) ); }
 
-   // do zrobienia: must use one additional argument for primal storage
    constexpr static bool
    CanCallReceiveRestrictedMessageFromLeftContainer()
    { 
@@ -470,7 +469,7 @@ public:
    }
    void ReceiveRestrictedMessageFromLeftContainer(PrimalSolutionStorage::Element primal)
    {
-      msg_op_.ReceiveRestrictedMessageFromLeft(leftFactor_->GetFactor(), *leftFactor_, *static_cast<RestrictedMessageContainerView<Chirality::right>*>(this), primal + leftFactor_->GetPrimalOffset());
+      msg_op_.ReceiveRestrictedMessageFromLeft(leftFactor_->GetFactor(), *leftFactor_, *static_cast<OneSideMessageContainerView<Chirality::right>*>(this), primal + leftFactor_->GetPrimalOffset());
    }
 
 
@@ -576,7 +575,6 @@ public:
       msg_op_.ComputeRightFromLeftPrimal(primal + leftFactor_->GetPrimalOffset(), leftFactor_->GetFactor(), primal + rightFactor_->GetPrimalOffset(), rightFactor_->GetFactor());
       rightFactor_->PropagatePrimal(primal + rightFactor_->GetPrimalOffset());
       rightFactor_->ComputePrimalThroughMessages(primal);
-
    }
 
    void ComputeLeftFromRightPrimal(PrimalSolutionStorage::Element primal)
@@ -786,15 +784,15 @@ public:
 
    // for primal computation: record message change only in one side and into a special array
    template<Chirality CHIRALITY>
-   class RestrictedMsgVal
+   class OneSideMsgVal
    {
    public:
-      RestrictedMsgVal(MessageContainerType* msg, const INDEX dim) : 
+      OneSideMsgVal(MessageContainerType* msg, const INDEX dim) : 
          msg_(msg), 
          dim_(dim)
       {}
 
-      RestrictedMsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
+      OneSideMsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
       {
          if(CHIRALITY == Chirality::right) { // message is computed by right factor
             msg_->RepamRight(+x, dim_);
@@ -806,7 +804,7 @@ public:
          return *this;
       }
 
-      RestrictedMsgVal& operator+=(const REAL x) __attribute__ ((always_inline))
+      OneSideMsgVal& operator+=(const REAL x) __attribute__ ((always_inline))
       {
          assert(false);
          if(CHIRALITY == Chirality::right) {
@@ -827,12 +825,12 @@ public:
    // this view is given to receive restricted message operations. 
    // Reparametrization is recorded only on one side
    template<Chirality CHIRALITY>
-   class RestrictedMessageContainerView : public MessageContainerType{
+   class OneSideMessageContainerView : public MessageContainerType{
    public:
       //using MessageContainerType;
-      RestrictedMsgVal<CHIRALITY> operator[](const INDEX i) 
+      OneSideMsgVal<CHIRALITY> operator[](const INDEX i) 
       {
-         return RestrictedMsgVal<CHIRALITY>(this,i);
+         return OneSideMsgVal<CHIRALITY>(this,i);
       }
    };
 
@@ -988,7 +986,7 @@ public:
 
    // do zrobienia: templatize cosntructor to allow for more general initialization of reparametrization storage and factor
    template<typename ...ARGS>
-   FactorContainer(const FactorType&& factor, ARGS... args) : RepamStorageType(factor,args...), factor_(factor) {
+   FactorContainer(const FactorType&& factor, ARGS... args) : RepamStorageType(factor,args...), factor_(std::move(factor)) {
       //INDEX status;
       //std::cout << "msg_ type= "  << abi::__cxa_demangle(typeid(msg_).name(),0,0,&status) << "\n";
       //std::cout << "dispatcher list = "  << abi::__cxa_demangle(typeid(MESSAGE_DISPATCHER_TYPELIST).name(),0,0,&status) << "\n";
@@ -1269,6 +1267,9 @@ public:
       if( n > 0 ) { // no need to construct currentRepam, if it will not be used at all
          // make a copy of the current reparametrization. The new messages are computed on it. Messages are updated implicitly and hence possibly the new reparametrization is automatically adjusted, which would interfere with message updates
          // do zrobienia: use static memory or custom memory allocator for this, do not always allocate new memory via system call
+         
+         //std::vector<REAL> repam_delta(RepamStorageType::size(),0.0); // here we store the change in the reparametrization produced by SnedMessage. Alternatively we could store the messages that are produced. Check which is less overhead and choose it so.
+
          std::vector<REAL> currentRepam(RepamStorageType::size());
          for(INDEX i=0; i<currentRepam.size(); ++i) {
             currentRepam[i] = RepamStorageType::operator[](i); 

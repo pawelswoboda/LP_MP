@@ -496,7 +496,7 @@ namespace TorresaniEtAlInput {
       }
    };
 
-   std::vector<std::vector<REAL>> build_left_unaries(const GraphMatchingInput& gm, const REAL weight = 0.5)
+   std::vector<std::vector<REAL>> build_left_unaries(const GraphMatchingInput& gm, const REAL weight)
    {
       const INDEX no_left_nodes = std::accumulate(gm.assignment_.begin(), gm.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.left_node_); }) + 1;
       std::vector<std::vector<REAL>> unaries(no_left_nodes);
@@ -509,7 +509,7 @@ namespace TorresaniEtAlInput {
       return std::move(unaries);
    }
 
-   std::vector<std::vector<REAL>> build_right_unaries(const GraphMatchingInput& gm, const REAL weight = 0.5)
+   std::vector<std::vector<REAL>> build_right_unaries(const GraphMatchingInput& gm, const REAL weight)
    {
       const INDEX no_right_nodes = std::accumulate(gm.assignment_.begin(), gm.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.right_node_); }) + 1;
       std::vector<std::vector<REAL>> unaries(no_right_nodes);
@@ -535,7 +535,14 @@ namespace TorresaniEtAlInput {
       if(node1 == node2) {
          std::cout << "This value is not useful, due to matching constraint: " << cost << "\n";
          cost = 1e10;
+         return;
       }
+      assert(graph[node1][oppositeNode1] != graph[node2][oppositeNode2]);
+      //if(oppositeNode1 == oppositeNode2) {
+      //   std::cout << "This value is not useful, due to matching constraint: " << cost << "\n";
+      //   cost = 1e100;
+      //   return;
+      //}
 
       if(node1>node2) {
          std::swap(node1,node2);
@@ -553,8 +560,10 @@ namespace TorresaniEtAlInput {
             for(INDEX i2=0; i2<graph[node2].size(); ++i2) {
                if(graph[node1][i1] == graph[node2][i2]) {
                   assert(i1 + i2*leftDim < cost.size());
-                  cost[i1 + i2*leftDim] = std::numeric_limits<REAL>::max();
-                  cost[i1 + i2*leftDim] = 10000.0; // do zrobienia: make max again. However tightening only works with finite numbers
+                  cost[i1 + i2*leftDim] = std::numeric_limits<REAL>::infinity();
+                  // transposed version
+                  //assert(i1*rightDim + i2 < cost.size());
+                  //cost[i1*rightDim + i2] = std::numeric_limits<REAL>::infinity();
                }
             }
          }
@@ -564,11 +573,15 @@ namespace TorresaniEtAlInput {
       // now add specific cost
       assert(q.find(std::make_pair(node1,node2)) != q.end());
       std::vector<REAL>& costVec = (*q.find(std::make_pair(node1,node2))).second;
+      // do zrobienia: correct, or transpose?
       assert(costVec[index1 + index2*leftDim] == 0.0);
       costVec[index1 + index2*leftDim] = cost;
+      // transposed version
+      //assert(costVec[index1*rightDim + index2] == 0.0);
+      //costVec[index1*rightDim + index2] = cost;
    }
 
-   std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> BuildLeftPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight = 1.0)
+   std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> BuildLeftPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight)
    {
       std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> q;
       for(auto i : gmInput.pairwise_potentials) {
@@ -579,13 +592,15 @@ namespace TorresaniEtAlInput {
          const REAL cost = std::get<4>(i);
 
          const INDEX rightIndex1 = std::find(gmInput.leftGraph_[leftNode1].begin(), gmInput.leftGraph_[leftNode1].end(), rightNode1) - gmInput.leftGraph_[leftNode1].begin();
+         assert(rightIndex1 < gmInput.leftGraph_[leftNode1].size());
          const INDEX rightIndex2 = std::find(gmInput.leftGraph_[leftNode2].begin(), gmInput.leftGraph_[leftNode2].end(), rightNode2) - gmInput.leftGraph_[leftNode2].begin();
+         assert(rightIndex2 < gmInput.leftGraph_[leftNode2].size());
 
          AddQuadraticPotential(q, leftNode1,leftNode2, rightIndex1,rightIndex2, weight*cost, gmInput.leftGraph_);
       }
       return q;
    }
-   std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> BuildRightPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight = 1.0)
+   std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> BuildRightPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight)
    {
       std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> q;
       for(auto i : gmInput.pairwise_potentials) {
@@ -596,7 +611,9 @@ namespace TorresaniEtAlInput {
          const REAL cost = std::get<4>(i);
 
          const INDEX leftIndex1 = std::find(gmInput.rightGraph_[rightNode1].begin(), gmInput.rightGraph_[rightNode1].end(), leftNode1) - gmInput.rightGraph_[rightNode1].begin();
+         assert(leftIndex1 < gmInput.rightGraph_[rightNode1].size());
          const INDEX leftIndex2 = std::find(gmInput.rightGraph_[rightNode2].begin(), gmInput.rightGraph_[rightNode2].end(), leftNode2) - gmInput.rightGraph_[rightNode2].begin();
+         assert(leftIndex2 < gmInput.rightGraph_[rightNode2].size());
 
          AddQuadraticPotential(q, rightNode1,rightNode2, leftIndex1,leftIndex2, weight*cost, gmInput.rightGraph_);
       }
@@ -614,7 +631,7 @@ namespace TorresaniEtAlInput {
 
       // construct pairwise potentials of mrfs
       if(pairwise_weight > 0) {
-         std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> leftQuadraticPot = BuildLeftPairwisePotentials(gmInput,pairwise_weight);
+         std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> leftQuadraticPot = BuildLeftPairwisePotentials(gmInput, pairwise_weight);
          for(auto& q : leftQuadraticPot) {
             auto p = left_mrf.AddPairwiseFactor(q.first.first, q.first.second, q.second);
          }
@@ -631,7 +648,7 @@ namespace TorresaniEtAlInput {
 
       // construct pairwise potentials of mrfs
       if(pairwise_weight > 0) {
-         std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> rightQuadraticPot = BuildRightPairwisePotentials(gmInput,pairwise_weight);
+         std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> rightQuadraticPot = BuildRightPairwisePotentials(gmInput, pairwise_weight);
          for(auto& q : rightQuadraticPot) {
             auto p = right_mrf.AddPairwiseFactor(q.first.first, q.first.second, q.second);
          }
@@ -645,16 +662,16 @@ namespace TorresaniEtAlInput {
       auto& mrf_right = s.template GetProblemConstructor<1>();
       constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
       if(pc == PairwiseConstruction::Left) {
-         construct_left_mrf(gm_input, mrf_left, 0.5, 1.0);
-         construct_right_mrf(gm_input, mrf_right, 0.5, 0.0);
+         construct_left_mrf(gm_input, mrf_left, 1.0, 1.0);
+         construct_right_mrf(gm_input, mrf_right, 0.0, 0.0);
       }
       if(pc == PairwiseConstruction::BothSides) {
          construct_left_mrf(gm_input, mrf_left, 0.5, 0.5);
          construct_right_mrf(gm_input, mrf_right, 0.5, 0.5);
       }
       if(pc == PairwiseConstruction::Right) {
-         construct_left_mrf(gm_input, mrf_left, 0.5, 0.0);
-         construct_right_mrf(gm_input, mrf_right, 0.5, 1.0);
+         construct_left_mrf(gm_input, mrf_left, 0.0, 0.0);
+         construct_right_mrf(gm_input, mrf_right, 1.0, 1.0);
       }
 
       std::vector<INDEX> left_label_count(mrf_left.GetNumberOfVariables(),0);
@@ -670,6 +687,13 @@ namespace TorresaniEtAlInput {
          ++left_label_count[a.left_node_];
          ++right_label_count[a.right_node_];
       }
+      for(INDEX i=0; i<mrf_left.GetNumberOfVariables(); ++i) {
+         assert(mrf_left.GetNumberOfLabels(i) == left_label_count[i]+1);
+      }
+      for(INDEX i=0; i<mrf_right.GetNumberOfVariables(); ++i) {
+         assert(mrf_right.GetNumberOfLabels(i) == right_label_count[i]+1);
+      }
+      
       mrf_left.Construct(s);
       mrf_right.Construct(s);
    }
@@ -694,6 +718,7 @@ namespace TorresaniEtAlInput {
       // build assignment problem
       const INDEX no_left_nodes = std::accumulate(gm_input.assignment_.begin(), gm_input.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.left_node_); }) + 1;
       const INDEX no_right_nodes = std::accumulate(gm_input.assignment_.begin(), gm_input.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.right_node_); }) + 1;
+      const INDEX no_nodes = no_left_nodes + no_right_nodes;
       const INDEX no_edges = gm_input.assignment_.size() + no_left_nodes + no_right_nodes + 1;
 
       std::vector<typename MinCostFlowFactorCS2::Edge> edges;
@@ -704,37 +729,66 @@ namespace TorresaniEtAlInput {
       std::vector<SIGNED_INDEX> demands;
       demands.reserve(no_left_nodes + no_right_nodes + 2);
       for(INDEX i=0; i<no_left_nodes; ++i) {
-         edges.push_back({i,no_left_nodes + no_right_nodes + 1, 0, 1, 0.0}); // for non-assignment
+         edges.push_back({i,no_nodes + 1, 0, 1, 0.0}); // for non-assignment
          demands.push_back(1);
       }
       for(INDEX i=0; i<no_right_nodes; ++i) {
-         edges.push_back({no_left_nodes + no_right_nodes, no_left_nodes + i, 0, 1, 0.0}); // for non-assignment
+         edges.push_back({no_nodes, no_left_nodes + i, 0, 1, 0.0}); // for non-assignment
          demands.push_back(-1);
       }
-      edges.push_back({no_left_nodes + no_right_nodes, no_left_nodes + no_right_nodes + 1, 0, std::max(no_left_nodes, no_right_nodes), 0.0});
+      edges.push_back({no_nodes, no_nodes + 1, 0, std::max(no_left_nodes, no_right_nodes), 0.0});
       demands.push_back(no_right_nodes);
       demands.push_back(-no_left_nodes);
 
-      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
+      // check for duplicate edges
+      //std::sort(edges.begin(), edges.end(), [](const auto& a, const auto& b) { 
+      //      if(a.start_node != b.start_node) {
+      //      return a.start_node < b.start_node;
+      //      } else {
+      //      return a.end_node < b.end_node;
+      //      }
+      //      });
+      //for(INDEX a=1; a<edges.size(); ++a) {
+      //   assert(!((edges[a].start_node == edges[a-1].start_node) && (edges[a].end_node == edges[a-1].end_node)));
+      //}
+      
+
+      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands, edges.size()-1) );
       auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
       s.GetLP().AddFactor(f);
 
       // connect assignment factor with unaries
       if(pc == PairwiseConstruction::Left || pc == PairwiseConstruction::BothSides) {
+         std::vector<std::vector<INDEX>> edgeId(no_left_nodes);
+         INDEX c=0;
+         for(auto& a : gm_input.assignment_) {
+            // get left and right unaries and connect them with a message
+            edgeId[a.left_node_].push_back(c);
+            ++c;
+         }
+         // add slack edges
          for(INDEX i=0; i<no_left_nodes; ++i) {
-            assert(mrf_left.GetNumberOfLabels(i) == mcf->NoArcs(i));
+            edgeId[i].push_back(c);
+            ++c;
+         }
+         for(INDEX i=0; i<no_left_nodes; ++i) {
+            //assert(mrf_left.GetNumberOfLabels(i) == mcf->NoArcs(i));
             auto *u = mrf_left.GetUnaryFactor(i);
             using MessageType = typename FMC::UnaryToAssignmentMessageType;
-            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+            //auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(edgeId[i]), u, f, mrf_left.GetNumberOfLabels(i));
             s.GetLP().AddMessage(m);
          }
       }
       if(pc == PairwiseConstruction::Right || pc == PairwiseConstruction::BothSides) {
+         std::vector<std::vector<INDEX>> edgeId(no_right_nodes);
          for(INDEX i=0; i<no_right_nodes; ++i) {
-            assert(mrf_right.GetNumberOfLabels(i) == mcf->NoArcs(no_left_nodes + i));
+            //assert(mrf_right.GetNumberOfLabels(i) == mcf->NoArcs(no_left_nodes + i));
             auto *u = mrf_right.GetUnaryFactor(i);
             using MessageType = typename FMC::UnaryToAssignmentMessageType;
-            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i + no_left_nodes), mcf->NoArcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
+            //auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i + no_left_nodes), mcf->NoArcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
+            assert(false);
+            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(edgeId[i]), u, f, mrf_right.GetNumberOfLabels(i));
             s.GetLP().AddMessage(m);
          }
       }
@@ -761,6 +815,12 @@ namespace TorresaniEtAlInput {
       pegtl::file_parser problem(filename);
       std::cout << "parsing " << filename << "\n";
 
+      for(auto& edges : gmInput.leftGraph_) {
+              assert(std::is_sorted(edges.begin(), edges.end()));
+      }
+      for(auto& edges : gmInput.rightGraph_) {
+              assert(std::is_sorted(edges.begin(), edges.end()));
+      }
       const bool ret = problem.parse< grammar, action >( gmInput );
       if(!ret) {
          throw std::runtime_error("could not read file " + filename);
@@ -1033,7 +1093,7 @@ namespace UaiGraphMatchingInput {
       std::fill(demands.begin() + no_left_nodes, demands.end(), 0);
       demands.back() = -no_left_nodes;
 
-      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
+      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands, edges.size()) );
       s.GetLP().AddFactor(f);
       auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
 
@@ -1317,7 +1377,7 @@ namespace UaiGraphMatchingInput {
       demands.push_back(no_right_nodes);
       demands.push_back(-no_left_nodes);
 
-      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
+      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands, edges.size()) );
       s.GetLP().AddFactor(f);
       auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
 

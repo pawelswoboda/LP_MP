@@ -5,6 +5,10 @@
 #include "lib/MinCost/MinCost.h"
 #include "config.hxx"
 
+
+//do zrobienia: remove again
+//#include <ilcplex/ilocplex.h>
+
 namespace LP_MP {
 
 
@@ -13,7 +17,7 @@ namespace LP_MP {
 class MinCostFlowFactorCS2 {
 public:
    //using MinCostFlowSolverType = CS2_CPP::MCMF_CS2<>;
-   using MinCostFlowSolverType = MCF::SSP<SIGNED_INDEX,REAL>;
+   using MinCostFlowSolverType = MinCost<SIGNED_INDEX,REAL>;
    /*
    constexpr static REAL scalingFactor_ = 1000000000;
    // note: the scaling is brittle. Unless long unsigned int = 64 bit is used, monotone improvement often fails for eps in tolerance.hxx
@@ -22,13 +26,15 @@ public:
    REAL Descale(const LONG_SIGNED_INDEX x) const { return REAL(x)/REAL(scalingFactor_); }
    */
    struct Edge {
-      const INDEX start_node, end_node, lower_bound, upper_bound; // we assume that the minimum capacity is 0
-      const REAL cost;
+      INDEX start_node, end_node, lower_bound, upper_bound; // we assume that the minimum capacity is 0
+      REAL cost;
    };
    
-   // provide method primal_size(), as not all arcs are [0,1]-flow and actually used as variables.
+   //MinCostFlowFactorCS2(const MinCostFlowFactorCS2& m) = delete;
 
-   MinCostFlowFactorCS2(const std::vector<Edge>& edges, const std::vector<SIGNED_INDEX>& supply_demand) 
+   MinCostFlowFactorCS2(const std::vector<Edge>& edges, const std::vector<SIGNED_INDEX>& supply_demand, const INDEX no_binary_edges) 
+      : demand_(supply_demand),
+      no_binary_edges_(no_binary_edges)
    {
       INDEX noNodes_ = supply_demand.size();
       INDEX noEdges_ = edges.size(); // arc and reverse arc
@@ -36,20 +42,21 @@ public:
       minCostFlow_ = new MinCostFlowSolverType(noNodes_, noEdges_);
       repamUpdateFlow_ = new MinCostFlowSolverType(noNodes_, noEdges_);
       for(auto& e : edges) {
+         assert(e.cost == 0.0);
          //minCostFlow_->set_arc(e.start_node, e.end_node, e.lower_bound, e.upper_bound, Scale(e.cost));
          //repamUpdateFlow_->set_arc(e.start_node, e.end_node, 0, 1, Scale(e.cost));
-         minCostFlow_->AddEdge(e.start_node, e.end_node, e.lower_bound, e.upper_bound, e.cost);
+         minCostFlow_->AddEdge(e.start_node, e.end_node, e.upper_bound, e.lower_bound, e.cost);
          repamUpdateFlow_->AddEdge(e.start_node, e.end_node, 0, std::numeric_limits<SIGNED_INDEX>::max(), 0);
       }
       for(INDEX i=0; i<supply_demand.size(); ++i) {
          minCostFlow_->AddNodeExcess(i, supply_demand[i]);
-         minCostFlow_->AddNodeExcess(i, 0);
+         //minCostFlow_->AddNodeExcess(i, 0);
          //minCostFlow_->set_supply_demand_of_node(i, supply_demand[i]);
          //repamUpdateFlow_->set_supply_demand_of_node(i,0);
       }
-      minCostFlow_->SortArcs();
+      //minCostFlow_->SortArcs();
       minCostFlow_->Solve(); // to initialize data structures
-      repamUpdateFlow_->SortArcs();
+      //repamUpdateFlow_->SortArcs();
       //repamUpdateFlow_->run_cs2(); // to initialize data structures
    }
 
@@ -63,25 +70,41 @@ public:
    template<typename REPAM_ARRAY>
    REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
    {
+           return std::numeric_limits<REAL>::infinity(); // do zrobienia: remove
+      // to do: this is a very hacky implementation and it need not be correct for anything except assignment problems!
+      // first check whether primal belongs to a feasible flow
+      /*
+      for(INDEX i=0; i<minCostFlow_->GetNodeNum(); ++i) {
+         SIGNED_INDEX excess = 0;
+         INDEX a_idx = minCostFlow_->StartingArc(i);
+         for(INDEX c=0; c<minCostFlow_->NoArcs(i); ++c, ++a_idx) {
+            if(primal[a_idx] == unknownState) {
+               excess = minCostFlow_->GetDemand(i);
+               continue;
+            }
+            const SIGNED_INDEX sign = minCostFlow_->GetCap(a_idx) == 1 ? 1 : -1;
+            excess += sign*SIGNED_INDEX(primal[a_idx]);
+         }
+         if(excess != minCostFlow_->GetDemand(i)) {
+            std::cout << "excess = " << excess << " demand = " << minCostFlow_->GetDemand(i) << "\n";
+            return std::numeric_limits<REAL>::infinity();
+         }
+      }
       REAL cost = 0.0;
-      //assert(repam.size() == arcs_.size());
-      // check whether primal indeed belongs to a flow
-      // the below is wrong whenever primal and repam have different sizes.
+      assert(repam.size() == minCostFlow_->GetArcNum());
       for(INDEX e=0; e<repam.size(); e++) {
-         if(minCostFlow_->GetCap(e) == 1) {
+         if(minCostFlow_->GetCap(e) != 0 && minCostFlow_->GetCap(e) != 1) {
+            assert(primal[e] == false || repam[e] == 0.0);
+         }
+         if(minCostFlow_->GetCap(e) == 1 && repam[e] != 0.0) { // some edges are auxiliary and have cost zero. Primal value is not set for them.
+            assert(minCostFlow_->GetCap( minCostFlow_->GetReverseArcId(e) ) == 0);
             assert(primal[e] == primal[ minCostFlow_->GetReverseArcId(e) ]);
+            assert(primal[e] != unknownState);
             cost += repam[e]*primal[e]; 
          }
       }
-      return cost;
-   }
-
-   void WritePrimal(const std::vector<INDEX>& flow, std::ofstream& fs) const
-   {
-      for(INDEX i=0; i<flow.size()-1; ++i) {
-         fs << flow[i] << ", ";
-      }
-      fs << flow.back() << "\n";
+      return 0.5*cost;
+      */
    }
 
    template<typename REPAM_ARRAY>
@@ -103,6 +126,7 @@ public:
    void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
    { 
       std::cout << "round mcf\n";
+      std::cout << "problem is with infinities!\n";
       // we assume here that repam is the current one as well
       //MaximizePotential(repam);
       //for(INDEX e; e<repam.size(); ++e) {
@@ -120,6 +144,11 @@ public:
    // sometimes reverse edges have to be set as well
    void PropagatePrimal(PrimalSolutionStorage::Element primal)
    {
+      return;
+      assert(false); // do zrobiebia: remove
+      assert(false);
+      return; // gets called too often when unaries round primals!
+      /*
       for(INDEX a=0; a<size(); ++a) {
          if(primal[a] != unknownState) {
             const INDEX a_rev = minCostFlow_->GetReverseArcId(a);
@@ -127,23 +156,79 @@ public:
             primal[a_rev] = primal[a];
          }
       }
+      */
    }
 
    template<typename REPAM_ARRAY>
    REAL LowerBound(const REPAM_ARRAY& repamPot) const
    {
       assert(repamPot.size() == size());
-      return minCostFlow_->Solve();
-      //return Descale(minCostFlow_->cs2_cost_restart()); // we assume here that current reparametrization is also repamPot
-      //GraphType::ArcMap<LONG_SIGNED_INDEX> repam(*graph_);
-      //for(INDEX e=0; e<arcs_.size(); ++e) {
-      //   repam[arcs_[e]] = Scale(repamPot[e]);
-      //}
 
-      //auto ret = minCostFlow_->costMap(repam).run();
-      //assert(ret == MinCostFlowSolverType::OPTIMAL);
-      
-      //return Descale(minCostFlow_->totalCost());
+      /*
+      for(INDEX a=0; a<size(); ++a) {
+         assert(minCostFlow_->GetCost(a) == -minCostFlow_->GetCost( minCostFlow_->GetReverseArcId(a)));
+         const REAL sign = minCostFlow_->GetCap(a) == 1 ? 1.0 : -1.0;
+         assert(sign*minCostFlow_->GetCost(a) == repamPot[a]);
+         if(!Is01Arc(a) && !Is01Arc(minCostFlow_->GetReverseArcId(a))) {
+            assert(minCostFlow_->GetCost(a) == 0.0);
+         }
+      }
+      */
+
+      // build a second test flow problem with cplex and check whether it gives the same result
+      /*
+      IloEnv env = IloEnv();
+      IloModel model = IloModel(env);
+      IloNumVarArray MainVars = IloNumVarArray(env,size(),-10000000.0,1000000.0,IloNumVar::Float);
+
+      for(INDEX a=0; a<minCostFlow_->GetArcNum(); ++a) {
+         const INDEX i = minCostFlow_->GetTailNodeId(a);
+         const INDEX j = minCostFlow_->GetHeadNodeId(a);
+         assert(i != j); // no self loops allowed
+
+         const INDEX a_rev = minCostFlow_->GetReverseArcId(a);
+         MainVars[a].setBounds(-minCostFlow_->GetCap(a_rev),minCostFlow_->GetCap(a));
+
+         // let forward be -reverse edge
+         if(i < j) {
+            model.add(IloRange(env,0.0,MainVars[a]+MainVars[a_rev],0.0));
+         }
+      }
+      // go through all nodes and add flow conservation constraints
+      for(INDEX i=0; i<minCostFlow_->GetNodeNum(); ++i) {
+
+         IloNumExpr constr(env);
+         for(INDEX a=minCostFlow_->StartingArc(i); a<minCostFlow_->StartingArc(i) + minCostFlow_->NoArcs(i); ++a) {
+            assert(a < size());
+            constr += MainVars[a];
+            //lhs += lp->GetAuxVariable(a);
+         }
+         constr -= minCostFlow_->GetDemand(i);
+         model.add(IloRange(env,0.0,constr,0.0));
+      }
+
+      IloNumArray ObjValues(env,size()); 
+      for(INDEX i=0; i<size(); ++i) {
+         const REAL value = minCostFlow_->GetCost(i);
+         ObjValues[i] = value;
+      }
+      IloObjective obj = IloMinimize(env);
+      obj.setLinearCoefs(MainVars, ObjValues);
+      model.add(obj);
+
+      IloCplex cplex = IloCplex(model);
+      try{
+         cplex.solve();
+         const REAL mcf_obj =  minCostFlow_->Solve();
+         std::cout << mcf_obj << " = " << cplex.getObjValue() << "\n";
+      }
+      catch (IloException& e) {
+         std::cerr << "Concert exception caught: " << e << std::endl;
+      }
+      */
+
+      //return cplex.getObjValue();
+      return minCostFlow_->Solve();
    }
 
    MinCostFlowSolverType* GetMinCostFlowSolver() const
@@ -157,14 +242,15 @@ public:
 
    const INDEX size() const 
    { 
-      //throw std::runtime_error("not supported"); return 0; 
-      return minCostFlow_->GetArcNum();
+      return no_binary_edges_;
+      //return minCostFlow_->GetEdgeNum();
    }
    const REAL operator[](const INDEX i) const 
    {
+      assert(i<no_binary_edges_);
+      //const REAL sign = minCostFlow_->GetCap(i) == 1 ? 1.0 : -1.0;
+      //return sign*minCostFlow_->GetCost(i);
       return minCostFlow_->GetCost(i);
-      throw std::runtime_error("not supported"); return 0; 
-      return 0.0;
    }
 
    // for the SendMessages update step, compute maximal cost change such that current labeling stays optimal
@@ -173,7 +259,9 @@ public:
    template<class REPAM_ARRAY, typename ACTIVE_EDGES_ARRAY>
    void MaximallyPerturbCosts(const REPAM_ARRAY& repam, const ACTIVE_EDGES_ARRAY& active_edges) const
    {
+      assert(false);
       // first read reduced cost of mcf into repam update
+      /*
       for(INDEX i=0; i<minCostFlow_->GetArcNum(); ++i) {
          if(minCostFlow_->GetTailNodeId(i) < minCostFlow_->GetHeadNodeId(i)) { // avoid copying twice
             repamUpdateFlow_->SetCost(i,minCostFlow_->GetCost(i));
@@ -195,6 +283,7 @@ public:
          }
       }
       repamUpdateFlow_->Solve();
+      */
       /*
       // we assume here that repam is the current one
       assert(active_edges.size() == size());
@@ -243,7 +332,7 @@ public:
             }
          }
       }
-      return repam_cost;
+      )return repam_cost;
       */
 
       /*
@@ -301,20 +390,65 @@ public:
       */
    }
 
-  void CreateConstraints(LpInterfaceAdapter* lp) const { 
-     // go through all edges and link let forward be 1-reverse edge
+   bool Is01Arc(const INDEX a) const
+   {
+      return true;
+      /*
+      const SIGNED_INDEX cap = minCostFlow_->GetCap(a);
+      const INDEX a_rev = minCostFlow_->GetReverseArcId(a);
+      const SIGNED_INDEX rev_cap = minCostFlow_->GetCap(a_rev);
+      return cap == 1 && rev_cap == 0;
+      */
+   }
+
+   INDEX GetNumberOfAuxVariables() const { return minCostFlow_->GetEdgeNum() - no_binary_edges_; }
+
+  void CreateConstraints(LpInterfaceAdapter* lp) const {
+     // the first no_binary_edges go into usual variables, the last ones into auxiliary
+     for(INDEX e=no_binary_edges_; e<minCostFlow_->GetEdgeNum(); ++e) {
+        auto var = lp->GetAuxVariable(e-no_binary_edges_);
+        lp->SetVariableBound(var, -REAL(minCostFlow_->GetRCap(e)), REAL(minCostFlow_->GetCap(e)));
+     }
+     // flow conservation constraints
+     std::vector<LinExpr> flow_conservation(minCostFlow_->GetNodeNum());
+     for(INDEX e=0; e<no_binary_edges_; ++e) {
+        auto var = lp->GetVariable(e);
+        const INDEX i=minCostFlow_->GetTailNodeId(e);
+        const INDEX j=minCostFlow_->GetHeadNodeId(e);
+        flow_conservation[i] += var;
+        flow_conservation[i] -= var;
+     }
+     for(INDEX e=no_binary_edges_; e<minCostFlow_->GetEdgeNum(); ++e) {
+        auto var = lp->GetAuxVariable(e-no_binary_edges_);
+        const INDEX i=minCostFlow_->GetTailNodeId(e);
+        const INDEX j=minCostFlow_->GetHeadNodeId(e);
+        flow_conservation[i] += var;
+        flow_conservation[i] -= var;
+     }
+     for(INDEX i=0; i<minCostFlow_->GetNodeNum(); ++i) {
+        auto rhs = lp->CreateLinExpr();
+        rhs += demand_[i]; // do zrobienia: store this directly and not in min cost flow problem
+        lp->addLinearEquality(flow_conservation[i],rhs);
+     }
+
+     // we approach the problem as follows: we build the mcf problem out of auxiliary variables, then we make equal {0,1}-variables to primal
+     /*
      for(INDEX a=0; a<minCostFlow_->GetArcNum(); ++a) {
         const INDEX i = minCostFlow_->GetTailNodeId(a);
         const INDEX j = minCostFlow_->GetHeadNodeId(a);
-        assert(i != j);
+        assert(i != j); // no self loops allowed
+
+        auto var = lp->GetAuxVariable(a);
+        const INDEX a_rev = minCostFlow_->GetReverseArcId(a);
+        lp->SetVariableBound(var, -REAL(minCostFlow_->GetCap(a_rev)), REAL(minCostFlow_->GetCap(a)));
+        
+        // let forward be -reverse edge
         if(i < j) {
-           const INDEX a_rev = minCostFlow_->GetReverseArcId(a);
-           assert( minCostFlow_->GetCap(a) == 1 && minCostFlow_->GetCap(a_rev) == 0
-                 || minCostFlow_->GetCap(a) == 0 && minCostFlow_->GetCap(a_rev) == 1);
+           auto rev_var = lp->GetAuxVariable(a_rev);
            LinExpr lhs = lp->CreateLinExpr();
-           lhs += lp->GetVariable(a);
-           lhs -= lp->GetVariable(a_rev); // this is not the flow formulation, but one based on "undirected flow"
+           lhs += var;
            LinExpr rhs = lp->CreateLinExpr();
+           rhs -= rev_var;
            lp->addLinearEquality(lhs,rhs);
         }
      }
@@ -322,18 +456,40 @@ public:
      for(INDEX i=0; i<minCostFlow_->GetNodeNum(); ++i) {
         LinExpr lhs = lp->CreateLinExpr();
         for(INDEX a=minCostFlow_->StartingArc(i); a<minCostFlow_->StartingArc(i) + minCostFlow_->NoArcs(i); ++a) {
-           lhs += lp->GetVariable(a);
+           lhs += lp->GetAuxVariable(a);
         }
         LinExpr rhs = lp->CreateLinExpr();
         rhs += minCostFlow_->GetDemand(i); // do zrobienia: store this directly and not in min cost flow problem
         lp->addLinearEquality(lhs,rhs);
      }
+     for(INDEX a=0; a<size(); ++a) {
+        if(Is01Arc(a)) {
+           auto var = lp->GetVariable(a);
+           auto var_aux = lp->GetAuxVariable(a);
+           LinExpr lhs = lp->CreateLinExpr();
+           lhs += var;
+           LinExpr rhs = lp->CreateLinExpr();
+           rhs += var;
+           lp->addLinearEquality(lhs,rhs);
+        } else if(Is01Arc(minCostFlow_->GetReverseArcId(a))) {
+           auto var = lp->GetVariable(a);
+           auto var_aux = lp->GetAuxVariable(a);
+           LinExpr lhs = lp->CreateLinExpr();
+           lhs -= var;
+           LinExpr rhs = lp->CreateLinExpr();
+           rhs += var;
+           lp->addLinearEquality(lhs,rhs);
+        }
+     }
+     */
   }
 
 private:
    // note: this is also given to the reparametrization storage and hence points to the reparametrized potential. Use shared_ptr?
    MinCostFlowSolverType* minCostFlow_;
    MinCostFlowSolverType* repamUpdateFlow_;
+   const std::vector<SIGNED_INDEX> demand_;
+   const INDEX no_binary_edges_;
 };
 
 template<typename FACTOR_CONTAINER>
@@ -356,6 +512,7 @@ public:
    }
 
    ~MinCostFlowReparametrizationStorageCS2() {
+      std::cout << "delete min cost flow factor\n";
       static_assert( std::is_same<typename FACTOR_CONTAINER::FactorType, MinCostFlowFactorCS2>::value, "");
       delete minCostFlow_;
    }
@@ -368,6 +525,8 @@ public:
 
    const REAL operator[](const INDEX i) const 
    {
+      //const REAL sign = minCostFlow_->GetCap(i) == 1 ? 1.0 : -1.0;
+      //return sign*minCostFlow_->GetCost(i);
       return minCostFlow_->GetCost(i);
    }
 
@@ -376,27 +535,68 @@ public:
       WriteBackProxy(const INDEX i, MinCostFlowSolverType* mcf) 
          : i_(i),
          minCostFlow_(mcf)
-      {}
+      {
+         //assert(i < minCostFlow_->GetArcNum());
+         assert(i < minCostFlow_->GetEdgeNum());
+      }
       WriteBackProxy operator=(const REAL x) {
-         minCostFlow_->SetCost(i_,x);
+         assert(std::isfinite(x));
+         /*
+         const SIGNED_INDEX cap = minCostFlow_->GetCap(i_);
+         const INDEX a_rev = minCostFlow_->GetReverseArcId(i_);
+         const SIGNED_INDEX rev_cap = minCostFlow_->GetCap(a_rev);
+         if(!((cap == 1 && rev_cap == 0) || (rev_cap == 1 && cap == 0))) {
+                 assert(x == 0.0);
+         }
+
+         const REAL sign = minCostFlow_->GetCap(i_) == 1 ? 1.0 : -1.0;
+         minCostFlow_->SetCost(i_,sign*x);
+         */
+         minCostFlow_->SetCost(i_, x);
          return *this;
       }
       operator REAL() const { 
-        return minCostFlow_->GetCost(i_);
+         //const REAL sign = minCostFlow_->GetCap(i_) == 1 ? 1.0 : -1.0;
+         //return sign*minCostFlow_->GetCost(i_);
+         return minCostFlow_->GetCost(i_);
       }
 
       // when we write to the mcf factor, the cost of the reverse arc is also modified
       // do zrobienia: introduce function for changing cost by constant
       WriteBackProxy operator+=(const REAL x) {
+              // do zrobienia: remove 
+         /*
+         const SIGNED_INDEX cap = minCostFlow_->GetCap(i_);
+         const INDEX a_rev = minCostFlow_->GetReverseArcId(i_);
+         const SIGNED_INDEX rev_cap = minCostFlow_->GetCap(a_rev);
+         assert((cap == 1 && rev_cap == 0) || (rev_cap == 1 && cap == 0));
+         assert(cap == 1);
+
+         assert(std::isfinite(x));
          // sign is necessary, as we may write cost to reverse edges -> reverse costs
          const REAL sign = minCostFlow_->GetCap(i_) == 1 ? 1.0 : -1.0;
+         assert(sign == 1.0);
          minCostFlow_->UpdateCost(i_, sign*x);
+         */
+         minCostFlow_->UpdateCost(i_, x);
          return *this;
       }
 
       WriteBackProxy operator-=(const REAL x) {
+              // do zrobienia: remove 
+         /*
+         const SIGNED_INDEX cap = minCostFlow_->GetCap(i_);
+         const INDEX a_rev = minCostFlow_->GetReverseArcId(i_);
+         const SIGNED_INDEX rev_cap = minCostFlow_->GetCap(a_rev);
+         assert((cap == 1 && rev_cap == 0) || (rev_cap == 1 && cap == 0));
+         assert(cap == 1);
+
+         assert(std::isfinite(x));
          const REAL sign = minCostFlow_->GetCap(i_) == 1 ? 1.0 : -1.0;
+         assert(sign == 1.0);
          minCostFlow_->UpdateCost(i_, sign*(-x)); // do zrobienia: capacity is possibly wrong! reverse has cap 0
+         */
+         minCostFlow_->UpdateCost(i_, -x);
          return *this;
       }
 
@@ -412,7 +612,8 @@ public:
 
    const INDEX size() const 
    {
-      return minCostFlow_->GetArcNum();
+      //return minCostFlow_->GetArcNum();
+      return minCostFlow_->GetEdgeNum();
    }
 
 private:
@@ -431,38 +632,39 @@ class UnaryToAssignmentMessageCS2 {
 // Those are ordered as the left and right nodes
 // templatize edgeIndex_ to allow for more compact representation. Possibly hold reference to original edgeId structure instead of full vector
 public:
+   UnaryToAssignmentMessageCS2(const std::vector<INDEX>& edges) : edges_(edges) {
+      assert(edges_.size() >= 2);
+   }
+   /*
    UnaryToAssignmentMessageCS2(const INDEX start_arc, const INDEX no_arcs)
       : 
          start_arc_(start_arc),
          no_arcs_(no_arcs)
    {
-      //assert(no_arcs >= 2);
+      assert(no_arcs >= 2);
    }
+   */
 
    template<typename LEFT_POT, typename MSG_ARRAY>
    void MakeLeftFactorUniform(const LEFT_POT& leftPot, MSG_ARRAY& msg, const REAL omega = 1.0) 
    {
-      assert(leftPot.size() == no_arcs_ && msg.size() == no_arcs_);
+      //assert(leftPot.size() == no_arcs_ && msg.size() == no_arcs_);
 
       for(INDEX i=0; i<leftPot.size(); ++i) {
          msg[i] -= omega*(leftPot[i]);
       }
    }
 
-   template<typename RIGHT_FACTOR, typename RIGHT_POT, typename MSG_ARRAY>
-   void MakeRightFactorUniform(const RIGHT_FACTOR& rightFactor, const RIGHT_POT& perturb, MSG_ARRAY& msg, const REAL omega = 1.0) const 
+   template<typename LEFT_FACTOR, typename LEFT_REPAM, typename MSG>
+   void SendMessageToRight(LEFT_FACTOR* l, const LEFT_REPAM& leftRepam, MSG& msg, const REAL omega)
    {
-      assert(msg.size() == no_arcs_);
-      for(INDEX i=0; i<no_arcs_; ++i) {
-         const INDEX curEdgeId = start_arc_ + i;
-         msg[i] -= omega*perturb[curEdgeId]; 
-      }
+      MakeLeftFactorUniform(leftRepam, msg, omega);
    }
-
-   // performance is enhanced when not using this. 
+   
    template<typename LEFT_FACTOR, typename G1, typename G2>
    void ReceiveMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg)
    {
+      //assert(leftPot.size() == no_arcs_);
       MakeLeftFactorUniform(leftPot, msg);
    }
 
@@ -471,11 +673,18 @@ public:
    void
    ReceiveRestrictedMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg, typename PrimalSolutionStorage::Element leftPrimal)
    { 
+      return;
+      /*
+      assert(leftPot.size() == no_arcs_);
+      assert(false); // do zrobiebia: remove
+      assert(false);
+      return;
       // we assume that leftPrimal is all unknownState
       for(INDEX i=0; i<no_arcs_; ++i) {
          assert(leftPrimal[i] == unknownState);
       }
       MakeLeftFactorUniform(leftPot, msg);
+      */
    }
 
    // for rounding based on unaries
@@ -483,10 +692,15 @@ public:
    void
    ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* r, const G1& rightPot, G2& msg, typename PrimalSolutionStorage::Element rightPrimal)
    { 
+      return;
+      assert(false); // do zrobiebia: remove
+      assert(false);
+      return;
+      /*
       auto* mcf = r->GetMinCostFlowSolver();
       // if an arc is true, enforce it. If an arc is false, forbid it. Otherwise, get reduced costs
       for(INDEX l=0; l<no_arcs_; ++l) {
-         //msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(-mcf->GetReducedCost(start_arc + l) + mcf->GetCost(start_arc + l));
+         msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(-mcf->GetReducedCost(start_arc + l) + mcf->GetCost(start_arc + l));
          const INDEX e = start_arc_ + l;
          assert(mcf->GetCap(e) == 0 || mcf->GetCap(e) == 1); // only {0,1}-flow accepted here!
          const REAL sign = mcf->GetCap(e) == 1 ? 1.0 : -1.0;
@@ -499,14 +713,8 @@ public:
             msg[l] -= std::numeric_limits<REAL>::max();
          }
       }
+      */
    }
-   /*
-   template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G1, typename G2, typename G3>
-   void SendMessageToRight(LEFT_FACTOR* const l, RIGHT_FACTOR* const r, const G1& leftPot, const G2& rightPot, G3& msg, const REAL omega)
-   {
-      MakeLeftFactorUniform(leftPot, msg, omega);
-   }
-   */
 
    template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
    static void
@@ -515,7 +723,7 @@ public:
       auto* mcf = rightFactor.GetMinCostFlowSolver();
       assert(rightRepam.size() == rightFactor.size());
       for(INDEX i=0; i<rightFactor.size(); ++i) {
-         assert(std::abs(rightRepam[i] - mcf->GetCost(i)) <= eps);
+         assert(std::abs(rightRepam[i] - rightFactor[i]) <= eps);
       }
       const REAL omega_sum = std::accumulate(omegaIt, omegaIt+msgs.size(),0.0); 
       assert(0.0 <= omega_sum && omega_sum < 1.0 + eps);
@@ -534,16 +742,35 @@ public:
 
       // the technique applied in Max-Weight Bipartite Matching ... CVPR16
       for(INDEX i=0; i<msgs.size(); ++i, ++omegaIt) {
+         /*
          INDEX start_arc = msgs[i].GetMessageOp().start_arc_;
          INDEX no_arcs = msgs[i].GetMessageOp().no_arcs_;
-         for(INDEX l=0; l<no_arcs; ++l) {
-            //msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(-mcf->GetReducedCost(start_arc + l) + mcf->GetCost(start_arc + l));
-            const INDEX e = start_arc + l;
-            assert(mcf->GetCap(e) == 0 || mcf->GetCap(e) == 1); // only {0,1}-flow accepted here!
-            const REAL sign = mcf->GetCap(e) == 1 ? 1.0 : -1.0;
-            msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(sign*mcf->GetReducedCost(e) );  // do zrobienia: this only works for left side models, not for right hand side ones!
+         INDEX node = mcf->GetTailNodeId(start_arc);
+         INDEX l_tmp=0;
+         //std::cout << "node = " << i << "\n";
+         for(auto it = mcf->begin(node); it != mcf->end(node); ++it) {
+                 const REAL delta = omega_sum*1.0/REAL(COVERING_FACTOR)*((*it)->GetRCost());
+                 auto a = mcf->N_arc(*it);
+                 //std::cout << "a = " << a << "\n";
+                 msgs[i][l_tmp] -= delta;
+                 //mcf->UpdateCost( a, -delta);
+                 ++l_tmp;
          }
-         //msgs[i].GetMessageOp().MakeRightFactorUniform(rightFactor, repam, msgs[i], omega_sum*1.0/REAL(COVERING_FACTOR));
+         */
+         for(INDEX l=0; l<msgs[i].size(); ++l) {
+            //msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(-mcf->GetReducedCost(start_arc + l) + mcf->GetCost(start_arc + l));
+            /*
+            const INDEX e = start_arc + l;
+            assert(mcf->GetTailNodeId(e) == node);
+            //std::cout << "e = " << e << "\n";
+            assert(rightFactor.Is01Arc(e) || rightFactor.Is01Arc(mcf->GetReverseArcId(e))); // only {0,1}-flow accepted here!
+            const REAL sign = mcf->GetCap(e) == 1 ? 1.0 : -1.0;
+            assert(sign == 1.0);
+            msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(sign*mcf->GetReducedCost(e) );  
+            */
+            const INDEX e = msgs[i].GetMessageOp().edges_[l];
+            msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(mcf->GetReducedCost(e) );  
+         }
       }
    }
 
@@ -553,8 +780,8 @@ public:
    typename std::enable_if<ENABLE,void>::type
    ComputeLeftFromRightPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
    {
-      for(INDEX e=0; e<no_arcs_; ++e) {
-         left[e] = right[start_arc_ + e];
+      for(INDEX e=0; e<edges_.size(); ++e) {
+         left[e] = right[edges_[e]];
       }
    }
 
@@ -563,43 +790,54 @@ public:
    ComputeRightFromLeftPrimal(typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, const typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
    {
       auto* mcf = r->GetMinCostFlowSolver();
+      /*
       for(INDEX e=0; e<no_arcs_; ++e) {
          right[start_arc_ + e] = left[e];
          const INDEX a_rev = mcf->GetReverseArcId(start_arc_ + e);
          right[a_rev] = left[e];
       }
+      */
+      for(INDEX e=0; e<edges_.size(); ++e) {
+         right[edges_[e]] = left[e];
+      }
+
    }
 
-   INDEX size() const { return no_arcs_; }
+   INDEX size() const { return edges_.size(); }
 
    template<typename G>
    void RepamLeft(G& leftRepamPot, const REAL msg, const INDEX dim) 
    {
+      assert(dim < edges_.size());
+      assert(leftRepamPot.size() == edges_.size());
       leftRepamPot[dim] += msg;
    }
 
    template<typename G>
    void RepamRight(G& rightRepamPot, const REAL msg, const INDEX dim) 
    {
-      rightRepamPot[start_arc_ + dim] += msg;
+      assert(dim < edges_.size());
+      rightRepamPot[edges_[dim]] += msg;
    }
 
    template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
-   void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor) const
+   void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* l, RIGHT_FACTOR_TYPE* r) const
    { 
-      for(INDEX i=0; i<no_arcs_; ++i) {
+      auto* mcf = r->GetMinCostFlowSolver();
+      for(INDEX i=0; i<edges_.size(); ++i) {
          LinExpr lhs = lp->CreateLinExpr();
          LinExpr rhs = lp->CreateLinExpr();
          lhs += lp->GetLeftVariable(i);
-         rhs += lp->GetRightVariable(i + start_arc_);
+         rhs += lp->GetRightVariable(edges_[i]);
          lp->addLinearEquality(lhs,rhs);
       }
    }
 
 
 private:
-   const INDEX start_arc_;
-   const INDEX no_arcs_;
+   //const INDEX start_arc_;
+   //const INDEX no_arcs_;
+   std::vector<INDEX> edges_;
 };
 
 } // end namespace LP_MP

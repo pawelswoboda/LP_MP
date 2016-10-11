@@ -11,8 +11,8 @@ SET(SOURCE_FILES
 foreach( source_file ${SOURCE_FILES} )
    string( REPLACE ".cpp" "" executable_file ${source_file} )
    add_executable( ${executable_file} ${source_file} ${headers} ${sources})
-   add_dependencies(${executable_file} Andres)
-   add_dependencies(${executable_file} Vc)
-   target_link_libraries( ${executable_file} Vc m stdc++ pthread ${HDF5_LIBRARIES} ncurses)
+   #add_dependencies(${executable_file} Andres)
+   #add_dependencies(${executable_file} Vc)
+   target_link_libraries( ${executable_file} Vc m stdc++ pthread ${HDF5_LIBRARIES})
 endforeach( source_file ${SOURCE_FILES} )
 
