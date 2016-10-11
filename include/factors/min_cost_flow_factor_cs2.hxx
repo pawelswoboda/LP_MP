@@ -506,7 +506,8 @@ public:
    using MinCostFlowSolverType = MinCostFlowFactorCS2::MinCostFlowSolverType;
    MinCostFlowReparametrizationStorageCS2(const MinCostFlowFactorCS2& mfc) 
       : minCostFlow_(mfc.GetMinCostFlowSolver()),
-      repamUpdateFlow_(mfc.GetRepamFlowSolver())
+      repamUpdateFlow_(mfc.GetRepamFlowSolver()),
+      no_binary_edges_(mfc.size())
    {
       assert(minCostFlow_ != nullptr);
    }
@@ -613,13 +614,15 @@ public:
    const INDEX size() const 
    {
       //return minCostFlow_->GetArcNum();
-      return minCostFlow_->GetEdgeNum();
+      return no_binary_edges_;
+      //return minCostFlow_->GetEdgeNum();
    }
 
 private:
    // do zrobienia: what about shared_ptr?
    MinCostFlowSolverType* minCostFlow_; //possibly not needed here.
    MinCostFlowSolverType* repamUpdateFlow_;
+   const INDEX no_binary_edges_;
 };
 
 

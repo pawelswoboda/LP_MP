@@ -799,7 +799,6 @@ namespace TorresaniEtAlInput {
             auto *u = mrf_right.GetUnaryFactor(i);
             using MessageType = typename FMC::UnaryToAssignmentMessageType;
             //auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i + no_left_nodes), mcf->NoArcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
-            assert(false);
             auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(edgeId[i]), u, f, mrf_right.GetNumberOfLabels(i));
             s.GetLP().AddMessage(m);
          }
