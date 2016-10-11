@@ -1102,7 +1102,9 @@ namespace UaiGraphMatchingInput {
       std::vector<std::vector<INDEX>> edgeId(no_left_nodes);
       for(INDEX i=0; i<edges.size(); ++i) {
               const INDEX left_node = edges[i].start_node;
-              edgeId[left_node].push_back(i);
+              if(left_node < no_left_nodes) {
+                      edgeId[left_node].push_back(i);
+              }
       }
 
       std::vector<SIGNED_INDEX> demands(no_left_nodes + total_no_right_nodes + 1);
