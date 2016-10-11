@@ -136,6 +136,7 @@ public:
    }
    INDEX GetNumberOfFactors() const { return f_.size(); }
    FactorTypeAdapter* GetFactor(const INDEX i) const { return f_[i]; }
+   INDEX size() const { INDEX size=0; for(auto* f : f_) { size += f->size(); } return size; }
    INDEX AddMessage(MessageTypeAdapter* m)
    {
       m_.push_back(m);

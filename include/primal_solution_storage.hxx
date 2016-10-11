@@ -21,7 +21,6 @@ public:
          size += (*factorIt)->PrimalSize();
       }
       this->resize(size,unknownState);
-      //this->shrink_to_fit();
       //std::cout << "primal size = " << this->size() << "\n";
    }
 
@@ -29,7 +28,6 @@ public:
    {
       std::fill(this->begin(), this->end(), unknownState);
    }
-
 };  
 
 

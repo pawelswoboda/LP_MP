@@ -2,6 +2,7 @@
 #define LP_MP_MULTICUT_UNARY_FACTOR_HXX
 
 #include "LP_MP.h"
+#include "lp_interface/lp_interface.h"
 #include <random>
 
 namespace LP_MP {
@@ -49,6 +50,8 @@ public:
    {
       //fs << primal[0];
    }
+
+   void CreateConstraints(LpInterfaceAdapter* lp) const {} // we do not have to do anything
 
 private:
 

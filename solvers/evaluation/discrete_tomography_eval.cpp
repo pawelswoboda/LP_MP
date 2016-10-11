@@ -988,7 +988,6 @@ int main()
             i = "discrete_tomography_datasets/discrete_tomography_synthetic/mp/" + p + "/" + i;
          }
          RunSolver<FMC_DT,VisitorSolver<LpSolver<Solver<FMC_DT>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT>,s,options,p + " projections, sparsity " + std::to_string(sparsity) ,"MP");
-
       }
       sparsity++;
    }

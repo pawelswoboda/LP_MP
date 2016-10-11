@@ -10,9 +10,9 @@ OPTION(BUILD_MULTICUT_EVALUATION "Build multicut evaluation" OFF)
 OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" ON)
 OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" ON)
 OPTION(BUILD_DISCRETE_TOMOGRAPHY_EVALUATION "Build discrete tomography evaluation" OFF)
-OPTION(BUILD_EVALUATION "Build evaluation" ON)
 OPTION(BUILD_TESTS "Build tests" ON)
 OPTION(WITH_GUROBI "LP interface to gurobi" OFF)
+OPTION(WITH_CPLEX "LP interface to Cplex" OFF)
 
 if(DOWNLOAD_DEPENDENCIES)
    # download external projects here 

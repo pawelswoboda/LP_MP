@@ -496,7 +496,7 @@ namespace TorresaniEtAlInput {
       }
    };
 
-   std::vector<std::vector<REAL>> build_left_unaries(const GraphMatchingInput& gm, const REAL weight = 0.5)
+   std::vector<std::vector<REAL>> build_left_unaries(const GraphMatchingInput& gm, const REAL weight)
    {
       const INDEX no_left_nodes = std::accumulate(gm.assignment_.begin(), gm.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.left_node_); }) + 1;
       std::vector<std::vector<REAL>> unaries(no_left_nodes);
@@ -509,7 +509,7 @@ namespace TorresaniEtAlInput {
       return std::move(unaries);
    }
 
-   std::vector<std::vector<REAL>> build_right_unaries(const GraphMatchingInput& gm, const REAL weight = 0.5)
+   std::vector<std::vector<REAL>> build_right_unaries(const GraphMatchingInput& gm, const REAL weight)
    {
       const INDEX no_right_nodes = std::accumulate(gm.assignment_.begin(), gm.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.right_node_); }) + 1;
       std::vector<std::vector<REAL>> unaries(no_right_nodes);
@@ -533,9 +533,17 @@ namespace TorresaniEtAlInput {
       // always assume that node1 < node2 in q
       //assert(node1 != node2);
       if(node1 == node2) {
-         std::cout << "This value is not useful, due to matching constraint\n";
+         std::cout << "This value is not useful, due to matching constraint: " << cost << "\n";
          cost = 1e10;
+         return;
       }
+      assert(graph[node1][oppositeNode1] != graph[node2][oppositeNode2]);
+      //if(oppositeNode1 == oppositeNode2) {
+      //   std::cout << "This value is not useful, due to matching constraint: " << cost << "\n";
+      //   cost = 1e100;
+      //   return;
+      //}
+
       if(node1>node2) {
          std::swap(node1,node2);
          std::swap(index1,index2);
@@ -552,8 +560,10 @@ namespace TorresaniEtAlInput {
             for(INDEX i2=0; i2<graph[node2].size(); ++i2) {
                if(graph[node1][i1] == graph[node2][i2]) {
                   assert(i1 + i2*leftDim < cost.size());
-                  cost[i1 + i2*leftDim] = std::numeric_limits<REAL>::max();
-                  cost[i1 + i2*leftDim] = 10000.0; // do zrobienia: make max again. However tightening only works with finite numbers
+                  cost[i1 + i2*leftDim] = std::numeric_limits<REAL>::infinity();
+                  // transposed version
+                  //assert(i1*rightDim + i2 < cost.size());
+                  //cost[i1*rightDim + i2] = std::numeric_limits<REAL>::infinity();
                }
             }
          }
@@ -563,11 +573,15 @@ namespace TorresaniEtAlInput {
       // now add specific cost
       assert(q.find(std::make_pair(node1,node2)) != q.end());
       std::vector<REAL>& costVec = (*q.find(std::make_pair(node1,node2))).second;
+      // do zrobienia: correct, or transpose?
       assert(costVec[index1 + index2*leftDim] == 0.0);
       costVec[index1 + index2*leftDim] = cost;
+      // transposed version
+      //assert(costVec[index1*rightDim + index2] == 0.0);
+      //costVec[index1*rightDim + index2] = cost;
    }
 
-   std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> BuildLeftPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight = 1.0)
+   std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> BuildLeftPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight)
    {
       std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> q;
       for(auto i : gmInput.pairwise_potentials) {
@@ -578,13 +592,15 @@ namespace TorresaniEtAlInput {
          const REAL cost = std::get<4>(i);
 
          const INDEX rightIndex1 = std::find(gmInput.leftGraph_[leftNode1].begin(), gmInput.leftGraph_[leftNode1].end(), rightNode1) - gmInput.leftGraph_[leftNode1].begin();
+         assert(rightIndex1 < gmInput.leftGraph_[leftNode1].size());
          const INDEX rightIndex2 = std::find(gmInput.leftGraph_[leftNode2].begin(), gmInput.leftGraph_[leftNode2].end(), rightNode2) - gmInput.leftGraph_[leftNode2].begin();
+         assert(rightIndex2 < gmInput.leftGraph_[leftNode2].size());
 
          AddQuadraticPotential(q, leftNode1,leftNode2, rightIndex1,rightIndex2, weight*cost, gmInput.leftGraph_);
       }
       return q;
    }
-   std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> BuildRightPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight = 1.0)
+   std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> BuildRightPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight)
    {
       std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> q;
       for(auto i : gmInput.pairwise_potentials) {
@@ -595,7 +611,9 @@ namespace TorresaniEtAlInput {
          const REAL cost = std::get<4>(i);
 
          const INDEX leftIndex1 = std::find(gmInput.rightGraph_[rightNode1].begin(), gmInput.rightGraph_[rightNode1].end(), leftNode1) - gmInput.rightGraph_[rightNode1].begin();
+         assert(leftIndex1 < gmInput.rightGraph_[rightNode1].size());
          const INDEX leftIndex2 = std::find(gmInput.rightGraph_[rightNode2].begin(), gmInput.rightGraph_[rightNode2].end(), leftNode2) - gmInput.rightGraph_[rightNode2].begin();
+         assert(leftIndex2 < gmInput.rightGraph_[rightNode2].size());
 
          AddQuadraticPotential(q, rightNode1,rightNode2, leftIndex1,leftIndex2, weight*cost, gmInput.rightGraph_);
       }
@@ -613,7 +631,7 @@ namespace TorresaniEtAlInput {
 
       // construct pairwise potentials of mrfs
       if(pairwise_weight > 0) {
-         std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> leftQuadraticPot = BuildLeftPairwisePotentials(gmInput,pairwise_weight);
+         std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> leftQuadraticPot = BuildLeftPairwisePotentials(gmInput, pairwise_weight);
          for(auto& q : leftQuadraticPot) {
             auto p = left_mrf.AddPairwiseFactor(q.first.first, q.first.second, q.second);
          }
@@ -630,7 +648,7 @@ namespace TorresaniEtAlInput {
 
       // construct pairwise potentials of mrfs
       if(pairwise_weight > 0) {
-         std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> rightQuadraticPot = BuildRightPairwisePotentials(gmInput,pairwise_weight);
+         std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> rightQuadraticPot = BuildRightPairwisePotentials(gmInput, pairwise_weight);
          for(auto& q : rightQuadraticPot) {
             auto p = right_mrf.AddPairwiseFactor(q.first.first, q.first.second, q.second);
          }
@@ -644,16 +662,16 @@ namespace TorresaniEtAlInput {
       auto& mrf_right = s.template GetProblemConstructor<1>();
       constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
       if(pc == PairwiseConstruction::Left) {
-         construct_left_mrf(gm_input, mrf_left, 0.5, 1.0);
-         construct_right_mrf(gm_input, mrf_right, 0.5, 0.0);
+         construct_left_mrf(gm_input, mrf_left, 1.0, 1.0);
+         construct_right_mrf(gm_input, mrf_right, 0.0, 0.0);
       }
       if(pc == PairwiseConstruction::BothSides) {
          construct_left_mrf(gm_input, mrf_left, 0.5, 0.5);
          construct_right_mrf(gm_input, mrf_right, 0.5, 0.5);
       }
       if(pc == PairwiseConstruction::Right) {
-         construct_left_mrf(gm_input, mrf_left, 0.5, 0.0);
-         construct_right_mrf(gm_input, mrf_right, 0.5, 1.0);
+         construct_left_mrf(gm_input, mrf_left, 0.0, 0.0);
+         construct_right_mrf(gm_input, mrf_right, 1.0, 1.0);
       }
 
       std::vector<INDEX> left_label_count(mrf_left.GetNumberOfVariables(),0);
@@ -669,6 +687,13 @@ namespace TorresaniEtAlInput {
          ++left_label_count[a.left_node_];
          ++right_label_count[a.right_node_];
       }
+      for(INDEX i=0; i<mrf_left.GetNumberOfVariables(); ++i) {
+         assert(mrf_left.GetNumberOfLabels(i) == left_label_count[i]+1);
+      }
+      for(INDEX i=0; i<mrf_right.GetNumberOfVariables(); ++i) {
+         assert(mrf_right.GetNumberOfLabels(i) == right_label_count[i]+1);
+      }
+      
       mrf_left.Construct(s);
       mrf_right.Construct(s);
    }
@@ -693,6 +718,7 @@ namespace TorresaniEtAlInput {
       // build assignment problem
       const INDEX no_left_nodes = std::accumulate(gm_input.assignment_.begin(), gm_input.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.left_node_); }) + 1;
       const INDEX no_right_nodes = std::accumulate(gm_input.assignment_.begin(), gm_input.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.right_node_); }) + 1;
+      const INDEX no_nodes = no_left_nodes + no_right_nodes;
       const INDEX no_edges = gm_input.assignment_.size() + no_left_nodes + no_right_nodes + 1;
 
       std::vector<typename MinCostFlowFactorCS2::Edge> edges;
@@ -703,37 +729,78 @@ namespace TorresaniEtAlInput {
       std::vector<SIGNED_INDEX> demands;
       demands.reserve(no_left_nodes + no_right_nodes + 2);
       for(INDEX i=0; i<no_left_nodes; ++i) {
-         edges.push_back({i,no_left_nodes + no_right_nodes + 1, 0, 1, 0.0}); // for non-assignment
+         edges.push_back({i,no_nodes + 1, 0, 1, 0.0}); // for non-assignment
          demands.push_back(1);
       }
       for(INDEX i=0; i<no_right_nodes; ++i) {
-         edges.push_back({no_left_nodes + no_right_nodes, no_left_nodes + i, 0, 1, 0.0}); // for non-assignment
+         edges.push_back({no_nodes, no_left_nodes + i, 0, 1, 0.0}); // for non-assignment
          demands.push_back(-1);
       }
-      edges.push_back({no_left_nodes + no_right_nodes, no_left_nodes + no_right_nodes + 1, 0, std::max(no_left_nodes, no_right_nodes), 0.0});
+      edges.push_back({no_nodes, no_nodes + 1, 0, std::max(no_left_nodes, no_right_nodes), 0.0});
       demands.push_back(no_right_nodes);
       demands.push_back(-no_left_nodes);
 
-      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
+      // check for duplicate edges
+      //std::sort(edges.begin(), edges.end(), [](const auto& a, const auto& b) { 
+      //      if(a.start_node != b.start_node) {
+      //      return a.start_node < b.start_node;
+      //      } else {
+      //      return a.end_node < b.end_node;
+      //      }
+      //      });
+      //for(INDEX a=1; a<edges.size(); ++a) {
+      //   assert(!((edges[a].start_node == edges[a-1].start_node) && (edges[a].end_node == edges[a-1].end_node)));
+      //}
+      
+
+      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands, edges.size()-1) );
       auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
       s.GetLP().AddFactor(f);
 
       // connect assignment factor with unaries
       if(pc == PairwiseConstruction::Left || pc == PairwiseConstruction::BothSides) {
+         std::vector<std::vector<INDEX>> edgeId(no_left_nodes);
+         INDEX c=0;
+         for(auto& a : gm_input.assignment_) {
+            // get left and right unaries and connect them with a message
+            edgeId[a.left_node_].push_back(c);
+            ++c;
+         }
+         // add slack edges
          for(INDEX i=0; i<no_left_nodes; ++i) {
-            assert(mrf_left.GetNumberOfLabels(i) == mcf->NoArcs(i));
+            edgeId[i].push_back(c);
+            ++c;
+         }
+         for(INDEX i=0; i<no_left_nodes; ++i) {
+            //assert(mrf_left.GetNumberOfLabels(i) == mcf->NoArcs(i));
             auto *u = mrf_left.GetUnaryFactor(i);
             using MessageType = typename FMC::UnaryToAssignmentMessageType;
-            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+            //auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(edgeId[i]), u, f, mrf_left.GetNumberOfLabels(i));
             s.GetLP().AddMessage(m);
          }
       }
       if(pc == PairwiseConstruction::Right || pc == PairwiseConstruction::BothSides) {
+         std::vector<std::vector<INDEX>> edgeId(no_right_nodes);
+         INDEX c=0;
+         for(auto& a : gm_input.assignment_) {
+            // get left and right unaries and connect them with a message
+            edgeId[a.right_node_].push_back(c);
+            ++c;
+         }
+         // add slack edges
+         c += no_left_nodes;
          for(INDEX i=0; i<no_right_nodes; ++i) {
-            assert(mrf_right.GetNumberOfLabels(i) == mcf->NoArcs(no_left_nodes + i));
+            edgeId[i].push_back(c);
+            ++c;
+         }
+         for(INDEX i=0; i<no_right_nodes; ++i) {
+            //assert(mrf_right.GetNumberOfLabels(i) == mcf->NoArcs(no_left_nodes + i));
             auto *u = mrf_right.GetUnaryFactor(i);
             using MessageType = typename FMC::UnaryToAssignmentMessageType;
-            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i + no_left_nodes), mcf->NoArcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
+            //auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i + no_left_nodes), mcf->NoArcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
+            assert(false);
+            auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(edgeId[i]), u, f, mrf_right.GetNumberOfLabels(i));
             s.GetLP().AddMessage(m);
          }
       }
@@ -760,6 +827,12 @@ namespace TorresaniEtAlInput {
       pegtl::file_parser problem(filename);
       std::cout << "parsing " << filename << "\n";
 
+      for(auto& edges : gmInput.leftGraph_) {
+              assert(std::is_sorted(edges.begin(), edges.end()));
+      }
+      for(auto& edges : gmInput.rightGraph_) {
+              assert(std::is_sorted(edges.begin(), edges.end()));
+      }
       const bool ret = problem.parse< grammar, action >( gmInput );
       if(!ret) {
          throw std::runtime_error("could not read file " + filename);
@@ -1027,61 +1100,29 @@ namespace UaiGraphMatchingInput {
          edges.push_back({no_left_nodes + i, no_left_nodes + total_no_right_nodes, 0, 1, 0.0});
       }
 
+      std::vector<std::vector<INDEX>> edgeId(no_left_nodes);
+      for(INDEX i=0; i<edges.size(); ++i) {
+              const INDEX left_node = edges[i].start_node;
+              edgeId[left_node].push_back(i);
+      }
+
       std::vector<SIGNED_INDEX> demands(no_left_nodes + total_no_right_nodes + 1);
       std::fill(demands.begin(), demands.begin() + no_left_nodes, 1);
       std::fill(demands.begin() + no_left_nodes, demands.end(), 0);
       demands.back() = -no_left_nodes;
 
-      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
+      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands, edges.size()) );
       s.GetLP().AddFactor(f);
       auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
 
       for(INDEX i=0; i<no_left_nodes; ++i) {
          auto *u = mrf_left.GetUnaryFactor(i);
          using MessageType = typename FMC::UnaryToAssignmentMessageType;
-         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(edgeId[i]), u, f, mrf_left.GetNumberOfLabels(i));
          s.GetLP().AddMessage(m);
       }
-
-      /*
-
-      for(INDEX right_node=0; right_node<constraints.size(); ++right_node) {
-         for(INDEX var_label=0; var_label<constraints[right_node].size(); ++var_label) {
-            const INDEX var = std::get<0>(constraints[right_node][var_label]);
-            const INDEX label = std::get<1>(constraints[right_node][var_label]);
-            edges.push_back({var,right_node,0,1,0.0});
-         }
-      }
-      std::vector<SIGNED_INDEX> demands;
-      demands.reserve(no_left_nodes + no_right_nodes + 2);
-      for(INDEX i=0; i<no_left_nodes; ++i) {
-         edges.push_back({i,no_left_nodes + no_right_nodes + 1, 0, 1, 0.0}); // for non-assignment
-         demands.push_back(1);
-      }
-      for(INDEX i=0; i<no_right_nodes; ++i) {
-         edges.push_back({no_left_nodes + no_right_nodes, i, 0, 1, 0.0}); // for non-assignment
-         demands.push_back(-1);
-      }
-      edges.push_back({no_left_nodes + no_right_nodes, no_left_nodes + no_right_nodes + 1, 0, std::max(no_left_nodes, no_right_nodes), 0.0});
-      demands.push_back(no_right_nodes);
-      demands.push_back(-no_left_nodes);
-
-      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
-      auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
-
-      // do zrobienia: is this correct? this means that all labels have been used in constraints
-      // connect assignment factor with unaries
-      for(INDEX i=0; i<no_left_nodes; ++i) {
-         auto *u = mrf_left.GetUnaryFactor(i);
-         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( UnaryToAssignmentMessageCS2<FMC::McfCoveringFactor>(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
-         s.GetLP().AddMessage(m);
-      }
-      */
    }
 
-
-
-   
    template<typename FMC>
    bool ParseProblemMP(const std::string& filename, Solver<FMC>& s)
    {
@@ -1100,651 +1141,6 @@ namespace UaiGraphMatchingInput {
       construct_mcf(s, input);
       return true;
    }
-
-
-   namespace old_format {
-
-      struct constraints_init_line : pegtl::seq< opt_whitespace, pegtl::string<'c','o','n','s','t','r','a','i','n','t','s'>, opt_whitespace, pegtl::eol> {};
-      struct variable : positive_integer {};
-      struct label : positive_integer {};
-      struct variable_label_pair : pegtl::seq< pegtl::string<'('>, pegtl::opt<pegtl::string<'v'>>, variable, pegtl::string<','>, pegtl::opt<pegtl::string<'l'>>, label, pegtl::string<')'>> {};
-      struct sum : positive_integer {};
-      struct constraint_begin : opt_whitespace {};
-      struct constraint_line : pegtl::seq< constraint_begin, variable_label_pair, pegtl::star<opt_whitespace, pegtl::string<'+'>, opt_whitespace, variable_label_pair>, opt_whitespace, pegtl::string<'<','='>, opt_whitespace, sum > {};
-
-      struct grammar : pegtl::seq<
-                       pegtl::until<constraints_init_line>, 
-                       pegtl::star<constraint_line,pegtl::eol>,
-                       pegtl::opt<constraint_line>,
-                       pegtl::star<pegtl::sor<mand_whitespace,pegtl::eol>>,
-                       pegtl::eof> {};
-
-
-      using constraints = std::vector<std::vector<std::pair<INDEX,INDEX>>>;
-      using input = std::tuple<UaiMrfInput::MrfInput, constraints>;
-
-      template< typename Rule >
-         struct action
-         : pegtl::nothing< Rule > {};
-
-      template<> struct action< variable > {
-         static void apply(const pegtl::action_input & in, constraints & c)
-         { 
-            //std::cout << "variable \n";
-            c.back().push_back(std::make_pair(std::stoul(in.string()),0));
-         }
-      };
-
-      template<> struct action< label > {
-         static void apply(const pegtl::action_input & in, constraints & c)
-         { 
-            std::get<1>(c.back().back()) = std::stoul(in.string());
-         }
-      };
-
-      template<> struct action< constraint_begin > {
-         static void apply(const pegtl::action_input & in, constraints& c)
-         {
-            //std::cout << "new constraint\n";
-            c.push_back(std::vector<std::pair<INDEX,INDEX>>(0));
-         }
-      };
-
-      template<> struct action< sum > {
-         static void apply(const pegtl::action_input & in, constraints & c)
-         { 
-            assert(std::stoul(in.string()) == 1);
-         }
-      };
-
-
-      input ParseFile(const std::string& filename)
-      {
-         UaiMrfInput::MrfInput gm_input;
-
-         pegtl::file_parser problem(filename);
-         bool ret = problem.parse< UaiMrfInput::grammar, UaiMrfInput::action >( gm_input );
-         if(!ret) {
-            throw std::runtime_error("could not read mrf input"); 
-         }
-
-         constraints c;
-         ret = problem.parse< grammar, action >( c );
-         if(!ret) {
-            throw std::runtime_error("could not read constraints input"); 
-         }
-
-         std::ofstream m_file;
-         m_file.open (filename, std::ios::out | std::ios::app);
-
-         m_file << "matching\n";
-         std::vector<std::vector<INDEX> > matching(gm_input.number_of_variables_);
-         for(INDEX i=0; i<gm_input.number_of_variables_; ++i) {
-            matching[i].resize(gm_input.cardinality_[i], std::numeric_limits<INDEX>::max());
-         }
-         for(INDEX idx=0; idx<c.size(); ++idx) {
-            for(auto elem : c[idx]) {
-               const INDEX var = std::get<0>(elem);
-               const INDEX label = std::get<1>(elem);
-               matching[var][label] = idx;
-            }
-         }
-         for(INDEX i=0; i<matching.size(); ++i) {
-            m_file << i << " ";
-            for(INDEX l=0; l<matching[i].size(); ++l) {
-               if(matching[i][l] == std::numeric_limits<INDEX>::max()) {
-                  m_file << "slack" << " ";
-               } else {
-                  m_file << matching[i][l] << " ";
-               }
-            }
-            m_file << "\n";
-         }
-         m_file.close();
-
-         return std::move(std::make_tuple(std::move(gm_input), std::move(c)));
-      }
-
-   template<typename FMC>
-      void construct_gm(Solver<FMC>& s, const input& i)
-      {
-         auto& mrf = s.template GetProblemConstructor<0>();
-         auto& mrf_input = std::get<0>(i);
-         UaiMrfInput::build_mrf(mrf, std::get<0>(i));
-
-         // add additional empty pairwise potentials with infty on diagonals for each constraint, if not already there.
-         auto& constraints = std::get<1>(i);
-         std::map<std::tuple<INDEX,INDEX>, std::vector<REAL>> pairwisePot;
-         for(INDEX c=0; c<constraints.size(); ++c) {
-            for(INDEX c1=0; c1<constraints[c].size(); ++c1) {
-               for(INDEX c2=0; c2<c1; ++c2) {
-                  INDEX var1 = constraints[c][c1].first;
-                  INDEX label1 = constraints[c][c1].second;
-                  INDEX var2 = constraints[c][c2].first;
-                  INDEX label2 = constraints[c][c2].second;
-                  assert(var1 != var2);
-                  if(var1 > var2) {
-                     std::swap(var1,var2);
-                     std::swap(label1,label2);
-                  }
-                  assert(var2 < mrf_input.number_of_variables_);
-                  assert(label1 < mrf_input.cardinality_[var1]);
-                  assert(label2 < mrf_input.cardinality_[var2]);
-
-                  if(!mrf.HasPairwiseFactor(var1,var2)) {
-                     const INDEX potentialSize = mrf_input.cardinality_[var1] * mrf_input.cardinality_[var2];
-                     if(pairwisePot.find(std::make_tuple(var1,var2)) == pairwisePot.end()) {
-                        pairwisePot.insert( std::make_pair(std::make_pair(var1,var2), std::vector<REAL>(potentialSize, 0.0)) );
-                     } 
-                  auto it = pairwisePot.find(std::make_pair(var1,var2));
-                  assert(it != pairwisePot.end());
-                  assert(it->second.size() == potentialSize);
-                  assert(label1 + label2*mrf_input.cardinality_[var1] < it->second.size());
-                  it->second.operator[](label1 + label2*mrf_input.cardinality_[var1]) = 3e11;
-               } else {
-                  const INDEX factorId = mrf.GetPairwiseFactorId(var1,var2);
-                  const REAL val = mrf.GetPairwiseValue(factorId,label1,label2);
-                  assert(val > 1000000);
-               }
-            }
-         }
-      }
-      for(auto it = pairwisePot.cbegin(); it!=pairwisePot.cend(); ++it) {
-         const INDEX var1 = std::get<0>(it->first);
-         const INDEX var2 = std::get<1>(it->first);
-         const std::vector<REAL> pot = it->second;
-         mrf.AddPairwiseFactor(var1,var2,pot);
-      }
-   }
-
-   template<typename FMC>
-   void construct_mp(Solver<FMC>& s, const input& i)
-   {
-      auto& mrf_left = s.template GetProblemConstructor<1>();
-      auto& mrf_input = std::get<0>(i);
-      UaiMrfInput::build_mrf(mrf_left, mrf_input);
-
-      // now build unaries for mrf_right. There will be as many unaries (=labels) on the right as constraints
-      auto& mrf_right = s.template GetProblemConstructor<2>();
-      auto& constraints = std::get<1>(i);
-      for(auto& c : constraints) {
-         const INDEX unary_no = mrf_right.AddUnaryFactor(std::vector<REAL>(c.size()+1,0.0)); // extra label is for non-assignment of label
-         auto* u_r = mrf_right.GetUnaryFactor(unary_no);
-         for(INDEX var_label=0; var_label<c.size(); ++var_label) {
-            const INDEX var = std::get<0>(c[var_label]);
-            const INDEX label = std::get<1>(c[var_label]);
-            auto* u_l = mrf_left.GetUnaryFactor(var);
-            auto* m = new typename FMC::AssignmentConstraintMessage( typename FMC::EqualityMessageType(label, var_label), u_l, u_r, 1);
-            s.GetLP().AddMessage(m);
-         }
-      }
-      
-      std::cout << "Constructed gm with " << mrf_left.GetNumberOfVariables() << " unary factors and " << mrf_left.GetNumberOfPairwiseFactors() << " pairwise factors\n";
-   }
-
-   template<typename FMC>
-   void construct_mcf(Solver<FMC>& s, const input& i)
-   {
-      auto& mrf_left = s.template GetProblemConstructor<1>();
-      auto& mrf_input = std::get<0>(i);
-      UaiMrfInput::build_mrf(mrf_left, mrf_input);
-
-      // build assignment problem
-      auto& constraints = std::get<1>(i);
-      const INDEX no_left_nodes = mrf_left.GetNumberOfVariables();
-      const INDEX no_right_nodes = constraints.size();
-
-      std::vector<typename MinCostFlowFactorCS2::Edge> edges;
-      for(INDEX right_node=0; right_node<constraints.size(); ++right_node) {
-         for(INDEX var_label=0; var_label<constraints[right_node].size(); ++var_label) {
-            const INDEX var = std::get<0>(constraints[right_node][var_label]);
-            const INDEX label = std::get<1>(constraints[right_node][var_label]);
-            edges.push_back({var,right_node,0,1,0.0});
-         }
-      }
-      std::vector<SIGNED_INDEX> demands;
-      demands.reserve(no_left_nodes + no_right_nodes + 2);
-      for(INDEX i=0; i<no_left_nodes; ++i) {
-         edges.push_back({i,no_left_nodes + no_right_nodes + 1, 0, 1, 0.0}); // for non-assignment
-         demands.push_back(1);
-      }
-      for(INDEX i=0; i<no_right_nodes; ++i) {
-         edges.push_back({no_left_nodes + no_right_nodes, i, 0, 1, 0.0}); // for non-assignment
-         demands.push_back(-1);
-      }
-      edges.push_back({no_left_nodes + no_right_nodes, no_left_nodes + no_right_nodes + 1, 0, std::max(no_left_nodes, no_right_nodes), 0.0});
-      demands.push_back(no_right_nodes);
-      demands.push_back(-no_left_nodes);
-
-      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands) );
-      s.GetLP().AddFactor(f);
-      auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
-
-      // do zrobienia: is this correct? this means that all labels have been used in constraints
-      // connect assignment factor with unaries
-      for(INDEX i=0; i<no_left_nodes; ++i) {
-         auto *u = mrf_left.GetUnaryFactor(i);
-         using MessageType = typename FMC::UnaryToAssignmentMessageType;
-         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
-         s.GetLP().AddMessage(m);
-      }
-   }
-
-   template<typename FMC>
-   bool ParseProblem(const std::string filename, Solver<FMC>& pd)
-   {
-      ParseFile(filename);
-      return true;
-   }
-
-
-   } // end old_format
-
-
-
-   /*
-      template<typename FMC> struct action< FMC, positive_integer > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>&, GraphMatchingInput &)
-      { 
-      integer_stack.push(std::stoul(in.string())); 
-      }
-      };
-      template<typename FMC> struct action< FMC, real_number > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>&, std::stack<REAL>& real_stack, GraphMatchingInput&)
-      { 
-      real_stack.push(std::stod(in.string())); 
-      }
-      };
-      template<typename FMC> struct action< FMC, numberOfVariables_line > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
-      {
-      gmInput.numberOfVariables_ = integer_stack.top();
-      integer_stack.pop();
-      }
-      };
-      template<typename FMC> struct action< FMC, numberOfCliques > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
-      {
-      gmInput.numberOfCliques_ = integer_stack.top();
-      integer_stack.pop();
-      }
-      };
-      template<typename FMC> struct action< FMC, cardinality_line > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
-      {
-         assert(integer_stack.size() == gmInput.numberOfVariables_);
-         while(!integer_stack.empty()) {
-            gmInput.cardinality_.push_back(integer_stack.top());
-            integer_stack.pop();
-         }
-         std::reverse(gmInput.cardinality_.begin(), gmInput.cardinality_.end());
-      }
-   };
-   template<typename FMC> struct action< FMC, cliqueScope_line > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
-      {
-         gmInput.cliqueScope_.push_back(std::vector<INDEX>(0));
-         while(integer_stack.size() > 1) {
-            gmInput.cliqueScope_.back().push_back(integer_stack.top());
-            integer_stack.pop();
-         }
-         std::reverse(gmInput.cliqueScope_.back().begin(), gmInput.cliqueScope_.back().end());
-         const INDEX cliqueSize = integer_stack.top();
-         integer_stack.pop();
-         assert(gmInput.cliqueScope_.back().size() == cliqueSize);
-      }
-   };
-   // reconstruct the function tables
-   template<typename FMC> struct action< FMC, functionTables > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
-      {
-         // first read in real stack into array
-         std::vector<REAL> values;
-         while(!real_stack.empty()) {
-            values.push_back(real_stack.top());
-            real_stack.pop();
-         }
-         std::reverse(values.begin(), values.end());
-
-         // now iterate over function tables. first read in number of values of function table, then add them to the function table.
-         INDEX functionTableIdx = 0; // at which index does current function table start?
-         while( functionTableIdx<values.size() ) {
-            // assert that this functionTableSize is actually a real variable
-            const INDEX functionTableSize = values[functionTableIdx];
-            assert(functionTableIdx+functionTableSize < values.size());
-            const INDEX potentialNumber = gmInput.functionTable_.size();
-            const INDEX cardinality = gmInput.cliqueScope_[potentialNumber].size();
-
-            gmInput.functionTable_.push_back(std::vector<REAL>(functionTableSize,0.0));
-            if(cardinality == 1) { // unary factor
-               assert(functionTableSize == gmInput.cardinality_[ gmInput.cliqueScope_[potentialNumber][0] ]);
-               for(INDEX label=0; label<functionTableSize; ++label) {
-                  gmInput.functionTable_.back().operator[](label) = values[functionTableIdx+1+label];
-                  //std::cout << values[functionTableIdx+1+label] << ", ";
-               }
-               //std::cout << "\n";
-            } else if(cardinality == 2) { // pairwise factor
-               const INDEX var1 = gmInput.cliqueScope_[potentialNumber][0];
-               const INDEX var2 = gmInput.cliqueScope_[potentialNumber][1];
-               assert(functionTableSize == gmInput.cardinality_[var1] * gmInput.cardinality_[var2]);
-               for(INDEX label1=0; label1<gmInput.cardinality_[var1]; ++label1) {
-                  for(INDEX label2=0; label2<gmInput.cardinality_[var2]; ++label2) {
-                     // note: we must transpose the matrix, that we have read in
-                     gmInput.functionTable_.back().operator[](label1 + label2*gmInput.cardinality_[var1]) = values[functionTableIdx + 1 + label2 + label1*gmInput.cardinality_[var2]];
-                  }
-               }
-            } else {
-               assert(false);
-               throw std::runtime_error("Only unary and pairwise potentials supported now");
-            }
-            functionTableIdx += functionTableSize+1;
-         }
-      }
-   };
-   template<typename FMC> struct action< FMC, constraint_line > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
-      {
-         //std::cout << "constraint: " << in.string() << "\n";
-         const INDEX sum = integer_stack.top();
-         integer_stack.pop();
-         assert(integer_stack.size() % 2 == 0);
-         assert(sum == 1);
-         // now read in variable label pairs.
-         gmInput.constraint_.push_back(std::vector<std::pair<INDEX,INDEX>>(0));
-         while(!integer_stack.empty()) {
-            const INDEX label = integer_stack.top(); // do zrobienia: in constraints, label start at 1, but variables start at 0
-            integer_stack.pop();
-            const INDEX var = integer_stack.top();
-            integer_stack.pop();
-            gmInput.constraint_.back().push_back(std::make_pair(var,label));
-         }
-         std::reverse(gmInput.constraint_.back().begin(), gmInput.constraint_.back().begin());
-      }
-   };
-
-   template<typename MRF_CONSTRUCTOR>
-      void BuildMrf(MRF_CONSTRUCTOR& mrf, GraphMatchingInput& gmInput)
-      {
-         // first input the unaries, as pairwise potentials need them to be able to link to them
-         for(INDEX i=0; i<gmInput.numberOfCliques_; ++i) {
-            if(gmInput.cliqueScope_[i].size() == 1) {
-               const INDEX var = gmInput.cliqueScope_[i][0];
-               assert(gmInput.functionTable_[i].size() == gmInput.cardinality_[var]);
-               mrf.AddUnaryFactor(var,gmInput.functionTable_[i]);
-            } else if(gmInput.cliqueScope_[i].size() > 2) {
-               throw std::runtime_error("only pairwise models are accepted currently");
-            }
-         }
-         // now the pairwise potentials. 
-         for(INDEX i=0; i<gmInput.numberOfCliques_; ++i) {
-            if(gmInput.cliqueScope_[i].size() == 2) {
-               const INDEX var1 = gmInput.cliqueScope_[i][0];
-               const INDEX var2 = gmInput.cliqueScope_[i][1];
-               assert(var1<var2);
-               assert(gmInput.functionTable_[i].size() == gmInput.cardinality_[var1]*gmInput.cardinality_[var2]);
-               mrf.AddPairwiseFactor(var1,var2,gmInput.functionTable_[i]); // or do we have to transpose the values?
-            }
-         }
-      }
-
-   std::vector<std::vector<INDEX>> BuildGraph(GraphMatchingInput& gmInput)
-   {
-      std::vector<std::vector<INDEX>> graph(gmInput.numberOfVariables_);
-      const INDEX noConstraints = gmInput.constraint_.size();
-      for(INDEX i=0; i<gmInput.numberOfVariables_; ++i) {
-         graph[i].resize(gmInput.cardinality_[i],noConstraints); // this value signifies that the edge does not participate in any constraint
-      }
-      for(INDEX c=0; c<gmInput.constraint_.size(); c++) {
-         //std::cout << "constraint ";
-         for(INDEX j=0; j<gmInput.constraint_[c].size(); ++j) {
-            const INDEX var = std::get<0>(gmInput.constraint_[c][j]);
-            assert(var < gmInput.numberOfVariables_);
-            const INDEX label = std::get<1>(gmInput.constraint_[c][j]); // do zrobienia: this is due to the format: labels start at 1, variables start at 0
-            //assert(label < mrf.GetNumberOfLabels(var));
-            //std::cout << "(" << var << "," << label << ")+";
-            assert(graph[var][label] == noConstraints); // assignment problem only allows node to be present in one constraint
-            graph[var][label] = c;
-         }
-         //std::cout << "\n";
-      }
-      return graph;
-   }
-
-   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_GM>(FMC{}) || FmcTypeCheck<FMC_GM_T>(FMC{}),pegtl::eof>::type> {
-      static void apply(const pegtl::action_input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
-      {
-         static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left,"");
-         std::cout << "construct gm version\n";
-         auto& mrf = pd.template GetProblemConstructor<0>();
-         BuildMrf(mrf, gmInput);
-
-         // add additional empty pairwise potentials with infty on diagonals for each constraint, if not already there.
-         std::map<std::tuple<INDEX,INDEX>, std::vector<REAL>> pairwisePot;
-         for(INDEX c=0; c<gmInput.constraint_.size(); ++c) {
-            for(INDEX c1=0; c1<gmInput.constraint_[c].size(); ++c1) {
-               for(INDEX c2=0; c2<c1; ++c2) {
-                  INDEX var1 = gmInput.constraint_[c][c1].first;
-                  INDEX label1 = gmInput.constraint_[c][c1].second;
-                  INDEX var2 = gmInput.constraint_[c][c2].first;
-                  INDEX label2 = gmInput.constraint_[c][c2].second;
-                  assert(var1 != var2);
-                  if(var1 > var2) {
-                     std::swap(var1,var2);
-                     std::swap(label1,label2);
-                  }
-                  assert(var2 < gmInput.numberOfVariables_);
-                  assert(label1 < gmInput.cardinality_[var1]);
-                  assert(label2 < gmInput.cardinality_[var2]);
-
-                  if(!mrf.HasPairwiseFactor(var1,var2)) {
-                     const INDEX potentialSize = gmInput.cardinality_[var1] * gmInput.cardinality_[var2];
-                     if(pairwisePot.find(std::make_tuple(var1,var2)) == pairwisePot.end()) {
-                        pairwisePot.insert( std::make_pair(std::make_pair(var1,var2), std::vector<REAL>(potentialSize, 0.0)) );
-                     } 
-                     auto it = pairwisePot.find(std::make_pair(var1,var2));
-                     assert(it != pairwisePot.end());
-                     assert(it->second.size() == potentialSize);
-                     assert(label1 + label2*gmInput.cardinality_[var1] < it->second.size());
-                     it->second.operator[](label1 + label2*gmInput.cardinality_[var1]) = 3e11;
-                  } else {
-                     const INDEX factorId = mrf.GetPairwiseFactorId(var1,var2);
-                     const REAL val = mrf.GetPairwiseValue(factorId,label1,label2);
-                     assert(val > 1000000);
-                  }
-               }
-            }
-         }
-         for(auto it = pairwisePot.cbegin(); it!=pairwisePot.cend(); ++it) {
-            const INDEX var1 = std::get<0>(it->first);
-            const INDEX var2 = std::get<1>(it->first);
-            const std::vector<REAL> pot = it->second;
-            mrf.AddPairwiseFactor(var1,var2,pot);
-         }
-  
-         // construct labeling factor
-         //auto& mcf = pd.template GetProblemConstructor<1>();
-         //mcf.ConstructLinearAssignmentGraph(BuildGraph(gmInput));
-         //mcf.LinkUnaries(mrf);
-      }
-   };
-
-   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MP>(FMC{}) || FmcTypeCheck<FMC_MP_T>(FMC{}),pegtl::eof>::type> {
-      static void apply(const pegtl::action_input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
-      {
-         static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left,"");
-         std::cout << "construct mp version\n";
-         auto& assignment = pd.template GetProblemConstructor<0>();
-         auto& mrfLeft = pd.template GetProblemConstructor<1>();
-         auto& mrfRight = pd.template GetProblemConstructor<2>();
-
-         std::vector<std::vector<INDEX>> graph = BuildGraph(gmInput);
-         std::vector<std::vector<REAL>> unaryCost(graph.size());
-         const INDEX noConstraints = gmInput.constraint_.size();
-         // get costs of unaries to give to assignment problem
-         for(INDEX i=0; i<gmInput.numberOfCliques_; ++i) {
-            if(gmInput.cliqueScope_[i].size() == 1) {
-               const INDEX var = gmInput.cliqueScope_[i][0];
-               assert(gmInput.functionTable_[i].size() == gmInput.cardinality_[var]);
-               for(INDEX j=0; j<gmInput.functionTable_[i].size(); ++j) {
-                  unaryCost[var].push_back(gmInput.functionTable_[i][j]);
-               }
-            } else if(gmInput.cliqueScope_[i].size() > 2) {
-               throw std::runtime_error("only pairwise models are accepted currently");
-            }
-         }
-         // now add assignment problem
-         for(INDEX i=0; i<graph.size(); ++i) {
-            for(INDEX j=0; j<graph[i].size(); ++j) {
-               const REAL cost = unaryCost[i][j];
-               if(graph[i][j] < noConstraints) {
-                  assignment.AddAssignment(i,graph[i][j],cost);
-               } else if(graph[i][j] == noConstraints) {
-                  //std::cout << "Add left slack for node " << i << " and label " << j << "\n";
-                  assignment.AddLeftSlack(i,cost);
-               } else {
-                  assert(false);
-                  throw std::runtime_error("assignment problem not well-defined");
-               }
-            }
-         }
-         // currently we have <= in constraints. Add slack because of that.
-         for(INDEX i=0; i<noConstraints; ++i) {
-            assignment.AddRightSlack(i,0.0);
-         }
-         assignment.Construct(pd);
-
-         // now add pairwise factors and get the unary ones from the assignment.
-         /// first register the unaries, as pairwise potentials need them to be able to link to them
-         for(INDEX i=0; i<gmInput.numberOfCliques_; ++i) {
-            if(gmInput.cliqueScope_[i].size() == 1) {
-               const INDEX var = gmInput.cliqueScope_[i][0];
-               assert(gmInput.functionTable_[i].size() == gmInput.cardinality_[var]);
-               mrfLeft.RegisterUnaryFactor(var,assignment.GetLeftFactor(var));
-            } else if(gmInput.cliqueScope_[i].size() > 2) {
-               throw std::runtime_error("only pairwise models are accepted currently");
-            }
-         }
-         for(INDEX i=0; i<assignment.GetNumberOfRightFactors(); ++i) {
-               mrfRight.RegisterUnaryFactor(i,assignment.GetRightFactor(i));
-         }
-         // now the pairwise potentials. 
-         for(INDEX i=0; i<gmInput.numberOfCliques_; ++i) {
-            if(gmInput.cliqueScope_[i].size() == 2) {
-               const INDEX var1 = gmInput.cliqueScope_[i][0];
-               const INDEX var2 = gmInput.cliqueScope_[i][1];
-               assert(var1<var2);
-               assert(gmInput.functionTable_[i].size() == gmInput.cardinality_[var1]*gmInput.cardinality_[var2]);
-               mrfLeft.AddPairwiseFactor(var1,var2,gmInput.functionTable_[i]);
-            }
-         }
-         std::cout << "Constructed gm with " << mrfLeft.GetNumberOfVariables() << " unary factors and " << mrfLeft.GetNumberOfPairwiseFactors() << " pairwise factors\n";
-
-         // connect left and right mp to mcf labeling factor
-         // construct labeling factor
-         //auto& mcf = pd.template GetProblemConstructor<3>();
-         //mcf.ConstructLinearAssignmentGraph(graph,false);
-         //mcf.LinkLeftUnaries(mrfLeft);
-         //mcf.LinkRightUnaries(mrfRight,graph,false);
-      }
-   };
-
-   template<typename FMC> struct action<FMC, typename std::enable_if<FmcTypeCheck<FMC_MCF>(FMC{}) || FmcTypeCheck<FMC_MCF_T>(FMC{}),pegtl::eof>::type> {
-      static void apply(const pegtl::action_input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, GraphMatchingInput& gmInput)
-      {
-         static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left,"");
-
-         std::cout << "problem has " << gmInput.numberOfVariables_ << " variables and " << gmInput.numberOfCliques_ << " cliques\n";
-         std::cout << "construct mcf version\n";
-         assert(gmInput.numberOfVariables_ == gmInput.cardinality_.size());
-         assert(gmInput.numberOfCliques_ == gmInput.functionTable_.size());
-
-         auto& mrf = pd.template GetProblemConstructor<1>();
-
-         BuildMrf(mrf,gmInput);
-
-         // now check if underlying constraints lead to assignment problem. This will be the case, when no variable label pair appears in two constraints and constraints sum to one (this is ensured by the grammar already)
-         // build a bipartite network such each variable is a node on the left side, each constraint is a node on the right side, and variable/label pair is an edge which goes from the variable to the constraint.
-         const INDEX noVariables = gmInput.numberOfVariables_;
-         const INDEX noConstraints = gmInput.constraint_.size();
-         std::cout << "no constraints = " << noConstraints << "\n";
-         auto& assignment = pd.template GetProblemConstructor<0>();
-         std::vector<std::vector<INDEX>> graph = BuildGraph(gmInput);
-
-         // check if pairwise potentials are infinity, whenever two constraints are present
-         for(INDEX c=0; c<gmInput.constraint_.size(); ++c) {
-            for(INDEX c1=0; c1<gmInput.constraint_[c].size(); ++c1) {
-               for(INDEX c2=0; c2<c1; ++c2) {
-                  INDEX var1 = gmInput.constraint_[c][c1].first;
-                  INDEX label1 = gmInput.constraint_[c][c1].second;
-                  INDEX var2 = gmInput.constraint_[c][c2].first;
-                  INDEX label2 = gmInput.constraint_[c][c2].second;
-                  assert(var1 != var2);
-                  if(var1 > var2) {
-                     std::swap(var1,var2);
-                     std::swap(label1,label2);
-                  }
-
-                  if(mrf.HasPairwiseFactor(var1,var2)) {
-                     const INDEX factorId = mrf.GetPairwiseFactorId(var1,var2);
-                     const REAL val = mrf.GetPairwiseValue(factorId,label1,label2);
-                     //std::cout << "diagonal value = " << val << "\n";
-                     assert(val > 1000000);
-                  }
-               }
-            }
-         }
-         // take care of non-assignment
-         for(INDEX i=0; i<graph.size(); ++i) {
-            for(INDEX j=0; j<graph[i].size(); ++j) {
-               if(graph[i][j] < noConstraints) {
-                  assignment.AddAssignment(i,graph[i][j],0.0);
-               } else if(graph[i][j] == noConstraints) {
-                  //std::cout << "Add left slack for node " << i << " and label " << j << "\n";
-                  assignment.AddLeftSlack(i,0.0);
-               } else {
-                  assert(false);
-                  throw std::runtime_error("assignment problem not well-defined");
-               }
-            }
-         }
-         // currently we have <= in constraints. Add slack because of that.
-         for(INDEX i=0; i<noConstraints; ++i) {
-            assignment.AddRightSlack(i,0.0);
-         }
-         assignment.Construct(pd);
-         // now link unaries with assignment problem.
-         // do zrobienia: assignment problem has non-matching edge as well. Handle this uniformly with TorresaniEtAlInput
-         for(INDEX i=0; i<noVariables; ++i) {
-            assert(false);
-            //auto& edgeList = assignment.GetEdgeList(i);
-            //assert(edgeList.size() == gmInput.cardinality_[i]);
-            //auto unary = mrf.GetUnaryFactor(i);
-
-            //UnaryToAssignmentMessage<1> msg(edgeList); // covering factor is 1 as we only have potentials on left side
-            //typename FMC::UnaryToAssignmentMessageContainer* msgContainer = new typename FMC::UnaryToAssignmentMessageContainer(msg, unary, assignment.GetMinCostFlowFactorContainer(), edgeList.size());
-            //pd.GetLP().AddMessage(msgContainer);
-         }
-      }
-   };
-   // the action class templates for the grammar must only depend on one parameter, hence we take out FMC
-   template<typename FMC>
-      struct actionSpecialization {
-         template<typename RULE> struct type : public action<FMC,RULE> {};
-      };
-
-   template<typename FMC>
-   bool ParseProblem(const std::string filename, Solver<FMC>& pd)
-   {
-      std::stack<SIGNED_INDEX> integer_stack;
-      std::stack<REAL> real_stack;
-      GraphMatchingInput gmInput;
-
-      pegtl::file_parser problem(filename);
-      std::cout << "parsing " << filename << "\n";
-
-      return problem.parse< grammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, gmInput);
-   }
-   */
 }
 
 

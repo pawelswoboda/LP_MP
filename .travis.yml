@@ -24,8 +24,8 @@ matrix:
 before_install:
   - sudo apt-get update -qq
 script:
-  - cmake . 
-  - make VERBOSE=1
+  - cmake .
+  - make
   - cd test && ctest
 
 notifications:

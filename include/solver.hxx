@@ -293,7 +293,6 @@ protected:
    // while Solver does not know how to compute primal, derived solvers do know. After computing a primal, they are expected to register their primals with the base solver
    REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
    PrimalSolutionStorage bestPrimal_; // these vectors are stored in the order of forwardOrdering_
-
    std::mutex LpChangeMutex;
 };
 

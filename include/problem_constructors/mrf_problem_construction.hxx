@@ -305,6 +305,7 @@ public:
       typename MRFPC::PairwiseFactorContainer* const p = this->pairwiseFactor_[pairwiseFactorId];
       const INDEX pairwiseVar1 = std::get<0>(this->pairwiseIndices_[pairwiseFactorId]);
       const INDEX pairwiseVar2 = std::get<1>(this->pairwiseIndices_[pairwiseFactorId]);
+      assert(pairwiseVar1 < pairwiseVar2);
       const INDEX pairwiseDim1 = this->GetNumberOfLabels(pairwiseVar1);
       const INDEX pairwiseDim2 = this->GetNumberOfLabels(pairwiseVar2);
 
@@ -312,6 +313,7 @@ public:
       const INDEX tripletVar1 = std::get<0>(tripletIndices_[tripletFactorId]);
       const INDEX tripletVar2 = std::get<1>(tripletIndices_[tripletFactorId]);
       const INDEX tripletVar3 = std::get<2>(tripletIndices_[tripletFactorId]);
+      assert(tripletVar1 < tripletVar2 && tripletVar2 << tripletVar3);
       const INDEX tripletDim1 = this->GetNumberOfLabels(tripletVar1);
       const INDEX tripletDim2 = this->GetNumberOfLabels(tripletVar2);
       const INDEX tripletDim3 = this->GetNumberOfLabels(tripletVar3);
@@ -357,7 +359,7 @@ public:
          }
 
          const INDEX tripletSize = this->GetNumberOfLabels(var1) *  this->GetNumberOfLabels(var2) * this->GetNumberOfLabels(var3);
-         AddTripletFactor(var1,var2,var3, std::vector<REAL>(tripletSize));
+         AddTripletFactor(var1,var2,var3, std::vector<REAL>(tripletSize,0.0));
          return true;
       } else {
          return false;
@@ -391,11 +393,14 @@ public:
          std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (k projection graph)\n";
          noTripletsAdded += noTripletsAddedByCycle;
 
+         // does not work currently
+         /*
          if(noTripletsAdded < noTripletsToAdd) {
             const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, projection_imap, partition_imap, cycle_set, 2);
             std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (full projection graph)\n";
             noTripletsAdded += noTripletsAddedByCycle;
          }
+         */
 
          std::cout << this->GetNumberOfVariables() << "\n";
          std::cout << this->GetNumberOfPairwiseFactors() << "\n";

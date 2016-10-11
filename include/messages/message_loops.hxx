@@ -262,7 +262,7 @@ public:
    const INDEX GetDim(const INDEX i) const { assert(i==0 || i==1 || i==2); return iter_limit_[i]; }
 
    const INDEX GetMsgIndex(const INDEX potIndex) const {  // for dimension i of potential, which message dimension acts on that point?
-      assert(false); // test this method!
+      //assert(false); // test this method!
       const INDEX i1 = potIndex%iter_limit_[0]; 
       const INDEX i2 = (potIndex/iter_limit_[0])%iter_limit_[1]; 
       const INDEX i3 = potIndex/(iter_limit_[0]*iter_limit_[1]);
@@ -282,7 +282,7 @@ public:
    { 
       assert(i[0] < iter_limit_[0]);
       assert(i[1] < iter_limit_[1]);
-      assert(i[1] < iter_limit_[2]);
+      assert(i[2] < iter_limit_[2]);
       return i[0] + i[1]*iter_limit_[0] + i[2]*iter_limit_[0]*iter_limit_[1]; 
    }
    // ignore index not coming from pairwise potential

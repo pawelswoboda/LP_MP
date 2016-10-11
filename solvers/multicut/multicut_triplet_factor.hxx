@@ -2,6 +2,7 @@
 #define LP_MP_MULTICUT_TRIPLET_FACTOR_HXX
 
 #include "LP_MP.h"
+#include "lp_interface/lp_interface.h"
 
 namespace LP_MP {
 
@@ -78,6 +79,18 @@ public:
       }
       return cost;
    }
+
+   void CreateConstraints(LpInterfaceAdapter* lp) const 
+   {
+      LinExpr lhs = lp->CreateLinExpr(); 
+      lhs += lp->GetVariable(0);
+      lhs += lp->GetVariable(1);
+      lhs += lp->GetVariable(2);
+      lhs += lp->GetVariable(3);
+      LinExpr rhs = lp->CreateLinExpr();
+      rhs += 1;
+      lp->addLinearInequality(lhs,rhs);
+   } 
 };
 
 
@@ -200,6 +213,17 @@ public:
       }
       return true;
    }
+
+    void CreateConstraints(LpInterfaceAdapter* lp, MulticutUnaryFactor* u, MulticutTripletFactor* t) const
+    {
+      LinExpr lhs = lp->CreateLinExpr(); 
+      lhs += lp->GetLeftVariable(0);
+      LinExpr rhs = lp->CreateLinExpr();
+      rhs += lp->GetRightVariable((i_+1)%3);
+      rhs += lp->GetRightVariable((i_+2)%3);
+      rhs += lp->GetRightVariable(3);
+      lp->addLinearEquality(lhs,rhs);
+    }
 
 private:
    const SHORT_INDEX i_;

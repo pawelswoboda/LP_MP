@@ -1,8 +1,3 @@
-# This module finds cplex.
-#
-# User can give CPLEX_ROOT_DIR as a hint stored in the cmake cache.
-#
-# It sets the following variables:
 #  CPLEX_FOUND              - Set to false, or undefined, if cplex isn't found.
 #  CPLEX_INCLUDE_DIRS       - include directory
 #  CPLEX_LIBRARIES          - library files
@@ -87,6 +82,7 @@ FIND_LIBRARY(CPLEX_LIBRARY
   NAMES cplex${CPLEX_WIN_VERSION} cplex
   HINTS ${CPLEX_ROOT_DIR}/cplex/lib/${CPLEX_WIN_PLATFORM} #windows
         ${CPLEX_ROOT_DIR}/cplex/lib/x86-64_debian4.0_4.1/static_pic #unix
+        ${CPLEX_ROOT_DIR}/cplex/lib/x86-64_linux/static_pic #unix
         ${CPLEX_ROOT_DIR}/cplex/lib/x86-64_sles10_4.1/static_pic #unix 
         ${CPLEX_ROOT_DIR}/cplex/lib/x86-64_osx/static_pic #osx 
   PATHS ENV LIBRARY_PATH #unix
@@ -98,6 +94,7 @@ FIND_LIBRARY(CPLEX_ILOCPLEX_LIBRARY
   ilocplex
   HINTS ${CPLEX_ROOT_DIR}/cplex/lib/${CPLEX_WIN_PLATFORM} #windows 
         ${CPLEX_ROOT_DIR}/cplex/lib/x86-64_debian4.0_4.1/static_pic #unix 
+        ${CPLEX_ROOT_DIR}/cplex/lib/x86-64_linux/static_pic #unix 
         ${CPLEX_ROOT_DIR}/cplex/lib/x86-64_sles10_4.1/static_pic #unix 
         ${CPLEX_ROOT_DIR}/cplex/lib/x86-64_osx/static_pic #osx 
   PATHS ENV LIBRARY_PATH
@@ -109,6 +106,7 @@ FIND_LIBRARY(CPLEX_CONCERT_LIBRARY
   concert
   HINTS ${CPLEX_ROOT_DIR}/concert/lib/${CPLEX_WIN_PLATFORM} #windows 
         ${CPLEX_ROOT_DIR}/concert/lib/x86-64_debian4.0_4.1/static_pic #unix 
+        ${CPLEX_ROOT_DIR}/concert/lib/x86-64_linux/static_pic #unix 
         ${CPLEX_ROOT_DIR}/concert/lib/x86-64_sles10_4.1/static_pic #unix 
         ${CPLEX_ROOT_DIR}/concert/lib/x86-64_osx/static_pic #osx 
   PATHS ENV LIBRARY_PATH
@@ -126,6 +124,7 @@ else()
 	  cplex 
           HINTS ${CPLEX_ROOT_DIR}/cplex/bin/x86-64_sles10_4.1 #unix 
                 ${CPLEX_ROOT_DIR}/cplex/bin/x86-64_debian4.0_4.1 #unix 
+                ${CPLEX_ROOT_DIR}/cplex/bin/x86-64_linux #unix 
                 ${CPLEX_ROOT_DIR}/cplex/bin/x86-64_osx #osx 
 	  ENV LIBRARY_PATH
           ENV LD_LIBRARY_PATH
@@ -146,6 +145,8 @@ IF(CPLEX_FOUND)
 ENDIF(CPLEX_FOUND)
 
 MARK_AS_ADVANCED(CPLEX_LIBRARY CPLEX_INCLUDE_DIR CPLEX_ILOCPLEX_LIBRARY CPLEX_CONCERT_INCLUDE_DIR CPLEX_CONCERT_LIBRARY)
+
+
 
 
 
