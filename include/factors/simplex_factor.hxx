@@ -109,24 +109,24 @@ public:
          return std::numeric_limits<REAL>::infinity();
       }
    }
-
-  INDEX GetNumberOfAuxVariables() const { return 0; }
-
-  template<typename REPAM_ARRAY>
-  void ReduceLp(LpInterfaceAdapter* lp,const REPAM_ARRAY& repam) const {
-    REAL lb = LowerBound(repam);
-    REAL epsi = lp->GetEpsilon();
-    for(INDEX i=0;i<repam.size();i++){
-      if(repam[i] >= lb + epsi){
-        lp->SetVariableBound(lp->GetVariable(i),0.0,0.0,false);
-      }
-    }
+   
+   void CreateAuxVariables(LpInterfaceAdapter* lp) const { 
+    
   }
   
   void CreateConstraints(LpInterfaceAdapter* lp) const { 
     LinExpr lhs = lp->CreateLinExpr();
+    REAL epsi = lp->GetEpsilon();
+    auto repam = lp->GetRepam();
+    REAL lb = LowerBound(repam);
+    
+    assert(repam.size() == lp->GetFactorSize()); 
+    assert(epsi > 0);
     for(INDEX i=0;i<lp->GetFactorSize();i++){
-      lhs += lp->GetVariable(i);
+      if(repam[i] < lb + epsi){
+        lhs += lp->GetVariable(i);
+        lp->AddObjective(i,repam[i]);
+      }
     }
     LinExpr rhs = lp->CreateLinExpr();
     rhs += 1;

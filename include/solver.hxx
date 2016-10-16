@@ -460,10 +460,10 @@ public:
             FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
             FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,SOLVER::lp_.GetNumberOfMessages());
 
-            LP_INTERFACE solver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
+      LP_INTERFACE solver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold_,!RELAX_.getValue());
 
-            solver.ReduceLp(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold_);
-            guard.unlock();
+      //solver.ReduceLp(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold_);
+      guard.unlock();
 
             solver.SetTimeLimit(timelimit_.getValue());
             solver.SetNumberOfThreads(LpThreadsArg_.getValue());
@@ -542,9 +542,9 @@ public:
       SOLVER::PostIterate(c);
 
       if( curIter_ % LpInterval_.getValue() == 0 ){
-              std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
-              WakeLpSolverCond.notify_one();
-              //std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Jan: why sleep here?
+        std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
+        WakeLpSolverCond.notify_one();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Without sleep, the next iteration will block the execution of the LpInterface
       }
       ++curIter_;
     }

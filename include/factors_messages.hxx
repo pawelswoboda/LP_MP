@@ -66,8 +66,8 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential);
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasReduceLp, ReduceLp);
+//LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables);
+//LP_MP_FUNCTION_EXISTENCE_CLASS(HasReduceLp, ReduceLp);
 
 LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(IsAssignable, operator[]);
 }
@@ -1764,7 +1764,7 @@ public:
    }
 
    constexpr static bool CanCreateConstraints()
-   {
+   { 
       //return FunctionExistence::HasCreateConstraints<FactorType,LpInterfaceAdapter*>();
       return FunctionExistence::HasCreateConstraints<FactorType,void,LpInterfaceAdapter*>();
    }
@@ -1775,7 +1775,25 @@ public:
    {
       factor_.CreateConstraints(l);
    }
+   
+   template<bool ENABLE = CanCreateConstraints()>
+   typename std::enable_if<!ENABLE>::type
+   CreateConstraintsImpl(LpInterfaceAdapter* l) const
+   {
+      throw std::runtime_error("create constraints not implemented by factor");
+   }
 
+
+   void CreateConstraints(LpInterfaceAdapter* l) const final
+   {
+      CreateConstraintsImpl(l);
+   }
+   
+   void CreateAuxVariables(LpInterfaceAdapter* l) const final{
+     factor_.CreateAuxVariables(l);
+   }
+   
+   /*
    constexpr static bool CanReduceLp()
    {
            //return FunctionExistence::HasReduceLp<FactorType,LpInterfaceAdapter*,FactorContainerType>();
@@ -1794,41 +1812,41 @@ public:
    void ReduceLp(LpInterfaceAdapter* l) const {
            ReduceLpImpl(l);
    }
+  */
   
+  /*
    constexpr static bool CanCallGetNumberOfAuxVariables()
    {
       return FunctionExistence::HasGetNumberOfAuxVariables<FactorType,INDEX>();
    }
+   */
+   
+   /*
    template<bool ENABLE = CanCallGetNumberOfAuxVariables()>
    typename std::enable_if<!ENABLE,INDEX>::type
    GetNumberOfAuxVariablesImpl() const
    {
       return 0;
    }
+   */
+   /*
    template<bool ENABLE = CanCallGetNumberOfAuxVariables()>
    typename std::enable_if<ENABLE,INDEX>::type
    GetNumberOfAuxVariablesImpl() const
    {
       return factor_.GetNumberOfAuxVariables();
    }
-  
+   */
+  /*
    INDEX GetNumberOfAuxVariables() const 
    { 
     return GetNumberOfAuxVariablesImpl();
    }
+  */
+  
+  
+  
 
-   template<bool ENABLE = CanCreateConstraints()>
-   typename std::enable_if<!ENABLE>::type
-   CreateConstraintsImpl(LpInterfaceAdapter* l) const
-   {
-      throw std::runtime_error("create constraints not implemented by factor");
-   }
-
-
-   void CreateConstraints(LpInterfaceAdapter* l) const final
-   {
-      CreateConstraintsImpl(l);
-   }
 };
 
 

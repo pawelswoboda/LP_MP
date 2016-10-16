@@ -12,7 +12,7 @@ namespace LP_MP{
   class DiscreteTomographyFactorCounting{
 
   public:
-
+ 
     enum class NODE {left,right,up,reg};
     
     DiscreteTomographyFactorCounting(INDEX numberOfLabels,INDEX numberOfVarsLeft,INDEX numberOfVarsRight,INDEX SumBound);
@@ -39,11 +39,10 @@ namespace LP_MP{
     //void WritePrimal(const PrimalSolutionStorage::Element, std::ofstream& fs) const; //
 
     // Lp Interface related
-    INDEX GetNumberOfAuxVariables() const { return leftSize_*rightSize_; } 
     void CreateConstraints(LpInterfaceAdapter* lp) const;
-
-    template<typename REPAM_ARRAY>
-    void ReduceLp(LpInterfaceAdapter* lp,const REPAM_ARRAY& repam) const;
+    void CreateAuxVariables(LpInterfaceAdapter* lp) const {
+      lp->CreateAuxVariables(leftSize_*rightSize_,0.0,1.0);
+    }
     
     INDEX getSize(NODE) const;
 
@@ -110,48 +109,6 @@ namespace LP_MP{
     regSize_ = pow(numberOfLabels_,2);
   }
 
-
-  template<typename REPAM_ARRAY>
-  inline void DiscreteTomographyFactorCounting::ReduceLp(LpInterfaceAdapter* lp,const REPAM_ARRAY& repam) const {
-    assert(repam.size() == (upSize_+leftSize_+rightSize_+regSize_));
-
-    auto xa = [&](INDEX idx){ return idx % numberOfLabels_;  };
-    auto xb = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return xa(idx); };
-    auto xz = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return (idx - xa(idx))/numberOfLabels_; };
-
-    INDEX z_up_size = upSize_/pow(numberOfLabels_,2);
-    REAL epsi = lp->GetEpsilon();
-    REAL lb = LowerBound(repam);
-    
-    for(INDEX i=0;i<leftSize_;i++){
-      INDEX lz = xz(i);
-      for(INDEX j=0;j<rightSize_ && lz + xz(j) < z_up_size;j++){
-        INDEX a = xa(i);
-        INDEX b = xb(i);
-        INDEX c = xa(j);
-        INDEX d = xb(j);
-
-        INDEX rz = xz(j);
-        INDEX uz = lz+rz;
-
-        INDEX l = a + b*numberOfLabels_ + lz*pow(numberOfLabels_,2);
-        INDEX r = c + d*numberOfLabels_ + rz*pow(numberOfLabels_,2);
-        INDEX u = a + d*numberOfLabels_ + uz*pow(numberOfLabels_,2);
-        INDEX p = b + c*numberOfLabels_;
-        
-        assert(l < leftSize_);
-        assert(r < rightSize_);
-        assert(u < upSize_);
-        assert(p < pow(numberOfLabels_,2));
-        
-        REAL value = repam[u] + repam[upSize_+l] + repam[upSize_+leftSize_+r] + repam[upSize_+leftSize_+rightSize_+p];
-        if(value >= lb + epsi){
-          lp->SetVariableBound(lp->GetAuxVariable(i + j*leftSize_),0.0,0.0);
-        }        
-      }
-    }    
-  }
-      
   inline void DiscreteTomographyFactorCounting::CreateConstraints(LpInterfaceAdapter* lp) const {
     REAL inf = std::numeric_limits<REAL>::infinity();
     
@@ -160,14 +117,16 @@ namespace LP_MP{
     auto xz = [&](INDEX idx){ idx = (idx - xa(idx))/numberOfLabels_; return (idx - xa(idx))/numberOfLabels_; };
    
     LinExpr lhs_all = lp->CreateLinExpr();
-    std::vector<LinExpr> lhs_up(upSize_);//,lp->CreateLinExpr());
-    std::vector<LinExpr> lhs_left(leftSize_);//,lp->CreateLinExpr());
-    std::vector<LinExpr> lhs_right(rightSize_);//,lp->CreateLinExpr());
-    std::vector<LinExpr> lhs_reg(regSize_);//,lp->CreateLinExpr());
+    lhs_all += 0;
+    std::vector<LinExpr> lhs_up(upSize_);
+    std::vector<LinExpr> lhs_left(leftSize_);
+    std::vector<LinExpr> lhs_right(rightSize_);
+    std::vector<LinExpr> lhs_reg(regSize_);
     
     auto InitVector = [&](std::vector<LinExpr>& v){
       for(INDEX i=0;i<v.size();i++){
         v[i] = lp->CreateLinExpr();
+        v[i] += 0;
       }
     };
     InitVector(lhs_up);
@@ -176,23 +135,58 @@ namespace LP_MP{
     InitVector(lhs_reg);
     
     INDEX z_max = upSize_/pow(numberOfLabels_,2);
+     
+    REAL epsi = lp->GetEpsilon();
+    auto repam = lp->GetRepam();
+    REAL lb = LowerBound(repam);
     
+    INDEX size = upSize_ + leftSize_ + rightSize_ + regSize_;
+    
+    INDEX noVars = 0;
     for(INDEX i=0;i<leftSize_;i++){
       for(INDEX j=0;j<rightSize_;j++){
         LpVariable var;
         {
           // up variable constraint
           // sum_{ i(z) + j(z) = k(z) && i(a) = k(a) && j(b) = k(b) } eta(i,j) = mu_u(k)
-          INDEX z = xz(i) + xz(j);
+          INDEX lz = xz(i);
+          INDEX rz = xz(j);
+          INDEX z = lz + rz;
           if( z < z_max ){
-            var = lp->GetAuxVariable(i + j*leftSize_);
-            lp->SetVariableBound(var,0.0,1.0);
             
             INDEX a = xa(i);
-            INDEX b = xb(j);
-            INDEX idx = a + b*numberOfLabels_ + z*pow(numberOfLabels_,2);
-            assert(idx < upSize_);
-            lhs_up[idx] += var;
+            INDEX b = xb(i);
+            INDEX c = xa(j);
+            INDEX d = xb(j);
+
+            INDEX rz = xz(j);
+            INDEX uz = lz+rz; 
+
+            INDEX l = a + b*numberOfLabels_ + lz*pow(numberOfLabels_,2);
+            INDEX r = c + d*numberOfLabels_ + rz*pow(numberOfLabels_,2);
+            INDEX u = a + d*numberOfLabels_ + uz*pow(numberOfLabels_,2);
+            INDEX p = b + c*numberOfLabels_;
+            
+            assert(l < leftSize_);
+            assert(r < rightSize_);
+            assert(u < upSize_);
+            assert(p < pow(numberOfLabels_,2));
+            
+            REAL value = repam[u] + repam[upSize_+l] + repam[upSize_+leftSize_+r] + repam[upSize_+leftSize_+rightSize_+p];
+             
+            if(value >= lb + epsi){
+              continue;
+            }
+            
+            var = lp->GetAuxVariable(i + j*leftSize_);
+            lhs_up[u] += var;
+            
+            //printf("add objective (%d) (%.2f)\n",u,repam[u]);
+            lp->AddObjective(u,repam[u]);
+            lp->AddObjective(upSize_+l,repam[upSize_+l]);
+            lp->AddObjective(upSize_+leftSize_+r,repam[upSize_+leftSize_+r]);
+            lp->AddObjective(upSize_+leftSize_+rightSize_+p,repam[upSize_+leftSize_+rightSize_+p]);
+            
           } else {
             continue;
           }
@@ -207,6 +201,7 @@ namespace LP_MP{
         {
           // sum_{i,j} eta(i,j) = 1
           lhs_all += var;
+          noVars++;
         }
         {
           // pairwise potential
@@ -419,7 +414,10 @@ namespace LP_MP{
       else if( noUnkwn > 1 && noTrue == 0 ){
         return IdxLbl(opt,0,numberOfLabels_);
       }
-      else{ assert(false); } // not possible!
+      else{ 
+        assert(false);
+        return IdxLbl(opt,0,numberOfLabels_);
+      } // not possible!
     };
     
     /* Get primal label */
