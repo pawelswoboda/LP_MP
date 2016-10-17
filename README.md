@@ -22,6 +22,7 @@ Prerequisites:
 * HDF5 (for inputs in hdf5 format)
 * Gurobi (for the gurobi interface. Compile libgurobi_c++ with clang)
 * CPlex (for the cplex interface)
+* LocalSolver (for the localsolver interface)
 * Sqlite3 (for evaluation)
 
 ## Contact
