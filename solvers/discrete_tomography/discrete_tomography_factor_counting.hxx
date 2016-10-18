@@ -126,13 +126,33 @@ namespace LP_MP{
     auto InitVector = [&](std::vector<LinExpr>& v){
       for(INDEX i=0;i<v.size();i++){
         v[i] = lp->CreateLinExpr();
-        v[i] += 0;
+        v[i] += 0.0;
       }
     };
     InitVector(lhs_up);
     InitVector(lhs_left);
     InitVector(lhs_right);
     InitVector(lhs_reg);
+
+    INDEX u_prim = upSize_;
+    INDEX l_prim = leftSize_;
+    INDEX r_prim = rightSize_;
+    INDEX p_prim = regSize_;
+
+    auto GetPrims = [&](INDEX size,INDEX offset,INDEX &prim){
+      INDEX count = 0;
+      for(INDEX i=offset;i<offset+size;i++){
+        if(lp->IsPrimal(i) == true){
+          prim = i;
+          count++;
+        }
+      }
+      assert(count <= 1);
+    };
+    GetPrims(upSize_,0,u_prim);
+    GetPrims(leftSize_,upSize_,l_prim);
+    GetPrims(rightSize_,upSize_+leftSize_,r_prim);
+    GetPrims(regSize_,upSize_+leftSize_+rightSize_,p_prim);
     
     INDEX z_max = upSize_/pow(numberOfLabels_,2);
      
@@ -174,14 +194,25 @@ namespace LP_MP{
             
             REAL value = repam[u] + repam[upSize_+l] + repam[upSize_+leftSize_+r] + repam[upSize_+leftSize_+rightSize_+p];
              
-            if(value >= lb + epsi){
+            if( value >= lb + epsi ){
+              continue;
+            }
+            if( u_prim < upSize_ && u != u_prim ){
+              continue;
+            }
+            if( l_prim < leftSize_ && l != l_prim ){
+              continue;
+            }
+            if( r_prim < rightSize_ && r != r_prim ){
+              continue;
+            }
+            if( p_prim < regSize_ && p != p_prim ){
               continue;
             }
             
             var = lp->GetAuxVariable(i + j*leftSize_);
             lhs_up[u] += var;
             
-            //printf("add objective (%d) (%.2f)\n",u,repam[u]);
             lp->AddObjective(u,repam[u]);
             lp->AddObjective(upSize_+l,repam[upSize_+l]);
             lp->AddObjective(upSize_+leftSize_+r,repam[upSize_+leftSize_+r]);

@@ -229,15 +229,24 @@ namespace LP_MP {
       }
           
       for(auto i=0; i<no_constraints ; i++){
-        LinExpr lhs = lp->CreateLinExpr();
-        LinExpr rhs = lp->CreateLinExpr();
+        LinExpr lhs = lp->CreateLinExpr() + 0.0;
+        LinExpr rhs = lp->CreateLinExpr() + 0.0;
+        bool least = false;
         for(auto l=0; l<leftIndices[i].size(); l++){
-          lhs += lp->GetLeftVariable(leftIndices[i][l]);
+          if(lp->IsObjective(leftIndices[i][l])){
+            lhs += lp->GetLeftVariable(leftIndices[i][l]);
+            least = true;
+          }
         }
         for(auto r=0; r<rightIndices[i].size(); r++){
-          rhs += lp->GetRightVariable(rightIndices[i][r]);
+          if(lp->IsObjective(leftIndices[i][r])){
+            rhs += lp->GetRightVariable(rightIndices[i][r]);
+            least = true;
+          }
         }
-        lp->addLinearEquality(lhs,rhs);
+        if(least){
+          lp->addLinearEquality(lhs,rhs);
+        }
       }
     }
   

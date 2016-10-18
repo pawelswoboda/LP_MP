@@ -78,9 +78,11 @@ namespace LP_MP {
     
     void AddObjective(INDEX i,REAL value)
     {
-      assert(i < pot_.size()); 
-      obj_ += value*GetVariable(i);
-      LpInterfaceAdapter::AddObjective(i,value);      
+      assert(i < pot_.size());
+      if( IsObjective(i) == false){
+        obj_ += value*GetVariable(i);
+        LpInterfaceAdapter::AddObjective(i,value);
+      }
     }    
     
     void CreateMainVariable(REAL lb, REAL ub,bool integer = false){

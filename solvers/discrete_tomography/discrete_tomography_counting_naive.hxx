@@ -32,8 +32,10 @@ public:
          return std::numeric_limits<REAL>::infinity();
       }
    }
-   void CreateConstraints(LpInterfaceAdapter* lp) const;
 
+  void CreateConstraints(LpInterfaceAdapter* lp) const;
+  void CreateAuxVariables(LpInterfaceAdapter* lp) const { }
+  
    INDEX GetNumberOfLabels() const { return no_labels_; }
 
    INDEX size() const { return no_labels_*no_vars_; }

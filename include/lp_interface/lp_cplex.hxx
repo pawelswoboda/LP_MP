@@ -67,7 +67,6 @@ namespace LP_MP {
     {
       assert(i < pot_.size());
       ObjValues_[Offset_+i]=value;
-      //obj_.setLinearCoef(GetVariable(i), value);
       LpInterfaceAdapter::AddObjective(i,value);      
     }  
     

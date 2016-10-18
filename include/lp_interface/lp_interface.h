@@ -75,6 +75,18 @@ namespace LP_MP {
     virtual void AddObjective(INDEX i,REAL value){ /* Have to be reimplemented by the subclass */
       primal_[Offset_ + i] = unknownState;
     }
+
+    bool IsObjective(INDEX i){
+      if(primal_[Offset_ + i] == false){
+        return false;
+      } else {
+        return true;
+      }
+    }
+
+    unsigned char IsPrimal(INDEX i){
+      return primal_[Offset_ + i];
+    }
     
     INDEX GetFactorSize() const { return size_; }
     INDEX GetLeftFactorSize() const { return leftSize_; }
