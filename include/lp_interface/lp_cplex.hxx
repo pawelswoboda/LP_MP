@@ -10,7 +10,10 @@ namespace LP_MP {
 
     LpInterfaceCplex() : env_(IloEnv()),model_(IloModel(env_)),obj_(IloMinimize(env_)){ }
 
-
+    ~LpInterfaceCplex(){
+      env_.end();
+    }
+    
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
     LpInterfaceCplex( FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, 
                         MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,

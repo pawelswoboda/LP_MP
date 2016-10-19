@@ -393,29 +393,38 @@ public:
       this->Init(arg);
    }
    int Solve()
-   {
-      this->lp_.Init();
-      this->Begin();
-      LpControl c = visitor_.begin(this->lp_);
-      while(!c.end && !c.error) {
-         this->PreIterate(c);
-         this->Iterate(c);
-         this->PostIterate(c);
-         c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
-      }
-      if(!c.error) {
-         this->End();
-         // possibly primal has been computed in end. Call visitor again
-         visitor_.end(this->lowerBound_, this->bestPrimalCost_);
-         this->WritePrimal();
-      }
-      return c.error;
-   }
+  {    
+    this->lp_.Init();
+    this->Begin();
+    std::unique_lock<std::mutex> VisitorGuard(VisitorMutex_);
+    LpControl c = visitor_.begin(this->lp_);
+    VisitorGuard.unlock();
+      
+    while(!c.end && !c.error) {
+      this->PreIterate(c);
+      this->Iterate(c);
+      this->PostIterate(c);
+
+      std::unique_lock<std::mutex> VisitorGuard(VisitorMutex_);
+      c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
+    }
+    if(!c.error) {
+      this->End();
+      // possibly primal has been computed in end. Call visitor again
+      std::unique_lock<std::mutex> VisitorGuard(VisitorMutex_);
+      visitor_.end(this->lowerBound_, this->bestPrimalCost_);
+      this->WritePrimal();
+    }
+    return c.error;
+  }
 
 private:
-   VISITOR visitor_;
+  VISITOR visitor_;
+  static std::mutex VisitorMutex_;
 };
-
+  template<typename SOLVER, typename VISITOR>
+  std::mutex VisitorSolver<SOLVER,VISITOR>::VisitorMutex_;
+  
 template<typename SOLVER, typename LP_INTERFACE>
 class LpSolver : public SOLVER {
 public:
@@ -558,18 +567,17 @@ public:
       WakeUpGuard.unlock();
 
       SOLVER::End();
-      //if(LPOnly_.isSet() || RELAX_.isSet()){
-          std::cout << "construct final lp solver\n";
-          std::thread th([this]() { this->RunLpSolver(1); });
-          th.join();
-      //} 
+      std::cout << "construct final lp solver\n";
+      std::thread th([this]() { this->RunLpSolver(1); });
+      th.join();
+
 
       for(INDEX i=0;i<threads_.getValue();i++){
               if(LpThreads_[i].joinable()){
                       LpThreads_[i].join();
               }
       }
-
+      
       std::cout << "\n";
       std::cout << "The best objective computed by ILP is " << ub_ << "\n";
     }
@@ -582,7 +590,6 @@ private:
   TCLAP::ValueArg<INDEX> LpInterval_;
   TCLAP::SwitchArg LPOnly_;
   TCLAP::SwitchArg RELAX_;
-  //TCLAP::SwitchArg EXPORT_;
   
   std::mutex UpdateUbLpMutex;
   std::mutex WakeLpSolverMutex_;

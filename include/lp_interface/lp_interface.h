@@ -33,6 +33,8 @@ namespace LP_MP {
  
     LpInterfaceAdapter(){ } 
     
+    virtual ~LpInterfaceAdapter(){ }
+    
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
     LpInterfaceAdapter( FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd, 
                         MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd,

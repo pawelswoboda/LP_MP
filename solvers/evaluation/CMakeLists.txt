@@ -39,10 +39,10 @@ endif()
 
 if(BUILD_DISCRETE_TOMOGRAPHY_EVALUATION)
    add_executable(discrete_tomography_eval discrete_tomography_eval.cpp ${headers} ${sources})
-   target_link_libraries(discrete_tomography_eval Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES} ${GUROBI_LIBRARIES})
+   target_link_libraries(discrete_tomography_eval Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES} ${CPLEX_LIBRARIES})
 
-   target_compile_definitions(discrete_tomography_eval PUBLIC -DUSE_GUROBI)
-   target_include_directories(discrete_tomography_eval PUBLIC ${GUROBI_INCLUDE_DIR})
+   target_compile_definitions(discrete_tomography_eval PUBLIC -DUSE_CPLEX)
+   target_include_directories(discrete_tomography_eval PUBLIC ${CPLEX_INCLUDE_DIRS})
 
    message("Download discrete tomography datasets")
    set(DT_DIRECTORY "discrete_tomography_datasets")
