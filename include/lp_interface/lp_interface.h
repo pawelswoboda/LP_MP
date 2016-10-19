@@ -76,7 +76,7 @@ namespace LP_MP {
       primal_[Offset_ + i] = unknownState;
     }
 
-    bool IsObjective(INDEX i){ // do not use it in messages!
+    bool IsObjective(INDEX i) const { // do not use it in messages!
       assert(primal_.size() > 0);
       assert(Offset_ + i < primal_.size());
       if(primal_[Offset_ + i] == false){

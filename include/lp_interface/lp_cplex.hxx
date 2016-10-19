@@ -40,12 +40,11 @@ namespace LP_MP {
     template<typename FACTOR_ITERATOR, typename MESSAGE_ITERATOR>
     void Setup(FACTOR_ITERATOR factorBegin, FACTOR_ITERATOR factorEnd,
                 MESSAGE_ITERATOR messageBegin, MESSAGE_ITERATOR messageEnd){
-            
-      CreateVariables(factorBegin,factorEnd,messageBegin,messageEnd);
+
       ObjVars_ = IloNumVarArray(env_);
-      for(INDEX i=0;i<MainVars_.size();i++){
-        ObjVars_.add(MainVars_[i]);
-      }      
+
+      CreateVariables(factorBegin,factorEnd,messageBegin,messageEnd);
+
       ObjValues_ = IloNumArray(env_,MainVars_.size());
       
       Build(factorBegin,factorEnd,messageBegin,messageEnd);
@@ -62,7 +61,7 @@ namespace LP_MP {
     }
     
     LinExpr CreateLinExpr() { return LinExpr(env_); }
-    
+
     void AddObjective(INDEX i,REAL value)
     {
       assert(i < pot_.size());
@@ -74,6 +73,7 @@ namespace LP_MP {
       auto TypeFlag = LpVariable::Float;
       if(integer){ TypeFlag = LpVariable::Int; }
       MainVars_.push_back(IloNumVar(env_,lb,ub,TypeFlag));
+      ObjVars_.add(MainVars_.back());
     }
     void CreateMainVariables(INDEX n,REAL lb, REAL ub,bool integer = false){
       auto TypeFlag = LpVariable::Float;
@@ -153,7 +153,11 @@ namespace LP_MP {
 
   REAL LpInterfaceCplex::GetVariableValue(const INDEX i) const{
     assert(i < noVars_);
-    return cplex_.getValue(MainVars_[i]);
+    if(primal_[i] == false){
+      return 0.0;
+    } else {
+      return cplex_.getValue(ObjVars_[i]);//MainVars_[i]);;
+    }
   }
 
   REAL LpInterfaceCplex::GetObjectiveValue() const{
