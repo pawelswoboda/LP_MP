@@ -76,7 +76,9 @@ namespace LP_MP {
       primal_[Offset_ + i] = unknownState;
     }
 
-    bool IsObjective(INDEX i){
+    bool IsObjective(INDEX i){ // do not use it in messages!
+      assert(primal_.size() > 0);
+      assert(Offset_ + i < primal_.size());
       if(primal_[Offset_ + i] == false){
         return false;
       } else {
@@ -84,8 +86,36 @@ namespace LP_MP {
       }
     }
 
-    unsigned char IsPrimal(INDEX i){
+    bool IsLeftObjective(INDEX i){
+      assert(primal_.size() > 0);
+      assert(OffsetLeft_ + i < primal_.size());
+      if(primal_[OffsetLeft_ + i] == false){
+        return false;
+      } else {
+        return true;
+      }
+    }
+
+    bool IsRightObjective(INDEX i){
+      assert(primal_.size() > 0);
+      assert(OffsetRight_ + i < primal_.size());
+      if(primal_[OffsetRight_ + i] == false){
+        return false;
+      } else {
+        return true;
+      }
+    }
+
+    unsigned char IsPrimal(INDEX i){ // do not use it in messages!
       return primal_[Offset_ + i];
+    }
+
+    unsigned char IsLeftPrimal(INDEX i){
+      return primal_[OffsetLeft_ + i];
+    }
+
+    unsigned char IsRightPrimal(INDEX i){
+      return primal_[OffsetRight_ + i];
     }
     
     INDEX GetFactorSize() const { return size_; }

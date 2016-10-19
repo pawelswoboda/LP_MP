@@ -134,11 +134,11 @@ namespace LP_MP {
         LinExpr lhs = lp->CreateLinExpr() + 0.0;
         LinExpr rhs = lp->CreateLinExpr() + 0.0;
         bool least = false;
-        if(lp->IsObjective(i)){
+        if(lp->IsLeftObjective(i)){
           lhs += lp->GetLeftVariable(i);
           least = true;
         }
-        if(lp->IsObjective(offset+i)){
+        if(lp->IsRightObjective(offset+i)){
           rhs += lp->GetRightVariable(offset + i);
           least = true;
         }

@@ -233,13 +233,13 @@ namespace LP_MP {
         LinExpr rhs = lp->CreateLinExpr() + 0.0;
         bool least = false;
         for(auto l=0; l<leftIndices[i].size(); l++){
-          if(lp->IsObjective(leftIndices[i][l])){
+          if(lp->IsLeftObjective(leftIndices[i][l])){
             lhs += lp->GetLeftVariable(leftIndices[i][l]);
             least = true;
           }
         }
         for(auto r=0; r<rightIndices[i].size(); r++){
-          if(lp->IsObjective(leftIndices[i][r])){
+          if(lp->IsRightObjective(rightIndices[i][r])){
             rhs += lp->GetRightVariable(rightIndices[i][r]);
             least = true;
           }

@@ -91,11 +91,11 @@ namespace LP_MP {
       assert(lp->GetLeftFactorSize() == regSize_);
       assert(lp->GetRightFactorSize() == upSize_+leftSize_+rightSize_+regSize_);
       bool least = false;
-      if(lp->IsObjective(i)){
+      if(lp->IsLeftObjective(i)){
         lhs += lp->GetLeftVariable(i);
         least = true;
       }
-      if(lp->IsObjective(upSize_+leftSize_+rightSize_+i)){
+      if(lp->IsRightObjective(upSize_+leftSize_+rightSize_+i)){
         rhs += lp->GetRightVariable(upSize_+leftSize_+rightSize_+i);
         least = true;
       }
