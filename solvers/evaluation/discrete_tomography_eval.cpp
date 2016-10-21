@@ -989,7 +989,7 @@ int main()
   using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
   
   std::mutex UpdateIter;
-  std::vector<std::thread> threads(15);
+  std::vector<std::thread> threads(16);
   
   /* Tree Method  */
   {
@@ -1003,12 +1003,13 @@ int main()
       {"--LpInterval"}, {"2"},
       {"--LpTimelimit"}, {"180"},
       {"--LpRoundValue"}, {"2"},
+      //{"--overwriteDbRecord"},
       {"--databaseFile"}, {"discrete_tomography.db"}
     };    
    
     auto AllInstIter = AllInst.begin();
     auto AllInstDatasetsIter = AllInstDatasets.begin();
-   
+    
     for(INDEX i=0;i<threads.size();i++){
       threads[i] =  std::thread([&](){
           INDEX idx = i;
@@ -1024,7 +1025,6 @@ int main()
               UpdateIterGuard.unlock();
 	     
               RunSolver<FMC_DT_COMBINED,VisitorSolver<LpSolver<Solver<FMC_DT_COMBINED>,LpInterfaceCplex>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT_COMBINED>,instv,options,sp,"MPCplexTree");
-
             } else { break; }
           }
         });
@@ -1035,10 +1035,13 @@ int main()
         threads[i].join();
       }
     }
+    
   }
 
   /* Naive Method  */
-  { 
+  {
+    threads.resize(20);
+    
     // emulate command line options
     std::vector<std::string> options = {
       {"--maxIter"}, {"1"},
@@ -1047,7 +1050,9 @@ int main()
       {"--minDualImprovementInterval"}, {"50"},
       {"--lowerBoundComputationInterval"}, {"10"},
       {"--LpInterval"}, {"2"},
+      //{"--overwriteDbRecord"},
       {"--LpTimelimit"}, {"3600"},
+      {"--onlyLp"},
       {"--databaseFile"}, {"discrete_tomography.db"}
     };
     
@@ -1093,6 +1098,8 @@ int main()
       {"--lowerBoundComputationInterval"}, {"10"},
       {"--LpInterval"}, {"2"},
       {"--LpTimelimit"}, {"3600"},
+      {"--onlyLp"},
+      //{"--overwriteDbRecord"},
       {"--databaseFile"}, {"discrete_tomography.db"}
     };
     

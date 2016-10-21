@@ -2,4 +2,4 @@
 #include "lp_interface/lp_gurobi.hxx"
 #include "visitors/standard_visitor.hxx"
 using namespace LP_MP;
-LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_LP(FMC_DT, DiscreteTomographyTextInput::ParseProblem<FMC_DT>, StandardTighteningVisitor, LpInterfaceGurobi);
+LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_LP(FMC_DT_COMBINED, DiscreteTomographyTextInput::ParseProblem<FMC_DT_COMBINED>, StandardTighteningVisitor, LpInterfaceGurobi);

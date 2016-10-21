@@ -187,9 +187,7 @@ namespace LP_MP {
         Offset_ = factorIt->GetPrimalOffset();          // <-- factoradapter provides this
         size_ = factorIt->size();                       // <-- factoradapter provides this
         OffsetAux_ = factorIt->GetAuxOffset();          // <-- factoradapter provides this
-        //sizeAux_ = factorIt->GetNumberOfAuxVariables(); // <-- factor provides this
         pot_ = factorIt->GetReparametrizedPotential();  // <-- factoradapter provides this
-        //printf("Factor\n");
         factorIt->CreateConstraints(this);              // <-- factor provides this
       }
             

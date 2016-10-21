@@ -16,18 +16,17 @@
 
 namespace LP_MP { 
 
-template<typename FMC, typename SOLVER, typename INPUT_FUNCTION>
-void RunSolver(INPUT_FUNCTION f, const std::vector<std::string>& datasets, std::vector<std::string> options, const std::string& datasetName, const std::string& algorithmName)
-{
-   options.push_back("--datasetName");
-   options.push_back(datasetName);
-   options.push_back("--algorithmName");
-   options.push_back(algorithmName);
-   options.push_back("--algorithmFMC");
-   options.push_back(FMC::name);
+  template<typename FMC, typename SOLVER, typename INPUT_FUNCTION>
+  void RunSolver(INPUT_FUNCTION f, const std::vector<std::string>& datasets, std::vector<std::string> options, const std::string& datasetName, const std::string& algorithmName)
+  {
+    options.push_back("--datasetName");
+    options.push_back(datasetName);
+    options.push_back("--algorithmName");
+    options.push_back(algorithmName);
+    options.push_back("--algorithmFMC");
+    options.push_back(FMC::name);
 
-   for(auto& dataset : datasets) {
-
+    for(auto dataset : datasets) {
       auto solverOptions = options;
       solverOptions.insert(solverOptions.begin(), std::string("LP_MP evaluation tool"));
       solverOptions.push_back("-i");
@@ -39,8 +38,9 @@ void RunSolver(INPUT_FUNCTION f, const std::vector<std::string>& datasets, std::
       std::cout << "run solver " << FMC::name << " on problem " << dataset << "\n";
       s.ReadProblem(f);
       s.Solve();
-   }
-}
+    }
+    printf("test0\n");
+  }
 
 
 

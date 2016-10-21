@@ -262,6 +262,7 @@ public:
     std::unique_lock<std::mutex> guard(LpChangeMutex);
     //std::cout << "size of primal = " << p.size() << "\n";
     const REAL cost = lp_.EvaluatePrimal(p.begin());
+    printf("cost: %.2f \n",cost);
     if(cost <= bestPrimalCost_) {
        // check constraints
        if(CheckPrimalConsistency(p.begin())) {
@@ -430,7 +431,7 @@ class LpSolver : public SOLVER {
 public:
    LpSolver() :
       SOLVER(),
-      LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_),
+      LPOnly_("","onlyLp","using lowerbound from lp solver instead of message passing",SOLVER::cmd_),
       RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
       timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
       roundBound_("","LpRoundValue","A small value removes many variables",false,std::numeric_limits<REAL>::infinity(),"positive real number",SOLVER::cmd_),
@@ -486,11 +487,13 @@ public:
                     // Jan: this is only admissible when we have an integral solution, not in RELAXed mode!       
                     PrimalSolutionStorage x(FactorItBegin,FactorItEnd);
                     for(INDEX i=0;i<x.size();i++){
-                            x[i] = solver.GetVariableValue(i);
+                      x[i] = solver.GetVariableValue(i);
                     }
                     this->RegisterPrimal(x);
                     //std::lock_guard<std::mutex> WriteGuard(BuildLpMutex);
-
+                    if(LPOnly_.getValue()){
+                      this->lowerBound_ = solver.GetBestBound();
+                    }
 
                     if( status == 0){
                             std::cout << "Optimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
@@ -566,7 +569,6 @@ public:
       WakeLpSolverCond.notify_all();
       WakeUpGuard.unlock();
 
-      SOLVER::End();
       std::cout << "construct final lp solver\n";
       std::thread th([this]() { this->RunLpSolver(1); });
       th.join();
@@ -577,7 +579,10 @@ public:
                       LpThreads_[i].join();
               }
       }
+
       
+      
+      SOLVER::End();
       std::cout << "\n";
       std::cout << "The best objective computed by ILP is " << ub_ << "\n";
     }
