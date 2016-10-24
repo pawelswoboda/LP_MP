@@ -39,7 +39,6 @@ namespace LP_MP {
       s.ReadProblem(f);
       s.Solve();
     }
-    printf("test0\n");
   }
 
 

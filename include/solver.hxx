@@ -487,7 +487,7 @@ public:
                     // Jan: this is only admissible when we have an integral solution, not in RELAXed mode!       
                     PrimalSolutionStorage x(FactorItBegin,FactorItEnd);
                     for(INDEX i=0;i<x.size();i++){
-                      x[i] = solver.GetVariableValue(i);
+                      x[i] = std::round(solver.GetVariableValue(i));
                     }
                     this->RegisterPrimal(x);
                     //std::lock_guard<std::mutex> WriteGuard(BuildLpMutex);
