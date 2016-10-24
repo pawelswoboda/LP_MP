@@ -42,7 +42,7 @@ public:
    virtual MessageTypeAdapter* GetMessage(const INDEX n) const = 0;
    virtual FactorTypeAdapter* GetConnectedFactor(const INDEX i) const = 0;
    virtual bool CanSendMessage(const INDEX i) const = 0;
-   virtual REAL LowerBound() const = 0;
+   virtual REAL LowerBound() const = 0; 
    virtual std::vector<REAL> GetReparametrizedPotential() const = 0;
    //virtual PrimalSolutionStorageAdapter* AllocatePrimalSolutionStorage() const = 0;
    //virtual bool CanComputePrimalSolution() const = 0;
@@ -59,9 +59,10 @@ public:
    //virtual void WritePrimal(PrimalSolutionStorage::Element primalSolution, std::ofstream& fs) const = 0;
 
    // for the LP interface
-   virtual INDEX GetNumberOfAuxVariables() const = 0;
+   //virtual INDEX GetNumberOfAuxVariables() const = 0;
    virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
-   virtual void ReduceLp(LpInterfaceAdapter* lpInterface) const = 0;
+   virtual void CreateAuxVariables(LpInterfaceAdapter* lpInterface) const = 0;
+   //virtual void ReduceLp(LpInterfaceAdapter* lpInterface) const = 0;
 };
 
 class MessageTypeAdapter

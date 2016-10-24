@@ -86,13 +86,22 @@ namespace LP_MP {
   template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
   void DiscreteTomographyMessageCountingPairwise::CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor) const {
     for(INDEX i=0;i<regSize_;i++){
-      LinExpr lhs = lp->CreateLinExpr();
-      LinExpr rhs = lp->CreateLinExpr();
+      LinExpr lhs = lp->CreateLinExpr() + 0.0;
+      LinExpr rhs = lp->CreateLinExpr() + 0.0;
       assert(lp->GetLeftFactorSize() == regSize_);
       assert(lp->GetRightFactorSize() == upSize_+leftSize_+rightSize_+regSize_);
-      lhs += lp->GetLeftVariable(i);
-      rhs += lp->GetRightVariable(upSize_+leftSize_+rightSize_+i);
-      lp->addLinearEquality(lhs,rhs);
+      bool least = false;
+      if(lp->IsLeftObjective(i)){
+        lhs += lp->GetLeftVariable(i);
+        least = true;
+      }
+      if(lp->IsRightObjective(upSize_+leftSize_+rightSize_+i)){
+        rhs += lp->GetRightVariable(upSize_+leftSize_+rightSize_+i);
+        least = true;
+      }
+      if(least){
+        lp->addLinearEquality(lhs,rhs);
+      }
     }
   }
   

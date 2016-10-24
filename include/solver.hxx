@@ -262,6 +262,7 @@ public:
     std::unique_lock<std::mutex> guard(LpChangeMutex);
     //std::cout << "size of primal = " << p.size() << "\n";
     const REAL cost = lp_.EvaluatePrimal(p.begin());
+    printf("cost: %.2f \n",cost);
     if(cost <= bestPrimalCost_) {
        // check constraints
        if(CheckPrimalConsistency(p.begin())) {
@@ -393,44 +394,64 @@ public:
       this->Init(arg);
    }
    int Solve()
-   {
-      this->lp_.Init();
-      this->Begin();
-      LpControl c = visitor_.begin(this->lp_);
-      while(!c.end && !c.error) {
-         this->PreIterate(c);
-         this->Iterate(c);
-         this->PostIterate(c);
-         c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
-      }
-      if(!c.error) {
-         this->End();
-         // possibly primal has been computed in end. Call visitor again
-         visitor_.end(this->lowerBound_, this->bestPrimalCost_);
-         this->WritePrimal();
-      }
-      return c.error;
-   }
+  {    
+    this->lp_.Init();
+    this->Begin();
+    std::unique_lock<std::mutex> VisitorGuard(VisitorMutex_);
+    LpControl c = visitor_.begin(this->lp_);
+    VisitorGuard.unlock();
+      
+    while(!c.end && !c.error) {
+      this->PreIterate(c);
+      this->Iterate(c);
+      this->PostIterate(c);
+
+      std::unique_lock<std::mutex> VisitorGuard(VisitorMutex_);
+      c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
+    }
+    if(!c.error) {
+      this->End();
+      // possibly primal has been computed in end. Call visitor again
+      std::unique_lock<std::mutex> VisitorGuard(VisitorMutex_);
+      visitor_.end(this->lowerBound_, this->bestPrimalCost_);
+      this->WritePrimal();
+    }
+    return c.error;
+  }
 
 private:
-   VISITOR visitor_;
+  VISITOR visitor_;
+  static std::mutex VisitorMutex_;
 };
-
+  template<typename SOLVER, typename VISITOR>
+  std::mutex VisitorSolver<SOLVER,VISITOR>::VisitorMutex_;
+  
 template<typename SOLVER, typename LP_INTERFACE>
 class LpSolver : public SOLVER {
 public:
    LpSolver() :
       SOLVER(),
-      LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_),
+      LPOnly_("","onlyLp","using lowerbound from lp solver instead of message passing",SOLVER::cmd_),
       RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
       timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
       roundBound_("","LpRoundValue","A small value removes many variables",false,std::numeric_limits<REAL>::infinity(),"positive real number",SOLVER::cmd_),
       threads_("","LpSolverThreads","number of threads to call Lp solver routine",false,1,"integer",SOLVER::cmd_),
       LpThreadsArg_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_),
       LpInterval_("","LpInterval","each n steps the lp solver will be executed if possible",false,1,"integer",SOLVER::cmd_)
-  {}
+    {}
       
-   ~LpSolver(){}
+    ~LpSolver(){
+      runLp_ = false;
+      std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
+      WakeLpSolverCond.notify_all();
+      WakeUpGuard.unlock();
+
+      for(INDEX i=0;i<LpThreads_.size();i++){
+        if(LpThreads_[i].joinable()){
+          LpThreads_[i].join();
+        }
+      }
+    }
    
     template<class T,class E>
     class FactorMessageIterator {
@@ -460,10 +481,10 @@ public:
             FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
             FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,SOLVER::lp_.GetNumberOfMessages());
 
-            LP_INTERFACE solver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
+      LP_INTERFACE solver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold_,!RELAX_.getValue());
 
-            solver.ReduceLp(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold_);
-            guard.unlock();
+      //solver.ReduceLp(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold_);
+      guard.unlock();
 
             solver.SetTimeLimit(timelimit_.getValue());
             solver.SetNumberOfThreads(LpThreadsArg_.getValue());
@@ -477,11 +498,13 @@ public:
                     // Jan: this is only admissible when we have an integral solution, not in RELAXed mode!       
                     PrimalSolutionStorage x(FactorItBegin,FactorItEnd);
                     for(INDEX i=0;i<x.size();i++){
-                            x[i] = solver.GetVariableValue(i);
+                      x[i] = std::round(solver.GetVariableValue(i));
                     }
                     this->RegisterPrimal(x);
                     //std::lock_guard<std::mutex> WriteGuard(BuildLpMutex);
-
+                    if(LPOnly_.getValue()){
+                      this->lowerBound_ = solver.GetBestBound();
+                    }
 
                     if( status == 0){
                             std::cout << "Optimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
@@ -542,9 +565,9 @@ public:
       SOLVER::PostIterate(c);
 
       if( curIter_ % LpInterval_.getValue() == 0 ){
-              std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
-              WakeLpSolverCond.notify_one();
-              //std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Jan: why sleep here?
+        std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
+        WakeLpSolverCond.notify_one();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Without sleep, the next iteration will block the execution of the LpInterface
       }
       ++curIter_;
     }
@@ -557,12 +580,10 @@ public:
       WakeLpSolverCond.notify_all();
       WakeUpGuard.unlock();
 
-      SOLVER::End();
-      //if(LPOnly_.isSet() || RELAX_.isSet()){
-          std::cout << "construct final lp solver\n";
-          std::thread th([this]() { this->RunLpSolver(1); });
-          th.join();
-      //} 
+      std::cout << "construct final lp solver\n";
+      std::thread th([this]() { this->RunLpSolver(1); });
+      th.join();
+
 
       for(INDEX i=0;i<threads_.getValue();i++){
               if(LpThreads_[i].joinable()){
@@ -570,6 +591,9 @@ public:
               }
       }
 
+      
+      
+      SOLVER::End();
       std::cout << "\n";
       std::cout << "The best objective computed by ILP is " << ub_ << "\n";
     }
@@ -582,7 +606,6 @@ private:
   TCLAP::ValueArg<INDEX> LpInterval_;
   TCLAP::SwitchArg LPOnly_;
   TCLAP::SwitchArg RELAX_;
-  //TCLAP::SwitchArg EXPORT_;
   
   std::mutex UpdateUbLpMutex;
   std::mutex WakeLpSolverMutex_;

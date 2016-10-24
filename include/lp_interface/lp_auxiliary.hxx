@@ -9,14 +9,6 @@ namespace LP_MP {
   public:
     LpVariable() : index(0),coeff(0) {}
     LpVariable(INDEX idx,REAL obj) : index(idx),coeff(obj) {}
-
-    // can be removed
-    /*
-    LpVariable operator* (REAL value){
-      coeff = value;
-      return *this;
-    }
-    */
     
     INDEX index;
     REAL coeff;
@@ -51,6 +43,11 @@ namespace LP_MP {
     
     LinExpr& operator-=(const REAL value){
       constant_ -= value;
+      return *this;
+    }
+
+    LinExpr& operator+(const REAL value){
+      constant_ += 0;
       return *this;
     }
     

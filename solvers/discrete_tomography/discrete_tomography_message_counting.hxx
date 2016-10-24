@@ -131,11 +131,20 @@ namespace LP_MP {
     INDEX noVars = (*LeftFactor).getSize(DiscreteTomographyFactorCounting::NODE::up);
     auto CoupleConstraints = [&](INDEX offset){
       for(INDEX i=0;i<noVars;i++){
-        LinExpr lhs = lp->CreateLinExpr();
-        LinExpr rhs = lp->CreateLinExpr();
-        lhs += lp->GetLeftVariable(i);
-        rhs += lp->GetRightVariable(offset + i);
-        lp->addLinearEquality(lhs,rhs);
+        LinExpr lhs = lp->CreateLinExpr() + 0.0;
+        LinExpr rhs = lp->CreateLinExpr() + 0.0;
+        bool least = false;
+        if(lp->IsLeftObjective(i)){
+          lhs += lp->GetLeftVariable(i);
+          least = true;
+        }
+        if(lp->IsRightObjective(offset+i)){
+          rhs += lp->GetRightVariable(offset + i);
+          least = true;
+        }
+        if( least ){
+          lp->addLinearEquality(lhs,rhs);
+        }
       }
     };
     if( DR == DIRECTION::left ){

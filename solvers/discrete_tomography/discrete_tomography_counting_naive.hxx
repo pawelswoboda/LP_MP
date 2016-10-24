@@ -17,23 +17,26 @@ public:
       return 0.0;
    }
 
-   template<typename REPAM_ARRAY>
-   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
-   {
-      INDEX sum=0;
-      for(INDEX i=0; i<no_vars_; ++i) {
-         for(INDEX s=1; s<no_labels_; ++s) {
-            sum += s*primal[i*no_labels_ + s];
-         }
+  template<typename REPAM_ARRAY>
+  REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
+  {
+    INDEX sum=0;
+    for(INDEX i=0; i<no_vars_; ++i) {
+      for(INDEX s=0; s<no_labels_; ++s) {
+        sum += s*primal[i*no_labels_ + s];
       }
-      if(sum_ == sum) {
-         return 0.0;
-      } else {
-         return std::numeric_limits<REAL>::infinity();
-      }
-   }
-   void CreateConstraints(LpInterfaceAdapter* lp) const;
+    }
+    
+    if(sum_ == sum) {
+      return 0.0;
+    } else {
+      return std::numeric_limits<REAL>::infinity();
+    }
+  }
 
+  void CreateConstraints(LpInterfaceAdapter* lp) const;
+  void CreateAuxVariables(LpInterfaceAdapter* lp) const { }
+  
    INDEX GetNumberOfLabels() const { return no_labels_; }
 
    INDEX size() const { return no_labels_*no_vars_; }
@@ -43,19 +46,20 @@ private:
    const INDEX sum_;
 };
 
-inline void
-DiscreteTomographyFactorCountingNaive::CreateConstraints(LpInterfaceAdapter* lp) const
-{
-   LinExpr lhs = lp->CreateLinExpr();
-   for(INDEX i=0; i<no_vars_; ++i) {
-      for(INDEX s=1; s<no_labels_; ++s) {
-         lhs += REAL(s)*lp->GetVariable(i*no_labels_ + s);
+  inline void
+  DiscreteTomographyFactorCountingNaive::CreateConstraints(LpInterfaceAdapter* lp) const
+  {
+    LinExpr lhs = lp->CreateLinExpr();
+    for(INDEX i=0; i<no_vars_; ++i) {
+      for(INDEX s=0;s<no_labels_; ++s) {
+        lhs += REAL(s)*lp->GetVariable(i*no_labels_ + s);
+        lp->AddObjective(i*no_labels_ + s,0.0);
       }
-   }
-   LinExpr rhs = lp->CreateLinExpr();
-   rhs += (REAL) sum_;
-   lp->addLinearEquality(lhs,rhs);
-}
+    }
+    LinExpr rhs = lp->CreateLinExpr();
+    rhs += (REAL) sum_;
+    lp->addLinearEquality(lhs,rhs);
+  }
 
 class DiscreteTomographyUnaryToFactorCountingNaiveMessage {
 public:

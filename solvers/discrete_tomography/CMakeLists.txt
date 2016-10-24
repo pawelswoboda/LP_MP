@@ -30,11 +30,19 @@ if(WITH_LOCALSOLVER)
 endif()
 
 if(WITH_CPLEX)
-  add_executable(discrete_tomography_cplex discrete_tomography_cplex.cpp  ${headers} ${sources})
-  target_link_libraries(discrete_tomography_cplex Vc m stdc++ pthread ${CPLEX_LIBRARIES})
+  SET(SOURCE_FILES
+    discrete_tomography_cplex.cpp
+    discrete_tomography_standard_relax_cplex.cpp
+    discrete_tomography_standard_relax_cplex_sql.cpp)
 
-  target_compile_definitions(discrete_tomography_cplex PUBLIC -DUSE_CPLEX)
-  target_include_directories(discrete_tomography_cplex PUBLIC ${CPLEX_INCLUDE_DIRS})
+  foreach( source_file ${SOURCE_FILES} )
+        string( REPLACE ".cpp" "" executable_file ${source_file} )
+        add_executable( ${executable_file} ${source_file} ${headers} ${sources})
+        target_link_libraries( ${executable_file} sqlite3 Vc m stdc++ pthread ${CPLEX_LIBRARIES})
+
+        target_compile_definitions(${executable_file} PUBLIC -DUSE_CPLEX)
+        target_include_directories(${executable_file} PUBLIC ${CPLEX_INCLUDE_DIRS})
+  endforeach( source_file ${SOURCE_FILES} )
 
   INSTALL(TARGETS discrete_tomography_cplex
     ARCHIVE DESTINATION ${PROJECT_BINARY_DIR}/install/discrete_tomography_cplex/lib
