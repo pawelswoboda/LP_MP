@@ -438,9 +438,20 @@ public:
       threads_("","LpSolverThreads","number of threads to call Lp solver routine",false,1,"integer",SOLVER::cmd_),
       LpThreadsArg_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_),
       LpInterval_("","LpInterval","each n steps the lp solver will be executed if possible",false,1,"integer",SOLVER::cmd_)
-  {}
+    {}
       
-   ~LpSolver(){}
+    ~LpSolver(){
+      runLp_ = false;
+      std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
+      WakeLpSolverCond.notify_all();
+      WakeUpGuard.unlock();
+
+      for(INDEX i=0;i<LpThreads_.size();i++){
+        if(LpThreads_[i].joinable()){
+          LpThreads_[i].join();
+        }
+      }
+    }
    
     template<class T,class E>
     class FactorMessageIterator {
