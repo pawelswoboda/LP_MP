@@ -20,10 +20,10 @@ namespace LP_MP {
                   MinConv(T1 a, T2 b, Index n, Index m,Index t);
 
                void init(Index,Index,Index);
-               Value getConv(Index k){ return c_[k]; };
-               Value getMin(){ return minimum_; };
-               Index getIdxA(Index k){ assert(0 <= k);assert(k < outA_.size()); return outA_[k]; };
-               Index getIdxB(Index k){ assert(0 <= k);assert(k < outB_.size()); return outB_[k]; };
+               Value getConv(Index k) const { return c_[k]; };
+               Value getMin() const { return minimum_; };
+               Index getIdxA(Index k) const { assert(0 <= k);assert(k < outA_.size()); return outA_[k]; };
+               Index getIdxB(Index k) const { assert(0 <= k);assert(k < outB_.size()); return outB_[k]; };
 
                template<class T1,class T2,class T3>
                   void CalcConv(T1 op,T2 a,T3 b,bool onlyMin = false);
@@ -55,6 +55,7 @@ namespace LP_MP {
       template<class Value,class Index>
          template<class T1,class T2>
          MinConv<Value,Index>::MinConv(T1 a, T2 b, Index n, Index m,Index t){
+            assert(false);
             if( n < 1 || m < 1 || t < 1){ 
                throw std::runtime_error("m,n and t should > 0!");  }
             sort(a,n,idxa_);

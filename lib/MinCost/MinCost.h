@@ -148,14 +148,14 @@ public:
    FlowType GetFlow(EdgeId e) const
    {
       assert(0 <= e && e < edgeNumMax);
-      return cap[e] - arcs[2*e].r_cap;
+      return cap[2*e] - arcs[2*e].r_cap;
    }
    FlowType GetCap(EdgeId e) const
    {
       assert(0 <= e && e < edgeNumMax);
       return cap[2*e];
    }
-   FlowType GetRCap(EdgeId e) const
+   FlowType GetReverseCap(EdgeId e) const
    {
       assert(0 <= e && e < edgeNumMax);
       return cap[2*e+1];
@@ -175,12 +175,10 @@ public:
    CostType Objective() const
    {
       CostType c = 0.0;
-      NodeId a;
-      Arc* arc;
-      for(arc=arcs, a=0; a<edgeNum; ++arc, ++a) {
-         c += GetFlow(2*a)*(arc->cost);
+      for(EdgeId a=0; a<edgeNum; ++a) {
+         c += GetFlow(a)*(arcs[2*a].cost);
       }
-      return 0.5*c; // we have counted objective for arcs and reverse arcs
+      return c;
    }
 };
 
@@ -679,6 +677,7 @@ template <typename FlowType, typename CostType>
 	TestCosts();
 #endif
 
+   return Objective();
 	return cost;
 }
 

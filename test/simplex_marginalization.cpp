@@ -5,29 +5,28 @@
 #include "messages/simplex_marginalization_message.hxx"
 
 using namespace LP_MP;
-using namespace std;
 
 TEST_CASE( "unary/pairwise message", "[unary/pairwise message between simplex factors]" ) {
-   vector<double> costUnary {0.1, 0.2, 0.05, 1};
-   vector<double> costPairwise {  0.1,    0.2,  0.05,
+   std::vector<double> costUnary {0.1, 0.2, 0.05, 1};
+   std::vector<double> costPairwise {  0.1,    0.2,  0.05,
                                   0.3,  0.001,  0.2 ,
                                  -0.3, -0.001, -0.2 ,
                                   0.3,  0.001,  0.2 };
-   SimplexFactor<> simplexUnary(costUnary);
-   SimplexFactor<> simplexPairwise(costPairwise);
+   UnarySimplexFactor simplexUnary(costUnary);
+   PairwiseSimplexFactor simplexPairwise(4,3);
+   for(INDEX i=0; i<4; ++i) {
+      for(INDEX j=0; j<3; ++j) {
+         simplexPairwise(i,j) = costPairwise[i*3 + j];
+      }
+   }
 
-   using UnaryLoopType = UnaryLoop<>;
-   using LeftLoopType = PairwiseLoop<0>;
-   using RightLoopType = PairwiseLoop<1>;
-   UnaryLoopType unaryLoop(4);
-   RightLoopType rightLoop({3,4});
-   LeftLoopType leftLoop({3,4});
-   SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false> rightMessage(unaryLoop,rightLoop);
-   SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,false> leftMessage(unaryLoop,leftLoop);
+   UnaryPairwiseMessageLeft<MessageSendingType::SRMP> leftMessage(4,3);
+   UnaryPairwiseMessageRight<MessageSendingType::SRMP> rightMessage(4,3);
 
+   // must add operators -= and += to vector to support the below things
    SECTION( "marginalize pairwise right" ) {
-      vector<double> marg(4,0.0);
-      rightMessage.ReceiveMessageFromRight(&simplexPairwise, costPairwise, marg);
+      vector marg(4,0.0);
+      rightMessage.ReceiveMessageFromRight(simplexPairwise, marg);
       REQUIRE(marg[0] == -0.05);
       REQUIRE(marg[1] == -0.001);
       REQUIRE(marg[2] ==  0.3);
@@ -35,8 +34,8 @@ TEST_CASE( "unary/pairwise message", "[unary/pairwise message between simplex fa
    }
 
    SECTION( "marginalize pairwise left" ) {
-      vector<double> marg(3,0.0);
-      leftMessage.ReceiveMessageFromRight(&simplexPairwise, costPairwise, marg);
+      vector marg(3,0.0);
+      leftMessage.ReceiveMessageFromRight(simplexPairwise, marg);
       REQUIRE(marg[0] == 0.3);
       REQUIRE(marg[1] == 0.001);
       REQUIRE(marg[2] == 0.2);
@@ -46,8 +45,26 @@ TEST_CASE( "unary/pairwise message", "[unary/pairwise message between simplex fa
 
 }
 
-
-// do zrobienia: triplet to pairwise marginalization
+/*
 TEST_CASE("pairwise/triplet message", "[pairwise/triplet message between simplex factors]") {
+   PairwiseSimplexFactor simplexPairwise(4,3);
+   for(INDEX i=0; i<3; ++i) {
+      for(INDEX j=0; j<3; ++j) {
+         simplexPairwise(i,j) = costPairwise[i*3 + j];
+      }
+   }
+   SimpleTighteningTernarySimplexFactor simplexTriplet(3,3,3);
 
+   PairwiseTripletMessage12<MessageSendingType::SRMP> message(3,3,3);
+
+   SECTION( "marginalize triplet" ) {
+      matrix marg(3,3,0.0);
+      message.ReceiveMessageFromRight(simplexTriplet, marg);
+   }
+
+   SECTION( "marginalize pairwise" ) {
+      matrix marg(3,3,0.0);
+      message.ReceiveMessageFromLeft(simplexPairwise, marg);
+   }
 }
+*/

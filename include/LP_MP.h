@@ -72,18 +72,11 @@ public:
    virtual FactorTypeAdapter* GetRightFactor() const = 0;
    //virtual bool CheckPrimalConsistency(typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right) const = 0;
    virtual bool CheckPrimalConsistency(typename PrimalSolutionStorage::Element primal) const = 0;
-   virtual void SetMessage(const std::valarray<REAL>& m) = 0; // do zrobienia: function is not used anywhere currently // do zrobienia: change to vector
-   virtual const std::valarray<REAL> GetMessage() const = 0; // do zrobienia: function is not used anywhere currently // do zrobienia: change to vector
    
    // Also true, if SendMessagesTo{Left|Right} is active. Used for weight computation. Disregard message in weight computation if it does not send messages at all
    // do zrobienia: throw them out again
    //virtual bool CanSendMessageToLeft() const = 0;
    //virtual bool CanSendMessageToRight() const = 0;
-
-   // possibly remove these functions again. They are not used anymore
-   virtual INDEX GetMessageNumber() const = 0; // give message number as specified in MessageList meta::list
-   //virtual REAL GetMessageWeightToRight() const = 0;
-   //virtual REAL GetMessageWeightToLeft() const = 0;
 
    // for the LP interface
    virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) = 0;
@@ -228,7 +221,7 @@ public:
    void ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, std::vector<std::vector<REAL> >& omega); 
    void ComputeUniformWeights();
    template<typename FACTOR_ITERATOR>
-   void ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, std::vector<std::vector<REAL> >& omega); // do zrobienia: rename to isotropic weights
+   void ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, std::vector<std::vector<REAL> >& omega, const REAL leave_weight = 0.01); // do zrobienia: rename to isotropic weights
 
    REAL LowerBound() const
    {
@@ -364,110 +357,11 @@ inline void LP::ComputeUniformWeights()
    if(repamMode_ != LPReparametrizationMode::Uniform) {
       ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_);
       ComputeUniformWeights(forwardOrdering_.rbegin(), forwardOrdering_.rend(), omegaBackward_);
+      //assert(omegaForward_.size() == forwardOrdering_.size()); // need not be true for factors that are not sending/receiving
+      //assert(omegaBackward_.size() == forwardOrdering_.size());
       repamMode_ = LPReparametrizationMode::Uniform;
    };
 }
-
-/*
-template<typename VISITOR, typename PRIMAL_CONSISTENCY_CHECK_FCT>
-SIGNED_INDEX LP::Solve(VISITOR& v, PRIMAL_CONSISTENCY_CHECK_FCT primalCheck)
-{
-   std::cout << "Current SIMD implementation: ";
-   switch( Vc::CurrentImplementation::current()) {
-      case Vc::Implementation::ScalarImpl:
-         std::cout << "scalar"; break;
-      case Vc::Implementation::SSE2Impl:
-            std::cout << "SSE2"; break;
-      case Vc::Implementation::SSSE3Impl:
-            std::cout << "SSSE3"; break;
-      case Vc::Implementation::SSE41Impl:
-            std::cout << "SSE41"; break;
-      case Vc::Implementation::SSE42Impl:
-            std::cout << "SSE42"; break;
-      case Vc::Implementation::AVXImpl:
-            std::cout << "AVX"; break;
-      case Vc::Implementation::AVX2Impl:
-            std::cout << "AVX2"; break;
-      default:
-            std::cout << "unknown";
-   }
-   std::cout << "\n";
-   std::cout << "SIMD vector size = " << REAL_SIMD::Size << "\n";
-   // note: currently init is called before solve. If repeated solve is done, then we do not to call init, unless factors or messages have changed
-   Init();
-
-   LPVisitorReturnType s = v.begin(this);
-
-   while(true) {
-      //std::cout << "repam mode = ";
-      //if(repamMode_ == LPReparametrizationMode::Anisotropic) {
-      //   std::cout << " anisotropic";
-      //} else if(repamMode_ == LPReparametrizationMode::Uniform) {
-      //   std::cout << " uniform";
-      //} else {
-      //   std::cout << "undefined";
-      //}
-      //std::cout << "\n";
-      
-      switch(s) {
-         case LPVisitorReturnType::ReparametrizeUniform:
-            ComputeUniformWeights();
-            ComputePass();
-            s = v.template visit<LPVisitorReturnType::ReparametrizeUniform>(this);
-            break;
-         case LPVisitorReturnType::ReparametrizeLowerBoundUniform:
-            ComputeUniformWeights();
-            ComputePass();
-            ComputeLowerBound();
-            s = v.template visit<LPVisitorReturnType::ReparametrizeLowerBoundUniform>(this);
-            break;
-         case LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform:
-            ComputeUniformWeights();
-            ComputePassAndPrimal(primalCheck);
-            ComputeLowerBound();
-            s = v.template visit<LPVisitorReturnType::ReparametrizeLowerBoundPrimalUniform>(this);
-            break;
-         case LPVisitorReturnType::ReparametrizePrimalUniform:
-            ComputeUniformWeights();
-            ComputePassAndPrimal(primalCheck);
-            s = v.template visit<LPVisitorReturnType::ReparametrizePrimalUniform>(this);
-            break;
-
-         case LPVisitorReturnType::ReparametrizeAnisotropic:
-            ComputeAnisotropicWeights();
-            ComputePass();
-            s = v.template visit<LPVisitorReturnType::ReparametrizeAnisotropic>(this);
-            break;
-         case LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic:
-            ComputeAnisotropicWeights();
-            ComputePass();
-            ComputeLowerBound();
-            s = v.template visit<LPVisitorReturnType::ReparametrizeLowerBoundAnisotropic>(this);
-            break;
-         case LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic:
-            ComputeAnisotropicWeights();
-            ComputePassAndPrimal(primalCheck);
-            ComputeLowerBound();
-            s = v.template visit<LPVisitorReturnType::ReparametrizeLowerBoundPrimalAnisotropic>(this);
-            break;
-         case LPVisitorReturnType::ReparametrizePrimalAnisotropic:
-            ComputeAnisotropicWeights();
-            ComputePassAndPrimal(primalCheck);
-            s = v.template visit<LPVisitorReturnType::ReparametrizePrimalAnisotropic>(this);
-            break;
-
-         case LPVisitorReturnType::Break:
-            s = v.template visit<LPVisitorReturnType::Break>(this);
-            return 0;
-            break;
-         case LPVisitorReturnType::Error:
-            s = v.template visit<LPVisitorReturnType::Error>(this);
-            return -1;
-            break;
-      }
-   }
-}
-*/
 
 // Here we check whether messages constraints are satisfied
 template<typename FACTOR_ITERATOR, typename PRIMAL_ITERATOR>
@@ -597,6 +491,7 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
    if(m_.size() == 0) { 
       std::cout << "no messages in problem\n"; 
       //assert(false);
+      omega.resize(factorEndIt - factorIt);
       return;
    }
 
@@ -643,9 +538,11 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
 
 // compute uniform weights so as to help decoding for obtaining primal solutions
 // do zrobienia: make omega a TwoDimVariableArray, same in ComputeAnisotropicWeights
+// leave_weight signals how much weight to leave in sending factor. Important for rounding and tightening
 template<typename FACTOR_ITERATOR>
-void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, std::vector<std::vector<REAL> >& omega)
+void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, std::vector<std::vector<REAL> >& omega, const REAL leave_weight)
 {
+   assert(leave_weight >= 0.0 && leave_weight <= 1.0);
    assert(factorEndIt - factorIt == f_.size());
    std::vector<std::vector<FactorTypeAdapter*> > fc = ComputeSendFactorConnection(factorIt,factorEndIt);
    assert(f_.size() == fc.size());
@@ -658,7 +555,7 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
       // do zrobienia: let the factor below be variable and specified on the command line
       // better for rounding
       if((*factorIt)->FactorUpdated()) {
-         omega.push_back(std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() ) ));
+         omega.push_back(std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + leave_weight) ));
       }
       //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 1.0) );
       // better for dual convergence

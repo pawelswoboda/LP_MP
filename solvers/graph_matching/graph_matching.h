@@ -38,21 +38,6 @@ using namespace LP_MP;
 
 enum class PairwiseConstruction {Left,Right,BothSides}; // Indicates whether pairwise potentials should be built on {left|right|both} side(s) of assignment graph.
 
-typedef UnaryLoop<> UnaryLoopType;
-typedef PairwiseLoop<0> LeftLoopType;
-typedef PairwiseLoop<1> RightLoopType;
-
-typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,false,false,true> LeftMargMessage;
-typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false,false,true> RightMargMessage;
-
-typedef PairwiseTripletLoop<0,1> PairwiseTripletLoopType12;
-typedef PairwiseTripletLoop<0,2> PairwiseTripletLoopType13;
-typedef PairwiseTripletLoop<1,2> PairwiseTripletLoopType23;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType12,true,false,false,true> PairwiseTriplet12Message;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType13,true,false,false,true> PairwiseTriplet13Message;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType23,true,false,false,true> PairwiseTriplet23Message;
-
-typedef SimplexFactor<> Simplex;
 
 // graph matching with assignment via message passing
 template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left>
@@ -64,23 +49,22 @@ struct FMC_MP {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "AMP-B"
       : "unknown variant"));
       
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 0, true > UnaryFactor; // set to true if labeling by unaries is desired
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 1, false > PairwiseFactor;
-   //typedef FactorContainer<MinimumCostFlowLabelingFactor, MinimumCostFlowLabelingRepamStorage, FMC_MP_PARAM, 2, true, false> McfLabelingFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_MP_PARAM, 0, true > UnaryFactor; // set to true if labeling by unaries is desired
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_MP_PARAM, 1, false > PairwiseFactor;
 
    constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::left : Chirality::right;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction>;
-   typedef MessageContainer<EqualityMessageType, 0, 0, variableMessageNumber, variableMessageNumber, 1, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
-   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRight;
-   //typedef MessageContainer<SimplexMinimumCostFlowLabelingMessage, 0, 2, 1, variableMessageNumber, 0, FMC_MP_PARAM, 3 > UnaryMcfLabelingMessage;
+   typedef MessageContainer<EqualityMessageType, 0, 0, variableMessageNumber, variableMessageNumber, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRightContainer;
 
-   using FactorList = meta::list< UnaryFactor, PairwiseFactor>;//, McfLabelingFactor >;
-   using MessageList = meta::list< AssignmentConstraintMessage, UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight>;//, UnaryMcfLabelingMessage >;
+   using FactorList = meta::list< UnaryFactor, PairwiseFactor>;
+   using MessageList = meta::list< AssignmentConstraintMessage, UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer>;//, UnaryMcfLabelingMessage >;
 
-   using mrfLeft = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
-   using mrfRight = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
-   using ProblemDecompositionList = meta::list<mrfLeft, mrfRight>;//, mcfLabeling>;
+   using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>>;
+   using mrfLeft = mrf;
+   using mrfRight = mrf;
+   using ProblemDecompositionList = meta::list<mrfLeft, mrfRight>;
 };
 
 // graph matching with assignment via message passing + tightening triplets
@@ -93,36 +77,35 @@ struct FMC_MP_T {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "AMP-B-T"
       : "unknown variant"));
       
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 0, true > UnaryFactor; // set to true if labeling by unaries is desired
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 1, false > PairwiseFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_MP_PARAM, 0, true > UnaryFactor; // set to true if labeling by unaries is desired
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_MP_PARAM, 1, false > PairwiseFactor;
 
    constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::left : Chirality::right;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction>;
-   typedef MessageContainer<EqualityMessageType, 0, 0, variableMessageNumber, variableMessageNumber, 1, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
-   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<EqualityMessageType, 0, 0, variableMessageNumber, variableMessageNumber, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRightContainer;
 
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MP_PARAM, 2 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 3> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 4> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MP_PARAM, 5> PairwiseTriplet23MessageContainer;
+   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_MP_PARAM, 2 > EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 3> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 4> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 5> PairwiseTriplet23MessageContainer;
 
-   using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor>;//McfLabelingFactor, EmptyTripletFactor >;
+   using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor>;
    using MessageList = meta::list< 
       AssignmentConstraintMessage,
-      UnaryPairwiseMessageLeft,
-      UnaryPairwiseMessageRight,
+      UnaryPairwiseMessageLeftContainer,
+      UnaryPairwiseMessageRightContainer,
       PairwiseTriplet12MessageContainer, 
       PairwiseTriplet13MessageContainer, 
       PairwiseTriplet23MessageContainer 
          >;
 
-   using mrf = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
+   using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>>;
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,2,3,4,5>;
    using mrfLeft = tighteningMrf;
    using mrfRight = tighteningMrf;
-   //using mcfLabeling = MinimumCostFlowLabelingConstructor<FMC_MP_PARAM,0,2,3>;
-   using ProblemDecompositionList = meta::list<mrfLeft, mrfRight>;//, mcfLabeling>;
+   using ProblemDecompositionList = meta::list<mrfLeft, mrfRight>;
 };
 
 
@@ -144,25 +127,34 @@ struct FMC_MCF {
       
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
-   typedef FactorContainer<MinCostFlowFactorCS2, MinCostFlowReparametrizationStorageCS2, FMC_MCF_PARAM, 0, false > MinCostFlowAssignmentFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 1, true > UnaryFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 2 > PairwiseFactor;
+   typedef FactorContainer<MinCostFlowFactorCS2, FMC_MCF_PARAM, 0, false > MinCostFlowAssignmentFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_MCF_PARAM, 1, true > UnaryFactor;
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_MCF_PARAM, 2 > PairwiseFactor;
 
-   typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
-   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,Chirality::left>;
-   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRightContainer;
+   //typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
+   //typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,MessagePassingType::SRMP>;
+   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
+
+   constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::left : Chirality::right;
+   using EqualityMessageType = EqualityMessage<primal_propagation_direction,false>;
+   typedef MessageContainer<EqualityMessageType, 1, 1, variableMessageNumber, variableMessageNumber, FMC_MCF_PARAM, 3 > AssignmentConstraintMessage;
+
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor>;
    using MessageList = meta::list<
-       UnaryPairwiseMessageLeft,  
-       UnaryPairwiseMessageRight, 
-       UnaryToAssignmentMessageContainer
+       UnaryPairwiseMessageLeftContainer,  
+       UnaryPairwiseMessageRightContainer, 
+       UnaryToAssignmentMessageContainer,
+       AssignmentConstraintMessage
       >;
 
    //using assignment = AssignmentViaMinCostFlowConstructor<FMC_MCF_PARAM,0>;
    //using mcf = AssignmentConstructor<MinCostFlowConstructorCS2<FMC_MCF_PARAM,0>>;
-   using mrf = StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>;
+   //using mrf = StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>;
+   using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>>;
    using mrfLeft = mrf;
    using mrfRight = mrf;
    //using ProblemDecompositionList = meta::list<assignment,mrfLeft,mrfRight>;
@@ -181,36 +173,45 @@ struct FMC_MCF_T {
       
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
-   typedef FactorContainer<MinCostFlowFactorCS2, MinCostFlowReparametrizationStorageCS2, FMC_MCF_PARAM, 0, false > MinCostFlowAssignmentFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 1, true > UnaryFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 2 > PairwiseFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MCF_PARAM, 3 > EmptyTripletFactor;
+   typedef FactorContainer<MinCostFlowFactorCS2, FMC_MCF_PARAM, 0, false > MinCostFlowAssignmentFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_MCF_PARAM, 1, true > UnaryFactor;
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_MCF_PARAM, 2 > PairwiseFactor;
+   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_MCF_PARAM, 3 > EmptyTripletFactor;
 
-   typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
-   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,Chirality::left>;
-   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRightContainer;
+   //typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
+   //typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,MessagePassingType::SRMP>;
+   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
 
-   typedef MessageContainer<PairwiseTriplet12Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 3> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 4> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 5> PairwiseTriplet23MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_MCF_PARAM, 3> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_MCF_PARAM, 4> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_MCF_PARAM, 5> PairwiseTriplet23MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet12Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 3> PairwiseTriplet12MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet13Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 4> PairwiseTriplet13MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet23Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 5> PairwiseTriplet23MessageContainer;
+
+   constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::left : Chirality::right;
+   using EqualityMessageType = EqualityMessage<primal_propagation_direction, false>;
+   typedef MessageContainer<EqualityMessageType, 1, 1, variableMessageNumber, variableMessageNumber, FMC_MCF_PARAM, 6 > AssignmentConstraintMessage;
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor, EmptyTripletFactor>;
    using MessageList = meta::list<
-       UnaryPairwiseMessageLeft,  
-       UnaryPairwiseMessageRight, 
+       UnaryPairwiseMessageLeftContainer,  
+       UnaryPairwiseMessageRightContainer, 
        UnaryToAssignmentMessageContainer, 
        PairwiseTriplet12MessageContainer, 
        PairwiseTriplet13MessageContainer, 
-       PairwiseTriplet23MessageContainer 
+       PairwiseTriplet23MessageContainer,
+       AssignmentConstraintMessage
       >;
 
-   //using assignment = AssignmentViaMinCostFlowConstructor<FMC_MCF_PARAM,0>;
-   using mrf = StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>;
+   using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>>;
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,3,4,5>;
    using mrfLeft = tighteningMrf;
    using mrfRight = tighteningMrf;
-   using ProblemDecompositionList = meta::list<mrfLeft,mrfRight>; // put away mrf
+   using ProblemDecompositionList = meta::list<mrfLeft,mrfRight>; 
 };
 
 
@@ -224,17 +225,21 @@ struct FMC_GM {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "GM-I"
       : "unknown variant");
       
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 1, false > PairwiseFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_GM_PARAM, 0, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_GM_PARAM, 1, false > PairwiseFactor;
 
-   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRightContainer;
+   //typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
+   //typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor>;//, McfLabelingFactor >;
-   using MessageList = meta::list< UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight>;//, UnaryMcfLabelingMessage >;
+   using MessageList = meta::list< UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer>;//, UnaryMcfLabelingMessage >;
 
-   using mrf = StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>;
-   using ProblemDecompositionList = meta::list<mrf>;//,mcfLabeling>;
+   using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>>;
+   using mrf_left = mrf;
+   using mrf_right = mrf;
+   using ProblemDecompositionList = meta::list<mrf_left, mrf_right>;//,mcfLabeling>;
 };
 
 // + tightening triplets
@@ -246,39 +251,38 @@ struct FMC_GM_T {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "GM-I-T"
       : "unknown variant");
       
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 0, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 1, false > PairwiseFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_GM_PARAM, 0, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_GM_PARAM, 1, false > PairwiseFactor;
 
-   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRightContainer;
+   //typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
+   //typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
 
    // tightening
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_GM_PARAM, 2 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
+   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_GM_PARAM, 2 > EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor >;
    using MessageList = meta::list<
-      UnaryPairwiseMessageLeft,
-      UnaryPairwiseMessageRight,
+      UnaryPairwiseMessageLeftContainer,
+      UnaryPairwiseMessageRightContainer,
       PairwiseTriplet12MessageContainer, 
       PairwiseTriplet13MessageContainer, 
       PairwiseTriplet23MessageContainer 
          >;
 
-   using mrf = StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>;
+   using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>>;
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,2,2,3,4>;
-   using ProblemDecompositionList = meta::list<tighteningMrf>;//,mcfLabeling>;
+   using mrf_left = tighteningMrf;
+   using mrf_right = tighteningMrf;
+   using ProblemDecompositionList = meta::list<mrf_left, mrf_right>;//,mcfLabeling>;
 };
-
-// loops for hungarian BP. As message passing is done in MPLP style, we must adjust which receive/send functions are invoked
-typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,false,true,false,true> LeftMargMessageMPLP;
-typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,false,true,false,true> RightMargMessageMPLP;
-
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType12,false,true,false,true> PairwiseTriplet12MessageMPLP;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType13,false,true,false,true> PairwiseTriplet13MessageMPLP;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType23,false,true,false,true> PairwiseTriplet23MessageMPLP;
 
 template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left> // note: both sides makes no sense here
 struct FMC_HUNGARIAN_BP {
@@ -293,23 +297,25 @@ struct FMC_HUNGARIAN_BP {
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
    // rounding is done by the mcf factor
-   typedef FactorContainer<MinCostFlowFactorCS2, MinCostFlowReparametrizationStorageCS2, FMC_PARAM, 0, true > MinCostFlowAssignmentFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_PARAM, 1, false > UnaryFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_PARAM, 2 > PairwiseFactor;
+   typedef FactorContainer<MinCostFlowFactorCS2, FMC_PARAM, 0, true > MinCostFlowAssignmentFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_PARAM, 1, false > UnaryFactor;
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_PARAM, 2 > PairwiseFactor;
 
-   typedef MessageContainer<LeftMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 1 > UnaryPairwiseMessageRight;
-   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,Chirality::right>;
-   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_PARAM, 2> UnaryToAssignmentMessageContainer;
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::MPLP>, 1, 2, variableMessageNumber, 1, FMC_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::MPLP>, 1, 2, variableMessageNumber, 1, FMC_PARAM, 1 > UnaryPairwiseMessageRightContainer;
+   //typedef MessageContainer<LeftMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 0 > UnaryPairwiseMessageLeft;
+   //typedef MessageContainer<RightMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 1 > UnaryPairwiseMessageRight;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,MessagePassingType::HUNGARIAN>;
+   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, FMC_PARAM, 2> UnaryToAssignmentMessageContainer;
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor>;
    using MessageList = meta::list<
-       UnaryPairwiseMessageLeft,  
-       UnaryPairwiseMessageRight, 
+       UnaryPairwiseMessageLeftContainer,  
+       UnaryPairwiseMessageRightContainer, 
        UnaryToAssignmentMessageContainer
       >;
 
-   using mrf = StandardMrfConstructor<FMC_PARAM,1,2,0,1>;
+   using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_HUNGARIAN_BP,1,2,0,1>>;
    using mrfLeft = mrf;
    using mrfRight = mrf;
    using ProblemDecompositionList = meta::list<mrfLeft,mrfRight>;
@@ -328,34 +334,40 @@ struct FMC_HUNGARIAN_BP_T {
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
    // rounding is done by the mcf factor
-   typedef FactorContainer<MinCostFlowFactorCS2, MinCostFlowReparametrizationStorageCS2, FMC_PARAM, 0, true > MinCostFlowAssignmentFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_PARAM, 1, false > UnaryFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_PARAM, 2 > PairwiseFactor;
+   typedef FactorContainer<MinCostFlowFactorCS2, FMC_PARAM, 0, true > MinCostFlowAssignmentFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_PARAM, 1, false > UnaryFactor;
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_PARAM, 2 > PairwiseFactor;
 
-   typedef MessageContainer<LeftMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 1 > UnaryPairwiseMessageRight;
-   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,Chirality::right>;
-   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, variableMessageSize, FMC_PARAM, 2> UnaryToAssignmentMessageContainer;
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::MPLP>, 1, 2, variableMessageNumber, 1, FMC_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::MPLP>, 1, 2, variableMessageNumber, 1, FMC_PARAM, 1 > UnaryPairwiseMessageRightContainer;
+   //typedef MessageContainer<LeftMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 0 > UnaryPairwiseMessageLeft;
+   //typedef MessageContainer<RightMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 1 > UnaryPairwiseMessageRight;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,MessagePassingType::HUNGARIAN>;
+   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, FMC_PARAM, 2> UnaryToAssignmentMessageContainer;
 
    // tightening
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_PARAM, 3 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTriplet12MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 3> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 4> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 5> PairwiseTriplet23MessageContainer;
+   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_PARAM, 3 > EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_PARAM, 3> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_PARAM, 4> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_PARAM, 5> PairwiseTriplet23MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet12MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 3> PairwiseTriplet12MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet13MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 4> PairwiseTriplet13MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet23MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 5> PairwiseTriplet23MessageContainer;
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor, EmptyTripletFactor>;
    using MessageList = meta::list<
-       UnaryPairwiseMessageLeft,  
-       UnaryPairwiseMessageRight, 
+       UnaryPairwiseMessageLeftContainer,  
+       UnaryPairwiseMessageRightContainer, 
        UnaryToAssignmentMessageContainer,
        PairwiseTriplet12MessageContainer, 
        PairwiseTriplet13MessageContainer, 
        PairwiseTriplet23MessageContainer 
       >;
 
-   using mrf = StandardMrfConstructor<FMC_PARAM,1,2,0,1>;
-   using mrfLeft = mrf;
-   using mrfRight = mrf;
+   using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_HUNGARIAN_BP_T,1,2,0,1>>;
+   using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,3,4,5>;
+   using mrfLeft = tighteningMrf;
+   using mrfRight = tighteningMrf;
    using ProblemDecompositionList = meta::list<mrfLeft,mrfRight>;
 };
 
@@ -658,9 +670,15 @@ namespace TorresaniEtAlInput {
    template<typename FMC>
    void construct_mp(Solver<FMC>& s, GraphMatchingInput& gm_input)
    {
+      constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
+
       auto& mrf_left = s.template GetProblemConstructor<0>();
       auto& mrf_right = s.template GetProblemConstructor<1>();
-      constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
+      /*
+
+      mrf_left.SetGraph(gm_input.leftGraph_);
+      mrf_right.SetGraph(gm_input.rightGraph_);
+
       if(pc == PairwiseConstruction::Left) {
          construct_left_mrf(gm_input, mrf_left, 1.0, 1.0);
          construct_right_mrf(gm_input, mrf_right, 0.0, 0.0);
@@ -673,6 +691,7 @@ namespace TorresaniEtAlInput {
          construct_left_mrf(gm_input, mrf_left, 0.0, 0.0);
          construct_right_mrf(gm_input, mrf_right, 1.0, 1.0);
       }
+      */
 
       std::vector<INDEX> left_label_count(mrf_left.GetNumberOfVariables(),0);
       std::vector<INDEX> right_label_count(mrf_right.GetNumberOfVariables(),0);
@@ -682,7 +701,7 @@ namespace TorresaniEtAlInput {
          auto *r = mrf_right.GetUnaryFactor(a.right_node_);
          const INDEX left_label = left_label_count[a.left_node_];
          const INDEX right_label = right_label_count[a.right_node_];
-         auto* m = new typename FMC::AssignmentConstraintMessage( typename FMC::EqualityMessageType(left_label, right_label), l, r, 1);
+         auto* m = new typename FMC::AssignmentConstraintMessage( typename FMC::EqualityMessageType(left_label, right_label), l, r);
          s.GetLP().AddMessage(m);
          ++left_label_count[a.left_node_];
          ++right_label_count[a.right_node_];
@@ -698,12 +717,108 @@ namespace TorresaniEtAlInput {
       mrf_right.Construct(s);
    }
 
+   // add mcf factor, but assume graphical model has already been built.
    template<typename FMC>
    void construct_mcf(Solver<FMC>& s, GraphMatchingInput& gm_input)
    {
+      // build assignment problem
+      const INDEX no_left_nodes = std::accumulate(gm_input.assignment_.begin(), gm_input.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.left_node_); }) + 1;
+      const INDEX no_right_nodes = std::accumulate(gm_input.assignment_.begin(), gm_input.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.right_node_); }) + 1;
+      const INDEX no_nodes = no_left_nodes + no_right_nodes;
+      const INDEX no_edges = gm_input.assignment_.size() + no_left_nodes + no_right_nodes + 1;
+
+      std::vector<typename MinCostFlowFactorCS2::Edge> edges;
+      edges.reserve(no_edges);
+      for(auto a : gm_input.assignment_) {
+         edges.push_back({a.left_node_, no_left_nodes + a.right_node_, 0, 1, 0.0});
+      }
+      std::vector<SIGNED_INDEX> demands;
+      demands.reserve(no_left_nodes + no_right_nodes + 2);
+
+      // slack edges
+      for(INDEX i=0; i<no_left_nodes; ++i) {
+         edges.push_back({i,no_nodes + 1, 0, 1, 0.0}); // for non-assignment
+         demands.push_back(1);
+      }
+      for(INDEX i=0; i<no_right_nodes; ++i) {
+         edges.push_back({no_nodes, no_left_nodes + i, 0, 1, 0.0}); // for non-assignment
+         demands.push_back(-1);
+      }
+      edges.push_back({no_nodes, no_nodes + 1, 0, std::max(no_left_nodes, no_right_nodes), 0.0});
+      demands.push_back(no_right_nodes);
+      demands.push_back(-no_left_nodes);
+
+      const INDEX no_covered_edges = edges.size() - 1;
+      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands, no_covered_edges) );
+      auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
+      s.GetLP().AddFactor(f);
+
+      // connect assignment factor with unaries
+      // left side
+      {
       auto& mrf_left = s.template GetProblemConstructor<0>();
+      std::vector<std::vector<INDEX>> edgeId(no_left_nodes);
+      INDEX c=0;
+      for(auto& a : gm_input.assignment_) {
+         // get left and right unaries and connect them with a message
+         edgeId[a.left_node_].push_back(c);
+         ++c;
+      }
+      // add slack edges
+      for(INDEX i=0; i<no_left_nodes; ++i) {
+         edgeId[i].push_back(c);
+         ++c;
+      }
+      for(INDEX i=0; i<no_left_nodes; ++i) {
+         //assert(mrf_left.GetNumberOfLabels(i) == mcf->NoArcs(i));
+         auto *u = mrf_left.GetUnaryFactor(i);
+         using MessageType = typename FMC::UnaryToAssignmentMessageType;
+         //auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
+         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(edgeId[i]), u, f);
+         s.GetLP().AddMessage(m);
+      }
+      }
+      // right side
+      {
       auto& mrf_right = s.template GetProblemConstructor<1>();
+      std::vector<std::vector<INDEX>> edgeId(no_right_nodes);
+      INDEX c=0;
+      for(auto& a : gm_input.assignment_) {
+         // get left and right unaries and connect them with a message
+         edgeId[a.right_node_].push_back(c);
+         ++c;
+      }
+      // add slack edges
+      c += no_left_nodes;
+      for(INDEX i=0; i<no_right_nodes; ++i) {
+         edgeId[i].push_back(c);
+         ++c;
+      }
+      for(INDEX i=0; i<no_right_nodes; ++i) {
+         //assert(mrf_right.GetNumberOfLabels(i) == mcf->NoArcs(no_left_nodes + i));
+         auto *u = mrf_right.GetUnaryFactor(i);
+         using MessageType = typename FMC::UnaryToAssignmentMessageType;
+         //auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i + no_left_nodes), mcf->NoArcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
+         auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(edgeId[i]), u, f);
+         s.GetLP().AddMessage(m);
+      }
+      }
+   }
+
+   /*
+   template<typename FMC>
+   void construct_mcf(Solver<FMC>& s, GraphMatchingInput& gm_input)
+   {
       constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
+
+      auto& mrf_left = s.template GetProblemConstructor<0>();
+      if(pc == PairwiseConstruction::Left || pc == PairwiseConstruction::BothSides) {
+         mrf_left.SetGraph(gm_input.leftGraph_);
+      }
+      auto& mrf_right = s.template GetProblemConstructor<1>();
+      if(pc == PairwiseConstruction::Right || pc == PairwiseConstruction::BothSides) {
+         mrf_right.SetGraph(gm_input.rightGraph_);
+      }
       if(pc == PairwiseConstruction::Left) {
          construct_left_mrf(gm_input, mrf_left, 1.0, 1.0);
       }
@@ -728,6 +843,8 @@ namespace TorresaniEtAlInput {
       }
       std::vector<SIGNED_INDEX> demands;
       demands.reserve(no_left_nodes + no_right_nodes + 2);
+
+      // slack edges
       for(INDEX i=0; i<no_left_nodes; ++i) {
          edges.push_back({i,no_nodes + 1, 0, 1, 0.0}); // for non-assignment
          demands.push_back(1);
@@ -753,7 +870,8 @@ namespace TorresaniEtAlInput {
       //}
       
 
-      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands, edges.size()-1) );
+      const INDEX no_covered_edges = edges.size() - no_right_nodes - 1;
+      auto* f = new typename FMC::MinCostFlowAssignmentFactor( MinCostFlowFactorCS2(edges, demands, no_covered_edges) );
       auto* mcf = f->GetFactor()->GetMinCostFlowSolver();
       s.GetLP().AddFactor(f);
 
@@ -804,19 +922,45 @@ namespace TorresaniEtAlInput {
          }
       }
    }
+*/
 
    template<typename FMC>
    void construct_gm(Solver<FMC>& s, GraphMatchingInput& gm_input)
    {
+      constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
+
+      auto& mrf_left = s.template GetProblemConstructor<0>();
+      auto& mrf_right = s.template GetProblemConstructor<1>();
+
+      mrf_left.SetGraph(gm_input.leftGraph_);
+      mrf_right.SetGraph(gm_input.rightGraph_);
+
+      if(pc == PairwiseConstruction::Left) {
+         construct_left_mrf(gm_input, mrf_left, 1.0, 1.0);
+         construct_right_mrf(gm_input, mrf_right, 0.0, 0.0);
+      }
+      if(pc == PairwiseConstruction::BothSides) {
+         construct_left_mrf(gm_input, mrf_left, 0.5, 0.5);
+         construct_right_mrf(gm_input, mrf_right, 0.5, 0.5);
+      }
+      if(pc == PairwiseConstruction::Right) {
+         construct_left_mrf(gm_input, mrf_left, 0.0, 0.0);
+         construct_right_mrf(gm_input, mrf_right, 1.0, 1.0);
+      }
+
       // note: possibly more pairwise potentials have to be added for some problems to ensure uniqueness constraint in matching. For house and hotel datasets this is not needed
+      /*
       auto& mrf = s.template GetProblemConstructor<0>();
       constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
       if(pc == PairwiseConstruction::Left) {
+         mrf.SetGraph(gm_input.leftGraph_);
          construct_left_mrf(gm_input, mrf, 1.0, 1.0);
       }
       if(pc == PairwiseConstruction::Right) {
+         mrf.SetGraph(gm_input.rightGraph_);
          construct_right_mrf(gm_input, mrf, 1.0, 1.0);
       }
+      */
    }
 
    
@@ -851,6 +995,7 @@ namespace TorresaniEtAlInput {
    bool ParseProblemMP(const std::string& filename, Solver<FMC>& s)
    {
       auto input = ParseFile(filename);
+      construct_gm( s, input );
       construct_mp( s, input );
       return true;
    }
@@ -859,6 +1004,19 @@ namespace TorresaniEtAlInput {
    bool ParseProblemMCF(const std::string& filename, Solver<FMC>& s)
    {
       auto input = ParseFile(filename);
+      //construct_mcf( s, input );
+      construct_gm( s, input );
+      construct_mp( s, input );
+      construct_mcf( s, input );
+      return true;
+   }
+
+   template<typename FMC>
+   bool ParseProblemHungarian(const std::string& filename, Solver<FMC>& s)
+   {
+      auto input = ParseFile(filename);
+      //construct_mcf( s, input );
+      construct_gm( s, input );
       construct_mcf( s, input );
       return true;
    }
@@ -1027,7 +1185,7 @@ namespace UaiGraphMatchingInput {
             const INDEX var = std::get<0>(c[var_label]);
             const INDEX label = std::get<1>(c[var_label]);
             auto* u_l = mrf_left.GetUnaryFactor(var);
-            auto* m = new typename FMC::AssignmentConstraintMessage( typename FMC::EqualityMessageType(label, var_label), u_l, u_r, 1);
+            auto* m = new typename FMC::AssignmentConstraintMessage( typename FMC::EqualityMessageType(label, var_label), u_l, u_r);
             s.GetLP().AddMessage(m);
          }
       }

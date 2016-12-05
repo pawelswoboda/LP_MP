@@ -23,68 +23,75 @@
 
 namespace LP_MP{
 
-  typedef UnaryLoop<> UnaryLoopType;
-  typedef PairwiseLoop<0> LeftLoopType;
-  typedef PairwiseLoop<1> RightLoopType;
-
-  //typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,true,false,true> LeftMargMessage;
-  //typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,true,false,true> RightMargMessage;
-  typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,false,false,true> LeftMargMessage;
-  typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false,false,true> RightMargMessage;
-
-  typedef SimplexFactor<> Simplex;
-
-  // messages to triplet factors for tightening
-  typedef PairwiseTripletLoop<0,1> PairwiseTripletLoopType12;
-  typedef PairwiseTripletLoop<0,2> PairwiseTripletLoopType13;
-  typedef PairwiseTripletLoop<1,2> PairwiseTripletLoopType23;
-  typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType12,true,false,false,true> PairwiseTriplet12Message;
-  typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType13,true,false,false,true> PairwiseTriplet13Message;
-  typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType23,true,false,false,true> PairwiseTriplet23Message;
-
-
   struct FMC_DT {
     static constexpr char* name = "Discrete Tomography";
 
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 0, false> UnaryFactor;
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 1> PairwiseFactor;
-    typedef FactorContainer<DiscreteTomographyFactorCounting, ExplicitRepamStorage, FMC_DT, 2> DiscreteTomographyCountingFactorContainer;
+    typedef FactorContainer<UnarySimplexFactor, FMC_DT, 0, false> UnaryFactor;
+    typedef FactorContainer<PairwiseSimplexFactor, FMC_DT, 1> PairwiseFactor;
+    typedef FactorContainer<DiscreteTomographyFactorCounting2, FMC_DT, 2> DiscreteTomographyCountingFactorContainer;
    
-    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 0 > UnaryPairwiseMessageLeft;
-    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT, 1 > UnaryPairwiseMessageRight;
+    // do zrobienia: possibly try out MPLP as well
+    typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_DT, 0 > UnaryPairwiseMessageLeft;
+    typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_DT, 1 > UnaryPairwiseMessageRight;
     
-    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::left>, 2, 2, atMostOneMessage, atMostOneMessage, variableMessageSize, FMC_DT, 2>
+    typedef MessageContainer<DiscreteTomographyMessageCounting2<DIRECTION::left>, 2, 2, atMostOneMessage, atMostOneMessage, FMC_DT, 2>
       DiscreteTomographyCountingMessageLeft;
-    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::right>, 2, 2, atMostOneMessage, atMostOneMessage, variableMessageSize, FMC_DT, 3>
+    typedef MessageContainer<DiscreteTomographyMessageCounting2<DIRECTION::right>, 2, 2, atMostOneMessage, atMostOneMessage, FMC_DT, 3>
       DiscreteTomographyCountingMessageRight;
-    typedef MessageContainer<DiscreteTomographyMessageCountingPairwise, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_DT, 4>
-      DiscreteTomographyCountingPairwiseMessageContainer;
+
+    // connect counting factors with pairwise ones
+    using pairwise_to_center_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise2<CountingPairwiseMessageType::center>, 1, 2, variableMessageNumber, 1, FMC_DT, 4>;
+    using pairwise_to_left_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise2<CountingPairwiseMessageType::left>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 5>;
+    using pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise2<CountingPairwiseMessageType::right>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 6>;
+
+    using left_pairwise_to_left_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::left,Chirality::left>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 7>;
+    using right_pairwise_to_left_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::left,Chirality::right>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 8>;
+    using left_pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::right,Chirality::left>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 9>;
+    using right_pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::right,Chirality::right>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 10>;
 
    // tightening
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT, 3> EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT, 5> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT, 6> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT, 7> PairwiseTriplet23MessageContainer;
+   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_DT, 3> EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 3, variableMessageNumber, 1, FMC_DT, 11> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 3, variableMessageNumber, 1, FMC_DT, 12> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 3, variableMessageNumber, 1, FMC_DT, 13> PairwiseTriplet23MessageContainer;
 
     using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer, EmptyTripletFactor >;
     using MessageList = meta::list<
-      UnaryPairwiseMessageLeft,
-      UnaryPairwiseMessageRight,
-      DiscreteTomographyCountingMessageLeft,
-      DiscreteTomographyCountingMessageRight,
-      DiscreteTomographyCountingPairwiseMessageContainer,
-      PairwiseTriplet12MessageContainer,
-      PairwiseTriplet13MessageContainer,
-      PairwiseTriplet23MessageContainer
-      >;
+       UnaryPairwiseMessageLeft,
+       UnaryPairwiseMessageRight,
+       DiscreteTomographyCountingMessageLeft,
+       DiscreteTomographyCountingMessageRight,
+       pairwise_to_center_counting,
+       pairwise_to_left_counting,
+       pairwise_to_right_counting,
+       left_pairwise_to_left_counting,
+       right_pairwise_to_left_counting,
+       left_pairwise_to_right_counting,
+       right_pairwise_to_right_counting,
+       PairwiseTriplet12MessageContainer,
+       PairwiseTriplet13MessageContainer,
+       PairwiseTriplet23MessageContainer
+          >;
 
     using mrf = StandardMrfConstructor<FMC_DT,0,1,0,1>;
-    using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,5,6,7>;
-    using dt = DiscreteTomographyTreeConstructor<FMC_DT,0,2,2,3,4>;
-    using ProblemDecompositionList = meta::list<tighteningMrf,dt>;
+    //using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,5,6,7>;
+    using dt = DiscreteTomographyTreeConstructor<FMC_DT,0,
+          DiscreteTomographyCountingFactorContainer,
+          DiscreteTomographyCountingMessageLeft,
+          DiscreteTomographyCountingMessageRight,
+          pairwise_to_center_counting,
+          pairwise_to_left_counting,
+          pairwise_to_right_counting,
+          left_pairwise_to_left_counting,
+          right_pairwise_to_left_counting,
+          left_pairwise_to_right_counting,
+          right_pairwise_to_right_counting>;
+    using ProblemDecompositionList = meta::list<mrf,dt>;
+    //using ProblemDecompositionList = meta::list<tighteningMrf,dt>;
 	  
   };
 
+  /*
   struct FMC_DT_NAIVE {
     static constexpr char* name = "Discrete Tomography, naive LP model";
 
@@ -159,6 +166,7 @@ namespace LP_MP{
     using ProblemDecompositionList = meta::list<tighteningMrf,dt,dt_naive>;
 	  
   };
+  */
 
   namespace DiscreteTomographyTextInput {
 

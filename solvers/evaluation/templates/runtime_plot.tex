@@ -1,6 +1,27 @@
 \documentclass[float=false,preview=true]{standalone}
 \usepackage{tikz}
 \usepackage{pgfplots}
+\usetikzlibrary{decorations.markings}
+
+{% raw -%}
+\makeatletter
+\tikzset{
+  nomorepostactions/.code={\let\tikz@postactions=\pgfutil@empty},
+  mymark/.style 2 args={decoration={markings,
+    mark= between positions 0 and 1 step (1/11)*\pgfdecoratedpathlength with{%
+        \tikzset{#2,every mark}\tikz@options
+        \pgfuseplotmark{#1}%
+      },  
+    },
+    postaction={decorate},
+    /pgfplots/legend image post style={
+        mark=#1,mark options={#2},every path/.append style={nomorepostactions}
+    },
+  },
+}
+\makeatother
+{% endraw -%}
+
 \begin{document}
 
 \begin{figure}
@@ -13,16 +34,23 @@
 {% set max_runtime = conn.cursor().execute("SELECT MAX(runtime) FROM Iterations WHERE instance_id = '" + instance_id + "';").fetchone()[0]  %}
 
 \begin{semilogxaxis}[ylabel = {energy}, xlabel = {runtime (s)}, ymin = {{ min_lower_bound}}, ymax = {{ max_upper_bound }}, xmax = {{ max_runtime/1000 }}]
+{% for solver_row in conn.cursor().execute("SELECT id FROM Solvers;") -%}
+  {% set solver_id = solver_row[0] -%}
+  {% set algorithmName = conn.cursor().execute("SELECT algorithmName FROM Solvers WHERE id = '" + solver_id|string + "';").fetchone()[0] -%}
+  \addlegendimage{ {{ legendStyles[loop.index]}} }
+  \addlegendentry{ {{ algorithmName }} }
+{% endfor -%}
 {% for solver_row in conn.cursor().execute("SELECT DISTINCT solver_id FROM Iterations WHERE instance_id = '" + instance_id + "';") -%}
    {% set solver_id = solver_row[0] -%}
    {% set algorithmName = conn.cursor().execute("SELECT algorithmName FROM Solvers WHERE id = '" + solver_id|string + "';").fetchone()[0] -%}
-   \addplot[thick,{{ lineStyles[loop.index]}}] coordinates {
+   \addplot[{{ lineStyles[loop.index]}}] coordinates {
    {% for row in conn.cursor().execute("SELECT runtime, lowerBound FROM Iterations WHERE instance_id = '" + instance_id + "' AND solver_id = '" + solver_row[0]|string + "';") -%}
+     {% if row[1] is not none -%}
       ( {{ row[0]/1000 }} , {{ row[1] }} )
+      {% endif -%}
    {% endfor -%}
    };
-   \addlegendentry{ {{ algorithmName }} }
-   \addplot[thick,{{ lineStyles[loop.index] }}, dashed, forget plot] coordinates {
+   \addplot[{{ lineStyles[loop.index] }}, dashed, forget plot] coordinates {
    {% for row in conn.cursor().execute("SELECT runtime, upperBound FROM Iterations WHERE instance_id = '" + instance_id + "' AND solver_id = '" + solver_row[0]|string + "';") -%}
       ( {{ row[0]/1000 }} , {{ row[1] }} )
    {% endfor -%}

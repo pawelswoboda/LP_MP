@@ -5,7 +5,6 @@
 #include "LP_MP.h"
 #include "factors/simplex_factor.hxx"
 //#include "messages/unary_pairwise_mcf_message.hxx"
-#include "const_array_types.h"
 #include "messages/simplex_marginalization_message.hxx"
 #include "problem_constructors/mrf_problem_construction.hxx"
 
@@ -35,17 +34,19 @@ typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType23,tr
 struct FMC_SRMP { // equivalent to SRMP or TRWS
    constexpr static const char* name = "SRMP for pairwise case = TRWS";
 
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_SRMP, 0, true, true > UnaryFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_SRMP, 1, false, false > PairwiseFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_SRMP, 0, true > UnaryFactor;
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_SRMP, 1, false > PairwiseFactor;
 
-   typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,false,false,true> LeftMargMessage;
-   typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false,false,true> RightMargMessage;
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_SRMP, 0 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_SRMP, 1 > UnaryPairwiseMessageRightContainer;
+   //typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,false,false,true> LeftMargMessage;
+   //typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false,false,true> RightMargMessage;
 
-   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_SRMP, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_SRMP, 1 > UnaryPairwiseMessageRight;
+   //typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_SRMP, 0 > UnaryPairwiseMessageLeft;
+   //typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_SRMP, 1 > UnaryPairwiseMessageRight;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor >;
-   using MessageList = meta::list< UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight >;
+   using MessageList = meta::list< UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer >;
 
    using mrf = StandardMrfConstructor<FMC_SRMP,0,1,0,1>;
    using ProblemDecompositionList = meta::list<mrf>;
@@ -54,23 +55,22 @@ struct FMC_SRMP { // equivalent to SRMP or TRWS
 struct FMC_SRMP_T { // equivalent to SRMP or TRWS
    constexpr static const char* name = "SRMP for pairwise case with tightening triplets";
 
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_SRMP_T, 0, true, true > UnaryFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_SRMP_T, 1, false, false > PairwiseFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_SRMP_T, 0, true> UnaryFactor;
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_SRMP_T, 1, false> PairwiseFactor;
 
-   typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,true,false,false,true> LeftMargMessage;
-   typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,true,false,false,true> RightMargMessage;
-
-   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 1 > UnaryPairwiseMessageRight;
-
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_SRMP_T, 0 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_SRMP_T, 1 > UnaryPairwiseMessageRightContainer;
    // tightening
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_SRMP_T, 2, false, false > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 2> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 3> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 4> PairwiseTriplet23MessageContainer;
+   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_SRMP_T, 2, false> EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_SRMP_T, 2> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_SRMP_T, 3> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_SRMP_T, 4> PairwiseTriplet23MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 2> PairwiseTriplet12MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 3> PairwiseTriplet13MessageContainer;
+   //typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 4> PairwiseTriplet23MessageContainer;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor >;
-   using MessageList = meta::list< UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight,
+   using MessageList = meta::list< UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer,
          PairwiseTriplet12MessageContainer, PairwiseTriplet13MessageContainer, PairwiseTriplet23MessageContainer
          >;
 
@@ -84,17 +84,14 @@ struct FMC_SRMP_T { // equivalent to SRMP or TRWS
 struct FMC_MPLP {
    constexpr static const char* name = "MPLP for pairwise case";
 
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MPLP, 0, true, true > UnaryFactor;
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_MPLP, 1, false, false > PairwiseFactor;
+   typedef FactorContainer<Simplex, FMC_MPLP, 0, true> UnaryFactor;
+   typedef FactorContainer<Simplex, FMC_MPLP, 1, false> PairwiseFactor;
 
-   typedef SimplexMarginalizationMessage<UnaryLoopType,LeftLoopType,false,true,false,true> LeftMargMessage;
-   typedef SimplexMarginalizationMessage<UnaryLoopType,RightLoopType,false,true,false,true> RightMargMessage;
-
-   typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MPLP, 0 > UnaryPairwiseMessageLeft;
-   typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_MPLP, 1 > UnaryPairwiseMessageRight;
+   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::MPLP>, 0, 1, variableMessageNumber, 1, FMC_MPLP, 0 > UnaryPairwiseMessageLeftContainer;
+   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::MPLP>, 0, 1, variableMessageNumber, 1, FMC_MPLP, 1 > UnaryPairwiseMessageRightContainer;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor >;
-   using MessageList = meta::list< UnaryPairwiseMessageLeft, UnaryPairwiseMessageRight >;
+   using MessageList = meta::list< UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer >;
 
    using mrf = StandardMrfConstructor<FMC_MPLP,0,1,0,1>;
    using ProblemDecompositionList = meta::list<mrf>;

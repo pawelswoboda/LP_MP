@@ -27,13 +27,14 @@ namespace LP_MP {
 
 // hash function for maps used in constructors. Do zrobienia: define hash functions used somewhere globally in config.hxx
 
-template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO>
+template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO, INDEX CONSTANT_FACTOR_NO>
 class MulticutConstructor {
 protected:
    using FMC = FACTOR_MESSAGE_CONNECTION;
 
    using UnaryFactorContainer = meta::at_c<typename FMC::FactorList, UNARY_FACTOR_NO>;
    using TripletFactorContainer = meta::at_c<typename FMC::FactorList, TRIPLET_FACTOR_NO>;
+   using ConstantFactorContainer = meta::at_c<typename FMC::FactorList, CONSTANT_FACTOR_NO>;
    //using GlobalFactorContainer = meta::at_c<typename FMC::FactorList, GLOBAL_FACTOR_NO>;
    using UnaryTripletMessageContainer = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_NO>::MessageContainerType;
    using UnaryTripletMessageType = typename UnaryTripletMessageContainer::MessageType;
@@ -359,6 +360,8 @@ MulticutConstructor(Solver<FMC>& pd)
    {
       //unaryFactors_.max_load_factor(0.7);
       tripletFactors_.max_load_factor(0.7);
+      constant_factor_ = new ConstantFactorContainer(0.0);
+      pd.GetLP().AddFactor(constant_factor_);
    }
    ~MulticutConstructor()
    {
@@ -366,6 +369,7 @@ MulticutConstructor(Solver<FMC>& pd)
       static_assert(std::is_same<typename TripletFactorContainer::FactorType, MulticutTripletFactor>::value,"");
       //static_assert(std::is_same<typename MessageContainer::MessageType, MulticutUnaryTripletMessage<MessageSending::SRMP>>::value,"");
    }
+   void AddToConstant(const REAL delta) { constant_factor_->GetFactor()->AddToOffset(delta); }
 
    virtual UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost) // declared virtual so that derived class notices when unary factor is added
    {
@@ -378,7 +382,7 @@ MulticutConstructor(Solver<FMC>& pd)
       assert(i1 < i2);
       assert(!HasUnaryFactor(i1,i2));
       
-      auto* u = new UnaryFactorContainer(MulticutUnaryFactor(cost), std::vector<REAL>{cost});
+      auto* u = new UnaryFactorContainer(cost);
       pd_.GetLP().AddFactor(u);
       auto it = unaryFactors_.insert(std::make_pair(std::array<INDEX,2>{i1,i2}, u)).first;
       //std::cout << "current edge: (" << i1 << "," << i2 << ")";
@@ -412,7 +416,7 @@ MulticutConstructor(Solver<FMC>& pd)
    UnaryTripletMessageContainer* LinkUnaryTriplet(UnaryFactorContainer* u, TripletFactorContainer* t, const INDEX i) // argument i denotes which edge the unary factor connects to
    {
       assert(i < 3);
-      auto* m = new UnaryTripletMessageContainer(UnaryTripletMessageType(i), u, t, UnaryTripletMessageType::size());
+      auto* m = new UnaryTripletMessageContainer(UnaryTripletMessageType(i), u, t);
       pd_.GetLP().AddMessage(m);
       return m;
    }
@@ -427,7 +431,7 @@ MulticutConstructor(Solver<FMC>& pd)
       assert(i1 < i2 && i2 < i3);
       assert(!HasTripletFactor(i1,i2,i3));
       assert(HasUnaryFactor(i1,i2) && HasUnaryFactor(i1,i3) && HasUnaryFactor(i2,i3));
-      auto* t = new TripletFactorContainer(MulticutTripletFactor(), std::vector<REAL>(MulticutTripletFactor::size(),0.0));
+      auto* t = new TripletFactorContainer();
       pd_.GetLP().AddFactor(t);
       tripletFactors_.insert(std::make_pair( std::array<INDEX,3>{i1,i2,i3}, t ));
       // use following ordering of unary and triplet factors: triplet comes after edge factor (i1,i2) and before (i2,i3)
@@ -547,16 +551,17 @@ MulticutConstructor(Solver<FMC>& pd)
 {
    assert(maxTripletsToAdd > 0);
    // keep here negative edge and associated maximal decrease that we can achieve using it in cycle.
-   std::multimap<REAL,std::array<INDEX,2>,std::greater<REAL>> negEdgeCandidates; // possibly must be multimap. Order with descending keys
+   std::multimap<REAL,std::array<INDEX,2>,std::greater<REAL>> negEdgeCandidates;
 
    // initialize data structures for violated cycle search
    UnionFind uf(noNodes_);
    std::vector<std::tuple<INDEX,INDEX,REAL> > posEdges;
+   // do zrobienia: we contract graphs a lot. Look into Bjoern Andres graph package for efficient implementation of this operation.
    std::vector<std::list<std::tuple<INDEX,REAL,INDEX,INDEX>>> negEdges(this->noNodes_); // forward_list would also be possible, but is slower. node entries here are the labels of connected components. Original endpoints are recorded in last two indexes.
    Graph posEdgesGraph(noNodes_,unaryFactors_.size()); // graph consisting of positive edges
    // sort edges 
    for(auto& it : unaryFactors_) {
-      const REAL v = it.second->operator[](0);
+      const REAL v = *(it.second->GetFactor());
       const INDEX i = std::get<0>(it.first);
       const INDEX j = std::get<1>(it.first);
       assert(i<j);
@@ -781,7 +786,7 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
       UnionFind uf(noNodes_);
       Graph posEdgesGraph(noNodes_,unaryFactors_.size()); // graph consisting of positive edges
       for(auto& it : unaryFactors_) {
-         const REAL v = it.second->operator[](0);
+         const REAL v = *(it.second->GetFactor());
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
          if(v >= minDualIncrease) {
@@ -790,7 +795,7 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
          }
       }
       for(auto& it : unaryFactors_) {
-         const REAL v = it.second->operator[](0);
+         const REAL v = *(it.second->GetFactor());
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
          if(v <= -minDualIncrease && uf.connected(i,j)) {
@@ -899,7 +904,7 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
 
       for(const auto& e : unaryFactors_) {
          graph.insertEdge(e.first[0], e.first[1]);
-         edgeValues.push_back(e.second->operator[](0));
+         edgeValues.push_back(*(e.second->GetFactor()));
       }
 
       std::vector<char> labeling(unaryFactors_.size(),0);
@@ -936,17 +941,17 @@ protected:
    };
    std::unordered_map<std::array<INDEX,3>, TripletFactorContainer*, decltype(hash::array3)> tripletFactors_; // triplet factors are defined on cycles of length three
    INDEX noNodes_ = 0;
+   ConstantFactorContainer* constant_factor_;
 
    Solver<FMC>& pd_;
 };
 
 
 
-template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO,
-   INDEX TRIPLET_PLUS_SPOKE_FACTOR_NO, INDEX TRIPLET_PLUS_SPOKE_MESSAGE_NO, INDEX TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>
-class MulticutOddWheelConstructor : public MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_NO> {
-   using FMC = FACTOR_MESSAGE_CONNECTION;
-   using BaseConstructor = MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_NO>;
+template<class MULTICUT_CONSTRUCTOR, INDEX TRIPLET_PLUS_SPOKE_FACTOR_NO, INDEX TRIPLET_PLUS_SPOKE_MESSAGE_NO, INDEX TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>
+class MulticutOddWheelConstructor : public MULTICUT_CONSTRUCTOR {
+   using FMC = typename MULTICUT_CONSTRUCTOR::FMC;
+   using BaseConstructor = MULTICUT_CONSTRUCTOR;
 
    using TripletPlusSpokeFactorContainer = meta::at_c<typename FMC::FactorList, TRIPLET_PLUS_SPOKE_FACTOR_NO>;
    using TripletPlusSpokeMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_MESSAGE_NO>::MessageContainerType;
@@ -1001,14 +1006,14 @@ public:
    TripletPlusSpokeFactorContainer* AddTripletPlusSpokeFactor(const INDEX n1, const INDEX n2, const INDEX centerNode, const INDEX spokeNode)
    {
       assert(!HasTripletPlusSpokeFactor(n1,n2,centerNode,spokeNode));
-      auto* tps = new TripletPlusSpokeFactorContainer(MulticutTripletPlusSpokeFactor(),std::vector<REAL>(MulticutTripletPlusSpokeFactor::size(),0.0));
+      auto* tps = new TripletPlusSpokeFactorContainer();
       BaseConstructor::pd_.GetLP().AddFactor(tps);
       assert(n1<n2);
       tripletPlusSpokeFactors_.insert(std::make_pair(std::array<INDEX,4>({n1,n2,centerNode,spokeNode}),tps));
       std::array<INDEX,3> tripletIndices{n1,n2,centerNode};
       std::sort(tripletIndices.begin(), tripletIndices.end());
       auto* t = BaseConstructor::GetTripletFactor(tripletIndices[0], tripletIndices[1], tripletIndices[2]);
-      auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(n1,n2,centerNode,spokeNode), t, tps, MulticutTripletPlusSpokeCoverMessage::size());
+      auto* m = new TripletPlusSpokeCoverMessageContainer(MulticutTripletPlusSpokeCoverMessage(n1,n2,centerNode,spokeNode), t, tps);
       BaseConstructor::pd_.GetLP().AddMessage(m);
       //BaseConstructor::pd_.GetLP().AddFactorRelation(t,tps);
       return tps;
@@ -1053,7 +1058,7 @@ public:
       }
       assert(sharedTripletEdgeTriplet < 3);
 
-      auto* m = new TripletPlusSpokeMessageContainer(MulticutTripletPlusSpokeMessage(n1,n2,centerNode,spokeNode,tripletIndices[0],tripletIndices[1],tripletIndices[2]),t,tps,MulticutTripletPlusSpokeMessage::size());
+      auto* m = new TripletPlusSpokeMessageContainer(MulticutTripletPlusSpokeMessage(n1,n2,centerNode,spokeNode,tripletIndices[0],tripletIndices[1],tripletIndices[2]), t, tps);
       //auto* m = new TripletPlusSpokeMessageContainer(MulticutTripletPlusSpokeMessage(sharedTripletEdgeTriplet,spokeEdgeTriplet,sharedTripletEdgeTripletPlusSpoke),t,tps,MulticutTripletPlusSpokeMessage::size());
       BaseConstructor::pd_.GetLP().AddMessage(m);
       if(tripletNode == n1) {
@@ -1126,17 +1131,17 @@ public:
       std::array<REAL,4> cost;
       std::fill(cost.begin(),cost.end(),0.0);
       if(this->HasTripletFactor(triplet[0],triplet[1],triplet[2])) {
-         auto* t = this->GetTripletFactor(triplet[0],triplet[1],triplet[2]);
-         assert(t->GetFactor()->size() == 4);
+         auto* t = this->GetTripletFactor(triplet[0],triplet[1],triplet[2])->GetFactor();
+         assert(t->size() == 4);
          cost[0] += (*t)[0];
          cost[1] += (*t)[1];
          cost[2] += (*t)[2];
          cost[3] += (*t)[3];
       } 
       // get cost directly from edge factors
-      const REAL c01 = this->GetUnaryFactor(triplet[0], triplet[1])->operator[](0);
-      const REAL c02 = this->GetUnaryFactor(triplet[0], triplet[2])->operator[](0);
-      const REAL c12 = this->GetUnaryFactor(triplet[1], triplet[2])->operator[](0);
+      const REAL c01 = *(this->GetUnaryFactor(triplet[0], triplet[1])->GetFactor());
+      const REAL c02 = *(this->GetUnaryFactor(triplet[0], triplet[2])->GetFactor());
+      const REAL c12 = *(this->GetUnaryFactor(triplet[1], triplet[2])->GetFactor());
       cost[0] += c02 + c12;
       cost[1] += c01 + c12;
       cost[2] += c01 + c02;
@@ -1347,10 +1352,10 @@ public:
                   std::sort(triplet.begin(),triplet.end()); // do zrobienia: use faster sorting
                   std::array<REAL,4> tripletCost {0.0,0.0,0.0,0.0};
                   if(this->HasTripletFactor(triplet[0],triplet[1],triplet[2])) {
-                     auto* t = this->GetTripletFactor(triplet[0],triplet[1],triplet[2]);
+                     auto* t = this->GetTripletFactor(triplet[0],triplet[1],triplet[2])->GetFactor();
                      INDEX l1, l2;
                      INDEX l3, l4; // the other labelings
-                     assert(t->GetFactor()->size() == 4);
+                     assert(t->size() == 4);
                      if(i < j && i < k) { // the cycle edge is the last one
                         l1 = 0; l2 = 1;
                         l3 = 2; l4 = 3;
@@ -1365,9 +1370,9 @@ public:
                         addTriplet = true;
                      }
                   } else { // get cost directly from edge factors
-                     const REAL ij = this->GetUnaryFactor(std::min(i,j), std::max(i,j))->operator[](0);
-                     const REAL ik = this->GetUnaryFactor(std::min(i,k), std::max(i,k))->operator[](0);
-                     const REAL jk = this->GetUnaryFactor(j,k)->operator[](0);
+                     const REAL ij = *(this->GetUnaryFactor(std::min(i,j), std::max(i,j))->GetFactor());
+                     const REAL ik = *(this->GetUnaryFactor(std::min(i,k), std::max(i,k))->GetFactor());
+                     const REAL jk = *(this->GetUnaryFactor(j,k)->GetFactor());
                      if(std::min(ij+jk, ik+jk) <= std::min(std::min(ij+ik, ij+ik+jk),0.0) - minDualIncrease) { // do zrobienia: check again
                         addTriplet = true;
                      }
@@ -1470,14 +1475,14 @@ public:
          typename BaseConstructor::BfsData mp(g);
          UnionFind uf(noBipartiteCompressedNodes);
          for(INDEX j=0; j<tripletByIndices_[i].size(); ++j) {
-            typename BaseConstructor::TripletFactorContainer*  t = std::get<2>(tripletByIndices_[i][j]);
+            auto*  t = std::get<2>(tripletByIndices_[i][j])->GetFactor();
             const INDEX i1 = std::get<0>(tripletByIndices_[i][j]);
             const INDEX i2 = std::get<1>(tripletByIndices_[i][j]);
             // check if 110 or 101 are among the minimal labelings, where the first edge is the outer cycle edge
             // the corresponding labeling numbers are
             INDEX l1, l2;
             INDEX l3, l4; // the other labelings
-            assert(t->GetFactor()->size() == 4);
+            assert(t->size() == 4);
             if(i < i1 && i < i2) { // the cycle edge is the last one
                l1 = 0; l2 = 1;
                l3 = 2; l4 = 3;

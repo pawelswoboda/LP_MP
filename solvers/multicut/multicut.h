@@ -7,6 +7,7 @@
 #include "multicut_unary_factor.hxx"
 #include "multicut_triplet_factor.hxx"
 #include "multicut_odd_wheel.hxx"
+#include "factors/constant_factor.hxx"
 #include "lifted_multicut_factors_messages.hxx"
 #include "multicut_constructor.hxx"
 
@@ -37,15 +38,16 @@ struct FMC_MULTICUT {
    constexpr static const char* name = "Multicut with cycle constraints";
    //constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
-   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_MULTICUT, 0, true> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<MulticutUnaryFactor, FMC_MULTICUT, 0, true> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
+   using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_MULTICUT, 2>;
 
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
 
-   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer>;
+   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, ConstantFactorContainer>;
    using MessageList = meta::list<MulticutUnaryTripletMessageContainer>;
 
-   using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0>;
+   using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0,2>;
    using ProblemDecompositionList = meta::list<multicut>;
 };
 
@@ -54,18 +56,20 @@ template<MessageSendingType MESSAGE_SENDING>
 struct FMC_ODD_WHEEL_MULTICUT {
    constexpr static const char* name = "Multicut with cycle and odd wheel constraints";
 
-   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<MulticutTripletPlusSpokeFactor, FixedSizeExplicitRepamStorage<MulticutTripletPlusSpokeFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeFactorContainer;
+   typedef FactorContainer<MulticutUnaryFactor, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<MulticutTripletPlusSpokeFactor, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeFactorContainer;
+   using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_ODD_WHEEL_MULTICUT, 3>;
       
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 2, variableMessageNumber, variableMessageNumber, MulticutTripletPlusSpokeMessage::size(), FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletPlusSpokeMessageContainer;
-   typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 2, variableMessageNumber, 1, MulticutTripletPlusSpokeCoverMessage::size(), FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeCoverMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 2, variableMessageNumber, variableMessageNumber, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletPlusSpokeMessageContainer;
+   typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeCoverMessageContainer;
 
    using FactorList = meta::list< 
       MulticutUnaryFactorContainer,
       MulticutTripletFactorContainer,
-      MulticutTripletPlusSpokeFactorContainer 
+      MulticutTripletPlusSpokeFactorContainer,
+      ConstantFactorContainer 
          >;
    using MessageList = meta::list<
       MulticutUnaryTripletMessageContainer, 
@@ -73,8 +77,9 @@ struct FMC_ODD_WHEEL_MULTICUT {
       MulticutTripletPlusSpokeCoverMessageContainer
       >;
 
-   using multicut = MulticutOddWheelConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,0,2,1,2>;
-   using ProblemDecompositionList = meta::list<multicut>;
+   using multicut_c = MulticutConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,0,3>;
+   using multicut_cow = MulticutOddWheelConstructor<multicut_c,2,1,2>;
+   using ProblemDecompositionList = meta::list<multicut_cow>;
 };
 
 struct FMC_LIFTED_MULTICUT {
@@ -82,18 +87,20 @@ struct FMC_LIFTED_MULTICUT {
    constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
    // no rounding performed: do it via GAEC and K&L, called from problem constructor
-   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_LIFTED_MULTICUT, 0> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_LIFTED_MULTICUT, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<LiftedMulticutCutFactor, ExplicitRepamStorage, FMC_LIFTED_MULTICUT, 2> LiftedMulticutCutFactorContainer;
+   typedef FactorContainer<MulticutUnaryFactor, FMC_LIFTED_MULTICUT, 0> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FMC_LIFTED_MULTICUT, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<LiftedMulticutCutFactor, FMC_LIFTED_MULTICUT, 2> LiftedMulticutCutFactorContainer;
+   using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_LIFTED_MULTICUT, 3>;
 
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_LIFTED_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, CutEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT, 1 > CutEdgeLiftedMulticutFactorMessageContainer;
-   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, LiftedEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT, 2 > LiftedEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_LIFTED_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, FMC_LIFTED_MULTICUT, 1 > CutEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, FMC_LIFTED_MULTICUT, 2 > LiftedEdgeLiftedMulticutFactorMessageContainer;
 
    using FactorList = meta::list<
       MulticutUnaryFactorContainer, 
       MulticutTripletFactorContainer, 
-      LiftedMulticutCutFactorContainer 
+      LiftedMulticutCutFactorContainer,
+      ConstantFactorContainer 
          >;
    using MessageList = meta::list<
       MulticutUnaryTripletMessageContainer, 
@@ -101,7 +108,7 @@ struct FMC_LIFTED_MULTICUT {
       LiftedEdgeLiftedMulticutFactorMessageContainer
          >;
 
-   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0>;
+   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,2>;
    using LiftedMulticutConstructor = LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 
@@ -238,13 +245,14 @@ namespace MulticutOpenGmInput {
       static_assert(sizeof(REAL) == 8, "HDF5 file format has 64 bits for floats");
       auto edgeCosts = ReadVector<REAL>(functionHandle,"values");
       assert(edgeCosts.size()/2 == edges.size());
+      auto& mc = pd.template GetProblemConstructor<0>();
       for(INDEX i=0; i<edges.size(); ++i) {
-         std::get<2>(edges[i]) = -edgeCosts[2*i] + edgeCosts[2*i+1]; // do zrobienia: or the other way around
+         std::get<2>(edges[i]) = -edgeCosts[2*i] + edgeCosts[2*i+1]; // do zrobienia: use constant factor and add edgeCosts[2*i] to it
+         mc.AddToConstant(edgeCosts[2*i]);
          //std::get<2>(edges[i]) = edgeCosts[2*i] - edgeCosts[2*i+1];
       }
       // note: theoretically, this could be much more complicated, if some factors are shared etc. Then this simple approach above will not work.
 
-      auto& mc = pd.template GetProblemConstructor<0>();
       for(INDEX i=0; i<edges.size(); ++i) {
          INDEX i1 = std::get<0>(edges[i]); 
          INDEX i2 = std::get<1>(edges[i]); 

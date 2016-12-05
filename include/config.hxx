@@ -5,13 +5,9 @@
 #include "Vc/Vc"
 //#include "Vc/Memory"
 
+#include <fenv.h>
+
 // type definitions for LP_MP
-
-#ifdef _MSC_VER
-#pragma warning(disable: 4661)
-#endif
-
-
 
 namespace LP_MP {
 
@@ -31,8 +27,7 @@ namespace LP_MP {
    using INDEX_MASK_SIMD = Vc::int_m;
 
    enum class Chirality {left,right};
-   enum class MessageSendingType {SRMP,MPLP};
-   enum class ReparametrizationMode {Explicit,Implicit};
+   enum class MessageSendingType {SRMP,MPLP}; // also add full, for always sending and receiving messages
 
    constexpr REAL eps = 1e-8;
    
@@ -48,16 +43,28 @@ namespace LP_MP {
    // shortcut to indicate how big the message is: here it is determined only at runtime
    constexpr SIGNED_INDEX variableMessageSize = -1;
 
-
    // do zrobienia: maybe put this into LP_MP.h
+   struct LpReparametrizationModetest {
+      enum class LPReparametrizationMode {Anisotropic, Uniform, Undefined} mode;
+      REAL weight;
+   };
    enum class LPReparametrizationMode {Anisotropic, Uniform, Undefined};
 
    inline LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
    {
-      if(s == "uniform") {
-         return LPReparametrizationMode::Uniform;
-      } else if(s == "anisotropic") {
+      feenableexcept(FE_INVALID | FE_OVERFLOW);
+      const std::string uniform = "uniform";
+      if(s == "anisotropic") {
+         //return LpReparametrizationMode({mode::anisotropic,0.0});
          return LPReparametrizationMode::Anisotropic;
+      } else if(s.length() >= uniform.length() && std::equal(uniform.begin(), uniform.end(), s.begin())) {
+         //if(s.length() == uniform.length()) {
+         //   return LpReparametrizationMode({mode::uniform,0.0});
+         //} else {
+         //   const REAL weight = std::stod( s.substr(uniform.length()) );
+         //   return LpReparametrizationMode({mode::uniform,weight});
+         //}
+         return LPReparametrizationMode::Uniform;
       } else {
          throw std::runtime_error("reparametrization mode " + s + " unknown");
       }
@@ -85,6 +92,14 @@ namespace LP_MP {
       static auto array4 = [](const std::array<INDEX,4> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3]); };
    }
 
+   REAL normalize(const REAL x) {
+      assert(!std::isnan(x));
+      if(std::isfinite(x)) {
+         return x;
+      } else {
+         return std::numeric_limits<REAL>::infinity();
+      }
+   }
 
 }
 

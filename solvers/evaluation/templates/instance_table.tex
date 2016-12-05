@@ -5,67 +5,66 @@
 
 {% set solvers =  c.execute("SELECT id,algorithmName FROM Solvers ORDER BY id").fetchall() -%}
 {% set no_algorithms = solvers|length -%}
-\begin{tabular}{|l{{ "c" * (solvers|length) }}|}
+\begin{tabular}{|ll{{ "c" * (solvers|length) }}|}
 \hline
 
-Instance 
+  Instance &
 {% for a in solvers -%}
 & {{ a[1] }}
 {% endfor-%}
 \\ \hline
 
 {% for dataset_row in conn.cursor().execute("SELECT id,name FROM Datasets;") %}
-   \multicolumn{ {{ 1 + no_algorithms }} }{| c |}{ \textbf{ {{ tex_escape(dataset_row[1]) }} } } \\ \hline
+   \multicolumn{ {{ 2 + no_algorithms }} }{| c |}{ \textbf{ {{ tex_escape(dataset_row[1]) }} } } \\ \hline
    {% for instance_row in conn.cursor().execute("SELECT id,name FROM Instances WHERE dataset_id = '" + dataset_row[0]|string + "';") %}
-      {% set minMaxBound = conn.cursor().execute("SELECT lowerBound,upperBound,runtime FROM MinMaxBoundInstancesView WHERE instance_id = '" + instance_row[0]|string + "';").fetchone() -%}
+     {% set min_bound = conn.cursor().execute("SELECT MAX(lowerBound) from Iterations WHERE instance_id = '" + instance_row[0]|string + "';").fetchone() %}
+     {% set max_bound = conn.cursor().execute("SELECT MIN(upperBound) from Iterations WHERE instance_id = '" + instance_row[0]|string + "';").fetchone() %}
+     {% set runtime_bound = conn.cursor().execute("SELECT MIN(runtime) from AggregateIterations WHERE instance_id = '" + instance_row[0]|string + "';").fetchone() %}
       \multirow{3}{*}{ {{ tex_escape(instance_row[1]) }} }
+      & UB
       {% for solver in solvers -%}
-         {% set solver_row = conn.cursor().execute("SELECT lowerBound, solver_id FROM LowerBoundView WHERE instance_id = '" + instance_row[0]|string + "' AND solver_id = '" + solver[0]|string + "' ORDER BY solver_id;").fetchone() %}
+        {% set max_bound_solver = conn.cursor().execute("SELECT MIN(upperBound) from Iterations WHERE instance_id = '" + instance_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone() %}
          & 
-         {% if solver_row is not none %}
-         {% if solver_row[0] >= minMaxBound[0] %}
-            \textbf{ {{ "%0.2f" | format(solver_row[0]|float)  }} }
+         {% if max_bound_solver is not none %}
+         {% if max_bound_solver[0] <= max_bound[0] %}
+            \textbf{ {{ "%0.2f" | format(max_bound_solver[0]|float)  }} }
          {% else %}
-            {{ "%0.2f" | format(solver_row[0])  }}
+            {{ "%0.2f" | format(max_bound_solver[0]|float)  }}
          {% endif %}
          {% else -%}
             $\dagger$
          {% endif -%}
       {% endfor %}
-
-      \\ 
-
-      {% for solver in solvers -%}
-         {% set solver_row = conn.cursor().execute("SELECT upperBound, solver_id FROM UpperBoundView WHERE instance_id = '" + instance_row[0]|string + "' AND solver_id = '" + solver[0]|string + "' ORDER BY solver_id;").fetchone() %}
-         & 
-         {% if solver_row is not none %}
-         {% if solver_row[0] <= minMaxBound[1] %}
-            \textbf{ {{ "%0.2f" | format(solver_row[0]|float)  }} }
-         {% else %}
-            {{ "%0.2f" | format(solver_row[0]|float)  }}
-         {% endif %}
-         {% else -%}
-            $\dagger$
-         {% endif -%}
-      {% endfor %}
-
       \\
-
+      & LB
       {% for solver in solvers -%}
-         {% set solver_row = conn.cursor().execute("SELECT runtime, solver_id FROM RuntimeView WHERE instance_id = '" + instance_row[0]|string + "' AND solver_id = '" + solver[0]|string + "' ORDER BY solver_id;").fetchone() %}
+        {% set min_bound_solver = conn.cursor().execute("SELECT MAX(lowerBound) from Iterations WHERE instance_id = '" + instance_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone() %}
          & 
-         {% if solver_row is not none %}
-         {% if solver_row[0] <= minMaxBound[2] %}
-            \textbf{ {{ "%0.2f" | format(solver_row[0]/1000|float)  }} }
+         {% if min_bound_solver is not none %}
+         {% if min_bound_solver[0] >= min_bound[0] %}
+            \textbf{ {{ "%0.2f" | format(min_bound_solver[0]|float)  }} }
          {% else %}
-            {{ "%0.2f" | format(solver_row[0]/1000|float)  }}
+            {{ "%0.2f" | format(min_bound_solver[0]|float)  }}
          {% endif %}
          {% else -%}
             $\dagger$
          {% endif -%}
       {% endfor %}
-
-
+      \\ 
+      & runtime(s)
+      {% for solver in solvers -%}
+        {% set runtime_bound_solver = conn.cursor().execute("SELECT MAX(runtime) from Iterations WHERE instance_id = '" + instance_row[0]|string + "' AND solver_id = '" + solver[0]|string + "';").fetchone() %}
+         & 
+         {% if runtime_bound_solver is not none -%}
+         {% if runtime_bound_solver[0] <= runtime_bound[0]+1 -%}
+           \textbf{ {{ "%0.2f" | format(runtime_bound_solver[0]|float/1000.0)  }} }
+         {% else -%}
+           {{ "%0.2f" | format((runtime_bound_solver[0]/1000.0)|float)  }}
+         {% endif -%}
+         {% else -%}
+            $\dagger$
+         {% endif -%}
+      {% endfor -%}
       \\ \hline
    {% endfor %}
 {% endfor %}

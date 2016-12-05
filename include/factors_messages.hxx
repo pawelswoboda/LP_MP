@@ -1,9 +1,8 @@
 #ifndef LP_MP_FACTORS_MESSAGES_HXX
 #define LP_MP_FACTORS_MESSAGES_HXX
 
-#include <vector>
-#include <valarray> // do zrobienia: do not use
 #include <tuple>
+#include <array>
 #include <iostream>
 #include <numeric>
 #include <algorithm>
@@ -20,15 +19,20 @@
 #include "template_utilities.hxx"
 #include "function_existence.hxx"
 #include "meta/meta.hpp"
+#include "static_if.hxx"
+#include "MemoryPool.h"
 
-#include "factors/reparametrization_storage.hxx" 
-#include "messages/message_storage.hxx"
+#include "memory_allocator.hxx"
 
 #include "LP_MP.h"
 
 // do zrobienia: remove these
+//#include "factors/reparametrization_storage.hxx"  // also delete file
+#include "messages/message_storage.hxx"
 #include <fstream>
 #include <sstream>
+#include <valarray> // do zrobienia: do not use
+#include <vector>
 
 // this file provides message and factor containers. The factors and messages are plugged into the container and then every method call is dispatched correctly with static polymorphism and template tricks.
 
@@ -78,16 +82,15 @@ struct LeftMessageFuncGetter
 {
    using ConnectedFactorType = typename MSG_CONTAINER::RightFactorContainer;
 
-   constexpr static decltype(&MSG_CONTAINER::GetLeftMessage) GetMessageFunc() { return &MSG_CONTAINER::GetLeftMessage; }
+   //constexpr static decltype(&MSG_CONTAINER::GetLeftMessage) GetMessageFunc() { return &MSG_CONTAINER::GetLeftMessage; }
 
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromRightContainer) GetReceiveFunc() { return &MSG_CONTAINER::ReceiveMessageFromRightContainer; }
    constexpr static decltype(&MSG_CONTAINER::ReceiveRestrictedMessageFromRightContainer) GetReceiveRestrictedFunc() { return &MSG_CONTAINER::ReceiveRestrictedMessageFromRightContainer; }
-   template<typename ARRAY>
-   constexpr static decltype(&MSG_CONTAINER::template SendMessageToRightContainer<ARRAY>) GetSendFunc() { return &MSG_CONTAINER::template SendMessageToRightContainer<ARRAY>; }
+   constexpr static decltype(&MSG_CONTAINER::SendMessageToRightContainer) GetSendFunc() { return &MSG_CONTAINER::SendMessageToRightContainer; }
 
-   template<typename LEFT_FACTOR, typename LEFT_REPAM, typename MSG_ARRAY, typename ITERATOR>
-   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, LEFT_REPAM, MSG_ARRAY, ITERATOR>) GetSendMessagesFunc() 
-   { return &MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, LEFT_REPAM, MSG_ARRAY, ITERATOR>; }
+   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ARRAY, ITERATOR>) GetSendMessagesFunc() 
+   { return &MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ARRAY, ITERATOR>; }
 
    constexpr static bool 
    CanCallReceiveMessage()
@@ -97,20 +100,23 @@ struct LeftMessageFuncGetter
    CanCallReceiveRestrictedMessage()
    { return MSG_CONTAINER::CanCallReceiveRestrictedMessageFromRightContainer(); }
 
-   template<typename REPAM_ARRAY>
    constexpr static bool CanCallSendMessage() 
-   { return MSG_CONTAINER::template CanCallSendMessageToRightContainer<REPAM_ARRAY>(); }
+   { return MSG_CONTAINER::CanCallSendMessageToRightContainer(); }
 
-   template<typename LEFT_FACTOR, typename REPAM_ARRAY, typename MSG_ARRAY, typename ITERATOR>
+   // do zrobienia: Is LEFT_FACTOR parameter needed at all? same for RightMessageFuncGetter
+   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    constexpr static bool 
    CanCallSendMessages()
-   { return MSG_CONTAINER::template CanCallSendMessagesToRightContainer<LEFT_FACTOR, REPAM_ARRAY, MSG_ARRAY, ITERATOR>(); }
+   { return MSG_CONTAINER::template CanCallSendMessagesToRightContainer<LEFT_FACTOR, MSG_ARRAY, ITERATOR>(); }
 
    // do zrobienia: rename CanPropagatePrimalThroughMessage
    constexpr static bool CanComputePrimalThroughMessage()
    { return MSG_CONTAINER::CanComputeRightFromLeftPrimal(); }
    constexpr static decltype(&MSG_CONTAINER::ComputeRightFromLeftPrimal) GetComputePrimalThroughMessageFunc()
    { return &MSG_CONTAINER::ComputeRightFromLeftPrimal; }
+
+   constexpr static Chirality Chirality() { return Chirality::left; }
+   constexpr static bool factor_holds_messages() { return MSG_CONTAINER::left_factor_holds_messages(); }
 };
 
 template<typename MSG_CONTAINER>
@@ -118,16 +124,15 @@ struct RightMessageFuncGetter
 {
    using ConnectedFactorType = typename MSG_CONTAINER::LeftFactorContainer;
 
-   constexpr static decltype(&MSG_CONTAINER::GetRightMessage) GetMessageFunc() { return &MSG_CONTAINER::GetRightMessage; }
+   //constexpr static decltype(&MSG_CONTAINER::GetRightMessage) GetMessageFunc() { return &MSG_CONTAINER::GetRightMessage; }
 
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromLeftContainer) GetReceiveFunc() { return &MSG_CONTAINER::ReceiveMessageFromLeftContainer; }
    constexpr static decltype(&MSG_CONTAINER::ReceiveRestrictedMessageFromLeftContainer) GetReceiveRestrictedFunc() { return &MSG_CONTAINER::ReceiveRestrictedMessageFromLeftContainer; }
-   template<typename ARRAY>
-   constexpr static decltype(&MSG_CONTAINER::template SendMessageToLeftContainer<ARRAY>) GetSendFunc() { return &MSG_CONTAINER::template SendMessageToLeftContainer<ARRAY>; }
+   constexpr static decltype(&MSG_CONTAINER::SendMessageToLeftContainer) GetSendFunc() { return &MSG_CONTAINER::SendMessageToLeftContainer; }
 
-   template<typename RIGHT_FACTOR, typename RIGHT_REPAM, typename MSG_ARRAY, typename ITERATOR>
-   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, RIGHT_REPAM, MSG_ARRAY, ITERATOR>) GetSendMessagesFunc() 
-   { return &MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, RIGHT_REPAM, MSG_ARRAY, ITERATOR>; }
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>) GetSendMessagesFunc() 
+   { return &MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>; }
 
    constexpr static bool CanCallReceiveMessage() 
    { return MSG_CONTAINER::CanCallReceiveMessageFromLeftContainer(); }
@@ -135,19 +140,21 @@ struct RightMessageFuncGetter
    constexpr static bool CanCallReceiveRestrictedMessage() 
    { return MSG_CONTAINER::CanCallReceiveRestrictedMessageFromLeftContainer(); }
 
-   template<typename REPAM_ARRAY>
    constexpr static bool CanCallSendMessage() 
-   { return MSG_CONTAINER::template CanCallSendMessageToLeftContainer<REPAM_ARRAY>(); }
+   { return MSG_CONTAINER::CanCallSendMessageToLeftContainer(); }
 
-   template<typename RIGHT_FACTOR, typename RIGHT_REPAM, typename MSG_ARRAY, typename ITERATOR>
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    constexpr static bool
    CanCallSendMessages()
-   { return MSG_CONTAINER::template CanCallSendMessagesToLeftContainer<RIGHT_FACTOR, RIGHT_REPAM, MSG_ARRAY, ITERATOR>(); }
+   { return MSG_CONTAINER::template CanCallSendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>(); }
 
    constexpr static bool CanComputePrimalThroughMessage()
    { return MSG_CONTAINER::CanComputeLeftFromRightPrimal(); }
    constexpr static decltype(&MSG_CONTAINER::ComputeLeftFromRightPrimal) GetComputePrimalThroughMessageFunc()
    { return &MSG_CONTAINER::ComputeLeftFromRightPrimal; }
+
+   constexpr static Chirality Chirality() { return Chirality::right; }
+   constexpr static bool factor_holds_messages() { return MSG_CONTAINER::right_factor_holds_messages(); }
 };
 
 template<class MSG_CONTAINER, template<typename> class FuncGetter>
@@ -169,31 +176,31 @@ struct MessageDispatcher
    }
 
    // individual message sending
-   template<typename REPAM_ARRAY>
-   constexpr static bool CanCallSendMessage() { return FuncGetter<MSG_CONTAINER>::template CanCallSendMessage<REPAM_ARRAY>(); }
-   template<typename REPAM_ARRAY>
-   static void SendMessage(MSG_CONTAINER& t, const REPAM_ARRAY& repam, const REAL omega)
+   constexpr static bool CanCallSendMessage() { return FuncGetter<MSG_CONTAINER>::CanCallSendMessage(); }
+
+   template<typename FACTOR_TYPE>
+   static void SendMessage(FACTOR_TYPE* f, MSG_CONTAINER& t, const REAL omega)
    {
-      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::template GetSendFunc<REPAM_ARRAY>();
-      return (t.*staticMemberFunc)(repam, omega);
+      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetSendFunc();
+      return (t.*staticMemberFunc)(f, omega);
    }
 
    // batch message sending
-   template<typename FACTOR, typename REPAM_ARRAY, typename MSG_ARRAY, typename ITERATOR>
-   constexpr static bool CanCallSendMessages() { return FuncGetter<MSG_CONTAINER>::template CanCallSendMessages<FACTOR, REPAM_ARRAY, MSG_ARRAY, ITERATOR>(); }
+   template<typename FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   constexpr static bool CanCallSendMessages() { return FuncGetter<MSG_CONTAINER>::template CanCallSendMessages<FACTOR, MSG_ARRAY, ITERATOR>(); }
 
-   template<typename FACTOR, typename REPAM_ARRAY, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessages(const FACTOR& f, const REPAM_ARRAY& repam, const MSG_ARRAY& msgs, ITERATOR omegaBegin)
+   template<typename FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   static void SendMessages(const FACTOR& f, const MSG_ARRAY& msgs, ITERATOR omegaBegin)
    {
-      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::template GetSendMessagesFunc<FACTOR, REPAM_ARRAY, MSG_ARRAY, ITERATOR>();
-      (*staticMemberFunc)(f, repam, msgs, omegaBegin);
+      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::template GetSendMessagesFunc<FACTOR, MSG_ARRAY, ITERATOR>();
+      (*staticMemberFunc)(f, msgs, omegaBegin);
    }
 
-   static REAL GetMessage(MSG_CONTAINER& t, const INDEX i)
-   {
-      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetMessageFunc();
-      return (t.*staticMemberFunc)(i);
-   }
+   //static REAL GetMessage(MSG_CONTAINER& t, const INDEX i)
+   //{
+   //   auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetMessageFunc();
+   //   return (t.*staticMemberFunc)(i);
+   //}
 
    constexpr static bool CanComputePrimalThroughMessage() // do zrobienia: return false, if the factor from which this is called computes its own primal already
    {
@@ -205,51 +212,16 @@ struct MessageDispatcher
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetComputePrimalThroughMessageFunc();
       return (t.*staticMemberFunc)(primal);
    }
-};
-
-// this container does the following: as it can never shrink, we choose the following growth strategy:
-// the first sizes are double, when 16 is reached, we increase by blocks of 16. 
-// by this approach we can save one variable over std::vector, which needs three pointers
-// do zrobienia: use own memory allocator. Possibly use stride 4 instead of 16.
-template<typename T>
-class VariableSizeMessageContainer {
-public:
-   VariableSizeMessageContainer() { begin_ = nullptr; end_ = nullptr; }
-   ~VariableSizeMessageContainer() { static_assert(std::is_pointer<T>::value, "Message container must hold pointers to messages"); }
-   INDEX size() const { return end_ - begin_; }
-   const T operator[](const INDEX i) const { assert(i < size()); return begin_[i]; }
-
-   void push_back(T t) {
-      INDEX newSize = std::min(size()*2, size() + 16);
-      if(size() == 0) {
-         begin_ = new T[1];
-         end_ = begin_+1;
-         begin_[0] = t;
-      } else if(size() == 1 || size() == 2 || size() == 4 || size() == 8 || size()%16 == 0) {
-         T beginOld = begin_;
-         T endOld = end_;
-         begin_ = new T[newSize];
-         end_ = begin_ + newSize;
-         for(INDEX i=0; i<endOld - beginOld; ++i) {
-            begin_[i] = beginOld[i];
-         }
-         begin_[endOld - beginOld] = t;
-         delete[] beginOld;
-      } else {
-         end_[0] = t;
-      }
-   }
-private:
-   T* begin_;
-   T* end_;
+   constexpr static Chirality Chirality() { return FuncGetter<MSG_CONTAINER>::Chirality(); }
+   constexpr static bool factor_holds_messages() { return FuncGetter<MSG_CONTAINER>::factor_holds_messages(); }
 };
 
 template<INDEX NO_ELEMENTS, typename T>
-class FixedSizeMessageContainer : public std::array<T,NO_ELEMENTS> {
+class FixedSizeMessageContainer : public std::array<T*,NO_ELEMENTS> {
 public: 
    FixedSizeMessageContainer() { this->fill(nullptr); }
-   ~FixedSizeMessageContainer() { static_assert(std::is_pointer<T>::value, "Message container must hold pointers to messages"); }
-   void push_back(T t) {
+   ~FixedSizeMessageContainer() {}
+   void push_back(T* t) {
       // do zrobienia: possibly use binary search when NO_ELEMENTS is bigger than some threshold
       for(INDEX i=0; i<NO_ELEMENTS; ++i) {
          if(this->operator[](i) == nullptr) {
@@ -264,111 +236,174 @@ public:
 
 // holds at most NO_ELEMENTS in std::array. Unused entries have nullptr in them
 template<INDEX NO_ELEMENTS, typename T>
-class UpToFixedSizeMessageContainer : public std::array<T,NO_ELEMENTS> {
+class UpToFixedSizeMessageContainer : public std::array<T*,NO_ELEMENTS> {
 public:
    UpToFixedSizeMessageContainer() : size_(0) { this->fill(nullptr); }
    ~UpToFixedSizeMessageContainer() { 
-      static_assert(std::is_pointer<T>::value, "Message container must hold pointers to messages"); 
       static_assert(NO_ELEMENTS > 0, "");
    }
-   void push_back(T t) {
+   void push_back(T* t) {
       assert(size_ < NO_ELEMENTS);
       this->operator[](size_) = t;
       ++size_;
    }
    INDEX size() const { return size_; }
+   auto end() const -> decltype(this->end()) { return this->begin() + size(); }
+
 
 private:
+   unsigned char size_;
+};
+
+// for one element we do not need to store its size explicitly
+template<typename T>
+class UpToFixedSizeMessageContainer<1,T> : public std::array<T*,1> {
+public:
+   UpToFixedSizeMessageContainer() { this->fill(nullptr); }
+   void push_back(T* t) {
+      assert((*this)[0] == nullptr);
+      (*this)[0] = t;
+   }
+   INDEX size() const { return (*this)[0] == nullptr ? 0 : 1; } 
+   auto end() const -> decltype(this->end()) { return this->begin() + size(); }
+};
+
+template<typename T>
+class UpToFixedSizeMessageContainer<2,T> : public std::array<T*,2> {
+public:
+   UpToFixedSizeMessageContainer() { this->fill(nullptr); }
+   void push_back(T* t) {
+      if((*this)[0] == nullptr) {
+         (*this)[0] = t; 
+      } else if((*this)[1] == nullptr) {
+         (*this)[1] = t; 
+      } else {
+         assert(false);
+      }
+   }
+   INDEX size() const {
+      assert(false);
+      return ((*this)[0] != nullptr)*1 + ((*this)[1] != nullptr)*1;
+      //if((*this)[0] == nullptr) {
+      //   (*this)[0] = t; 
+      //} else if((*this)[1] == nullptr) {
+      //   (*this)[1] = t; 
+      //} else {
+      //return 2; }
+      //} 
+}
+   auto end() const -> decltype(this->end()) { return this->begin() + size(); }
+};
+
+template<typename M, Chirality CHIRALITY>
+class VariableSizeMessageContainerIterator {
+public:
+   VariableSizeMessageContainerIterator(M* m) : m_(m) {}
+   VariableSizeMessageContainerIterator operator++() {
+      if(CHIRALITY == Chirality::right) {
+         m_ = m_->next_right_message_container::next_msg();
+      } else {
+         m_ = m_->next_left_message_container::next_msg();
+      }
+      return *this;
+   }
+   M* operator*() const { return m_; } 
+   bool operator==(const VariableSizeMessageContainerIterator& o) const { return m_ == o.m_; }
+   bool operator!=(const VariableSizeMessageContainerIterator& o) const { return m_ != o.m_; }
+private:
+   M* m_;
+};
+
+template<typename M, Chirality CHIRALITY>
+class VariableSizeMessageContainer
+{
+public:
+   VariableSizeMessageContainer() : m_(nullptr), size_(0) {}
+   INDEX size() const { return size_; }
+   void push_back(M* m) { // actually it is push_front
+      if(CHIRALITY == Chirality::right) {
+         m->next_right_message_container::next_msg(m_);
+      } else {
+         m->next_left_message_container::next_msg(m_);
+      }
+      m_ = m;
+      ++size_;
+   }
+   VariableSizeMessageContainerIterator<M,CHIRALITY> begin() const {
+      return VariableSizeMessageContainerIterator<M,CHIRALITY>(m_);
+   }
+   VariableSizeMessageContainerIterator<M,CHIRALITY> end() const {
+      return VariableSizeMessageContainerIterator<M,CHIRALITY>(nullptr);
+   }
+
+private:
+   M* m_;
    INDEX size_;
 };
 
-
 // N=0 means variable number of messages, > 0 means compile time fixed number of messages and <0 means at most compile time number of messages
 // see config.hxx for shortcuts
-template<SIGNED_INDEX N, typename MESSAGE_CONTAINER_TYPE>
+template<SIGNED_INDEX N, typename MESSAGE_CONTAINER_TYPE, Chirality CHIRALITY>
 struct MessageContainerSelector {
-   using type = typename std::conditional<(N > 0), FixedSizeMessageContainer<INDEX(N),MESSAGE_CONTAINER_TYPE*>,
-        typename std::conditional<(N < 0), UpToFixedSizeMessageContainer<INDEX(-N),MESSAGE_CONTAINER_TYPE*>, std::vector<MESSAGE_CONTAINER_TYPE*> >::type >::type;
+   using type = 
+      typename std::conditional<(N > 0), FixedSizeMessageContainer<INDEX(N),MESSAGE_CONTAINER_TYPE>,
+      typename std::conditional<(N < 0), UpToFixedSizeMessageContainer<INDEX(-N),MESSAGE_CONTAINER_TYPE>, 
+                                         VariableSizeMessageContainer<MESSAGE_CONTAINER_TYPE,CHIRALITY> >::type >::type;
 };
 
-// there are two possible choices: (i) knowing message size in advance, (ii) holding message explicitly (e.g. when one factor is reparametrized implicitly)
-// provide message storage classes for the four combinations of these cases
-// do zrobienia: replace std::vector
-// do zrobienia: simdize the two classes below
-// do zrobienia: if message knows its size (constexpr), derive automatically from it.
-class VariableSizeMessageStorage : public std::vector<REAL>
-{
-public:
-   VariableSizeMessageStorage(const INDEX msg_size) : std::vector<REAL>(msg_size,0.0) {}
-}; 
-
-template<INDEX N>
-class FixedSizeMessageStorage : public std::array<REAL,N>
-{
-public:
-   FixedSizeMessageStorage(const INDEX msg_size) { assert(msg_size == N); std::array<REAL,N>::fill(0.0); }
-   FixedSizeMessageStorage() { std::array<REAL,N>::fill(0.0); }
-}; 
-
-template<INDEX N>
-class FixedSizeEmptyMessageStorage
-{
-public:
-   FixedSizeEmptyMessageStorage(const INDEX msg_size) { static_assert(msg_size == N,""); }
-   FixedSizeEmptyMessageStorage() {}
-   constexpr static INDEX size() { return N; }
-};
-class VariableSizeEmptyMessageStorage
-{
-public:
-   VariableSizeEmptyMessageStorage(const INDEX msg_size) : n_(msg_size) {}
-   INDEX size() const { return n_; }
-private:
-   INDEX n_;
+template<typename MSG_CONTAINER, bool HOLD>
+struct next_left_message_container {
+   MSG_CONTAINER* next_msg() const { assert(false); return nullptr; }
+   void next_msg(MSG_CONTAINER*) { assert(false); }
 };
 
-template<SIGNED_INDEX SIZE, bool HOLD_MESSAGE>
-struct MessageStorageSelector {};
+template<typename MSG_CONTAINER>
+struct next_left_message_container<MSG_CONTAINER,true> {
+   void next_msg(MSG_CONTAINER* m) { next = m; }
+   MSG_CONTAINER* next_msg() const { return next; }
+   MSG_CONTAINER* next = nullptr;
+};
+   
+template<typename MSG_CONTAINER, bool HOLD>
+struct next_right_message_container {
+   MSG_CONTAINER* next_msg() const { assert(false); return nullptr; }
+   void next_msg(MSG_CONTAINER*) { assert(false); }
+};
 
-template<SIGNED_INDEX SIZE>
-struct MessageStorageSelector<SIZE, false> {
-   using type = typename std::conditional<(SIZE >= 0), FixedSizeEmptyMessageStorage<INDEX(SIZE)>, VariableSizeEmptyMessageStorage>::type;
+template<typename MSG_CONTAINER>
+struct next_right_message_container<MSG_CONTAINER,true> {
+   void next_msg(MSG_CONTAINER* m) { next = m; }
+   MSG_CONTAINER* next_msg() const { return next; }
+   MSG_CONTAINER* next = nullptr;
 };
-template<SIGNED_INDEX SIZE>
-struct MessageStorageSelector<SIZE, true> {
-   using type = typename std::conditional<(SIZE >= 0), FixedSizeMessageStorage<INDEX(SIZE)>, VariableSizeMessageStorage>::type;
-};
+
 
 
 // Class holding message and left and right factor
-// We simulate holding two messages, one for the left and one for the right factor, each being the negative of the other one. Physically, we just hold one.
-// The following sign convention must be followed: 
-// {Left|Right}Repam use +
-// message computation uses -
-// Dispatch of signs to {Left|Right}Repam:
-// Left | Right
-//  -   |   +
-//
+// do zrobienia: possibly replace {LEFT|RIGHT}_FACTOR_NO by their type
 template<typename MESSAGE_TYPE, 
          INDEX LEFT_FACTOR_NO, INDEX RIGHT_FACTOR_NO, SIGNED_INDEX NO_OF_LEFT_FACTORS, SIGNED_INDEX NO_OF_RIGHT_FACTORS,
-         SIGNED_INDEX MESSAGE_SIZE, 
          typename FACTOR_MESSAGE_TRAIT, 
          INDEX MESSAGE_NO
          >
-class MessageContainer : public MessageStorageSelector<MESSAGE_SIZE,true>::type, public MessageTypeAdapter
+class MessageContainer : //public MessageStorageSelector<MESSAGE_SIZE,true>::type, 
+                           public MessageTypeAdapter
+                         // when NO_OF_LEFT_FACTORS is zero, we hold factors in linked list
+                         ,public next_left_message_container<MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>,NO_OF_LEFT_FACTORS == 0> 
+                         ,public next_right_message_container<MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>,NO_OF_RIGHT_FACTORS == 0>
 {
 public:
    using leftFactorNumber_t = std::integral_constant<INDEX, LEFT_FACTOR_NO>;
    static constexpr INDEX leftFactorNumber = LEFT_FACTOR_NO;
    static constexpr INDEX rightFactorNumber = RIGHT_FACTOR_NO;
 
-   typedef MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, MESSAGE_SIZE, FACTOR_MESSAGE_TRAIT, MESSAGE_NO> MessageContainerType;
-   typedef MESSAGE_TYPE MessageType;
-   typedef typename MessageStorageSelector<MESSAGE_SIZE,true>::type MessageStorageType; // do zrobienia: true is just for now. In general, message need not hold actual message, except when some factor is reparametrized implicitly
+   using MessageContainerType = MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, FACTOR_MESSAGE_TRAIT, MESSAGE_NO>;
+   using MessageType = MESSAGE_TYPE;
+   //typedef typename MessageStorageSelector<MESSAGE_SIZE,true>::type MessageStorageType; // do zrobienia: true is just for now. In general, message need not hold actual message, except when some factor is reparametrized implicitly
 
    // structures used in FactorContainer to hold pointers to messages
-   using LeftMessageContainerStorageType = typename MessageContainerSelector<NO_OF_LEFT_FACTORS, MessageContainerType>::type;
-   using RightMessageContainerStorageType = typename MessageContainerSelector<NO_OF_RIGHT_FACTORS, MessageContainerType>::type;
+   using LeftMessageContainerStorageType = typename MessageContainerSelector<NO_OF_LEFT_FACTORS, MessageContainerType, Chirality::left>::type;
+   using RightMessageContainerStorageType = typename MessageContainerSelector<NO_OF_RIGHT_FACTORS, MessageContainerType, Chirality::right>::type;
 
    // FactorContainer
    using LeftFactorContainer = meta::at_c<typename FACTOR_MESSAGE_TRAIT::FactorList, leftFactorNumber>;
@@ -377,23 +412,27 @@ public:
    using LeftFactorType = typename LeftFactorContainer::FactorType;
    using RightFactorType = typename RightFactorContainer::FactorType;
 
-   // message size known in advance
+   constexpr static bool left_factor_holds_messages() { return NO_OF_LEFT_FACTORS != 0; }
+   constexpr static bool right_factor_holds_messages() { return NO_OF_RIGHT_FACTORS != 0; }
+   
+   template<typename ...ARGS>
+   MessageContainer(ARGS... args, LeftFactorContainer* const l, RightFactorContainer* const r) 
+   : msg_op_(args...),
+   leftFactor_(l),
+   rightFactor_(r)
+   {
+      leftFactor_->template AddMessage<MessageDispatcher<MessageContainerType, LeftMessageFuncGetter>, MessageContainerType>(this);
+      rightFactor_->template AddMessage<MessageDispatcher<MessageContainerType, RightMessageFuncGetter>, MessageContainerType>(this);
+   }
+
    MessageContainer(MESSAGE_TYPE msg_op, LeftFactorContainer* const l, RightFactorContainer* const r) 
-      :MessageStorageType(),
+      ://MessageStorageType(),
       msg_op_(msg_op),
       leftFactor_(l),
       rightFactor_(r)
    {
       leftFactor_->template AddMessage<MessageDispatcher<MessageContainerType, LeftMessageFuncGetter>, MessageContainerType>(this);
       rightFactor_->template AddMessage<MessageDispatcher<MessageContainerType, RightMessageFuncGetter>, MessageContainerType>(this);
-   }
-   // message size not known in advance
-   MessageContainer(MESSAGE_TYPE msg_op, LeftFactorContainer* const l, RightFactorContainer* const r, const INDEX msg_size) 
-      : MessageStorageType(msg_size),
-      msg_op_(msg_op),
-      leftFactor_(l), 
-      rightFactor_(r) 
-   {
       int status;
       //std::cout << "msg holding type = " << abi::__cxa_demangle(typeid(*this).name(),0,0,&status) << "\n";
       //std::cout << FunctionExistence::IsAssignable<RightFactorContainer,REAL,INDEX>() << "\n";
@@ -403,8 +442,6 @@ public:
       //std::cout << "left factor type = " << abi::__cxa_demangle(typeid(LeftFactorContainer).name(),0,0,&status) << "\n";
       //std::cout << "right factor type = " << abi::__cxa_demangle(typeid(RightFactorContainer).name(),0,0,&status) << "\n";
       // register messages in factors
-      leftFactor_->template AddMessage<MessageDispatcher<MessageContainerType, LeftMessageFuncGetter>, MessageContainerType>(this);
-      rightFactor_->template AddMessage<MessageDispatcher<MessageContainerType, RightMessageFuncGetter>, MessageContainerType>(this);
    }
    ~MessageContainer() {
       static_assert(meta::unique<typename FACTOR_MESSAGE_TRAIT::MessageList>::size() == FACTOR_MESSAGE_TRAIT::MessageList::size(), 
@@ -414,145 +451,178 @@ public:
       static_assert(rightFactorNumber < FACTOR_MESSAGE_TRAIT::FactorList::size(), "right factor number out of bound");
       // do zrobienia: put message constraint here, i.e. which methods MESSAGE_TYPE must minimally implement
    } 
+   
+   // overloaded new so that factor containers are allocated by global block allocator consecutively
+   void* operator new(std::size_t size)
+   {
+      assert(size == sizeof(MessageContainerType));
+      //return (void*) global_real_block_allocator.allocate(size/sizeof(REAL),1);
+      return Allocator::get().allocate(1);
+   }
+   void operator delete(void* mem)
+   {
+      Allocator::get().deallocate((MessageContainerType*) mem);
+      //assert(false);
+      //global_real_block_allocator.deallocate(mem,sizeof(FactorContainerType));
+   }
 
-   // we can throw these functions out again
-   /*
-   bool CanSendMessageToLeft() const final
-   {
-      if(CanCallSendMessageToLeftContainer<std::vector<REAL>>()) return true;
-      if(CanCallSendMessagesToLeftContainer<RightFactorType,RightFactorContainer,std::vector<MessageContainerType*>,std::vector<REAL>::iterator>()) return true;
-      else return false;
-   }
-   bool CanSendMessageToRight() const final
-   {
-      if(CanCallSendMessageToRightContainer<std::vector<REAL>>() ) return true;//|| CanCallSendMessagesToRightContainer<>()) return true;
-      if(CanCallSendMessagesToRightContainer<LeftFactorType,LeftFactorContainer,std::vector<MessageContainerType*>,std::vector<REAL>::iterator>()) return true;
-      else return false;
-   }
-   */
+
 
    constexpr static bool
    CanCallReceiveMessageFromRightContainer()
    { 
       return FunctionExistence::HasReceiveMessageFromRight<MessageType, void, 
-      decltype(rightFactor_->GetFactor()), decltype(*rightFactor_), MessageContainerType>(); 
+      RightFactorType, MessageContainerType>(); 
    }
    void ReceiveMessageFromRightContainer()
-   { msg_op_.ReceiveMessageFromRight(rightFactor_->GetFactor(),*rightFactor_, *static_cast<MessageContainerView<Chirality::right>*>(this) ); }
+   { msg_op_.ReceiveMessageFromRight(*rightFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::right>*>(this) ); }
 
    // do zrobienia: must use one additional argument for primal storage
    constexpr static bool
    CanCallReceiveRestrictedMessageFromRightContainer()
    { 
       return FunctionExistence::HasReceiveRestrictedMessageFromRight<MessageType, void, 
-      decltype(rightFactor_->GetFactor()), decltype(*rightFactor_), MessageContainerType, PrimalSolutionStorage::Element>(); // do zrobienia: signature is slighly different: MessageContainerType is not actually used
+      RightFactorType, MessageContainerType, PrimalSolutionStorage::Element>(); // do zrobienia: signature is slighly different: MessageContainerType is not actually used
    }
    void ReceiveRestrictedMessageFromRightContainer(PrimalSolutionStorage::Element primal)
    {
-      msg_op_.ReceiveRestrictedMessageFromRight(rightFactor_->GetFactor(), *rightFactor_, *static_cast<OneSideMessageContainerView<Chirality::left>*>(this), primal + rightFactor_->GetPrimalOffset());
+     //assert(rightFactor_->GetPrimalOffset() + rightFactor_->PrimalSize() <= primal.size());
+      msg_op_.ReceiveRestrictedMessageFromRight(*(rightFactor_->GetFactor()), *static_cast<OneSideMessageContainerView<Chirality::left>*>(this), primal + rightFactor_->GetPrimalOffset());
    }
 
    constexpr static bool 
    CanCallReceiveMessageFromLeftContainer()
    { 
       return FunctionExistence::HasReceiveMessageFromLeft<MessageType, void, 
-      decltype(leftFactor_->GetFactor()), decltype(*leftFactor_), MessageContainerType>(); 
+      LeftFactorType, MessageContainerType>(); 
    }
    void ReceiveMessageFromLeftContainer()
-   { msg_op_.ReceiveMessageFromLeft(leftFactor_->GetFactor(), *leftFactor_, *static_cast<MessageContainerView<Chirality::left>*>(this) ); }
+   { msg_op_.ReceiveMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<MessageContainerView<Chirality::left>*>(this) ); }
 
    constexpr static bool
    CanCallReceiveRestrictedMessageFromLeftContainer()
    { 
       return FunctionExistence::HasReceiveRestrictedMessageFromLeft<MessageType, void, 
-      decltype(leftFactor_->GetFactor()), decltype(*leftFactor_), MessageContainerType, PrimalSolutionStorage::Element>(); 
+      LeftFactorType, MessageContainerType, PrimalSolutionStorage::Element>(); 
    }
    void ReceiveRestrictedMessageFromLeftContainer(PrimalSolutionStorage::Element primal)
    {
-      msg_op_.ReceiveRestrictedMessageFromLeft(leftFactor_->GetFactor(), *leftFactor_, *static_cast<OneSideMessageContainerView<Chirality::right>*>(this), primal + leftFactor_->GetPrimalOffset());
+     //assert(leftFactor_->GetPrimalOffset() + leftFactor_->PrimalSize() <= primal.size());
+      msg_op_.ReceiveRestrictedMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<OneSideMessageContainerView<Chirality::right>*>(this), primal + leftFactor_->GetPrimalOffset());
    }
 
 
-   template<typename REPAM_ARRAY>
    constexpr static bool 
    CanCallSendMessageToRightContainer()
    { 
       return FunctionExistence::HasSendMessageToRight<MessageType, void, 
-      decltype(leftFactor_->GetFactor()), REPAM_ARRAY, MessageContainerType, REAL>(); 
+      LeftFactorType, MessageContainerType, REAL>(); 
    }
 
-   template<typename ARRAY>
-   void SendMessageToRightContainer(const ARRAY& repam, const REAL omega)
+   void SendMessageToRightContainer(LeftFactorType* l, const REAL omega)
    {
-      msg_op_.SendMessageToRight(leftFactor_->GetFactor(), repam, *static_cast<MessageContainerView<Chirality::left>*>(this), omega);
+      //msg_op_.SendMessageToRight(leftFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::left>*>(this), omega);
+      msg_op_.SendMessageToRight(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega);
    }
 
-   template<typename REPAM_ARRAY>
    constexpr static bool
    CanCallSendMessageToLeftContainer()
    { 
       return FunctionExistence::HasSendMessageToLeft<MessageType, void, 
-      decltype(rightFactor_->GetFactor()), REPAM_ARRAY, MessageContainerType, REAL>(); 
+      RightFactorType, MessageContainerType, REAL>(); 
    }
 
-   template<typename ARRAY>
-   void SendMessageToLeftContainer(const ARRAY& repam, const REAL omega)
+   void SendMessageToLeftContainer(RightFactorType* r, const REAL omega)
    {
-      msg_op_.SendMessageToLeft(rightFactor_->GetFactor(), repam, *static_cast<MessageContainerView<Chirality::right>*>(this), omega);
+      //msg_op_.SendMessageToLeft(rightFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::right>*>(this), omega);
+      msg_op_.SendMessageToLeft(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega);
    }
 
-   template<typename RIGHT_FACTOR, typename RIGHT_REPAM, typename MSG_ARRAY, typename ITERATOR>
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    constexpr static bool
    CanCallSendMessagesToLeftContainer()
    { 
-      return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RIGHT_FACTOR, RIGHT_REPAM, MSG_ARRAY, ITERATOR>();
+      return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RIGHT_FACTOR, MSG_ARRAY, MSG_ARRAY, ITERATOR>();
    }
-   template<typename RIGHT_FACTOR, typename RIGHT_REPAM, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& repam, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
    {
       // this is not nice: heavy static casting!
       // We get msgs an array with pointers to messages. We wrap it so that operator[] gives a reference to the respective message with the correct view
-      struct ViewWrapper : public MSG_ARRAY {
-         MessageContainerView<Chirality::right>& operator[](const INDEX i) const 
-         { 
-            return *static_cast<MessageContainerView<Chirality::right>*>( (static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
-            //return *static_cast<MessageContainerView<Chirality::right>*>( operator[](i) ); 
-            //return operator[](i);
+      struct MessageIterator {
+         using type = decltype(msgs.begin());
+         MessageIterator(type it) : it_(it) {}
+         MessageContainerView<Chirality::right>& operator*() const {
+            return *(static_cast<MessageContainerView<Chirality::right>*>( *it_ )); 
          }
-      };
-      return MessageType::SendMessagesToLeft(rightFactor, repam, *static_cast<const ViewWrapper*>(&msgs), omegaBegin);
-
-      struct ViewWrapper2 {
-         ViewWrapper2(const MSG_ARRAY& msgs) : msgs_(msgs) {}
-         MessageContainerView<Chirality::right>& operator[](const INDEX i) const {
-            return static_cast<MessageContainerView<Chirality::right>&>( *(msgs_[i]) );
+         MessageIterator operator++() {
+            ++it_;
+            return *this;
          }
-         INDEX size() const {
-            return msgs_.size();
+         bool operator!=(const MessageIterator& o) const {
+            return it_ != o.it_; 
          }
          private:
-         const MSG_ARRAY& msgs_;
-      } msgsProxy(msgs);
+         type it_;
+      };
+      return MessageType::SendMessagesToLeft(rightFactor->GetFactor(), MessageIterator(msgs.begin()), MessageIterator(msgs.end()), omegaBegin);
 
-      return MessageType::SendMessagesToLeft(rightFactor, repam, msgsProxy, omegaBegin);
+      //struct ViewWrapper : public MSG_ARRAY {
+      //   MessageContainerView<Chirality::right>& operator*() const {
+      //      return *static_cast<MessageContainerView<Chirality::right>*>( &(this->operator*()) ); 
+      //   }
+      //   MessageContainerView<Chirality::right>& operator[](const INDEX i) const  {
+      //      // not supported anymore, just use iterators
+      //      assert(false);
+      //   }
+      //   private:
+      //   const MSG_ARRAY& a_;
+      //   //MessageContainerView<Chirality::right>& operator[](const INDEX i) const 
+      //   //{ 
+      //   //   //return *static_cast<MessageContainerView<Chirality::right>*>( (static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
+      //   //   return *static_cast<MessageContainerView<Chirality::right>*>( (static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
+      //   //   //return *static_cast<MessageContainerView<Chirality::right>*>( operator[](i) ); 
+      //   //   //return operator[](i);
+      //   //}
+      //};
+      //return MessageType::SendMessagesToLeft(rightFactor, repam, static_cast<const ViewWrapper>(msgs.begin()), omegaBegin);
    }
 
-   template<typename LEFT_FACTOR, typename LEFT_REPAM, typename MSG_ARRAY, typename ITERATOR>
+   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    constexpr static bool
    CanCallSendMessagesToRightContainer()
    { 
-      return FunctionExistence::HasSendMessagesToRight<MessageType, void, LEFT_FACTOR, LEFT_REPAM, MSG_ARRAY, ITERATOR>(); 
+      return FunctionExistence::HasSendMessagesToRight<MessageType, void, LEFT_FACTOR, MSG_ARRAY, MSG_ARRAY, ITERATOR>(); 
    }
-   template<typename LEFT_FACTOR, typename LEFT_REPAM, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessagesToRightContainer(const LEFT_FACTOR& leftFactor, const LEFT_REPAM& repam, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   static void SendMessagesToRightContainer(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
    {
-      struct ViewWrapper : public MSG_ARRAY {
-         MessageContainerView<Chirality::left>& operator[](const INDEX i) const 
-         { 
-            return *static_cast<MessageContainerView<Chirality::left>*>( (static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
+      // do zrobienia: unify message iterators
+      struct MessageIterator {
+         using type = decltype(msgs.begin());
+         MessageIterator(type it) : it_(it) {}
+         MessageContainerView<Chirality::left>& operator*() const {
+            return *(static_cast<MessageContainerView<Chirality::left>*>( *it_ )); 
          }
+         MessageIterator operator++() {
+            ++it_;
+            return *this;
+         }
+         bool operator!=(const MessageIterator& o) const {
+            return it_ != o.it_;
+         }
+         private:
+         type it_;
       };
-      MessageType::SendMessagesToRight(leftFactor, repam, *static_cast<const ViewWrapper*>(&msgs), omegaBegin);
+      return MessageType::SendMessagesToRight(leftFactor->GetFactor, MessageIterator(msgs.begin()), MessageIterator(msgs.end()), omegaBegin);
+      //struct ViewWrapper : public MSG_ARRAY {
+      //   MessageContainerView<Chirality::left>& operator[](const INDEX i) const 
+      //   { 
+      //      assert(false); // make as in SendMessagesToLeftContainer
+      //      return *static_cast<MessageContainerView<Chirality::left>*>( (static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
+      //   }
+      //};
+      //MessageType::SendMessagesToRight(leftFactor, repam, *static_cast<const ViewWrapper*>(&msgs), omegaBegin);
    }
 
    constexpr static bool
@@ -591,110 +661,135 @@ public:
           PrimalSolutionStorage::Element, typename LeftFactorContainer::FactorType*,
           PrimalSolutionStorage::Element, typename RightFactorContainer::FactorType*>();
    }
-   template<bool ENABLE=CanCheckPrimalConsistency()>
-   typename std::enable_if<ENABLE,bool>::type
-   CheckPrimalConsistencyImpl(PrimalSolutionStorage::Element primal) const
-   {
-      static_assert(ENABLE == CanCheckPrimalConsistency(),"");
-      return msg_op_.CheckPrimalConsistency(primal + leftFactor_->GetPrimalOffset(), leftFactor_->GetFactor(), primal + rightFactor_->GetPrimalOffset(), rightFactor_->GetFactor());
-   }
-   template<bool ENABLE=CanCheckPrimalConsistency()>
-   typename std::enable_if<!ENABLE,bool>::type
-   CheckPrimalConsistencyImpl(PrimalSolutionStorage::Element primal) const
-   {
-      static_assert(ENABLE == CanCheckPrimalConsistency(),"");
-      return true;
-   }
+
    bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) const final
    { 
-      return CheckPrimalConsistencyImpl(primal);
+      bool ret;
+      static_if<CanCheckPrimalConsistency()>([&](auto f) {
+            ret = f(msg_op_).CheckPrimalConsistency(primal + leftFactor_->GetPrimalOffset(), leftFactor_->GetFactor(), primal + rightFactor_->GetPrimalOffset(), rightFactor_->GetFactor());
+      }).else_([&](auto f) {
+               ret = true;
+      });
+      return ret;
    }
 
+   // do zrobienia: not needed anymore
    // do zrobienia: this does not capture write back functions not returning REAL&
    constexpr static bool IsAssignableLeft() {
-      return FunctionExistence::IsAssignable<typename LeftFactorContainer::RepamStorageType,REAL,INDEX>();
+      return FunctionExistence::IsAssignable<LeftFactorType, REAL, INDEX>();
    }
    constexpr static bool IsAssignableRight() {
-      return FunctionExistence::IsAssignable<typename RightFactorContainer::RepamStorageType,REAL,INDEX>();
+      return FunctionExistence::IsAssignable<RightFactorType, REAL, INDEX>();
    }
 
    template<typename ARRAY, bool IsAssignable = IsAssignableLeft()>
    constexpr static bool CanBatchRepamLeft()
    {
-      return FunctionExistence::HasRepamLeft<MessageType,void,LeftFactorContainer,ARRAY>();
+      return FunctionExistence::HasRepamLeft<MessageType,void,LeftFactorType,ARRAY>();
    }
    template<typename ARRAY, bool IsAssignable = IsAssignableLeft()>
-   typename std::enable_if<CanBatchRepamLeft<ARRAY>() == true && IsAssignable == true>::type
+   //typename std::enable_if<CanBatchRepamLeft<ARRAY>() == true && IsAssignable == true>::type
+   void
    RepamLeft(const ARRAY& m)
    { 
-      assert(false); // no -+ distinguishing
-      msg_op_.RepamLeft(*leftFactor_, m);
+      //assert(false); // no -+ distinguishing
+      static_if<CanBatchRepamLeft<ARRAY>()>([&](auto f) {
+            f(msg_op_).RepamLeft(*(leftFactor_->GetFactor()), m);
+      }).else_([&](auto f) {
+         for(INDEX i=0; i<m.size(); ++i) {
+            f(msg_op_).RepamLeft(*(leftFactor_->GetFactor()), m[i], i);
+         }
+      });
    }
+   /*
    template<typename ARRAY, bool IsAssignable = IsAssignableLeft()>
    typename std::enable_if<CanBatchRepamLeft<ARRAY>() == false && IsAssignable == true>::type
    RepamLeft(const ARRAY& m)
    { 
-      assert(false); // no -+ distinguishing
-      assert(m.size() == this->size());
+      //assert(false); // no -+ distinguishing
       for(INDEX i=0; i<m.size(); ++i) {
-         msg_op_.RepamLeft(*leftFactor_, m[i], i);
+         msg_op_.RepamLeft(*(leftFactor_->GetFactor()), m[i], i);
       }
    }
    template<typename ARRAY, bool IsAssignable = IsAssignableLeft()>
    typename std::enable_if<IsAssignable == false>::type
    RepamLeft(const ARRAY& m)
-   {}
+   {
+   assert(false);
+   }
+   */
 
    template<bool IsAssignable = IsAssignableLeft()>
-   typename std::enable_if<IsAssignable == true>::type
+   //typename std::enable_if<IsAssignable == true>::type
+   void
    RepamLeft(const REAL diff, const INDEX dim) {
-      msg_op_.RepamLeft(*leftFactor_, diff, dim); // note: in right, we reparametrize by +diff, here by -diff
+      msg_op_.RepamLeft(*(leftFactor_->GetFactor()), diff, dim); // note: in right, we reparametrize by +diff, here by -diff
    }
+   /*
    template<bool IsAssignable = IsAssignableLeft()>
    typename std::enable_if<IsAssignable == false>::type
    RepamLeft(const REAL diff, const INDEX dim)
-   {}
+   {
+   assert(false);
+   }
+   */
 
    template<typename ARRAY>
    constexpr static bool CanBatchRepamRight()
    {
-      return FunctionExistence::HasRepamRight<MessageType,void,RightFactorContainer,ARRAY>();
+      // do zrobienia: replace Container by actual factor
+      return FunctionExistence::HasRepamRight<MessageType,void,RightFactorType,ARRAY>();
    }
    template<typename ARRAY, bool IsAssignable = IsAssignableRight()>
-   typename std::enable_if<CanBatchRepamRight<ARRAY>() == true && IsAssignable == true>::type
+   //typename std::enable_if<CanBatchRepamRight<ARRAY>() == true && IsAssignable == true>::type
+   void
    RepamRight(const ARRAY& m)
    { 
-      assert(false); // no -+ distinguishing
-      msg_op_.RepamRight(*rightFactor_, m);
+      //assert(false); // no -+ distinguishing
+      static_if<CanBatchRepamRight<ARRAY>()>([&](auto f) {
+            f(msg_op_).RepamRight(*(rightFactor_->GetFactor()), m);
+      }).else_([&](auto f) {
+         for(INDEX i=0; i<m.size(); ++i) {
+            f(msg_op_).RepamRight(*(rightFactor_->GetFactor()), m[i], i);
+         }
+      });
    }
+   /*
    template<typename ARRAY, bool IsAssignable = IsAssignableRight()>
    typename std::enable_if<CanBatchRepamRight<ARRAY>() == false && IsAssignable == true>::type
    RepamRight(const ARRAY& m)
    {
-      assert(false); // no -+ distinguishing
-      assert(m.size() == this->size());
+      //assert(false); // no -+ distinguishing
       for(INDEX i=0; i<m.size(); ++i) {
-         msg_op_.RepamRight(*rightFactor_, m[i], i);
+         msg_op_.RepamRight(*(rightFactor_->GetFactor()), m[i], i);
       }
    }
    template<typename ARRAY, bool IsAssignable = IsAssignableRight()>
    typename std::enable_if<IsAssignable == false>::type
    RepamRight(const ARRAY& m)
-   {}
+   {
+   assert(false);
+   }
+   */
 
    template<bool IsAssignable = IsAssignableRight()>
-   typename std::enable_if<IsAssignable == true>::type
+   //typename std::enable_if<IsAssignable == true>::type
+   void
    RepamRight(const REAL diff, const INDEX dim) {
-      msg_op_.RepamRight(*rightFactor_, diff, dim);
+      msg_op_.RepamRight(*(rightFactor_->GetFactor()), diff, dim);
    }
+   /*
    template<bool IsAssignable = IsAssignableRight()>
    typename std::enable_if<IsAssignable == false>::type
    RepamRight(const REAL diff, const INDEX dim)
-   {}
+   {
+   assert(false);
+   }
+   */
 
    // do zrobienia: better name?
-   REAL GetLeftMessage(const INDEX i) const { return msg_op_.GetLeftMessage(i,*this); }
-   REAL GetRightMessage(const INDEX i) const { return msg_op_.GetRightMessage(i,*this);  }
+   //REAL GetLeftMessage(const INDEX i) const { return msg_op_.GetLeftMessage(i,*this); }
+   //REAL GetRightMessage(const INDEX i) const { return msg_op_.GetRightMessage(i,*this);  }
 
    //FactorTypeAdapter* GetLeftFactor() const { return leftFactor_; }
    //FactorTypeAdapter* GetRightFactor() const { return rightFactor_; }
@@ -702,7 +797,7 @@ public:
    LeftFactorContainer* GetLeftFactor() const final { return leftFactor_; }
    RightFactorContainer* GetRightFactor() const final { return rightFactor_; }
 
-   INDEX GetMessageNumber() const final { return MESSAGE_NO; } 
+   //INDEX GetMessageNumber() const final { return MESSAGE_NO; } 
    //REAL GetMessageWeightToRight() const final { return SEND_MESSAGE_TO_RIGHT_WEIGHT::value; }
    //REAL GetMessageWeightToLeft() const final { return SEND_MESSAGE_TO_LEFT_WEIGHT::value;  }
    
@@ -732,11 +827,9 @@ public:
       MsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
       {
          if(CHIRALITY == Chirality::right) { // message is computed by right factor
-            static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) -= x;
             msg_->RepamLeft( +x, dim_);
             msg_->RepamRight(-x, dim_);
          } else if (CHIRALITY == Chirality::left) { // message is computed by left factor
-            static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) += x;
             msg_->RepamLeft(  -x, dim_);
             msg_->RepamRight( +x, dim_);
             //msg_->RepamLeft( +x, dim_);
@@ -750,11 +843,9 @@ public:
       {
          assert(false);
          if(CHIRALITY == Chirality::right) { // message is computed by right factor
-            static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) += x;
             msg_->RepamLeft( x, dim_);
             msg_->RepamRight( x, dim_);
          } else if(CHIRALITY == Chirality::left) { // message is computed by left factor
-            static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) -= x;
             msg_->RepamLeft( x, dim_);
             msg_->RepamRight( x, dim_);
             //msg_->RepamLeft( -x, dim_);
@@ -765,7 +856,7 @@ public:
          return *this;
       }
       // do zrobienia: this value should never be used. Remove function
-      operator REAL() const __attribute__ ((always_inline)) { return static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_); }
+      //operator REAL() const __attribute__ ((always_inline)) { return static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_); }
    private:
       MessageContainerType* const msg_;
       const INDEX dim_;
@@ -780,6 +871,23 @@ public:
       {
          return MsgVal<CHIRALITY>(this,i);
       }
+
+      template<typename ARRAY>
+      MessageContainerType& operator-=(const ARRAY& diff) {
+        MinusVec<ARRAY> minus_diff(diff);
+        // note: order of below operations is important: When the message is e.g. just the potential, we must reparametrize the other side first!
+        if(CHIRALITY == Chirality::right) {
+          RepamLeft(diff);
+          RepamRight(-diff);
+        } else if(CHIRALITY == Chirality::left) {
+          RepamRight(diff);
+          RepamLeft(-diff);
+        } else {
+          assert(false);
+        }
+        return *this;
+      }
+
    };
 
    // for primal computation: record message change only in one side and into a special array
@@ -832,6 +940,20 @@ public:
       {
          return OneSideMsgVal<CHIRALITY>(this,i);
       }
+
+      template<typename ARRAY>
+      MessageContainerType& operator-=(const ARRAY& diff) {
+        MinusVec<ARRAY> minus_diff(diff);
+        if(CHIRALITY == Chirality::right) {
+          RepamRight(-diff);
+        } else if(CHIRALITY == Chirality::left) {
+          RepamLeft(-diff);
+        } else {
+          assert(false);
+        }
+        return *this;
+      }
+
    };
 
 
@@ -842,27 +964,12 @@ public:
 
 
    template<typename ARRAY>
-   MessageContainerType& operator=(const ARRAY& msg) {
-      // construct difference to current message and then call +=
-      // better do this via expression templates
-      // diff = msg - *this;
-      MinusExprVec<ARRAY,decltype(*this)> diff(msg, *this);
-
-      //std::vector<REAL> diff(msg.size());
-      //for(INDEX i=0; i<diff.size(); ++i) {
-      //   diff[i] = msg[i] - operator[](i);
-      //}
-      operator+=(diff);
-      return *this;
-   }
-
-   template<typename ARRAY>
    MessageContainerType& operator-=(const ARRAY& diff) {
       assert(false); // update to left right -+
       MinusVec<ARRAY> minus_diff(diff);
       assert(minus_diff.size() == this->size());
-      RepamLeft(minus_diff);
-      RepamRight(minus_diff);
+      RepamLeft(-diff);
+      RepamRight(-diff);
       return *this;
    }
 
@@ -876,55 +983,6 @@ public:
       return *this;
    }
 
-
-   /*
-   template<typename LAMBDA>
-      struct repamOp {
-         repamOp(const std::vector<REAL>& msg, LAMBDA& f) : f_(f) {}
-         inline REAL operator[](const INDEX i) const { return f_(i); }
-         LAMBDA& f_;
-      };
-      */
-   // do zrobienia: change from valarray to std::vector and name SetMessageVal
-   // function obsolete in current form
-   void SetMessage(const std::valarray<REAL>& m) final
-   { 
-      assert(m.size() == MessageStorageType::size());
-      assert(false); // not supported currently
-      
-      for(INDEX i=0; i<m.size(); ++i) { this->operator[](i) = m[i]; }
-
-      /*
-      // get difference to current message
-      // check later if the construction below is faster
-      //static std::vector<REAL> d(200);
-      std::vector<REAL> d(m.size());
-      for(INDEX i=0; i<m.size(); ++i) { d[i] = m[i] - msg_val_[i]; }
-
-      // set message
-      msg_val_ = m; 
-     
-      // update the reparametrization stored by the factor
-      auto l = [&](const INDEX i) { return static_cast<MESSAGE_TYPE*>(this)->ApplyLeftRepam(i,d); };
-      repamOp<decltype(l)> lOp(m,l);
-      auto r = [&](const INDEX i) { return static_cast<MESSAGE_TYPE*>(this)->ApplyRightRepam(i,d); };
-      repamOp<decltype(r)> rOp(m,r);
-
-      leftFactor_->UpdateRepam(lOp);
-      rightFactor_->UpdateRepam(rOp);
-      */
-   }
-   // do zrobienia: change return type to std::vector, rename to GetMessageVal
-   const std::valarray<REAL> GetMessage() const final
-   { 
-      assert(false); // do zrobienia: function not supported anymore. Only reparametrizations should be of interest
-      std::valarray<REAL> m(0.0, MessageStorageType::size());
-      for(INDEX i=0; i<MessageStorageType::size(); ++i) {
-         m[i] = MessageStorageType::operator[](i);
-      }
-      return m; 
-   }
-
    // possibly not the best choice: Sometimes msg_op_ needs access to this class
    const MessageType& GetMessageOp() const
    {
@@ -934,33 +992,33 @@ public:
    constexpr static bool CanCreateConstraints()
    {
       //return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
-      return FunctionExistence::HasCreateConstraints<MessageType,void, LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
+      return FunctionExistence::HasCreateConstraints<MessageType,void, LpInterfaceAdapter*, LeftFactorType*, RightFactorType*>();
    }
    
-   template<bool ENABLE = CanCreateConstraints()>
-   typename std::enable_if<ENABLE>::type
-   CreateConstraintsImpl(LpInterfaceAdapter* l) const
-   {
-      msg_op_.CreateConstraints(l,leftFactor_->GetFactor(),rightFactor_->GetFactor());
-   }
-
-   template<bool ENABLE = CanCreateConstraints()>
-   typename std::enable_if<!ENABLE>::type
-   CreateConstraintsImpl(LpInterfaceAdapter* l) const
-   {
-      throw std::runtime_error("create constraints not implemented by message");
-   }
-
    virtual void CreateConstraints(LpInterfaceAdapter* l) final
    {
-      CreateConstraintsImpl(l);
+      // do zrobienia: use static_if
+      static_if<CanCreateConstraints()>([&](auto f) {
+            f(msg_op_).CreateConstraints(l,leftFactor_->GetFactor(),rightFactor_->GetFactor());
+      }).else_([&](auto f) {
+         throw std::runtime_error("create constraints not implemented by message");
+      });
    }
 
 
 protected:
-   MessageType msg_op_;
+   MessageType msg_op_; // possibly inherit privately from MessageType to apply empty base optimization when applicable
    LeftFactorContainer* const leftFactor_;
    RightFactorContainer* const rightFactor_;
+
+   // see notes on allocator in FactorContainer
+   struct Allocator {
+      using type = MemoryPool<MessageContainerType,4096*sizeof(MessageContainerType)>; 
+      static type& get() {
+         static type allocator;
+         return allocator;
+      }
+   };
 };
 
 
@@ -971,22 +1029,21 @@ protected:
 // if WRITE_PRIMAL_SOLUTION is false, WritePrimal will not output anything
 // do zrobienia: introduce enum classes for COMPUTE_PRIMAL_SOLUTION and WRITE_PRIMAL_SOLUTION
 template<typename FACTOR_TYPE, 
-         template<class> class REPAM_STORAGE_TYPE, 
+         //template<class> class REPAM_STORAGE_TYPE, 
          class FACTOR_MESSAGE_TRAIT,
          INDEX FACTOR_NO,
-         bool COMPUTE_PRIMAL_SOLUTION = false,
-         bool WRITE_PRIMAL_SOLUTION = false> // do zrobienia: remove this template parameter
-class FactorContainer : public REPAM_STORAGE_TYPE<FactorContainer<FACTOR_TYPE, REPAM_STORAGE_TYPE, FACTOR_MESSAGE_TRAIT, FACTOR_NO, COMPUTE_PRIMAL_SOLUTION, WRITE_PRIMAL_SOLUTION> >, public FactorTypeAdapter
+         bool COMPUTE_PRIMAL_SOLUTION = false> 
+class FactorContainer : public FactorTypeAdapter
 {
 public:
-   using FactorContainerType = FactorContainer<FACTOR_TYPE, REPAM_STORAGE_TYPE, FACTOR_MESSAGE_TRAIT, FACTOR_NO, COMPUTE_PRIMAL_SOLUTION, WRITE_PRIMAL_SOLUTION>;
+   using FactorContainerType = FactorContainer<FACTOR_TYPE, FACTOR_MESSAGE_TRAIT, FACTOR_NO, COMPUTE_PRIMAL_SOLUTION>;
    using FactorType = FACTOR_TYPE;
-   using RepamStorageType = REPAM_STORAGE_TYPE<FactorContainerType>;
-   friend class REPAM_STORAGE_TYPE<FactorContainerType>;
 
    // do zrobienia: templatize cosntructor to allow for more general initialization of reparametrization storage and factor
    template<typename ...ARGS>
-   FactorContainer(const FactorType&& factor, ARGS... args) : RepamStorageType(factor,args...), factor_(std::move(factor)) {
+   FactorContainer(ARGS... args) : factor_(args...) {}
+
+   FactorContainer(const FactorType&& factor) : factor_(std::move(factor)) {
       //INDEX status;
       //std::cout << "msg_ type= "  << abi::__cxa_demangle(typeid(msg_).name(),0,0,&status) << "\n";
       //std::cout << "dispatcher list = "  << abi::__cxa_demangle(typeid(MESSAGE_DISPATCHER_TYPELIST).name(),0,0,&status) << "\n";
@@ -995,14 +1052,28 @@ public:
       //std::cout << "left message list = " << abi::__cxa_demangle(typeid(left_message_list_1).name(),0,0,&status) << "\n";
    
    }
-   template<typename ...ARGS>
-   FactorContainer(const FactorType& factor, ARGS... args) : RepamStorageType(factor,args...), factor_(factor) 
+   FactorContainer(const FactorType& factor) : factor_(factor) 
    {}
    ~FactorContainer() { 
       static_assert(meta::unique<MESSAGE_DISPATCHER_TYPELIST>::size() == MESSAGE_DISPATCHER_TYPELIST::size(), 
             "Message dispatcher typelist must have unique elements");
       static_assert(FACTOR_NO >= 0 && FACTOR_NO < FACTOR_MESSAGE_TRAIT::FactorList::size(), "factor number must be smaller than length of factor list");
    }
+
+   // overloaded new so that factor containers are allocated by global block allocator consecutively
+   void* operator new(std::size_t size)
+   {
+      assert(size == sizeof(FactorContainerType));
+      //return (void*) global_real_block_allocator.allocate(size/sizeof(REAL),1);
+      return Allocator::get().allocate(1);
+   }
+   void operator delete(void* mem)
+   {
+      Allocator::get().deallocate((FactorContainerType*) mem);
+      //assert(false);
+      //global_real_block_allocator.deallocate(mem,sizeof(FactorContainerType));
+   }
+
 
    template<typename MESSAGE_DISPATCHER_TYPE, typename MESSAGE_TYPE> 
    void AddMessage(MESSAGE_TYPE* m) { 
@@ -1018,7 +1089,8 @@ public:
       std::get<n>(msg_).push_back(m);
    }
 
-   // get sum of all messages in dimension i
+   // do zrobienia: remove
+   // get sum of all messages in dimension i -> obsolete
    const REAL GetMessageSum(const INDEX i) const {
       return GetMessageSum(MESSAGE_DISPATCHER_TYPELIST{},i);
    }
@@ -1058,45 +1130,43 @@ public:
       return FunctionExistence::HasPropagatePrimal<FactorType,void,PrimalSolutionStorage::Element>();
    }
 
-   template<bool ENABLE=CanPropagatePrimal()>
-   typename std::enable_if<!ENABLE,void>::type
-   PropagatePrimalImpl(PrimalSolutionStorage::Element primal) 
-   {}
-   template<bool ENABLE=CanPropagatePrimal()>
-   typename std::enable_if<ENABLE,void>::type
-   PropagatePrimalImpl(PrimalSolutionStorage::Element primal) 
-   {
-      factor_.PropagatePrimal(primal);
-   }
-
    void PropagatePrimal(PrimalSolutionStorage::Element primal) 
    {
-      PropagatePrimalImpl(primal);
+      static_if<CanPropagatePrimal()>([&](auto f) {
+            f(factor_).PropagatePrimal(primal);
+      });
    }
 
    constexpr static bool
    CanMaximizePotential()
    {
-      return FunctionExistence::HasMaximizePotential<FactorType,void,FactorContainerType>();
+      return FunctionExistence::HasMaximizePotential<FactorType,void>();
    }
 
    void UpdateFactor(const std::vector<REAL>& omega, typename PrimalSolutionStorage::Element primal) final
    {
       if(CanComputePrimal()) { // do zrobienia: for now
          if(CanReceiveRestrictedMessages()) {
-            std::vector<REAL> tmpRepam(this->size()); // temporary structure where repam is stored before it is reverted back.
-            for(INDEX i=0; i<tmpRepam.size(); ++i) {
-               tmpRepam[i] = this->operator[](i);
-            }
+           //std::cout << "before tmp repam allocation\n";
+           // do zrobienia: copy whole factor here
+            auto cur_factor(factor_);
+            //using vector_type = std::vector<REAL, stack_allocator<REAL>>;
+            //vector_type tmpRepam(this->size(), 0.0, global_real_stack_allocator);
+            //std::vector<REAL> tmpRepam(this->size()); // temporary structure where repam is stored before it is reverted back.
+            //for(INDEX i=0; i<tmpRepam.size(); ++i) {
+            //   tmpRepam[i] = factor_[i];
+            //}
             // first we compute restricted incoming messages, on which to compute the primal
             ReceiveRestrictedMessages(primal);
             // now we compute primal
             MaximizePotentialAndComputePrimal(primal);
             // restore original reparametrization
-            for(INDEX i=0; i<tmpRepam.size(); ++i) {
-               this->operator[](i) = tmpRepam[i];
-            }
+            factor_ = cur_factor;
+            //for(INDEX i=0; i<tmpRepam.size(); ++i) {
+            //   factor_[i] = tmpRepam[i];
+            //}
             MaximizePotential();
+           //std::cout << "before tmp repam deallocation\n";
          } else {
             MaximizePotentialAndComputePrimal(primal);
          }
@@ -1107,309 +1177,148 @@ public:
       } 
 
       ReceiveMessages(omega);
-      SendMessages(omega);
-   }
-
-   /*
-   void UpdateFactor(const std::vector<REAL>& omega, LpInterfaceAdapter* l)
-   {
-      ReceiveMessages(omega);
       MaximizePotential();
-      ReduceLp(l);
       SendMessages(omega);
    }
-   */
 
-   template<bool ENABLE=CanMaximizePotential()>
-   typename std::enable_if<ENABLE,void>::type
-   MaximizePotential() 
+   void MaximizePotential()
    {
-      factor_.MaximizePotential(*this);
-   }
-   template<bool ENABLE=CanMaximizePotential()>
-   typename std::enable_if<!ENABLE,void>::type
-   MaximizePotential() {}
-
-   // if primal solution is to be computed by this factor, then we must take primal solution from some other factor and derive the solution through the messages
-   template<bool COMPUTE_PRIMAL_SOLUTION_TMP = COMPUTE_PRIMAL_SOLUTION>
-   typename std::enable_if<COMPUTE_PRIMAL_SOLUTION_TMP == false>::type 
-   MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal)
-   {
-      assert(false); // this should not occur at all
+      static_if<CanMaximizePotential()>([&](auto f) {
+            f(factor_).MaximizePotential();
+      });
    }
 
-   // if primal solution is to be computed by this factor, we store the solution in primal
-   template<bool COMPUTE_PRIMAL_SOLUTION_TMP = COMPUTE_PRIMAL_SOLUTION>
-   typename std::enable_if<COMPUTE_PRIMAL_SOLUTION_TMP == true>::type 
-   MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal)
+   void MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal)
    {
-      static_assert(COMPUTE_PRIMAL_SOLUTION_TMP == COMPUTE_PRIMAL_SOLUTION,"");
-      factor_.MaximizePotentialAndComputePrimal(*this, primal + primalOffset_);
+      static_if<COMPUTE_PRIMAL_SOLUTION>([&](auto f) {
+            //f(factor_).MaximizePotentialAndComputePrimal(*this, primal + primalOffset_);
+            f(factor_).MaximizePotentialAndComputePrimal(primal + primalOffset_);
+      });
    }
 
-
-   template<typename MESSAGE_DISPATCHER_TYPE>
-   typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanComputePrimalThroughMessage() == true>::type 
-   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element primal) const
-   {
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      for(INDEX i=0; i<std::get<n>(msg_).size(); ++i) {
-         MESSAGE_DISPATCHER_TYPE::ComputePrimalThroughMessage(*(std::get<n>(msg_)[i]), primal);
-      }
-      //for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it) {
-      //   MESSAGE_DISPATCHER_TYPE::ComputePrimalThroughMessage(*(*it), primal);
-      //}
-   }
-   template<typename MESSAGE_DISPATCHER_TYPE>
-   typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanComputePrimalThroughMessage() == false>::type 
-   ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE, typename PrimalSolutionStorage::Element primal) const {}
-
-   template<typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element primal) const {}
-   template<typename MESSAGE_DISPATCHER_TYPE, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, typename PrimalSolutionStorage::Element primal) const 
-   {
-      ComputePrimalThroughMessagesImpl(MESSAGE_DISPATCHER_TYPE{}, primal);
-      ComputePrimalThroughMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, primal);
-   }
    // do zrobienia: rename PropagatePrimalThroughMessages
    void ComputePrimalThroughMessages(typename PrimalSolutionStorage::Element primal) const
    {
-      ComputePrimalThroughMessages(MESSAGE_DISPATCHER_TYPELIST{}, primal);
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,primal](auto l) {
+            static_if<l.CanComputePrimalThroughMessage()>([&](auto f) {
+                  constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+                  for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it) {
+                     f(l.ComputePrimalThroughMessage)(*(*it), primal);
+                  }
+            });
+      });
    }
-   
-   
 
-   // SFINAE-based selection whether we will perform message updates for receiving   
-   template<typename MESSAGE_DISPATCHER_TYPE, typename MSG_ARRAY, typename ITERATOR>
-   typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage() == true>::type 
-   ReceiveMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, const MSG_ARRAY& msgs, ITERATOR omegaIt)
-   {
-      // receive messages for current MESSAGE_DISPATCER_TYPE
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      // do zrobienia: note that msgs array is not used!
-      for(INDEX i=0; i<std::get<n>(msg_).size(); ++i) {
-         // this is not valid. Instead, use a vector of bools which indicates whether to receive messages and let it be computed by Compute...Weights
-         //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
-         MESSAGE_DISPATCHER_TYPE::ReceiveMessage(*(std::get<n>(msg_)[i]));
-         //}
-      }
-      //for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it, ++omegaIt) {
-      //   // this is not valid. Instead, use a vector of bools which indicates whether to receive messages and let it be computed by Compute...Weights
-      //   //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
-      //      MESSAGE_DISPATCHER_TYPE::ReceiveMessage(*(*it));
-      //   //}
-      //}
-   }
-   // or do not perform receiving message updates (if no receive message is implemented)
-   template<typename MESSAGE_DISPATCHER_TYPE, typename MSG_ARRAY, typename ITERATOR>
-   typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage() == false>::type 
-   ReceiveMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, const MSG_ARRAY& msgs, ITERATOR omegaIt)
-   {}
-
-   template<typename ITERATOR, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, ITERATOR omegaIt) {}
-   template<typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, ITERATOR omegaIt) 
-   {
-      // receive messages for current MESSAGE_DISPATCER_TYPE
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      ReceiveMessagesImpl(MESSAGE_DISPATCHER_TYPE{}, std::get<n>(msg_), omegaIt);
-      //omegaIt += std::get<n>(msg_).size(); 
-      // receive messages for subsequent MESSAGE_DISPATCHER_TYPES
-      ReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, omegaIt);
-   }
    void ReceiveMessages(const std::vector<REAL>& omega) 
    {
       // note: currently all messages are received, even if not needed. Change this again.
-      //assert(omega.size() == GetNoMessages());
-      ReceiveMessages(MESSAGE_DISPATCHER_TYPELIST{}, omega.cbegin());
+      auto omegaIt = omega.begin();
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&omegaIt](auto l) {
+            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+            static_if<l.CanCallReceiveMessage()>([&](auto f) {
+                  
+                  for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it) {
+                     //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
+                     f(l.ReceiveMessage)(*(*it));
+                     //}
+                  }
+
+                  });
+            
+            std::advance(omegaIt, std::get<n>(msg_).size());
+      });
    }
-
-
-
-   // SFINAE-based restricted message updates
-   template<typename MESSAGE_DISPATCHER_TYPE>
-   typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanCallReceiveRestrictedMessage() == true>::type 
-   ReceiveRestrictedMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, PrimalSolutionStorage::Element primal)
-   {
-      // receive restricted messages for current MESSAGE_DISPATCHER_TYPE
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      // do zrobienia: note that msgs array is not used!
-      for(INDEX i=0; i<std::get<n>(msg_).size(); ++i) {
-         MESSAGE_DISPATCHER_TYPE::ReceiveRestrictedMessage(*(std::get<n>(msg_)[i]), primal); // do zrobienia: only receive messages from sensible ones
-      }
-      //for(auto it=std::get<n>(msg_).cbegin(); it!=std::get<n>(msg_).cend(); ++it) { // do zrobienia: only receive messages from sensible ones
-      //   MESSAGE_DISPATCHER_TYPE::ReceiveRestrictedMessage(*(*it),primal);
-      //}
-   }
-   // or do not perform receiving message updates (if no receive restricted message is implemented)
-   template<typename MESSAGE_DISPATCHER_TYPE>
-   typename std::enable_if<MESSAGE_DISPATCHER_TYPE::CanCallReceiveRestrictedMessage() == false>::type 
-   ReceiveRestrictedMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, PrimalSolutionStorage::Element)
-   {}
 
    // we write message change not into original reparametrization, but into temporary one named pot
-   template<typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, PrimalSolutionStorage::Element) {}
-   template<typename MESSAGE_DISPATCHER_TYPE, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   void ReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, PrimalSolutionStorage::Element primal) 
-   {
-      // receive messages for current MESSAGE_DISPATCER_TYPE
-      ReceiveRestrictedMessagesImpl(MESSAGE_DISPATCHER_TYPE{}, primal);
-      ReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, primal);
-   }
-
    void ReceiveRestrictedMessages(PrimalSolutionStorage::Element primal) 
    {
-      ReceiveRestrictedMessages(MESSAGE_DISPATCHER_TYPELIST{}, primal);
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,primal](auto l) {
+            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+            static_if<l.CanCallReceiveRestrictedMessage()>([&](auto f) {
+                  for(auto it=std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it) {
+                     f(l.ReceiveRestrictedMessage)(*(*it),primal); // do zrobienia: only receive messages from sensible ones
+                  }
+            });
+      });
    }
 
+   constexpr static bool CanReceiveRestrictedMessages() 
+   {
+      struct can_receive {
+         template<typename MESSAGE_DISPATCHER_TYPE>
+            using invoke = typename std::is_same<std::integral_constant<bool,MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage()>, std::integral_constant<bool,true> >::type;
+      };
+      return meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_receive>{};
+   }
+
+   // methods used by MessageIterator
+   const INDEX GetNoMessages() const final
+   {
+      INDEX noMessages = 0;
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&noMessages](auto l) {
+            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+            noMessages += std::get<n>(msg_).size();
+            } );
+      return noMessages;
+   }
+
+   INDEX no_send_messages_calls() const {
+      INDEX no_calls = 0;
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_calls](auto l) {
+            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+            if(CanCallSendMessages(l)) {
+               if(std::get<n>(msg_).size() > 0) {
+                  ++no_calls;
+               }
+            } else if(CanCallSendMessage(l)) {
+               no_calls += std::get<n>(msg_).size();
+            }
+            } );
+      return no_calls;
+   }
 
    void SendMessages(const std::vector<REAL>& omega) 
    {
       //assert(omega.size() == GetNoMessages()); // this is not true: omega.size() is the number of messages that implement a send function
-      static constexpr INDEX n = NumberOfSendMessagesCalls<std::vector<REAL>, decltype(omega.begin())>(MESSAGE_DISPATCHER_TYPELIST{});
+      const INDEX no_calls = no_send_messages_calls();
+
       // do zrobienia: also do not construct currentRepam, if exactly one message update call will be issued. 
       // Check if there is one message dispatcher such that its size can be called via a constexpr function and is 1 -> complicated!
       // also possible: check whether omega has only one nonnegative entry
-      if( n > 0 ) { // no need to construct currentRepam, if it will not be used at all
+      if( no_calls > 0 ) { // no need to construct currentRepam, if it will not be used at all
          // make a copy of the current reparametrization. The new messages are computed on it. Messages are updated implicitly and hence possibly the new reparametrization is automatically adjusted, which would interfere with message updates
-         // do zrobienia: use static memory or custom memory allocator for this, do not always allocate new memory via system call
          
          //std::vector<REAL> repam_delta(RepamStorageType::size(),0.0); // here we store the change in the reparametrization produced by SnedMessage. Alternatively we could store the messages that are produced. Check which is less overhead and choose it so.
 
-         std::vector<REAL> currentRepam(RepamStorageType::size());
-         for(INDEX i=0; i<currentRepam.size(); ++i) {
-            currentRepam[i] = RepamStorageType::operator[](i); 
-         }
-         SendMessages(MESSAGE_DISPATCHER_TYPELIST{}, currentRepam, omega.cbegin());
+         FactorType tmp_factor = factor_; 
+
+         auto omegaIt = omega.begin();
+
+         meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+               constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+               // check whether the message supports batch updates. If so, call batch update. If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
+               static_if<CanCallSendMessages(l)>([&](auto f) {
+                     const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
+                     if(omega_sum > 0.0) { 
+                     assert(false); // must give copy of factor
+                        l.SendMessages(tmp_factor, std::get<n>(msg_), omegaIt);
+                     }
+                     omegaIt += std::get<n>(msg_).size();
+               }).else_([&](auto f) {
+                  static_if<CanCallSendMessage(l)>([&](auto f) {
+                        for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
+                           if(*omegaIt != 0.0) {
+                              l.SendMessage(&tmp_factor, *(*it), *omegaIt); 
+                           }
+                        }
+                  });
+               });
+         });
+         assert(omegaIt == omega.end());
       }
    }
 
-   template<typename REPAM_ARRAY, typename ITERATOR, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   constexpr static INDEX NumberOfSendMessagesCalls(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) 
-   { return 0; }
-   template<typename REPAM_ARRAY, typename ITERATOR, typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   constexpr static INDEX NumberOfSendMessagesCalls(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t) 
-   { 
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      constexpr INDEX no = MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<FactorType, REPAM_ARRAY, decltype(std::get<n>(msg_)), ITERATOR>()
-         || MESSAGE_DISPATCHER_TYPE::template CanCallSendMessage<REPAM_ARRAY>()
-         ? 1 : 0;
-      return no + NumberOfSendMessagesCalls<REPAM_ARRAY,ITERATOR>(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
-   }
 
-   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   constexpr static bool CanReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) 
-   { return false; }
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   constexpr static bool CanReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t) 
-   {
-      constexpr bool canReceive = MESSAGE_DISPATCHER_TYPE::CanCallReceiveRestrictedMessage();
-      if(canReceive == true) {
-         return true;
-      } else {
-         return CanReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
-      }
-   }
-   constexpr static bool CanReceiveRestrictedMessages() 
-   {
-      return CanReceiveRestrictedMessages(MESSAGE_DISPATCHER_TYPELIST{});
-   }
-
-   // SFINAE-based seletion whether we will do batch or individual message updates for sending
-   // batch message update
-   // do zrobienia: note that CanCallSendMessages depends on more tempalte arguments than CanCalSendMessage. Reduce template usage of first one by passign tempalte arguments later.
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ITERATOR, typename REPAM_ARRAY, typename MSG_ARRAY>
-   typename std::enable_if<MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<FactorType, REPAM_ARRAY, MSG_ARRAY, ITERATOR>() == true,INDEX>::type 
-   SendMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, const MSG_ARRAY& msgs, const REPAM_ARRAY& repam, ITERATOR omegaIt)
-   {
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
-      if(omega_sum > 0.0) { // do zrobienia: possibly not allowed with MessageReplicatorFactor
-         // do zrobienia: construct proxy object for msgs, so that it directly points to &(msgs[i]->msg_op_), make msg_op_ protected in MessageContainer again
-                  //MsgProxy<MSG_ARRAY> msgProxy({msgs});
-               
-         /*
-         struct MsgProxy {
-            MsgProxy(const MSG_ARRAY& msgs) : msgs_(msgs) {}
-            decltype(*(std::declval<const MSG_ARRAY&>().operator[](0)))& operator[](const INDEX i) const { return *(msgs_[i]); }
-            INDEX size() const { return msgs_.size(); }
-            private:
-            const MSG_ARRAY& msgs_;
-         } msgProxy(msgs);
-         MESSAGE_DISPATCHER_TYPE::SendMessages(factor_, repam, msgProxy, omegaIt);
-         */
-
-         MESSAGE_DISPATCHER_TYPE::SendMessages(factor_, repam, msgs, omegaIt);
-      }
-      return msgs.size();
-   }
-   // individual message update
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ITERATOR, typename REPAM_ARRAY, typename MSG_ARRAY>
-   typename std::enable_if<
-   MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<FactorType,REPAM_ARRAY,MSG_ARRAY,ITERATOR>() == false && 
-   MESSAGE_DISPATCHER_TYPE::template CanCallSendMessage <REPAM_ARRAY>() == true
-   ,INDEX>::type 
-   SendMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, const MSG_ARRAY& msgs, const REPAM_ARRAY& repam, ITERATOR omegaIt)
-   {
-      // call individual message updates
-      for(INDEX i=0; i<msgs.size(); ++i, ++omegaIt) {
-         if(*omegaIt != 0.0) {
-            MESSAGE_DISPATCHER_TYPE::SendMessage(*msgs[i], repam, *omegaIt); // do zrobienia: only receive messages from sensible ones
-         }
-      }
-      //for(auto it=msgs.cbegin(); it!=msgs.cend(); ++it, ++omegaIt) {
-      //   if(*omegaIt != 0.0) {
-      //      MESSAGE_DISPATCHER_TYPE::SendMessage(*(*it), repam, *omegaIt);
-      //   }
-      //}
-      return msgs.size(); 
-   }
-   // no updates if they are not implemented 
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ITERATOR, typename REPAM_ARRAY, typename MSG_ARRAY>
-   typename std::enable_if<
-   MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<FactorType,REPAM_ARRAY,MSG_ARRAY,ITERATOR>() == false &&
-   MESSAGE_DISPATCHER_TYPE::template CanCallSendMessage <REPAM_ARRAY>() == false
-   ,INDEX>::type 
-   SendMessagesImpl(MESSAGE_DISPATCHER_TYPE msg_dispatcher, const MSG_ARRAY& msgs, const REPAM_ARRAY& repam, ITERATOR omegaIt)
-   { return 0;}
-
-   // note that messages must be iterated over in the same order as done by MessageIterator
-   template<typename ITERATOR, typename ARRAY, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   void SendMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t, const ARRAY& repam, ITERATOR omegaIt) {}
-   template<typename ITERATOR, typename ARRAY, typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   void SendMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t, const ARRAY& repam, ITERATOR omegaIt) // to get the current MESSAGE_TYPE
-   { 
-      // receive messages for current MESSAGE_DISPATCHER_TYPE
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-
-      // check whether the message supports batch updates. If so, call batch update. If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
-      INDEX noCalls = SendMessagesImpl(MESSAGE_DISPATCHER_TYPE{}, std::get<n>(msg_), repam, omegaIt);
-      omegaIt += noCalls;
-
-      // receive messages for subsequent MESSAGE_DISPATCHER_TYPES
-      SendMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, repam, omegaIt);
-   }
-
-   // methods used by MessageIterator
-   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   const INDEX GetNoMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) const
-   {
-      return 0;
-   }
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   const INDEX GetNoMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t) const 
-   {
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      const INDEX no_msgs = std::get<n>(msg_).size(); 
-      return no_msgs + GetNoMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
-   }
-   const INDEX GetNoMessages() const final
-   {
-      return GetNoMessages(MESSAGE_DISPATCHER_TYPELIST{});
-   }
 
    template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
    MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX msgNo) const 
@@ -1422,7 +1331,12 @@ public:
    MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX msgNo) const 
    {
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      if(msgNo < std::get<n>(msg_).size()) { return  std::get<n>(msg_)[msgNo]; }
+      if(msgNo < std::get<n>(msg_).size()) {
+         auto it = std::get<n>(msg_).begin();
+         for(INDEX i=0; i<msgNo; ++i) { ++it; }
+         return *it;
+         //return  std::get<n>(msg_)[msgNo]; 
+      }
       else return GetMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, msgNo - std::get<n>(msg_).size());
    }
    MessageTypeAdapter* GetMessage(const INDEX n) const final
@@ -1442,7 +1356,11 @@ public:
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       const INDEX no_msgs = std::get<n>(msg_).size();
       if(cur_msg_idx < no_msgs) {
-         auto msg = std::get<n>(msg_)[cur_msg_idx];
+         //auto msg = std::get<n>(msg_)[cur_msg_idx];
+         // do zrobienia: not most efficient way
+         auto it = std::get<n>(msg_).begin();
+         for(INDEX i=0; i<cur_msg_idx; ++i) { ++it; }
+         auto msg = *it;
          assert(msg != nullptr);
          if(msg->GetLeftFactor() == static_cast<const FactorTypeAdapter*>(this)) { return msg->GetRightFactor(); }
          else { return msg->GetLeftFactor(); }
@@ -1457,86 +1375,67 @@ public:
       return f;
    }
 
-   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   constexpr static bool CanReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) 
-   {
-      return false;
-   }
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   constexpr static bool CanReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t)
-   {
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      if( MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage()) {
-         return true;
-      } else {
-         return CanReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
-      }
-   }
    constexpr static bool CanReceiveMessages() 
    {
-      return CanReceiveMessages(MESSAGE_DISPATCHER_TYPELIST{});
+      struct can_receive_message {
+         template<typename MESSAGE_DISPATCHER_TYPE>
+            using invoke = typename std::is_same<std::integral_constant<bool,MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage()>, std::integral_constant<bool,true> >::type;
+      };
+      return meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_receive_message>{};
    }
-   // check whether actually receive restricted messages is called. Can be false, even if CanReceiveRestrictedMessages is true, e.g. when no message is present
-   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   bool CallsReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) const
-   { return false; }
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   bool CallsReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t)  const
-   {
-      constexpr bool canReceive = MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage();
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      if(canReceive == true && std::get<n>(msg_).size() > 0) {
-         return true;
-      } else {
-         return CallsReceiveMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
-      }
-   }
+
    bool CallsReceiveMessages() const
    {
-      return CallsReceiveMessages(MESSAGE_DISPATCHER_TYPELIST{});
+      bool can_receive = false;
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&can_receive](auto l) {
+         constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+         if(l.CanCallReceiveMessage() && std::get<n>(msg_).size() > 0) {
+            can_receive = true;
+         }
+      });
+      return can_receive;
    }
 
 
-   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   constexpr static bool CanSendMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) 
-   {
-      return false;
-   }
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   constexpr static bool CanSendMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t)
+   template<typename MESSAGE_DISPATCHER_TYPE>
+   constexpr static bool CanCallSendMessages(MESSAGE_DISPATCHER_TYPE t) 
    {
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      if( MESSAGE_DISPATCHER_TYPE::template CanCallSendMessage<std::vector<REAL>>() ||
-             MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<FactorContainerType, std::vector<REAL>, decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>() ) {
-         return true;
-      } else {
-         return CanSendMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
-      }
+      return MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<FactorContainerType, decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>();
    }
+   template<typename MESSAGE_DISPATCHER_TYPE>
+   constexpr static bool CanCallSendMessage(MESSAGE_DISPATCHER_TYPE t) 
+   {
+      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      return MESSAGE_DISPATCHER_TYPE::CanCallSendMessage();
+   }
+
    constexpr static bool CanSendMessages() 
    {
-      return CanSendMessages(MESSAGE_DISPATCHER_TYPELIST{});
+      struct can_send_message {
+         template<typename MESSAGE_DISPATCHER_TYPE>
+            using invoke = typename std::is_same<std::integral_constant<bool,CanCallSendMessage(MESSAGE_DISPATCHER_TYPE{})>, std::integral_constant<bool,true> >::type;
+      };
+      struct can_send_messages {
+         template<typename MESSAGE_DISPATCHER_TYPE>
+            using invoke = typename std::is_same<std::integral_constant<bool,CanCallSendMessages(MESSAGE_DISPATCHER_TYPE{})>, std::integral_constant<bool,true> >::type;
+      };
+      return meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_send_message>{} || meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_send_messages>{};
    }
 
    // check whether actually send messages is called. Can be false, even if CanSendMessages is true, e.g. when no message is present
-   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   bool CallsSendMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) const
-   { return false; }
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   bool CallsSendMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t)  const
-   {
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      constexpr bool canSend = MESSAGE_DISPATCHER_TYPE::template CanCallSendMessage<std::vector<REAL>>() || 
-             MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<decltype(*this), std::vector<REAL>, decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>();
-      if(canSend == true && std::get<n>(msg_).size() > 0) {
-         return true;
-      } else {
-         return CallsSendMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
-      }
-   }
    bool CallsSendMessages() const
    {
-      return CallsSendMessages(MESSAGE_DISPATCHER_TYPELIST{});
+      bool calls_send = false;
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+            if(CanCallSendMessage(l) || CanCallSendMessages(l)) {
+               if(std::get<n>(msg_).size()>0) {
+                  calls_send = true;
+               }
+            }
+      });
+      return calls_send;
    }
 
 
@@ -1551,8 +1450,8 @@ public:
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       const INDEX no_msgs = std::get<n>(msg_).size();
       if(cur_msg_idx < no_msgs) {
-         if( MESSAGE_DISPATCHER_TYPE::template CanCallSendMessage<std::vector<REAL>>() || 
-             MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<decltype(*this), std::vector<REAL>, decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>() )
+         if( MESSAGE_DISPATCHER_TYPE::CanCallSendMessage() || 
+             MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<decltype(*this), decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>() )
             return true;
          else return false;
       } else {
@@ -1565,29 +1464,20 @@ public:
       return CanSendMessage(MESSAGE_DISPATCHER_TYPELIST{}, msg_idx);
    }
 
-
    // check whether actually receive restricted messages is called. Can be false, even if CanReceiveRestrictedMessages is true, e.g. when no message is present
-   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   bool CallsReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t) const
-   { return false; }
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   bool CallsReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t)  const
-   {
-      constexpr bool canReceive = MESSAGE_DISPATCHER_TYPE::CanCallReceiveRestrictedMessage();
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      if(canReceive == true && std::get<n>(msg_).size() > 0) {
-         return true;
-      } else {
-         return CallsReceiveRestrictedMessages(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{});
-      }
-   }
    bool CallsReceiveRestrictedMessages() const
    {
-      return CallsReceiveRestrictedMessages(MESSAGE_DISPATCHER_TYPELIST{});
+      bool calls_receive_restricted = false;
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+            if(l.CanCallReceiveRestrictedMessage() && std::get<n>(msg_).size() > 0) {
+               calls_receive_restricted = true;
+            }
+      });
+      return calls_receive_restricted;
    }
 
-
-   // does factor call {Receive|Send}Messages? If not, it need, UpdateFactor need not be called
+   // does factor call {Receive(Restricted)?|Send}Messages or does it compute primal? If not, UpdateFactor need not be called.
    bool FactorUpdated() const final
    {
       if(CanComputePrimal()) {
@@ -1608,6 +1498,7 @@ public:
    template<typename ITERATOR>
    void SetAndPropagatePrimal(PrimalSolutionStorage::Element primal, ITERATOR label) const
    {
+     //assert(GetPrimalOffset() + PrimalSize() <= primal.size());
       for(INDEX i=0; i<PrimalSize(); ++i) {
          primal[i + GetPrimalOffset()] = label[i];
       }
@@ -1630,14 +1521,18 @@ public:
 
    std::vector<REAL> GetReparametrizedPotential() const final
    {
+      assert(false);
       std::vector<REAL> repam(size());
-      for(INDEX i=0; i<repam.size(); ++i) {
-         repam[i] = RepamStorageType::operator[](i);
-      }
+      //for(INDEX i=0; i<repam.size(); ++i) {
+      //   repam[i] = RepamStorageType::operator[](i);
+      //}
       return repam;
    }
 
-   INDEX size() const final { return RepamStorageType::size(); }
+   INDEX size() const final { 
+      return factor_.size();
+      //return RepamStorageType::size(); 
+   }
 
    constexpr static bool CanComputePrimalSize()
    {
@@ -1658,7 +1553,10 @@ public:
    // return size for primal storage
    INDEX PrimalSize() const final { return PrimalSizeImpl(); }
 
-   REAL LowerBound() const final { return factor_.LowerBound(*this); } 
+   REAL LowerBound() const final {
+      //return factor_.LowerBound(*this); 
+      return factor_.LowerBound(); 
+   } 
 
    FactorType* GetFactor() const { return &factor_; }
    FactorType* GetFactor() { return &factor_; }
@@ -1671,34 +1569,19 @@ public:
 protected:
    FactorType factor_; // the factor operation
    INDEX primalOffset_;
-   INDEX auxOffset_;
+   INDEX auxOffset_; // do zrobienia: remove again: artifact from LP interface
+
+   // pool memory allocator specific for this factor container
+   // note: the below construction is not perfect when more than one solver is run simultaneously: The same allocator is used, yet the optimization problems are different + not thread safe.
+   // -> investigate thread_local inline static! inline static however is only supported in C++17
+   struct Allocator { // we enclose static allocator in nested class as only there (since C++11) we can access sizeof(FactorContainerType).
+      using type = MemoryPool<FactorContainerType,4096*sizeof(FactorContainerType)>; 
+      static type& get() {
+         static type allocator;
+         return allocator;
+      }
+   };
    
-
-   // we do this via templates only (no values), as types are incomplete yet. This is more cumbersome than a direct value computation as can be done usually.
-   /*
-   template<typename MESSAGE_LIST>
-   constexpr static auto MetaComputeMessageTuple()
-   {
-      //auto message_tuple = hana::transform(msg_list, [](auto m) { return std::declval<typename decltype(m)::type>(); }); // go from type_c to actual type
-      //auto left_message_type_tuple = hana::filter(msg_list, [](auto m) { return std::declval<typename decltype(m)::type>().LeftFactorNumber() == FACTOR_NO; });
-      auto msg_list_t = hana::type_c<MESSAGE_LIST>; // MESSAGE_LIST cannot be instantiated yet (incomplete type) -> hold it as type_c
-      // transform message list to tuple_t holding all the tuples
-      constexpr auto
-      auto has_same_left_factor = hana::is_valid([](auto&& x) -> decltype((void)x.leftFactorNumber) { });
-      //MESSAGE_LIST* msg_list;
-      //auto left_message_type_tuple = hana::filter(*msg_list, [](auto&& m) { return decltype(m)::leftFactorNumber == FACTOR_NO; });
-      //auto left_message_dispatcher_tuple = hana::transform(left_message_type_tuple, [](auto m) { return hana::type_c<MessageDispatcher<typename decltype(m)::type, LeftMessageFuncGetter>>; });
-      //auto right_message_tuple = hana::filter(msg_list, [](auto m) { return decltype(m)::type::rightFactorNumber == FACTOR_NO; });
-      //auto right_message_dispatcher_tuple = hana::transform(right_message_tuple, [](auto m) { return hana::type_c<MessageDispatcher<typename decltype(m)::type, RightMessageFuncGetter>>; });
-      //return hana::concat<left_message_dispatcher_tuple, right_message_dispatcher_tuple>;
-
-      //return left_message_dispatcher_tuple;
-      return hana::type_c<char>;
-   }
-   */
-
-   //decltype(MetaComputeMessageTuple<typename FACTOR_MESSAGE_TRAIT::MessageListHana>()) test;
-
    // compile time metaprogramming to transform Factor-Message information into lists of which messages this factor must hold
    // first get lists with left and right message types
    struct get_msg_type_list {
@@ -1760,26 +1643,18 @@ protected:
 public:
    REAL EvaluatePrimal(typename PrimalSolutionStorage::Element primalIt) const final
    {
-      return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
+      //return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
+      return factor_.EvaluatePrimal(primalIt + primalOffset_);
    }
 
    constexpr static bool CanCreateConstraints()
    {
-      //return FunctionExistence::HasCreateConstraints<FactorType,LpInterfaceAdapter*>();
       return FunctionExistence::HasCreateConstraints<FactorType,void,LpInterfaceAdapter*>();
-   }
-   
-   template<bool ENABLE = CanCreateConstraints()>
-   typename std::enable_if<ENABLE>::type
-   CreateConstraintsImpl(LpInterfaceAdapter* l) const
-   {
-      factor_.CreateConstraints(l);
    }
 
    constexpr static bool CanReduceLp()
    {
-           //return FunctionExistence::HasReduceLp<FactorType,LpInterfaceAdapter*,FactorContainerType>();
-           return FunctionExistence::HasReduceLp<FactorType,void,LpInterfaceAdapter*, FactorContainerType&>();
+      return FunctionExistence::HasReduceLp<FactorType,void,LpInterfaceAdapter*, FactorContainerType&>();
    }
    template<bool ENABLE = CanReduceLp()>
    typename std::enable_if<!ENABLE>::type
@@ -1789,7 +1664,7 @@ public:
    typename std::enable_if<ENABLE>::type
    ReduceLpImpl(LpInterfaceAdapter* l) const
    {
-           factor_.ReduceLp(l, *this); 
+           factor_.ReduceLp(l, factor_); 
    }  
    void ReduceLp(LpInterfaceAdapter* l) const {
            ReduceLpImpl(l);
@@ -1817,17 +1692,13 @@ public:
     return GetNumberOfAuxVariablesImpl();
    }
 
-   template<bool ENABLE = CanCreateConstraints()>
-   typename std::enable_if<!ENABLE>::type
-   CreateConstraintsImpl(LpInterfaceAdapter* l) const
-   {
-      throw std::runtime_error("create constraints not implemented by factor");
-   }
-
-
    void CreateConstraints(LpInterfaceAdapter* l) const final
    {
-      CreateConstraintsImpl(l);
+      static_if<CanCreateConstraints()>([&](auto f) {
+            f(factor_).CreateConstraints(l);
+      }).else_([&](auto f) {
+         throw std::runtime_error("create constraints not implemented by factor");
+      });
    }
 };
 
