@@ -949,7 +949,7 @@ int main()
    // emulate command line options
    std::vector<std::string> options = {
       {"--maxIter"}, {"1000"},
-      {"--timeout"}, {"3600"}, // one hour
+      {"--timeout"}, {"36000"}, // one hour
       {"--minDualImprovement"}, {"0.00001"},
       {"--minDualImprovementInterval"}, {"50"},
       {"--lowerBoundComputationInterval"}, {"10"},
@@ -959,14 +959,48 @@ int main()
       //{"--tightenIteration"}, {"500"},
       //{"--tightenInterval"}, {"20"},
       //{"--tightenConstraintsMax"}, {"50"},
-      {"--LpInterval"}, {"50"},
-      {"--LpTimelimit"}, {"100"},
+      {"--LpInterval"}, {"100"},
+      {"--LpTimelimit"}, {"36000"},
       {"--LpSolverThreads"}, {"1"},
       {"--LpRoundValue"}, {"1"},
       {"--databaseFile"}, {"discrete_tomography.db"}
    };
 
+   std::vector<std::string> LP_only_options = {
+      {"--maxIter"}, {"1"},
+      {"--timeout"}, {"3600"}, // one hour
+      {"--primalComputationInterval"}, {"100000"},
+      //{"--overwriteDbRecord"}, // do zrobienia: possibly deactivate this. Then we do not overwrite
+      //{"--tighten"},
+      //{"--tightenIteration"}, {"500"},
+      //{"--tightenInterval"}, {"20"},
+      //{"--tightenConstraintsMax"}, {"50"},
+      {"--LpInterval"}, {"50"},
+      {"--LpTimelimit"}, {"3600"},
+      {"--LpSolverThreads"}, {"1"},
+      {"--databaseFile"}, {"discrete_tomography.db"}
+   };
+
+
    using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
+
+
+   { // for overview
+      std::string prefix = "discrete_tomography_datasets/discrete_tomography_synthetic/mp/"; 
+         //RunSolver<FMC_DT_COMBINED,VisitorSolver<LpSolver<Solver<FMC_DT_COMBINED>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT_COMBINED>,{{prefix + "2/" + dt_synthetic_sparsity_1[0]}} ,options,"p=2,s=1", "MP");
+         //RunSolver<FMC_DT_COMBINED,VisitorSolver<LpSolver<Solver<FMC_DT_COMBINED>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT_COMBINED>,{{prefix + "4/" + dt_synthetic_sparsity_1[0]}} ,options,"p=4, s=1", "MP");
+         RunSolver<FMC_DT_COMBINED,VisitorSolver<LpSolver<Solver<FMC_DT_COMBINED>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT_COMBINED>,{{prefix + sheep_logan[0]}} ,options,"sheep logan, p=2", "MP");
+
+         //RunSolver<FMC_DT,VisitorSolver<LpSolver<Solver<FMC_DT_COMBINED>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT_COMBINED>,{{prefix + "2/" + dt_synthetic_sparsity_1[0]}} ,LP_only_options,"p=2,s=1", "LP tight");
+         //RunSolver<FMC_DT,VisitorSolver<LpSolver<Solver<FMC_DT_COMBINED>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT_COMBINED>,{{prefix + "4/" + dt_synthetic_sparsity_1[0]}} ,LP_only_options,"p=4, s=1", "LP tight");
+         //RunSolver<FMC_DT,VisitorSolver<LpSolver<Solver<FMC_DT_COMBINED>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT_COMBINED>,{{prefix + "4/" + dt_synthetic_sparsity_1[0]}} ,LP_only_options,"sheep logan, p=2", "LP tight");
+
+         //RunSolver<FMC_DT_NAIVE,VisitorSolver<LpSolver<Solver<FMC_DT_NAIVE>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT_NAIVE>,{{prefix + "2/" + dt_synthetic_sparsity_1[0]}} ,LP_only_options,"p=2,s=1", "LP standard");
+         //RunSolver<FMC_DT_NAIVE,VisitorSolver<LpSolver<Solver<FMC_DT_NAIVE>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT_NAIVE>,{{prefix + "4/" + dt_synthetic_sparsity_1[0]}} ,LP_only_options,"p=4, s=1", "LP standard");
+         RunSolver<FMC_DT_NAIVE,VisitorSolver<LpSolver<Solver<FMC_DT_NAIVE>,LpInterfaceGurobi>,VisitorType>>(DiscreteTomographyTextInput::ParseProblem<FMC_DT_NAIVE>,{{prefix + sheep_logan[0]}} ,LP_only_options,"sheep logan, p=2", "LP standard");
+
+   }
+   return 1;
 
    // run synthetic problems on all projection and sparsity levels 
    std::vector<std::string> projections = {{"2"},{"4"},{"6"}};

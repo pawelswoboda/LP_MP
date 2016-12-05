@@ -7,12 +7,150 @@
 
 #include "minConv.hxx"
 #include "discrete_tomography_algorithms.hxx"
+#include "vector.hxx"
 
 namespace LP_MP {
     
   //using MinConv = MinConv<std::function<REAL(INDEX)>,REAL,INDEX>;
 
   enum class DIRECTION {left,right};
+
+  template<DIRECTION DR>
+  class DiscreteTomographyMessageCounting2 {
+   public:
+
+      // do zrobienia: make the member functions static
+
+    //DiscreteTomographyMessageCounting2(INDEX numberOfLabels,INDEX numberOfVarsLeft,INDEX numberOfVarsRight,INDEX SumBound);
+
+    // RIGHT -> TOP Ternary
+    // LEFT  -> BOTTOM Ternary
+
+    /* repam.GetFactor()->&f  */
+      
+    //template<typename RIGHT_FACTOR, typename G1, typename G2>
+    //void ReceiveMessageFromRight(RIGHT_FACTOR* const f_right, const G1& repam_right, G2& msg){
+    //   MakeRightFactorUniform(f_right, repam_right, msg, 1.0);
+    //}
+
+    template<typename RIGHT_FACTOR, typename G2>
+    void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
+       MakeRightFactorUniform(f_right, msg, omega);
+    }
+
+    //template<typename LEFT_FACTOR, typename G1, typename G3>
+    //void SendMessageToRight(LEFT_FACTOR* const f_left, const G1& repam_left, G3& msg, const REAL omega){
+    //   MakeLeftFactorUniform(f_left, repam_left, msg, omega);
+    //}
+
+    template<typename LEFT_FACTOR, typename G3>
+    void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
+       MakeLeftFactorUniform(f_left, msg, 1.0);
+    }
+
+    template<typename RIGHT_FACTOR, typename MSG>
+    void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega)
+    {
+       if( DR == DIRECTION::left ){
+          tensor3 msg_tmp(f_right.no_labels(), f_right.no_labels(), f_right.left_sum_size());
+
+          f_right.MessageCalculation_Naive_Left(msg_tmp);
+
+          //for(auto it=msg_tmp.begin(); it!=msg_tmp.end(); ++it) {
+          //   *it = omega*(*it);
+          //}
+          msg -= omega*msg_tmp;
+       } else if(DR == DIRECTION::right) {
+          tensor3 msg_tmp(f_right.no_labels(), f_right.no_labels(), f_right.right_sum_size());
+
+          f_right.MessageCalculation_Naive_Right(msg_tmp);
+
+          //for(auto it=msg_tmp.begin(); it!=msg_tmp.end(); ++it) {
+          //   *it = omega*(*it);
+          //}
+          msg -= omega*msg_tmp;
+       } else {
+          assert(false);
+       } 
+    }
+
+    template<typename LEFT_FACTOR, typename MSG>
+    void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega)
+    {
+       tensor3 msg_tmp(f_left.no_labels(), f_left.no_labels(), f_left.up_sum_size());
+       f_left.MessageCalculation_Naive_Up(msg_tmp);
+       //for(auto it=msg_tmp.begin(); it!=msg_tmp.end(); ++it) {
+       //   *it = omega*(*it);
+       //}
+       msg -= omega*msg_tmp;
+    }
+    /*------*/
+
+    //template<typename LEFT_FACTOR, typename G1, typename G2>
+    //void ReceiveMessageFromLeft(LEFT_FACTOR* const f_left, const G1& repam_left, G2& msg);
+
+    //template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename G2, typename G3>
+    //void SendMessageToLeft(RIGHT_FACTOR* const f_right, const G2& repam_right, G3& msg, const REAL omega);
+
+    /*------*/
+      
+    template<typename LEFT_FACTOR, typename MSG>
+    void RepamLeft(LEFT_FACTOR& l, const MSG msg){
+       auto& up = l.up();
+       assert(up.size() == msg.size());
+       for(INDEX x_l=0; x_l<l.no_labels(); ++x_l) {
+          for(INDEX x_r=0; x_r<l.no_labels(); ++x_r) {
+             for(INDEX sum=0; sum<l.up_sum_size(); ++sum) {
+                up(x_l,x_r,sum) += normalize( msg(x_l,x_r,sum) );
+             }
+          }
+       } 
+       assert(l.LowerBound() < std::numeric_limits<REAL>::infinity()); 
+    }
+
+    template<typename RIGHT_FACTOR, typename MSG>
+    void RepamRight(RIGHT_FACTOR& r, const MSG msg){
+       assert(r.LowerBound() < std::numeric_limits<REAL>::infinity()); 
+       if(DR == DIRECTION::left) {
+          auto& left = r.left();
+          assert(left.size() == msg.size());
+          for(INDEX x_l=0; x_l<r.no_labels(); ++x_l) {
+             for(INDEX x_r=0; x_r<r.no_labels(); ++x_r) {
+                for(INDEX sum=0; sum<r.left_sum_size(); ++sum) {
+                   left(x_l,x_r,sum) += normalize( msg(x_l,x_r,sum) );
+                }
+             }
+          }
+       } else if(DR == DIRECTION::right) {
+          auto& right = r.right();
+          assert(right.size() == msg.size());
+          for(INDEX x_l=0; x_l<r.no_labels(); ++x_l) {
+             for(INDEX x_r=0; x_r<r.no_labels(); ++x_r) {
+                for(INDEX sum=0; sum<r.right_sum_size(); ++sum) {
+                   right(x_l,x_r,sum) += normalize( msg(x_l,x_r,sum) );
+                }
+             }
+          } 
+       } else {
+          assert(false);
+       }
+       //REAL min_val = std::numeric_limits<REAL>::infinity();
+       //for(INDEX i=0; i<msg.size(); ++i) { min_val = std::min(min_val, msg[i]); }
+       //assert(min_val < std::numeric_limits<REAL>::infinity());
+       //assert(*std::min_element(r.up().begin(), r.up().end()) < std::numeric_limits<REAL>::infinity());
+       //assert(r.LowerBound() < std::numeric_limits<REAL>::infinity()); 
+    }
+
+    /*------*/
+
+    // not used currently, as primal rounding does not give good results
+    //template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    //void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element left, LEFT_FACTOR* l,
+    //                                PrimalSolutionStorage::Element right, RIGHT_FACTOR* r);
+
+    
+  };
+
 
   template<DIRECTION DR>
   class DiscreteTomographyMessageCounting{

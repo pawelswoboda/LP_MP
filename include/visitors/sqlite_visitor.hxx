@@ -185,16 +185,27 @@ public:
       //ConditionallyCreateIndex("IterationsIndex4","Iterations(instance_id,solver_id,runtime)");
 
       ConditionallyCreateView("LowerBoundView", 
-"SELECT lowerBound,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.lowerBound < b.lowerBound) GROUP BY solver_id, instance_id;");
+//"SELECT lowerBound,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.lowerBound < b.lowerBound) GROUP BY solver_id, instance_id;");
+         "SELECT MAX(lowerBound),solver_id,instance_id FROM Iterations GROUP BY solver_id,instance_id;"
+         );
       // maximum lower bound over all solvers
       ConditionallyCreateView("MaxLowerBoundView",
-"SELECT MAX(lowerBound) as lowerBound, instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.instance_id = b.instance_id AND a.lowerBound < b.lowerBound) GROUP BY instance_id;");
+//"SELECT MAX(lowerBound) as lowerBound, instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.instance_id = b.instance_id AND a.lowerBound < b.lowerBound) GROUP BY instance_id;");
+         "SELECT MAX(lowerBound),instance_id FROM Iterations GROUP BY instance_id;"
+            );
+
       ConditionallyCreateView("UpperBoundView", 
-"SELECT upperBound,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations AS b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.upperBound > b.upperBound) GROUP BY solver_id, instance_id");
+//"SELECT upperBound,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations AS b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.upperBound > b.upperBound) GROUP BY solver_id, instance_id");
+         "SELECT MIN(upperBound),solver_id,instance_id FROM Iterations GROUP BY solver_id,instance_id;"
+            );
       ConditionallyCreateView("MinUpperBoundView",
-"SELECT MIN(upperBound) as upperBound, instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.instance_id = b.instance_id AND a.upperBound > b.upperBound) GROUP BY instance_id;");
+//"SELECT MIN(upperBound) as upperBound, instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.instance_id = b.instance_id AND a.upperBound > b.upperBound) GROUP BY instance_id;");
+         "SELECT MIN(upperBound),instance_id FROM Iterations GROUP BY instance_id;"
+            );
       ConditionallyCreateView("RuntimeView", 
-"SELECT runtime,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations AS b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.runtime < b.runtime) GROUP BY solver_id, instance_id;");
+//"SELECT runtime,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations AS b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.runtime < b.runtime) GROUP BY solver_id, instance_id;");
+         "SELECT MAX(runtime),solver_id,instance_id FROM Iterations GROUP BY solver_id,instance_id;"
+            );
       ConditionallyCreateView("AggregateIterationsHelper",
 " SELECT LowerBoundView.lowerBound AS lowerBound, UpperBoundView.upperBound AS upperBound, RuntimeView.runtime AS runtime, LowerBoundView.solver_id AS solver_id, LowerBoundView.instance_id AS instance_id"
 " FROM LowerBoundView "
@@ -202,29 +213,34 @@ public:
 " INNER JOIN RuntimeView ON (LowerBoundView.solver_id = RuntimeView.solver_id AND LowerBoundView.instance_id = RuntimeView.instance_id)"
 ";"); 
       ConditionallyCreateView("MinMaxBoundInstancesView",
-" SELECT MaxLowerBoundView.lowerBound, MinUpperBoundView.upperBound, RuntimeView.runtime, RuntimeView.iteration, MaxLowerBoundView.instance_id"
-" FROM MaxLowerBoundView "
-" INNER JOIN MinUpperBoundView ON (MaxLowerBoundView.instance_id = MinUpperBoundView.instance_id)"
-" INNER JOIN RuntimeView ON (MaxLowerBoundView.instance_id = RuntimeView.instance_id)"
-";");
+         "SELECT MAX(lowerBound),MIN(upperBound),instance_id FROM Iterations GROUP BY instance_id;"
+//" SELECT MaxLowerBoundView.lowerBound, MinUpperBoundView.upperBound, RuntimeView.runtime, RuntimeView.iteration, MaxLowerBoundView.instance_id"
+//" FROM MaxLowerBoundView "
+//" INNER JOIN MinUpperBoundView ON (MaxLowerBoundView.instance_id = MinUpperBoundView.instance_id)"
+//" INNER JOIN RuntimeView ON (MaxLowerBoundView.instance_id = RuntimeView.instance_id)"
+//";"
+);
       ConditionallyCreateView("AggregateIterations", 
-" SELECT AggregateIterationsHelper.lowerBound, AggregateIterationsHelper.upperBound, AggregateIterationsHelper.runtime, AggregateIterationsHelper.instance_id, AggregateIterationsHelper.solver_id, Instances.name AS instanceName, Datasets.id AS dataset_id, Datasets.name AS datasetName, Solvers.algorithmName, Solvers.algorithmFmc"
-" FROM AggregateIterationsHelper"
-" INNER JOIN Instances ON (Instances.id = AggregateIterationsHelper.instance_id)"
-" INNER JOIN Datasets ON (Instances.dataset_id = Datasets.id)"
-" INNER JOIN Solvers ON (Solvers.id = AggregateIterationsHelper.solver_id)"
-";");
+"SELECT MAX(lowerBound) AS lowerBound, MIN(upperBound) AS upperBound, MAX(runtime) as runtime,instance_id, Datasets.id AS dataset_id, Datasets.name AS datasetName, Solvers.id AS solver_id, Solvers.algorithmName AS algorithmName, Solvers.algorithmFMC AS algorithmFmc FROM Iterations INNER JOIN Instances ON (Instances.id = instance_id) INNER JOIN Datasets ON (Instances.dataset_id = Datasets.id) INNER JOIN Solvers ON (Solvers.id = solver_id) GROUP BY instance_id,solver_id;");
+//" SELECT AggregateIterationsHelper.lowerBound, AggregateIterationsHelper.upperBound, AggregateIterationsHelper.runtime, AggregateIterationsHelper.instance_id, AggregateIterationsHelper.solver_id, Instances.name AS instanceName, Datasets.id AS dataset_id, Datasets.name AS datasetName, Solvers.algorithmName, Solvers.algorithmFmc"
+//" FROM AggregateIterationsHelper"
+//" INNER JOIN Instances ON (Instances.id = AggregateIterationsHelper.instance_id)"
+//" INNER JOIN Datasets ON (Instances.dataset_id = Datasets.id)"
+//" INNER JOIN Solvers ON (Solvers.id = AggregateIterationsHelper.solver_id)"
+//";"
       ConditionallyCreateView("AggregateInstances",
-" SELECT AVG(ai.lowerBound) AS lowerBound, AVG(ai.upperBound) AS upperBound, AVG(ai.runtime) AS runtime, ai.dataset_id AS dataset_id, ai.datasetName AS datasetName, ai.solver_id AS solver_id FROM AggregateIterations AS ai "
-" WHERE (SELECT 1 FROM Instances WHERE Instances.dataset_id = ai.dataset_id AND Instances.id = ai.instance_id) "
+            "SELECT AVG(ai.lowerBound) AS lowerBound, AVG(ai.upperBound) AS upperBound, AVG(ai.runtime) AS runtime, Instances.dataset_id AS dataset_id, ai.datasetName AS datasetName, ai.solver_id AS solver_id FROM AggregateIterations AS ai INNER JOIN Instances ON (ai.instance_id = Instances.id)  GROUP BY Instances.dataset_id, ai.solver_id;");
+//" SELECT AVG(ai.lowerBound) AS lowerBound, AVG(ai.upperBound) AS upperBound, AVG(ai.runtime) AS runtime, ai.dataset_id AS dataset_id, ai.datasetName AS datasetName, ai.solver_id AS solver_id FROM AggregateIterations AS ai "
+//" WHERE (SELECT 1 FROM Instances WHERE Instances.dataset_id = ai.dataset_id AND Instances.id = ai.instance_id) "
 //" INNER JOIN Instances ON (Instances.dataset_id = ai.dataset_id AND Instances.id = ai.instance_id)"
-" GROUP BY ai.dataset_id, ai.solver_id"
-";");
+//" GROUP BY ai.dataset_id, ai.solver_id"
+//";");
       ConditionallyCreateView("MinMaxBoundDatasetsView",
-"SELECT MAX(ai.lowerBound) AS lowerBound, MIN(ai.upperBound) AS upperBound, MIN(ai.runtime) AS runtime, ai.dataset_id AS dataset_id, ai.datasetName AS datasetName FROM AggregateInstances AS ai "
-" WHERE (SELECT 1 FROM AggregateInstances WHERE AggregateInstances.dataset_id = ai.dataset_id)"
-" GROUP BY ai.dataset_id"
-";");
+            "SELECT MAX(ai.lowerBound) as lowerBound, MIN(ai.upperBound) as upperBound, MIN(ai.runtime) AS runtime, ai.dataset_id AS dataset_id, ai.datasetName AS datasetName FROM AggregateInstances AS ai GROUP BY ai.dataset_id;");
+//"SELECT MAX(ai.lowerBound) AS lowerBound, MIN(ai.upperBound) AS upperBound, MIN(ai.runtime) AS runtime, ai.dataset_id AS dataset_id, ai.datasetName AS datasetName FROM AggregateInstances AS ai "
+//" WHERE (SELECT 1 FROM AggregateInstances WHERE AggregateInstances.dataset_id = ai.dataset_id)"
+//" GROUP BY ai.dataset_id"
+//";");
 
    }
 
@@ -319,6 +335,7 @@ public:
       dataset_id_ = GetDatasetId(datasetName_);
       instance_id_ = GetInstanceId(inputFile, dataset_id_);
 
+      // do zrobienia: functions not in parallel! -> in parallel more than one optimization can take place. make lock in database
       if(!overwriteDbRecord_ && CheckIterationsPresent(solver_id_, instance_id_)) { 
          std::cout << "Not performing optimization, as instance was already optimized with same algorithm\n";
          ret.error = true;
@@ -337,6 +354,7 @@ public:
 
       return ret_state;
    }
+
    void end(const REAL lowerBound, const REAL upperBound)
    {
       const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - BaseVisitor::GetBeginTime()).count();

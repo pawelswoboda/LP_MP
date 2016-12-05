@@ -7,10 +7,9 @@
 namespace LP_MP {
 
 // maximize/minimize to second min/max
-// assume FactorType is Simplex. 
-// do zrobienia: or multiplex
-// do zrobienia: use breakpoINDEX cost for message updates
-template<Chirality C>
+// do zrobienia: use breakpoint cost for message updates
+// Sometimes EqualityMessage is only used for receiving restricted messages. In this case COMPUTE_MESSAGES = false
+template<Chirality C, bool COMPUTE_MESSAGES = true>
 class EqualityMessage 
 {
 public:
@@ -40,14 +39,16 @@ public:
       msg[0] -= omega*(repamPot[var_idx] - min_val);
    }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2>
-   void ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg)
+   template<typename RIGHT_FACTOR, typename G1, typename G2, bool ENABLE=COMPUTE_MESSAGES>
+   typename std::enable_if<ENABLE,void>::type
+   ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg)
    { 
       MakeFactorUniform(rightPot, msg, rightVar_);
    }
 
-   template<typename LEFT_FACTOR, typename G1, typename G2>
-   void ReceiveMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg)
+   template<typename LEFT_FACTOR, typename G1, typename G2, bool ENABLE=COMPUTE_MESSAGES>
+   typename std::enable_if<ENABLE,void>::type
+   ReceiveMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg)
    { 
       MakeFactorUniform(leftPot, msg, leftVar_);
    }
@@ -84,12 +85,14 @@ public:
 
    // for sending multiple messages at once: makes factor uniform by sending all messages at once
    template<typename VAR_ACCESS_OP, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
-   static void MakeFactorUniformParallel(VAR_ACCESS_OP var_access_op, const MSG_ARRAY& msgs, const RIGHT_REPAM& repam, ITERATOR omegaIt)
+   static void MakeFactorUniformParallel(VAR_ACCESS_OP var_access_op, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, const RIGHT_REPAM& repam, ITERATOR omegaIt)
    {
       //assert(msgs.size() >= 2); // otherwise calling this method makes no sense, but it can happen for some trivial problems.
-      assert(msgs.size() <= repam.size());
+      //assert(msgs.size() <= repam.size());
       //assert(msgs.size() == repam.size()-1); // special case of one edge is not assignment in QAP or cosegmentation. For now. Only for hotel and house
-      const ITERATOR omegaEnd = omegaIt + msgs.size();
+      INDEX size = 0;
+      for(auto it= msg_begin; it!=msg_end; ++it) ++size;
+      const ITERATOR omegaEnd = omegaIt + size;
 
       // do zrobienia:
       const REAL omega_sum = 0.5 * std::accumulate(omegaIt, omegaEnd, 0.0); // strangely, a smaller factor makes the algorithm faster
@@ -99,8 +102,9 @@ public:
 
       // find minimal value of potential over all indices accessed by messages
       REAL min_val_covered = std::numeric_limits<REAL>::max();
-      for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx) {
-         const INDEX var_idx = var_access_op(msgs[msg_idx].GetMessageOp());
+      //for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx) {
+      for(auto it= msg_begin; it!=msg_end; ++it) {
+         const INDEX var_idx = var_access_op((*it).GetMessageOp());
          //assert(var_idx != repam.size()-1); // this is only valied for assignment problems from house and hotel
          //std::cout << "leftVar = " << leftVar << "\n";
          min_val_covered = std::min(min_val_covered, repam[var_idx]);
@@ -129,27 +133,30 @@ public:
       //const INDEX last_idx = leftRepam.size() - 1;
       //std::cout << "not covered = " << leftRepam[last_idx] << "\n";
 
-      for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx, omegaIt++) {
+      //for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx, omegaIt++) {
+      for(auto it= msg_begin; it!=msg_end; ++it, ++omegaIt) {
          if(*omegaIt > 0) {
-            const INDEX var_idx = var_access_op(msgs[msg_idx].GetMessageOp());
-            msgs[msg_idx].operator[](0) -= omega_sum*(repam[var_idx] - new_val);
+            const INDEX var_idx = var_access_op((*it).GetMessageOp());
+            (*it).operator[](0) -= omega_sum*(repam[var_idx] - new_val);
          }
       }
    }
 
    // do zrobienia: enable again
-   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
-   static void SendMessagesToLeft(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& rightRepam, const MSG_ARRAY& msgs, ITERATOR omegaIt)
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR, bool ENABLE=COMPUTE_MESSAGES>
+   static typename std::enable_if<ENABLE,void>::type
+   SendMessagesToLeft(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& rightRepam, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
    {
       auto var_access_op = [](const EqualityMessage& msg) -> INDEX { return msg.rightVar_; };
-      MakeFactorUniformParallel(var_access_op, msgs, rightRepam, omegaIt);
+      MakeFactorUniformParallel(var_access_op, msg_begin, msg_end, rightRepam, omegaIt);
    }
 
-   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename LEFT_REPAM, typename ITERATOR>
-   static void SendMessagesToRight(const LEFT_FACTOR& leftFactor, const LEFT_REPAM& leftRepam, const MSG_ARRAY& msgs, ITERATOR omegaIt)
+   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename LEFT_REPAM, typename ITERATOR, bool ENABLE=COMPUTE_MESSAGES>
+   static typename std::enable_if<ENABLE,void>::type
+   SendMessagesToRight(const LEFT_FACTOR& leftFactor, const LEFT_REPAM& leftRepam, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
    {
       auto var_access_op = [](const EqualityMessage& msg) -> INDEX { return msg.leftVar_; };
-      MakeFactorUniformParallel(var_access_op, msgs, leftRepam, omegaIt);
+      MakeFactorUniformParallel(var_access_op, msg_begin, msg_end, leftRepam, omegaIt);
    }
 
    template<typename G>
@@ -173,7 +180,7 @@ public:
       lp->addLinearEquality(lhs,rhs);
    }
 
-   template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = C == Chirality::left, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = C == Chirality::right, typename LEFT_FACTOR, typename RIGHT_FACTOR>
    typename std::enable_if<PROPAGATE_PRIMAL_TO_LEFT_TMP,void>::type
    ComputeLeftFromRightPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
    {
@@ -185,7 +192,7 @@ public:
       }
    }
 
-   template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = C == Chirality::right, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = C == Chirality::left, typename LEFT_FACTOR, typename RIGHT_FACTOR>
    typename std::enable_if<PROPAGATE_PRIMAL_TO_RIGHT_TMP,void>::type
    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
    {

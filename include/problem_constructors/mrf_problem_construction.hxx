@@ -29,22 +29,20 @@ public:
 
    MRFProblemConstructor(Solver<FMC>& solver) : lp_(&solver.GetLP()) {}
 
-   virtual UnaryFactorType ConstructUnaryFactor(const std::vector<REAL>& cost) = 0;
-   virtual PairwiseFactorType ConstructPairwiseFactor(const std::vector<REAL>& cost, const INDEX leftDim, const INDEX rightDim) = 0;
+   virtual void ConstructUnaryFactor(UnaryFactorType& u, const std::vector<REAL>& cost) = 0;
+   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const std::vector<REAL>& cost, const INDEX leftDim, const INDEX rightDim) = 0;
    virtual RightMessageType ConstructRightUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
    virtual LeftMessageType ConstructLeftUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
 
-   INDEX AddUnaryFactor(const std::vector<REAL>& cost)
+   UnaryFactorContainer* AddUnaryFactor(const std::vector<REAL>& cost)
    {
-      UnaryFactorContainer* u = new UnaryFactorContainer(UnaryFactorType(cost), cost);
-      unaryFactor_.push_back(u);
-      lp_->AddFactor(u);;
-      return unaryFactor_.size()-1;
+      return AddUnaryFactor(unaryFactor_.size(), cost);
    }
    UnaryFactorContainer* AddUnaryFactor(const INDEX node_number, const std::vector<REAL>& cost)
    {
       //UnaryFactorContainer* u = new UnaryFactorContainer(UnaryFactorType(cost), cost);
-      auto* u = new UnaryFactorContainer( ConstructUnaryFactor(cost), cost);
+      auto* u = new UnaryFactorContainer( cost.size() );
+      ConstructUnaryFactor( *(u->GetFactor()), cost );
       if(node_number >= unaryFactor_.size()) {
          unaryFactor_.resize(node_number+1,nullptr);
       } else {
@@ -74,7 +72,8 @@ public:
       assert(cost.size() == GetNumberOfLabels(var1) * GetNumberOfLabels(var2));
       //assert(pairwiseMap_.find(std::make_tuple(var1,var2)) == pairwiseMap_.end());
       //PairwiseFactorContainer* p = new PairwiseFactorContainer(PairwiseFactor(cost), cost);
-      auto* p = new PairwiseFactorContainer(ConstructPairwiseFactor(cost, GetNumberOfLabels(var1), GetNumberOfLabels(var2)), cost);
+      auto* p = new PairwiseFactorContainer(GetNumberOfLabels(var1), GetNumberOfLabels(var2));
+      ConstructPairwiseFactor(*(p->GetFactor()), cost, var1, var2);
       pairwiseFactor_.push_back(p);
       pairwiseIndices_.push_back(std::make_tuple(var1,var2));
       const INDEX factorId = pairwiseFactor_.size()-1;
@@ -90,17 +89,21 @@ public:
 
    void LinkUnaryPairwiseFactor(UnaryFactorContainer* const left, PairwiseFactorContainer* const p, UnaryFactorContainer* right)
    {
-      auto* l = new LeftMessageContainer(ConstructLeftUnaryPairwiseMessage(left, p), left, p, left->size());
-      leftMessage_.push_back(l);
+      auto* l = new LeftMessageContainer(ConstructLeftUnaryPairwiseMessage(left, p), left, p);
       lp_->AddMessage(l);
-      auto* r = new RightMessageContainer(ConstructRightUnaryPairwiseMessage(right, p), right, p, right->size());
-      rightMessage_.push_back(r);
+      auto* r = new RightMessageContainer(ConstructRightUnaryPairwiseMessage(right, p), right, p);
       lp_->AddMessage(r);
    }
 
 
    UnaryFactorContainer* GetUnaryFactor(const INDEX i) const { assert(i<unaryFactor_.size()); return unaryFactor_[i]; }
    PairwiseFactorContainer* GetPairwiseFactor(const INDEX i) const { assert(i<pairwiseFactor_.size()); return pairwiseFactor_[i]; }
+   PairwiseFactorContainer* GetPairwiseFactor(const INDEX i, const INDEX j) const { 
+      assert(i<j);    
+      assert(j<unaryFactor_.size());
+      const INDEX factor_id = GetPairwiseFactorId(i,j);
+      return pairwiseFactor_[factor_id]; 
+   }
 
    INDEX GetNumberOfVariables() const 
    { 
@@ -130,10 +133,9 @@ public:
       assert(i1 < GetNumberOfLabels( std::get<0>(GetPairwiseVariables(factorId)) ));
       assert(i2 < GetNumberOfLabels( std::get<1>(GetPairwiseVariables(factorId)) ));
       const INDEX var1 = std::get<0>(GetPairwiseVariables(factorId));
-      const INDEX label = i1 + i2*GetNumberOfLabels(var1);
       //const INDEX var2 = std::get<1>(GetPairwiseVariables(factorId));
       //const INDEX label = i2 + i1*GetNumberOfLabels(var2);
-      return pairwiseFactor_[factorId]->operator[](label);
+      return (*pairwiseFactor_[factorId]->GetFactor())(i1,i2);
    }
 
 
@@ -157,7 +159,7 @@ public:
    void WritePrimal(STREAM& s, PrimalSolutionStorage& primal) const 
    {
       if(unaryFactor_.size() > 0) {
-         for(INDEX i=0; i<unaryFactor_.size(); ++i) {
+        for(INDEX i=0; i<unaryFactor_.size()-1; ++i) { // -1 because you asking for the last factor later
             auto* f = unaryFactor_[i];
             const INDEX primal_offset = f->GetPrimalOffset();
             for(INDEX x=0; x<f->size(); ++x) {
@@ -182,9 +184,6 @@ protected:
    
    std::vector<std::tuple<INDEX,INDEX>> pairwiseIndices_;
 
-   std::vector<LeftMessageContainer*> leftMessage_;
-   std::vector<RightMessageContainer*> rightMessage_;
-
    std::map<std::tuple<INDEX,INDEX>, INDEX> pairwiseMap_; // given two sorted indices, return factorId belonging to that index.
 
    INDEX unaryFactorIndexBegin_, unaryFactorIndexEnd_; 
@@ -207,39 +206,123 @@ public:
    using RightMessageType = typename BaseConstructor::RightMessageType;
    using LeftMessageType = typename BaseConstructor::LeftMessageType;
 
-   UnaryFactorType ConstructUnaryFactor(const std::vector<REAL>& cost) 
-   { return UnaryFactorType(cost); }
+   void ConstructUnaryFactor(UnaryFactorType& u, const std::vector<REAL>& cost) 
+   { 
+      for(INDEX i=0; i<cost.size(); ++i) {
+         u[i] = cost[i];
+      }
+   }
 
-   PairwiseFactorType ConstructPairwiseFactor(const std::vector<REAL>& cost, const INDEX leftDim, const INDEX rightDim) 
-   { return PairwiseFactorType(cost); }
+   void ConstructPairwiseFactor(PairwiseFactorType& p, const std::vector<REAL>& cost, const INDEX i1, const INDEX i2) 
+   { 
+      const INDEX dim1 = this->GetNumberOfLabels(i1);
+      const INDEX dim2 = this->GetNumberOfLabels(i2);
+      for(INDEX x1=0; x1<dim1; ++x1) {
+         for(INDEX x2=0; x2<dim2; ++x2) {
+            p(x1,x2) = cost[x2*dim1 + x1];
+         }
+      }
+   }
 
    RightMessageType ConstructRightUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p)
    { 
-      using RightUnaryLoopType = typename RightMessageType::LeftLoopType;
-      using RightPairwiseLoopType = typename RightMessageType::RightLoopType;
+      //using RightUnaryLoopType = typename RightMessageType::LeftLoopType;
+      //using RightPairwiseLoopType = typename RightMessageType::RightLoopType;
 
       const INDEX rightDim = right->size();
       const INDEX leftDim = p->size() / rightDim;
 
-      RightUnaryLoopType rightUnaryLoop(rightDim);
-      std::array<INDEX,2> pairwiseDim = {{leftDim, rightDim}};
-      RightPairwiseLoopType rightPairwiseLoop( pairwiseDim );
-      return RightMessageType(rightUnaryLoop, rightPairwiseLoop);
+      //RightUnaryLoopType rightUnaryLoop(rightDim);
+      //std::array<INDEX,2> pairwiseDim = {{leftDim, rightDim}};
+      //RightPairwiseLoopType rightPairwiseLoop( pairwiseDim );
+      return RightMessageType(leftDim, rightDim);
    }
 
    LeftMessageType ConstructLeftUnaryPairwiseMessage(UnaryFactorContainer* const left, PairwiseFactorContainer* const p)
    {
-      using LeftUnaryLoopType = typename LeftMessageType::LeftLoopType;
-      using LeftPairwiseLoopType = typename LeftMessageType::RightLoopType;
+      //using LeftUnaryLoopType = typename LeftMessageType::LeftLoopType;
+      //using LeftPairwiseLoopType = typename LeftMessageType::RightLoopType;
 
       const INDEX leftDim = left->size();
       const INDEX rightDim = p->size() / leftDim;
 
-      LeftUnaryLoopType leftUnaryLoop(leftDim);
-      std::array<INDEX,2> pairwiseDim = {{leftDim, rightDim}};
-      LeftPairwiseLoopType leftPairwiseLoop( pairwiseDim );
-      return LeftMessageType(leftUnaryLoop, leftPairwiseLoop);
+      //LeftUnaryLoopType leftUnaryLoop(leftDim);
+      //std::array<INDEX,2> pairwiseDim = {{leftDim, rightDim}};
+      //LeftPairwiseLoopType leftPairwiseLoop( pairwiseDim );
+      //return LeftMessageType(leftUnaryLoop, leftPairwiseLoop);
+      return LeftMessageType(leftDim, rightDim);
    }
+};
+
+// assumes underlying label space comes from an assignment problem on a bipartite graph, where certain nodes corresponds to unaries in the graphical model. Should inherit from StandardMrfConstructor
+template<class MRF_PROBLEM_CONSTRUCTOR>
+class AssignmentGmConstructor : public MRF_PROBLEM_CONSTRUCTOR
+{
+public:
+   using PairwiseFactorType = typename MRF_PROBLEM_CONSTRUCTOR::PairwiseFactorType;
+
+   AssignmentGmConstructor(Solver<typename MRF_PROBLEM_CONSTRUCTOR::FMC>& pd) : MRF_PROBLEM_CONSTRUCTOR(pd) {}
+
+   void SetGraph(const std::vector<std::vector<INDEX>> graph) { graph_ = graph; }
+
+   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const std::vector<REAL>& cost, const INDEX i1, const INDEX i2) 
+   { 
+      assert(i1 < graph_.size()+1 && i2 < graph_.size()+1);
+      assert(i1 < i2);
+
+      const INDEX dim1 = this->GetNumberOfLabels(i1);
+      const INDEX dim2 = this->GetNumberOfLabels(i2);
+      for(INDEX x1=0; x1<dim1; ++x1) {
+         for(INDEX x2=0; x2<dim2; ++x2) {
+            p(x1,x2) = cost[x2*dim1 + x1];
+         }
+      }
+
+      if(i1 < graph_.size() && i2 < graph_.size()) {
+         // put infinities on diagonal
+         std::vector<REAL> cost_inf = cost;
+         assert(this->GetNumberOfLabels(i1) == graph_[i1].size() + 1);
+         assert(this->GetNumberOfLabels(i2) == graph_[i2].size() + 1);
+         for(INDEX x1=0; x1<this->GetNumberOfLabels(i1)-1; ++x1) { // last label is non-assignment
+            for(INDEX x2=0; x2<this->GetNumberOfLabels(i2)-1; ++x2) { // last label is non-assignment
+               if(graph_[i1][x1] == graph_[x2][i2]) {
+                  p(x1,x2) = std::numeric_limits<REAL>::infinity();
+               }
+            }
+         }
+      }
+   }
+   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) const
+   {
+      INDEX no_labels = 0;
+      for(auto&v : graph_) {
+         for(auto l : v) {
+            no_labels = std::max(no_labels, l);
+         }
+      }
+      ++no_labels;
+      std::vector<INDEX> labels_taken(no_labels,0);
+      for(INDEX i=0; i<graph_.size(); ++i) {
+         auto* u = this->GetUnaryFactor(i);
+         const INDEX primal_offset = u->GetPrimalOffset();
+         for(INDEX l=0; l<graph_[i].size(); ++l) {
+            if(primal[primal_offset + l] == 1) {
+               labels_taken[graph_[i][l]]++;
+            }
+         }
+      }
+      for(auto l : labels_taken) {
+         if(l > 1) {
+            std::cout << "assignment not feasible\n";
+            return false;
+         }
+      }
+      return true;
+   }
+
+private:
+   std::vector<std::vector<INDEX>> graph_;
+
 };
 
 // derives from a given mrf problem constructor and adds tightening capabilities on top of it, as implemented in cycle_inequalities and proposed by David Sontag
@@ -277,7 +360,7 @@ public:
       const INDEX factor13Id = this->pairwiseMap_.find(std::make_tuple(var1,var3))->second;
       const INDEX factor23Id = this->pairwiseMap_.find(std::make_tuple(var2,var3))->second;
 
-      TripletFactorContainer* t = new TripletFactorContainer(TripletFactor(cost), cost);
+      TripletFactorContainer* t = new TripletFactorContainer(this->GetNumberOfLabels(var1), this->GetNumberOfLabels(var2), this->GetNumberOfLabels(var3));
       tripletFactor_.push_back(t);
       tripletIndices_.push_back(std::make_tuple(var1,var2,var3));
       const INDEX factorId = tripletFactor_.size()-1;
@@ -299,8 +382,8 @@ public:
    {
       using PairwiseTripletMessageType = typename PAIRWISE_TRIPLET_MESSAGE_CONTAINER::MessageType;
 
-      using PairwiseLoopType = typename PairwiseTripletMessageType::LeftLoopType;
-      using TripletLoopType = typename PairwiseTripletMessageType::RightLoopType;
+      //using PairwiseLoopType = typename PairwiseTripletMessageType::LeftLoopType;
+      //using TripletLoopType = typename PairwiseTripletMessageType::RightLoopType;
 
       typename MRFPC::PairwiseFactorContainer* const p = this->pairwiseFactor_[pairwiseFactorId];
       const INDEX pairwiseVar1 = std::get<0>(this->pairwiseIndices_[pairwiseFactorId]);
@@ -321,14 +404,14 @@ public:
       assert(pairwiseDim1*pairwiseDim2 == p->size());
       assert(tripletDim1*tripletDim2*tripletDim3 == t->size());
 
-      PairwiseLoopType pairwiseLoop( pairwiseDim1*pairwiseDim2 );
+      //PairwiseLoopType pairwiseLoop( pairwiseDim1*pairwiseDim2 );
 
-      std::array<INDEX,3> tripletDim = {{tripletDim1, tripletDim2, tripletDim3}};
-      TripletLoopType tripletLoop( tripletDim );
+      //std::array<INDEX,3> tripletDim = {{tripletDim1, tripletDim2, tripletDim3}};
+      //TripletLoopType tripletLoop( tripletDim );
 
       using MessageType = typename PAIRWISE_TRIPLET_MESSAGE_CONTAINER::MessageType;
-      MessageType m = MessageType(pairwiseLoop, tripletLoop);
-      PAIRWISE_TRIPLET_MESSAGE_CONTAINER* mc = new PAIRWISE_TRIPLET_MESSAGE_CONTAINER(m, p, t, p->size());
+      MessageType m = MessageType(tripletDim1, tripletDim2, tripletDim3);
+      PAIRWISE_TRIPLET_MESSAGE_CONTAINER* mc = new PAIRWISE_TRIPLET_MESSAGE_CONTAINER(m, p, t);
       tripletMessage_.push_back( mc );
       this->lp_->AddMessage(mc);
    }
@@ -588,8 +671,8 @@ namespace UaiMrfInput {
                auto* f = mrf.GetUnaryFactor(var);
                assert(input.function_tables_[i].size() == input.cardinality_[var]);
                for(INDEX x=0; x<input.function_tables_[i].size(); ++x) {
-                  assert( (*f)[x] == 0.0);
-                  (*f)[x] = input.function_tables_[i][x];
+                  assert( (*f->GetFactor())[x] == 0.0);
+                  (*f->GetFactor())[x] = input.function_tables_[i][x];
                }
             }
          }
