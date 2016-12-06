@@ -52,7 +52,7 @@ namespace LP_MP {
 
    inline LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
    {
-      feenableexcept(FE_INVALID | FE_OVERFLOW);
+      //feenableexcept(FE_INVALID | FE_OVERFLOW);
       const std::string uniform = "uniform";
       if(s == "anisotropic") {
          //return LpReparametrizationMode({mode::anisotropic,0.0});

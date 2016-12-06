@@ -29,6 +29,7 @@ namespace LP_MP {
                   void CalcConv(T1 op,T2 a,T3 b,bool onlyMin = false);
 
             private:
+               // do zrobienia: custom vector?
                std::vector<Index> idxa_;
                std::vector<Index> idxb_;
                std::vector<Index> outA_;
@@ -55,7 +56,6 @@ namespace LP_MP {
       template<class Value,class Index>
          template<class T1,class T2>
          MinConv<Value,Index>::MinConv(T1 a, T2 b, Index n, Index m,Index t){
-            assert(false);
             if( n < 1 || m < 1 || t < 1){ 
                throw std::runtime_error("m,n and t should > 0!");  }
             sort(a,n,idxa_);

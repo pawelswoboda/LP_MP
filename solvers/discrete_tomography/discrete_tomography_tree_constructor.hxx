@@ -37,33 +37,40 @@ namespace LP_MP {
     void connect_pairwise_counting_center(PairwiseFactorType* p, COUNTING_FACTOR* c) {
        auto* m = new PAIRWISE_COUNTING_CENTER(false, p, c);
        pd_.GetLP().AddMessage(m);
+       pd_.GetLP().AddFactorRelation(p,c);
     }
     void connect_pairwise_counting_left(PairwiseFactorType* p, COUNTING_FACTOR* c) {
        auto* m = new PAIRWISE_COUNTING_LEFT(false, p, c);
        pd_.GetLP().AddMessage(m);
+       pd_.GetLP().AddFactorRelation(p,c);
     }
     void connect_pairwise_counting_right(PairwiseFactorType* p, COUNTING_FACTOR* c) {
        auto* m = new PAIRWISE_COUNTING_RIGHT(false, p, c);
        pd_.GetLP().AddMessage(m);
+       pd_.GetLP().AddFactorRelation(p,c);
     }
     void connect_pairwise_counting_left(PairwiseFactorType* p1, PairwiseFactorType* p2, COUNTING_FACTOR* c) {
        auto* m1 = new LEFT_PAIRWISE_COUNTING_LEFT(false,p1,c);
        pd_.GetLP().AddMessage(m1);
        auto* m2 = new RIGHT_PAIRWISE_COUNTING_LEFT(false,p2,c);
        pd_.GetLP().AddMessage(m2);
+       pd_.GetLP().AddFactorRelation(p2,c);
     }
     void connect_pairwise_counting_right(PairwiseFactorType* p1, PairwiseFactorType* p2, COUNTING_FACTOR* c) {
        auto* m1 = new LEFT_PAIRWISE_COUNTING_RIGHT(false,p1,c);
        pd_.GetLP().AddMessage(m1);
        auto* m2 = new RIGHT_PAIRWISE_COUNTING_RIGHT(false,p2,c);
        pd_.GetLP().AddMessage(m2);
+       pd_.GetLP().AddFactorRelation(p2,c);
     }
 
     void connect_counting_factors_left(COUNTING_FACTOR* c_left, COUNTING_FACTOR* c_top) {
+       pd_.GetLP().AddFactorRelation(c_left,c_top);
        auto* m = new COUNTING_MESSAGE_LEFT(c_left, c_top);
        pd_.GetLP().AddMessage(m);
     }
     void connect_counting_factors_right(COUNTING_FACTOR* c_right, COUNTING_FACTOR* c_top) {
+       pd_.GetLP().AddFactorRelation(c_right,c_top);
        auto* m = new COUNTING_MESSAGE_RIGHT(c_right, c_top);
        pd_.GetLP().AddMessage(m);
     }
@@ -103,12 +110,14 @@ namespace LP_MP {
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[0],projectionVar[1]),f1);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[1],projectionVar[2]),f1);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[2],projectionVar[3]),f1);
+                 pd_.GetLP().AddFactorRelation(f1, mrf.GetUnaryFactor(projectionVar[3]));
 
                  auto* f2 = new COUNTING_FACTOR(noLabels_, f1->GetFactor()->up_sum_size(), 1, std::min(f1->GetFactor()->up_sum_size() + 2*noLabels_, max_sum));
                  pd_.GetLP().AddFactor(f2);
                  connect_counting_factors_left(f1,f2);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[3],projectionVar[4]),f2);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[4],projectionVar[5]),f2);
+                 pd_.GetLP().AddFactorRelation(f2, mrf.GetUnaryFactor(projectionVar[5]));
 
                  begin_rest = 7;
                  queue.push_back({f2,6});
@@ -121,6 +130,7 @@ namespace LP_MP {
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[0],projectionVar[1]), f1);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[1],projectionVar[2]),f1);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[2],projectionVar[3]),f1);
+                 pd_.GetLP().AddFactorRelation(f1, mrf.GetUnaryFactor(projectionVar[3]));
                  queue.push_back({f1,3});
 
                  auto* f2 = new COUNTING_FACTOR(noLabels_, 1, 1, std::min(2*noLabels_, max_sum));
@@ -128,6 +138,7 @@ namespace LP_MP {
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[4],projectionVar[5]), f2);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[5],projectionVar[6]),f2);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[6],projectionVar[7]),f2);
+                 pd_.GetLP().AddFactorRelation(f2, mrf.GetUnaryFactor(projectionVar[7]));
                  queue.push_back({f2,7});
 
                  begin_rest = 8;
@@ -139,6 +150,7 @@ namespace LP_MP {
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[0],projectionVar[1]), mrf.GetPairwiseFactor(projectionVar[1], projectionVar[2]), f1);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[2],projectionVar[3]),f1);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[3],projectionVar[4]),f1);
+                 pd_.GetLP().AddFactorRelation(f1, mrf.GetUnaryFactor(projectionVar[4]));
                  queue.push_back({f1,4});
 
                  auto* f2 = new COUNTING_FACTOR(noLabels_, 1, 1, std::min(2*noLabels_, max_sum));
@@ -146,6 +158,7 @@ namespace LP_MP {
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[5],projectionVar[6]), f2);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[6],projectionVar[7]),f2);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[7],projectionVar[8]),f2);
+                 pd_.GetLP().AddFactorRelation(f2, mrf.GetUnaryFactor(projectionVar[8]));
                  queue.push_back({f2,8});
 
                  begin_rest = 9;
@@ -157,6 +170,7 @@ namespace LP_MP {
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[0],projectionVar[1]), f);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[1],projectionVar[2]),f);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[2],projectionVar[3]), f);
+                 pd_.GetLP().AddFactorRelation(f, mrf.GetUnaryFactor(projectionVar[3]));
                  queue.push_back({f,3});
 
                  begin_rest = 4;
@@ -168,6 +182,7 @@ namespace LP_MP {
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[0],projectionVar[1]), mrf.GetPairwiseFactor(projectionVar[1], projectionVar[2]), f);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[2],projectionVar[3]),f);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[3],projectionVar[4]), f);
+                 pd_.GetLP().AddFactorRelation(f, mrf.GetUnaryFactor(projectionVar[4]));
                  queue.push_back({f,4});
 
                  begin_rest = 5;
@@ -182,6 +197,7 @@ namespace LP_MP {
          connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[i],projectionVar[i+1]), mrf.GetPairwiseFactor(projectionVar[i+1], projectionVar[i+2]), f);
          connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[i+2],projectionVar[i+3]),f);
          connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[i+3],projectionVar[i+4]), mrf.GetPairwiseFactor(projectionVar[i+4], projectionVar[i+5]), f);
+         pd_.GetLP().AddFactorRelation(f, mrf.GetUnaryFactor(projectionVar[i+5]));
          queue.push_back({f,i+5});
       }
 
@@ -229,6 +245,73 @@ namespace LP_MP {
     INDEX noLabels_ = 0;
     Solver<FMC>& pd_;
   };
+
+// construct one-dimensional discrete tomography problem with sequential factors
+template<typename FMC,
+     INDEX MRF_PROBLEM_CONSTRUCTOR_NO,
+     typename SUM_FACTOR,
+     typename SUM_PAIRWISE_FACTOR,
+     typename SUM_PAIRWISE_MESSAGE_LEFT,
+     typename SUM_PAIRWISE_MESSAGE_RIGHT,
+     typename SUM_PAIRWISE_PAIRWISE_MESSAGE>
+class dt_sequential_constructor {
+public:
+   using MrfConstructorType =
+      typename meta::at_c<typename FMC::ProblemDecompositionList,MRF_PROBLEM_CONSTRUCTOR_NO>;
+   using PairwiseFactorType = typename MrfConstructorType::PairwiseFactorContainer;
+
+   dt_sequential_constructor(Solver<FMC>& pd) : pd_(pd) {}
+
+   void SetNumberOfLabels(const INDEX noLabels) { noLabels_ = noLabels; }
+
+   void AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost)
+   { 
+      assert(summationCost.size() > 0);
+      const INDEX max_sum = std::max(noLabels_,INDEX(summationCost.size()));
+      auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+      assert(std::is_sorted(projectionVar.begin(), projectionVar.end())); // support unsorted projectionVar (transpose in messages) later
+
+      auto& mrfConstructor = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+
+      for(INDEX i=0;i<projectionVar.size()-1;++i) {
+         const INDEX i1 = std::min(projectionVar[i],projectionVar[i+1]);
+         const INDEX i2 = std::max(projectionVar[i],projectionVar[i+1]);
+
+         if(!mrfConstructor.HasPairwiseFactor(i1,i2)) {
+            mrfConstructor.AddPairwiseFactor(i1,i2,std::vector<REAL>(pow(noLabels_,2),0.0));
+         }
+      }
+
+      auto* f_prev = new SUM_FACTOR(noLabels_, 1);
+      pd_.GetLP().AddFactor(f_prev);
+      for(INDEX i=1; i<projectionVar.size(); ++i) {
+         const INDEX sum_size = std::min(i*noLabels_, max_sum);
+         auto* f = new SUM_FACTOR(noLabels_, sum_size);
+         pd_.GetLP().AddFactor(f);
+         auto* f_p = new SUM_PAIRWISE_FACTOR(noLabels_, f_prev->GetFactor()->sum_size(), sum_size);
+         pd_.GetLP().AddFactor(f_p);
+         auto* m_l = new SUM_PAIRWISE_MESSAGE_LEFT(false,f_prev,f_p);
+         pd_.GetLP().AddMessage(m_l);
+         auto* m_r = new SUM_PAIRWISE_MESSAGE_RIGHT(false,f,f_p);
+         pd_.GetLP().AddMessage(m_r);
+         auto* m_c = new SUM_PAIRWISE_PAIRWISE_MESSAGE(false,mrf.GetPairwiseFactor(projectionVar[i-1], projectionVar[i]),f_p);
+         pd_.GetLP().AddMessage(m_c);
+         f_prev = f;
+
+         pd_.GetLP().AddFactorRelation(f_prev,f_p);
+         pd_.GetLP().AddFactorRelation(f_p,f);
+         pd_.GetLP().AddFactorRelation(f_p,mrf.GetUnaryFactor(projectionVar[i]));
+         pd_.GetLP().AddFactorRelation(mrf.GetUnaryFactor(projectionVar[i]), f_p);
+      }
+
+      f_prev->GetFactor()->summation_cost(summationCost);
+   }
+private:
+   INDEX noLabels_ = 0;
+   Solver<FMC>& pd_;
+
+
+};
 
 }
 
