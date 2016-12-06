@@ -438,40 +438,32 @@ namespace LP_MP {
     // reparametrize left potential for i-th entry of msg
     // do zrobienia: put strides in here and below
     template<typename G>
-    void RepamLeft(G& repamPot, const REAL msg, const INDEX msg_dim)
+    void RepamLeft(G& l, const REAL msg, const INDEX msg_dim)
     {
-      REAL msgn;
-      if( std::isfinite(msg) ){ msgn = msg; }
-      else{ msgn = std::numeric_limits<REAL>::infinity(); }
       const INDEX x1 = msg_dim/i2_;
       const INDEX x2 = msg_dim%i2_;
-      repamPot(x1,x2) += msgn;
+      //if(SUPPORT_INFINITY) {
+         l(x1,x2) += normalize( msg );
+      //} else {
+      //   l(x1,x2) += msg;
+      //}
     }
     template<typename A1, typename A2>
-    void RepamRight(A1& repamPot, const A2& msgs)
+    void RepamRight(A1& r, const A2& msgs)
     {
       // do zrobienia: possibly use counter
-      for(INDEX x3 = 0; x3<i3_; ++x3) {
-        for(INDEX x2=0; x2<i2_; ++x2) {
-          for(INDEX x1=0; x1<i1_; ++x1) {
-            REAL msgn;
-            if( std::isfinite(msgs[x2*i1_ + x1]) ){ msgn = msgs[x2*i1_ + x1]; }
-            else{ msgn = std::numeric_limits<REAL>::infinity(); }
-            repamPot[x3*i1_*i2_ + x2*i1_ + x1] += msgn;
+       for(INDEX x1=0; x1<i1_; ++x1) {
+          for(INDEX x2=0; x2<i2_; ++x2) {
+             r.msg12(x1,x2) += normalize( msgs(x1,x2) );
           }
-        }
-      }
+       }
     }
     template<typename G>
-    void RepamRight(G& repamPot, const REAL msg, const INDEX dim)
+    void RepamRight(G& r, const REAL msg, const INDEX dim)
     {
-      REAL msgn;
-      if( std::isfinite(msg) ){ msgn = msg; }
-      else{ msgn = std::numeric_limits<REAL>::infinity(); }
-      assert(false);
-      //for(INDEX x3 = 0; x3<i3_; ++x3) {
-      //  repamPot[x3*i2_*i1_ + dim] += msgn;
-      //}
+      const INDEX x1 = dim/i2_;
+      const INDEX x2 = dim%i2_;
+      r.msg12(x1,x2) += normalize( msg );
     }
 
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
@@ -543,16 +535,9 @@ namespace LP_MP {
     template<typename RIGHT_FACTOR, typename G2>
     void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
     {
-      std::vector<REAL> msgs(i1_*i2_, std::numeric_limits<REAL>::infinity());
-      for(INDEX x3=0; x3<i3_; ++x3) {
-        for(INDEX x2=0; x2<i2_; ++x2) {
-          for(INDEX x1=0; x1<i1_; ++x1) {
-            msgs[x2*i1_ + x1] = std::min(msgs[x2*i1_ + x1],omega*r[x3*i1_*i2_ + x2*i1_ + x1]);
-          }
-        }
-      }
-      assert(false);
-      //msg -= msgs;
+       matrix msgs(i1_,i2_, std::numeric_limits<REAL>::infinity());
+       r.min_marginal12(msgs);
+       msg -= omega*msgs;
     }
 
     const INDEX i1_,i2_, i3_;

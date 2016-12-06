@@ -14,6 +14,7 @@
 #include "discrete_tomography_message_counting_pairwise.hxx"
 #include "discrete_tomography_tree_constructor.hxx"
 #include "discrete_tomography_counting_naive.hxx"
+#include "dt_sequential.hxx"
 
 #include "parse_rules.h"
 
@@ -29,6 +30,8 @@ namespace LP_MP{
     typedef FactorContainer<UnarySimplexFactor, FMC_DT, 0, false> UnaryFactor;
     typedef FactorContainer<PairwiseSimplexFactor, FMC_DT, 1> PairwiseFactor;
     typedef FactorContainer<DiscreteTomographyFactorCounting2, FMC_DT, 2> DiscreteTomographyCountingFactorContainer;
+    using dt_sequential_factor = FactorContainer<dt_sum_state_factor, FMC_DT, 3>;
+    using dt_sequential_pairwise_factor = FactorContainer<dt_sum_state_pairwise_factor, FMC_DT, 4>;
    
     // do zrobienia: possibly try out MPLP as well
     typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_DT, 0 > UnaryPairwiseMessageLeft;
@@ -49,13 +52,20 @@ namespace LP_MP{
     using left_pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::right,Chirality::left>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 9>;
     using right_pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::right,Chirality::right>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 10>;
 
-   // tightening
-   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_DT, 3> EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 3, variableMessageNumber, 1, FMC_DT, 11> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 3, variableMessageNumber, 1, FMC_DT, 12> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 3, variableMessageNumber, 1, FMC_DT, 13> PairwiseTriplet23MessageContainer;
+    // connect sequential dt factors
+    using dt_sequential_message_left = MessageContainer<dt_sum_pairwise_message<Chirality::left>, 3,4, atMostOneMessage, atMostOneMessage, FMC_DT, 11>;
+    using dt_sequential_message_right = MessageContainer<dt_sum_pairwise_message<Chirality::right>, 3,4, atMostOneMessage, atMostOneMessage, FMC_DT, 12>;
+    using dt_sequential_recursive_message_left = MessageContainer<dt_sum_counting_message<Chirality::left>, 3,2, atMostOneMessage, atMostOneMessage, FMC_DT, 13>;
+    using dt_sequential_recursive_message_right = MessageContainer<dt_sum_counting_message<Chirality::right>, 3,2, atMostOneMessage, atMostOneMessage, FMC_DT, 14>;
+    using dt_pairwise_pairwise_message = MessageContainer<dt_sum_pairwise_pairwise_message, 1, 4, variableMessageNumber, atMostOneMessage, FMC_DT, 15>;
 
-    using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer, EmptyTripletFactor >;
+   // tightening
+   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_DT, 5> EmptyTripletFactor;
+   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 5, variableMessageNumber, 1, FMC_DT, 16> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 5, variableMessageNumber, 1, FMC_DT, 17> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 5, variableMessageNumber, 1, FMC_DT, 18> PairwiseTriplet23MessageContainer;
+
+    using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer, dt_sequential_factor, dt_sequential_pairwise_factor, EmptyTripletFactor >;
     using MessageList = meta::list<
        UnaryPairwiseMessageLeft,
        UnaryPairwiseMessageRight,
@@ -68,13 +78,17 @@ namespace LP_MP{
        right_pairwise_to_left_counting,
        left_pairwise_to_right_counting,
        right_pairwise_to_right_counting,
+       dt_sequential_message_left,
+       dt_sequential_message_right,
+       dt_sequential_recursive_message_left,
+       dt_sequential_recursive_message_right,
+       dt_pairwise_pairwise_message,
        PairwiseTriplet12MessageContainer,
        PairwiseTriplet13MessageContainer,
-       PairwiseTriplet23MessageContainer
-          >;
+       PairwiseTriplet23MessageContainer>;
 
     using mrf = StandardMrfConstructor<FMC_DT,0,1,0,1>;
-    //using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,5,6,7>;
+    using tighteningMrf = TighteningMRFProblemConstructor<mrf,5,16,17,18>;
     using dt = DiscreteTomographyTreeConstructor<FMC_DT,0,
           DiscreteTomographyCountingFactorContainer,
           DiscreteTomographyCountingMessageLeft,
@@ -86,6 +100,14 @@ namespace LP_MP{
           right_pairwise_to_left_counting,
           left_pairwise_to_right_counting,
           right_pairwise_to_right_counting>;
+    using dt_sequential = dt_sequential_constructor<FMC_DT, 0,
+          dt_sequential_factor,
+          dt_sequential_pairwise_factor, 
+          dt_sequential_message_left,
+          dt_sequential_message_right,
+          dt_pairwise_pairwise_message>;
+
+
     using ProblemDecompositionList = meta::list<mrf,dt>;
     //using ProblemDecompositionList = meta::list<tighteningMrf,dt>;
 	  

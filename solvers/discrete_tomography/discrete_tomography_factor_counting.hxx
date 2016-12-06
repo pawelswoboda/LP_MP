@@ -7,7 +7,7 @@
 
 namespace LP_MP{
 
-   constexpr static INDEX MinSumConvolutionThreshold = 100000000;
+  constexpr static INDEX MinSumConvolutionThreshold = 1000000;
   using MinConv = discrete_tomo::MinConv<REAL,INDEX>;
 
   class DiscreteTomographyFactorCounting2{
@@ -111,7 +111,6 @@ namespace LP_MP{
      template<typename LAMBDA>
      void for_each_label_min_conv(LAMBDA f) const
      {
-        assert(false); // not yet tested!
         for(INDEX x_l=0; x_l<no_labels(); ++x_l) {
            for(INDEX x_cl=0; x_cl<no_labels(); ++x_cl) {
               for(INDEX x_cr=0; x_cr<no_labels(); ++x_cr) {
@@ -233,7 +232,6 @@ namespace LP_MP{
     
     template<typename MSG>
     void MessageCalculation_MinConv_Up(MSG& msg) const {
-       assert(false);
         std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
 
         for_each_label([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r) {
@@ -257,7 +255,6 @@ namespace LP_MP{
     
     template<typename MSG>
     void MessageCalculation_MinConv_Left(MSG& msg) const {
-       assert(false);
         std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
 
         for_each_label([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r) {
@@ -285,7 +282,6 @@ namespace LP_MP{
 
     template<typename MSG>
     void MessageCalculation_MinConv_Right(MSG& msg) const {
-       assert(false);
         std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
 
         for_each_label([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r) {
@@ -313,7 +309,6 @@ namespace LP_MP{
 
     template<typename MSG>
     void MessageCalculation_MinConv_Reg(MSG& msg) const {
-       assert(false);
         std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
 
         for_each_label([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r) {

@@ -397,6 +397,16 @@ public:
       return marg;
    }
    template<typename MSG>
+   void min_marginal12(MSG& msg) const {
+      assert(false);
+      for(INDEX x1=0; x1<dim1_; ++x1) {
+         for(INDEX x2=0; x2<dim2_; ++x2) {
+            msg(x1,x2) = min_marginal12(x1,x2);
+         }
+      }
+   }
+
+   template<typename MSG>
    void min_marginal13(MSG& msg) const {
       for(INDEX x1=0; x1<dim1_; ++x1) {
          for(INDEX x3=0; x3<dim3_; ++x3) {
@@ -412,7 +422,7 @@ public:
       }
    }
    template<typename MSG>
-   REAL min_marginal23(MSG& msg) const {
+   void min_marginal23(MSG& msg) const {
       for(INDEX x2=0; x2<dim2_; ++x2) {
          for(INDEX x3=0; x3<dim3_; ++x3) {
             msg(x2,x3) = std::numeric_limits<REAL>::infinity();
