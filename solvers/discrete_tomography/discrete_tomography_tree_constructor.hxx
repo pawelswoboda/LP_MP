@@ -277,7 +277,7 @@ public:
    { 
       auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
       assert(noLabels_ > 0);
-      assert(std::is_sorted(projectionVar.begin(), projectionVar.end())); // support unsorted projectionVar (transpose in messages) later
+      assert(std::is_sorted(projection_var_begin, projection_var_end)); // support unsorted projectionVar (transpose in messages) later
 
       auto& mrfConstructor = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
 
