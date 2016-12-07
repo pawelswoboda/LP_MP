@@ -44,9 +44,9 @@ public:
   {
      std::fill(begin_,end_,value);
   }
-   ~vector() {
-      global_real_block_allocator.deallocate(begin_,1);
-   }
+  ~vector() {
+     global_real_block_allocator.deallocate(begin_,1);
+  }
    vector(const vector& o)  {
       begin_ = global_real_block_allocator.allocate(o.size());
       end_ = begin_ + o.size();
@@ -60,6 +60,19 @@ public:
       for(INDEX i=0; i<o.size(); ++i) { 
          (*this)[i] = o[i]; }
    }
+   template<typename E>
+   void operator-=(const vector_expression<E>& o) {
+      assert(size() == o.size());
+      for(INDEX i=0; i<o.size(); ++i) { 
+         (*this)[i] -= o[i]; } 
+   }
+   template<typename E>
+   void operator+=(const vector_expression<E>& o) {
+      assert(size() == o.size());
+      for(INDEX i=0; i<o.size(); ++i) { 
+         (*this)[i] += o[i]; } 
+   }
+
 
    // force construction from expression template
    template<typename E>
@@ -153,9 +166,10 @@ struct scaled_vector : public vector_expression<scaled_vector<T>> {
    const REAL operator()(const INDEX i, const INDEX j, const INDEX k) const {
       return omega_*a_(i,j,k);
    }
-   INDEX size() const {
-      return a_.size();
-   }
+   INDEX size() const { return a_.size(); }
+   INDEX dim1() const { return a_.dim1(); }
+   INDEX dim2() const { return a_.dim2(); }
+   INDEX dim3() const { return a_.dim3(); }
    private:
    const T& a_;
    const REAL omega_;
@@ -180,6 +194,9 @@ struct minus_vector : public vector_expression<minus_vector<T>> {
       return -a_(i,j,k);
    }
    INDEX size() const { return a_.size(); }
+   INDEX dim1() const { return a_.dim1(); }
+   INDEX dim2() const { return a_.dim2(); }
+   INDEX dim3() const { return a_.dim3(); }
    private:
    const T& a_;
 };
