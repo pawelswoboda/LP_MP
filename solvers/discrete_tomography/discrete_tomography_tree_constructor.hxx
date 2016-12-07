@@ -293,7 +293,7 @@ public:
 
       auto* f_prev = new SUM_FACTOR(noLabels_, 1);
       pd_.GetLP().AddFactor(f_prev);
-      INDEX i=0;
+      INDEX i=1;
       for(auto it=projection_var_begin+1; it!=projection_var_end; ++it, ++i) {
       //for(INDEX i=1; i<projectionVar.size(); ++i) {
          const INDEX sum_size = std::min(i*noLabels_, max_sum);
