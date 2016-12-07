@@ -264,18 +264,27 @@ public:
 
    void SetNumberOfLabels(const INDEX noLabels) { noLabels_ = noLabels; }
 
-   void AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost)
-   { 
+   SUM_FACTOR* AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost)
+   {
       assert(summationCost.size() > 0);
       const INDEX max_sum = std::max(noLabels_,INDEX(summationCost.size()));
+      auto* f = AddProjection(projectionVar.begin(), projectionVar.end(), max_sum);
+      f->GetFactor()->summation_cost(summationCost);
+      return f;
+   }
+   template<typename ITERATOR>
+   SUM_FACTOR* AddProjection(ITERATOR projection_var_begin, ITERATOR projection_var_end, const INDEX max_sum)
+   { 
       auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+      assert(noLabels_ > 0);
       assert(std::is_sorted(projectionVar.begin(), projectionVar.end())); // support unsorted projectionVar (transpose in messages) later
 
       auto& mrfConstructor = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
 
-      for(INDEX i=0;i<projectionVar.size()-1;++i) {
-         const INDEX i1 = std::min(projectionVar[i],projectionVar[i+1]);
-         const INDEX i2 = std::max(projectionVar[i],projectionVar[i+1]);
+      for(auto it=projection_var_begin; it!=projection_var_end-1; ++it) {
+      //for(INDEX i=0;i<projectionVar.size()-1;++i) {
+         const INDEX i1 = std::min(*it, *(it+1));
+         const INDEX i2 = std::max(*it, *(it+1));
 
          if(!mrfConstructor.HasPairwiseFactor(i1,i2)) {
             mrfConstructor.AddPairwiseFactor(i1,i2,std::vector<REAL>(pow(noLabels_,2),0.0));
@@ -284,7 +293,9 @@ public:
 
       auto* f_prev = new SUM_FACTOR(noLabels_, 1);
       pd_.GetLP().AddFactor(f_prev);
-      for(INDEX i=1; i<projectionVar.size(); ++i) {
+      INDEX i=0;
+      for(auto it=projection_var_begin+1; it!=projection_var_end; ++it, ++i) {
+      //for(INDEX i=1; i<projectionVar.size(); ++i) {
          const INDEX sum_size = std::min(i*noLabels_, max_sum);
          auto* f = new SUM_FACTOR(noLabels_, sum_size);
          pd_.GetLP().AddFactor(f);
@@ -294,23 +305,73 @@ public:
          pd_.GetLP().AddMessage(m_l);
          auto* m_r = new SUM_PAIRWISE_MESSAGE_RIGHT(false,f,f_p);
          pd_.GetLP().AddMessage(m_r);
-         auto* m_c = new SUM_PAIRWISE_PAIRWISE_MESSAGE(false,mrf.GetPairwiseFactor(projectionVar[i-1], projectionVar[i]),f_p);
+         auto* m_c = new SUM_PAIRWISE_PAIRWISE_MESSAGE(false,mrf.GetPairwiseFactor(*(it-1), *it),f_p);
          pd_.GetLP().AddMessage(m_c);
          f_prev = f;
 
          pd_.GetLP().AddFactorRelation(f_prev,f_p);
          pd_.GetLP().AddFactorRelation(f_p,f);
-         pd_.GetLP().AddFactorRelation(f_p,mrf.GetUnaryFactor(projectionVar[i]));
-         pd_.GetLP().AddFactorRelation(mrf.GetUnaryFactor(projectionVar[i]), f_p);
+         pd_.GetLP().AddFactorRelation(f_p,mrf.GetUnaryFactor(*it));
+         pd_.GetLP().AddFactorRelation(mrf.GetUnaryFactor(*it), f_p);
       }
 
-      f_prev->GetFactor()->summation_cost(summationCost);
+      return f_prev;
    }
 private:
    INDEX noLabels_ = 0;
    Solver<FMC>& pd_;
+};
+
+template<typename FMC,
+     INDEX MRF_PROBLEM_CONSTRUCTOR_NO,
+     typename SEQUENTIAL_CONSTRUCTOR,
+     typename RECURSIVE_CONSTRUCTOR,
+     typename SEQUENTIAL_RECURSIVE_MESSAGE_LEFT,
+     typename SEQUENTIAL_RECURSIVE_MESSAGE_RIGHT> 
+class dt_combined_constructor : public SEQUENTIAL_CONSTRUCTOR, public RECURSIVE_CONSTRUCTOR {
+public:
+   constexpr static INDEX recursive_threshold = 200; // when sum can be more than 200, switch to recursive factors, otherwise stick with sequential
+   using MrfConstructorType =
+      typename meta::at_c<typename FMC::ProblemDecompositionList,MRF_PROBLEM_CONSTRUCTOR_NO>;
+   using PairwiseFactorType = typename MrfConstructorType::PairwiseFactorContainer;
+
+   dt_combined_constructor(Solver<FMC>& pd) : SEQUENTIAL_CONSTRUCTOR(pd), RECURSIVE_CONSTRUCTOR(pd), pd_(pd) {}
+
+   void SetNumberOfLabels(const INDEX noLabels) 
+   { 
+      noLabels_ = noLabels;
+      SEQUENTIAL_CONSTRUCTOR::SetNumberOfLabels(noLabels); 
+      RECURSIVE_CONSTRUCTOR::SetNumberOfLabels(noLabels); 
+   } 
+
+   void AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost)
+   { 
+      assert(summationCost.size() > 0);
+      const INDEX max_sum = std::max(noLabels_,INDEX(summationCost.size()));
+      auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+      assert(std::is_sorted(projectionVar.begin(), projectionVar.end())); // support unsorted projectionVar (transpose in messages) later
+
+      assert(projectionVar.size() > 2); // otherwise pairwise factor can take care
+      const INDEX mid_point = projectionVar.size()/2;
+      INDEX no_sequential_factors_left;
+      INDEX no_sequential_factors_right;
+      // recursive factors take over when sequential one holds sum with more than ${recursive_threshold} elements
+      if(max_sum < recursive_threshold) {
+         no_sequential_factors_left = mid_point;
+         no_sequential_factors_right = projectionVar.size() - mid_point;
+      } else {
+         no_sequential_factors_left = std::min(mid_point, recursive_threshold/noLabels_);
+         no_sequential_factors_right = std::min(INDEX(projectionVar.size())-mid_point, recursive_threshold/noLabels_);
+      }
+      auto* last_sequential_left = SEQUENTIAL_CONSTRUCTOR::AddProjection(projectionVar.begin(), projectionVar.begin()+mid_point, max_sum);
+      auto* last_sequential_right = SEQUENTIAL_CONSTRUCTOR::AddProjection(projectionVar.rbegin(), projectionVar.rend()-mid_point, max_sum);
+   }
 
 
+
+private:
+   INDEX noLabels_ = 0;
+   Solver<FMC>& pd_; 
 };
 
 }
