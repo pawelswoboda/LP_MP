@@ -746,7 +746,7 @@ namespace LP_MP{
       else if( noUnkwn > 1 && noTrue == 0 ){
         return IdxLbl(opt,0,numberOfLabels_);
       }
-      else{ assert(false); } // not possible!
+      else{ assert(false); return IdxLbl(opt,0,numberOfLabels_);  } // not possible!
     };
     
     /* Get primal label */
