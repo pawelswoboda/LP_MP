@@ -12,25 +12,30 @@ namespace LP_MP{
 
   class DiscreteTomographyFactorCounting2{
   public:
-     DiscreteTomographyFactorCounting2(const INDEX no_labels, const INDEX left_sum_size, const INDEX right_sum_size, const INDEX up_sum_size)
-        : reg_(no_labels, no_labels,0.0),
-        up_(no_labels,no_labels, up_sum_size,0.0), 
-        left_(no_labels, no_labels, left_sum_size,0.0), 
-        right_(no_labels, no_labels, right_sum_size,0.0)
+     DiscreteTomographyFactorCounting2(const INDEX no_left_labels, const INDEX left_sum_size, const INDEX no_center_left_labels, const INDEX no_center_right_labels, const INDEX right_sum_size, const INDEX no_right_labels, const INDEX up_sum_size)
+        : reg_(no_center_left_labels, no_center_right_labels, 0.0),
+        up_(no_left_labels, no_right_labels, up_sum_size,0.0), 
+        left_(no_left_labels, no_center_left_labels, left_sum_size,0.0), 
+        right_(no_center_right_labels, no_right_labels, right_sum_size,0.0)
      {
-        assert(no_labels > 0);
+        assert(no_left_labels > 0);
+        assert(no_center_left_labels > 0);
+        assert(no_center_right_labels > 0);
+        assert(no_right_labels > 0);
         assert(left_sum_size > 0);
         assert(right_sum_size > 0);
         assert(up_sum_size > 0);
-        assert(no_labels <= up_sum_size);
-        assert(up_sum_size <= left_sum_size + 2*no_labels + right_sum_size);
+        assert(up_sum_size <= left_sum_size + no_center_left_labels + no_center_right_labels + right_sum_size);
      }
+     DiscreteTomographyFactorCounting2(const INDEX no_labels, const INDEX left_sum_size, const INDEX right_sum_size, const INDEX up_sum_size)
+        : DiscreteTomographyFactorCounting2(no_labels, left_sum_size, no_labels, no_labels, right_sum_size, no_labels, up_sum_size)
+     {}
 
      REAL eval(const INDEX x_left, const INDEX left_sum, const INDEX x_center_left, const INDEX x_center_right, const INDEX right_sum, const INDEX x_right) const {
-        assert(x_left < no_labels());
-        assert(x_center_left < no_labels());
-        assert(x_center_right < no_labels());
-        assert(x_right < no_labels());
+        assert(x_left < no_left_labels());
+        assert(x_center_left < no_center_left_labels());
+        assert(x_center_right < no_center_right_labels());
+        assert(x_right < no_right_labels());
         assert(left_sum + x_center_left + x_center_right + right_sum < up_sum_size());
         return up_(x_left, x_right, x_center_left + x_center_right + left_sum + right_sum) 
            + left_(x_left, x_center_left, left_sum) 
@@ -80,10 +85,10 @@ namespace LP_MP{
 
      template<typename LAMBDA>
      void for_each_label_sum(LAMBDA f) const {
-        for(INDEX x_l=0; x_l<no_labels(); ++x_l) {
-           for(INDEX x_cl=0; x_cl<no_labels(); ++x_cl) {
-              for(INDEX x_cr=0; x_cr<no_labels(); ++x_cr) {
-                 for(INDEX x_r=0; x_r<no_labels(); ++x_r) {
+        for(INDEX x_l=0; x_l<no_left_labels(); ++x_l) {
+           for(INDEX x_cl=0; x_cl<no_center_left_labels(); ++x_cl) {
+              for(INDEX x_cr=0; x_cr<no_center_right_labels(); ++x_cr) {
+                 for(INDEX x_r=0; x_r<no_right_labels(); ++x_r) {
                     for(INDEX lz=0;lz<left_sum_size();lz++){
                        for(INDEX rz=0;rz<right_sum_size() && rz+lz+x_cl+x_cr<up_sum_size();rz++){
                           f(x_l, lz, x_cl, x_cr, rz, x_r);
@@ -97,10 +102,10 @@ namespace LP_MP{
 
      template<typename LAMBDA>
      void for_each_label(LAMBDA f) const {
-        for(INDEX x_l=0; x_l<no_labels(); ++x_l) {
-           for(INDEX x_cl=0; x_cl<no_labels(); ++x_cl) {
-              for(INDEX x_cr=0; x_cr<no_labels(); ++x_cr) {
-                 for(INDEX x_r=0; x_r<no_labels(); ++x_r) {
+        for(INDEX x_l=0; x_l<no_left_labels(); ++x_l) {
+           for(INDEX x_cl=0; x_cl<no_center_left_labels(); ++x_cl) {
+              for(INDEX x_cr=0; x_cr<no_center_right_labels(); ++x_cr) {
+                 for(INDEX x_r=0; x_r<no_right_labels(); ++x_r) {
                     f(x_l,x_cl, x_cr, x_r);
                  }
               }
@@ -111,10 +116,10 @@ namespace LP_MP{
      template<typename LAMBDA>
      void for_each_label_min_conv(LAMBDA f) const
      {
-        for(INDEX x_l=0; x_l<no_labels(); ++x_l) {
-           for(INDEX x_cl=0; x_cl<no_labels(); ++x_cl) {
-              for(INDEX x_cr=0; x_cr<no_labels(); ++x_cr) {
-                 for(INDEX x_r=0; x_r<no_labels(); ++x_r) {
+        for(INDEX x_l=0; x_l<no_left_labels(); ++x_l) {
+           for(INDEX x_cl=0; x_cl<no_center_left_labels(); ++x_cl) {
+              for(INDEX x_cr=0; x_cr<no_center_right_labels(); ++x_cr) {
+                 for(INDEX x_r=0; x_r<no_right_labels(); ++x_r) {
                     assert(up_sum_size() >= x_cl + x_cr);
                     auto op = [&](INDEX i,INDEX j){ return std::min(i+j, up_sum_size() - x_cl - x_cr); };
                     auto z_left = [&](INDEX k){ return left_(x_l,x_cl, k); };
@@ -143,10 +148,18 @@ namespace LP_MP{
      }
 
      INDEX size() const { return up_.size() + left_.size() + right_.size() + reg_.size(); }
-     INDEX no_labels() const { return reg_.dim2(); }
+     INDEX no_left_labels() const { return left_.dim1(); }
+     INDEX no_center_left_labels() const { return left_.dim2(); }
+     INDEX no_center_right_labels() const { return right_.dim1(); }
+     INDEX no_right_labels() const { return right_.dim2(); }
+     //INDEX no_labels() const { return reg_.dim2(); }
      INDEX up_sum_size() const { return up_.dim3(); }
      INDEX left_sum_size() const { return left_.dim3(); }
      INDEX right_sum_size() const { return right_.dim3(); }
+     REAL& reg(const INDEX x_cl, const INDEX x_cr) { return reg_(x_cl, x_cr); }
+     REAL& right(const INDEX x_cr, const INDEX x_r, const INDEX sum) { return right_(x_cr, x_r, sum); }
+     REAL& left(const INDEX x_l, const INDEX x_cl, const INDEX sum) { return left_(x_l, x_cl, sum); }
+     REAL& up(const INDEX x_left, const INDEX x_right, const INDEX sum) { return up_(x_left, x_right, sum); }
      matrix& reg() { return reg_; }
      tensor3& right() { return right_; }
      tensor3& left() { return left_; }
@@ -330,10 +343,8 @@ namespace LP_MP{
     }
 
   private:
-    // it is possible to hold the four subcomponents making up the factor as pointers and holds sizes more efficiently.
     matrix reg_;
-    tensor3 up_, left_, right_;
-
+    tensor3 up_, left_, right_; 
   };
   
   class DiscreteTomographyFactorCounting{

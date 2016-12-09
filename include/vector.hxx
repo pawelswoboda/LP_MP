@@ -124,6 +124,15 @@ public:
    REAL& operator()(const INDEX x1, const INDEX x2, const INDEX x3) { assert(x3 == 0); return (*this)[x1*dim2_ + x2]; } // sometimes we treat a matrix as a tensor with trivial last dimension
    const INDEX dim1() const { return this->size()/dim2_; }
    const INDEX dim2() const { return dim2_; }
+
+   void transpose() {
+      assert(dim1() == dim2());
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<x1; ++x2) {
+            std::swap((*this)(x1,x2), (*this)(x2,x1));
+         }
+      }
+   }
 protected:
    const INDEX dim2_;
 };
@@ -153,6 +162,60 @@ protected:
    const INDEX dim2_, dim3_;
 };
 
+template<INDEX FIXED_DIM>
+class matrix_view_of_tensor : public vector_expression<matrix_view_of_tensor<FIXED_DIM>> {
+public:
+   matrix_view_of_tensor(tensor3& t, const INDEX fixed_index) : fixed_index_(fixed_index), t_(t) {}
+   ~matrix_view_of_tensor() {
+      static_assert(FIXED_DIM < 3,"");
+   }
+   const INDEX size() const { 
+      if(FIXED_DIM==0) {
+         return t_.dim2()*t_.dim3();
+      } else if(FIXED_DIM == 1) {
+         return t_.dim1()*t_.dim2();
+      } else {
+         return t_.dim2()*t_.dim3();
+      }
+   }
+   const INDEX dim1() const { 
+      if(FIXED_DIM==0) {
+         return t_.dim2();
+      } else {
+         return t_.dim1();
+      }
+   }
+   const INDEX dim2() const { 
+      if(FIXED_DIM==2) {
+         return t_.dim2();
+      } else {
+         return t_.dim3();
+      }
+   }
+   REAL& operator()(const INDEX x1, const INDEX x2) { 
+      if(FIXED_DIM==0) {
+         return t_(fixed_index_,x1,x2);
+      } else if(FIXED_DIM == 1) {
+         return t_(x1,fixed_index_,x2);
+      } else {
+         return t_(x1,x2,fixed_index_);
+      }
+   }
+   REAL operator()(const INDEX x1, const INDEX x2) const { 
+      if(FIXED_DIM==0) {
+         return t_(fixed_index_,x1,x2);
+      } else if(FIXED_DIM == 1) {
+         return t_(x1,fixed_index_,x2);
+      } else {
+         return t_(x1,x2,fixed_index_);
+      }
+   }
+
+private:
+   const INDEX fixed_index_;
+   tensor3& t_;
+};
+
 // primitive expression templates for all the above linear algebraic classes
 template<typename T>
 struct scaled_vector : public vector_expression<scaled_vector<T>> {
@@ -174,6 +237,7 @@ struct scaled_vector : public vector_expression<scaled_vector<T>> {
    const T& a_;
    const REAL omega_;
 };
+
 
 template<typename T>
 scaled_vector<T> const

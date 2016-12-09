@@ -52,7 +52,7 @@ namespace LP_MP {
     void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega)
     {
        if( DR == DIRECTION::left ){
-          tensor3 msg_tmp(f_right.no_labels(), f_right.no_labels(), f_right.left_sum_size());
+          tensor3 msg_tmp(f_right.no_left_labels(), f_right.no_center_left_labels(), f_right.left_sum_size());
 
           f_right.MessageCalculation_Naive_Left(msg_tmp);
 
@@ -61,7 +61,7 @@ namespace LP_MP {
           //}
           msg -= omega*msg_tmp;
        } else if(DR == DIRECTION::right) {
-          tensor3 msg_tmp(f_right.no_labels(), f_right.no_labels(), f_right.right_sum_size());
+          tensor3 msg_tmp(f_right.no_center_right_labels(), f_right.no_right_labels(), f_right.right_sum_size());
 
           f_right.MessageCalculation_Naive_Right(msg_tmp);
 
@@ -77,7 +77,7 @@ namespace LP_MP {
     template<typename LEFT_FACTOR, typename MSG>
     void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega)
     {
-       tensor3 msg_tmp(f_left.no_labels(), f_left.no_labels(), f_left.up_sum_size());
+       tensor3 msg_tmp(f_left.no_left_labels(), f_left.no_right_labels(), f_left.up_sum_size());
        f_left.MessageCalculation_Naive_Up(msg_tmp);
        //for(auto it=msg_tmp.begin(); it!=msg_tmp.end(); ++it) {
        //   *it = omega*(*it);
@@ -98,8 +98,8 @@ namespace LP_MP {
     void RepamLeft(LEFT_FACTOR& l, const MSG msg){
        auto& up = l.up();
        assert(up.size() == msg.size());
-       for(INDEX x_l=0; x_l<l.no_labels(); ++x_l) {
-          for(INDEX x_r=0; x_r<l.no_labels(); ++x_r) {
+       for(INDEX x_l=0; x_l<l.no_left_labels(); ++x_l) {
+          for(INDEX x_r=0; x_r<l.no_right_labels(); ++x_r) {
              for(INDEX sum=0; sum<l.up_sum_size(); ++sum) {
                 up(x_l,x_r,sum) += normalize( msg(x_l,x_r,sum) );
              }
@@ -114,8 +114,8 @@ namespace LP_MP {
        if(DR == DIRECTION::left) {
           auto& left = r.left();
           assert(left.size() == msg.size());
-          for(INDEX x_l=0; x_l<r.no_labels(); ++x_l) {
-             for(INDEX x_r=0; x_r<r.no_labels(); ++x_r) {
+          for(INDEX x_l=0; x_l<r.no_left_labels(); ++x_l) {
+             for(INDEX x_r=0; x_r<r.no_center_left_labels(); ++x_r) {
                 for(INDEX sum=0; sum<r.left_sum_size(); ++sum) {
                    left(x_l,x_r,sum) += normalize( msg(x_l,x_r,sum) );
                 }
@@ -124,8 +124,8 @@ namespace LP_MP {
        } else if(DR == DIRECTION::right) {
           auto& right = r.right();
           assert(right.size() == msg.size());
-          for(INDEX x_l=0; x_l<r.no_labels(); ++x_l) {
-             for(INDEX x_r=0; x_r<r.no_labels(); ++x_r) {
+          for(INDEX x_l=0; x_l<r.no_center_right_labels(); ++x_l) {
+             for(INDEX x_r=0; x_r<r.no_right_labels(); ++x_r) {
                 for(INDEX sum=0; sum<r.right_sum_size(); ++sum) {
                    right(x_l,x_r,sum) += normalize( msg(x_l,x_r,sum) );
                 }
