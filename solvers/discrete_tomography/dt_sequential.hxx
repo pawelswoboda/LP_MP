@@ -117,7 +117,7 @@ template<Chirality DIRECTION>
 class dt_sum_pairwise_message {
 public:
    dt_sum_pairwise_message(bool transpose) : transpose_(transpose) {
-      assert(transpose_ == false);
+      //assert(transpose_ == false);
    }
 
    ~dt_sum_pairwise_message() {
@@ -199,15 +199,13 @@ public:
       }
    }
 private:
-   bool transpose_; 
+   bool transpose_; // not needed
 };
 
 // connect sequential dt_sum_factor (left) with recursive DiscreteTomograhpyCountingFactor (right)
 template<Chirality DIRECTION>
 class dt_sum_counting_message {
 public:
-   dt_sum_counting_message(const bool transpose) : transpose_(transpose) {}
-
    ~dt_sum_counting_message() {
       static_assert(DIRECTION == Chirality::left || DIRECTION == Chirality::right, "");
    }
@@ -239,34 +237,37 @@ public:
 
    template<typename RIGHT_FACTOR, typename MSG>
    void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
-      tensor3 msgs(f_right.no_labels(), f_right.no_labels(), DIRECTION == Chirality::left ? f_right.left_sum_size() : f_right.right_sum_size());
+      std::array<INDEX,3> dim;
+
+      if(DIRECTION == Chirality::left) {
+         assert(1 == f_right.no_left_labels());
+         dim = {1, f_right.no_center_left_labels(), f_right.left_sum_size()};
+      } else {
+         assert(1 == f_right.no_right_labels());
+         dim = {f_right.no_center_right_labels(), 1, f_right.right_sum_size()}; 
+      }
+      tensor3 msgs(dim[0], dim[1], dim[2]);
+
       if(DIRECTION == Chirality::left) {
          f_right.MessageCalculation_Left(msgs);
+         matrix_view_of_tensor<0> msgs_reduced(msgs,0);
+         msg -= omega*msgs_reduced;
       } else {
          f_right.MessageCalculation_Right(msgs);
+         matrix_view_of_tensor<1> msgs_reduced(msgs,0);
+         msg -= omega*msgs_reduced;
       }
-      msg -= omega*msgs;
    }
 
    template<typename LEFT_FACTOR, typename MSG>
    void RepamLeft(LEFT_FACTOR& f_left, const MSG& msg)
    {
       //static_if<std::is_base_of<matrix,msg>([&](auto f) {});
-      matrix msg_marg(f_left.no_labels(),f_left.sum_size(), std::numeric_limits<REAL>::infinity());
-      for(INDEX x1=0; x1<f_left.no_labels(); ++x1) {
-         for(INDEX x2=0; x2<f_left.no_labels(); ++x2) {
-            for(INDEX sum=0; sum<f_left.sum_size(); ++sum) {
-               if(DIRECTION == Chirality::left) {
-                  msg_marg(x1,sum) += std::min( msg_marg(x1,sum), normalize( msg(x1,x2,sum) ));
-               } else {
-                  msg_marg(x1,sum) += std::min( msg_marg(x1,sum), normalize( msg(x1,x2,sum) )); 
-               }
-            }
-         }
-      }
+      assert(msg.dim1() == f_left.no_labels());
+      assert(msg.dim2() == f_left.sum_size());
       for(INDEX x=0; x<f_left.no_labels(); ++x) {
          for(INDEX sum=0; sum<f_left.sum_size(); ++sum) {
-            f_left(x,sum) += msg_marg(x,sum);
+            f_left(x,sum) += normalize( msg(x,sum) );
          }
       }
    }
@@ -274,24 +275,26 @@ public:
    template<typename RIGHT_FACTOR, typename MSG>
    void RepamRight(RIGHT_FACTOR& f_right, const MSG& msg)
    {
-      /*
-      for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
-         for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
-            if(DIRECTION == Chirality::left) {
-               for(INDEX sum=0; sum<f_right.left_sum_size(); ++sum) {
-                  f_right.left()(x1, x2, sum) += normalize( msg(x1, sum) );
-               }
-            } else {
-               for(INDEX sum=0; sum<f_right.right_sum_size(); ++sum) {
-                  f_right.right()(x1, x2, sum) += normalize( msg(x2, sum) );
-               }
+      if(DIRECTION == Chirality::left) {
+         assert(f_right.no_left_labels() == 1);
+         assert(msg.dim1() == f_right.no_center_left_labels());
+         assert(msg.dim2() == f_right.left_sum_size());
+         for(INDEX x=0; x<f_right.no_center_left_labels(); ++x) {
+            for(INDEX sum=0; sum<f_right.left_sum_size(); ++sum) {
+               f_right.left(0,x,sum) += normalize( msg(x,sum) );
+            }
+         }
+      } else {
+         assert(f_right.no_right_labels() == 1);
+         assert(msg.dim1() == f_right.no_center_right_labels());
+         assert(msg.dim2() == f_right.right_sum_size());
+         for(INDEX x=0; x<f_right.no_center_right_labels(); ++x) {
+            for(INDEX sum=0; sum<f_right.right_sum_size(); ++sum) {
+               f_right.right(x,0,sum) += normalize( msg(x,sum) );
             }
          }
       }
-      */
    }
-private:
-   bool transpose_; 
 };
 
 // connect mrf pairwise factor (left) with dt_sequential_pairwise_factor (right)
@@ -328,6 +331,9 @@ public:
    void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
       matrix msgs(f_right.no_labels(), f_right.no_labels());
       f_right.marginalize_pairwise(msgs);
+      if(transpose_) {
+         msgs.transpose();
+      }
       msg -= omega*msgs;
    }
 
@@ -344,15 +350,23 @@ public:
    template<typename RIGHT_FACTOR, typename MSG>
    void RepamRight(RIGHT_FACTOR& f_right, const MSG& msg)
    {
-      for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
-         for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
-            f_right.reg(x1,x2) += normalize( msg(x1,x2) );
+      if(!transpose_) {
+         for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
+            for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
+               f_right.reg(x1,x2) += normalize( msg(x1,x2) );
+            }
+         }
+      } else {
+         for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
+            for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
+               f_right.reg(x1,x2) += normalize( msg(x2,x1) );
+            }
          }
       }
    }
 
 private:
-   bool transpose_; 
+   const bool transpose_; 
 };
 
 } // end namespace LP_MP

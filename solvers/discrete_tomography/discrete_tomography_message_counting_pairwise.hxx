@@ -8,14 +8,16 @@
 
 namespace LP_MP {
     
-  //using MinConv = MinConv<REAL,INDEX>;
+//using MinConv = MinConv<REAL,INDEX>;
 
 // regularizer to counting factor, when counting factor has intermediate sum=0, i.e. no intermediate node
 enum class CountingPairwiseMessageType { left, center, right };
 template<CountingPairwiseMessageType TYPE>
 class DiscreteTomographyMessageCountingPairwise2{
 public:
-   DiscreteTomographyMessageCountingPairwise2(const bool transpose) : transpose_(transpose) {}
+   DiscreteTomographyMessageCountingPairwise2(const bool transpose) : transpose_(transpose) {
+      assert(transpose == false);
+   }
 
    template<typename RIGHT_FACTOR, typename G2>
    void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
@@ -60,15 +62,15 @@ public:
    template<typename RIGHT_FACTOR, typename MSG>
    void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
       if(TYPE == CountingPairwiseMessageType::center) {
-         matrix msg_tmp(f_right.no_labels(), f_right.no_labels());
+         matrix msg_tmp(f_right.no_center_left_labels(), f_right.no_center_right_labels());
          f_right.MessageCalculation_Reg(msg_tmp);
          msg -= omega*msg_tmp;
       } else if(TYPE == CountingPairwiseMessageType::left) {
-         matrix msg_tmp(f_right.no_labels(), f_right.no_labels());
+         matrix msg_tmp(f_right.no_left_labels(), f_right.no_center_left_labels());
          f_right.MessageCalculation_Naive_Left(msg_tmp);
          msg -= omega*msg_tmp;
       } else if(TYPE == CountingPairwiseMessageType::right) {
-         matrix msg_tmp(f_right.no_labels(), f_right.no_labels());
+         matrix msg_tmp(f_right.no_center_right_labels(), f_right.no_right_labels());
          f_right.MessageCalculation_Naive_Right(msg_tmp);
          msg -= omega*msg_tmp;
       } else {
@@ -105,16 +107,11 @@ public:
    template<typename RIGHT_FACTOR, typename MSG>
    void RepamRight(RIGHT_FACTOR& f_right, const MSG& msg)
    {
-      for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
-         for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
-            assert(std::isnan(msg(x1,x2)) == false);
-         }
-      }
       if(TYPE == CountingPairwiseMessageType::center) {
          auto& reg = f_right.reg();
          if(!transpose_) {
-            for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
-               for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
+            for(INDEX x1=0; x1<f_right.no_center_left_labels(); ++x1) {
+               for(INDEX x2=0; x2<f_right.no_center_right_labels(); ++x2) {
                   reg(x1,x2) += normalize( msg(x1,x2) );
                }
             }
@@ -127,8 +124,8 @@ public:
          auto& left = f_right.left();
          assert(left.dim3() == 1);
          if(!transpose_) {
-            for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
-               for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
+            for(INDEX x1=0; x1<f_right.no_left_labels(); ++x1) {
+               for(INDEX x2=0; x2<f_right.no_center_left_labels(); ++x2) {
                   left(x1,x2,0) += normalize( msg(x1,x2) );
                }
             }
@@ -141,8 +138,8 @@ public:
          auto& right = f_right.right();
          assert(right.dim3() == 1);
          if(!transpose_) {
-            for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
-               for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
+            for(INDEX x1=0; x1<f_right.no_center_right_labels(); ++x1) {
+               for(INDEX x2=0; x2<f_right.no_right_labels(); ++x2) {
                   right(x1,x2,0) += normalize( msg(x1,x2) );
                }
             }
@@ -162,7 +159,9 @@ public:
 template<Chirality COUNTING_FACTOR, Chirality DIRECTION>
 class DiscreteTomographyMessageCountingPairwise3{
 public:
-   DiscreteTomographyMessageCountingPairwise3(const bool transpose) : transpose_(transpose) {}
+   DiscreteTomographyMessageCountingPairwise3(const bool transpose) : transpose_(transpose) {
+      assert(transpose == false);
+   }
    ~DiscreteTomographyMessageCountingPairwise3() {
       static_assert(COUNTING_FACTOR == Chirality::left || COUNTING_FACTOR == Chirality::right,"");
       static_assert(DIRECTION == Chirality::left || DIRECTION == Chirality::right,"");
@@ -202,20 +201,45 @@ public:
 
    template<typename RIGHT_FACTOR, typename MSG>
    void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
-      tensor3 msg_tmp(f_right.no_labels(), f_right.no_labels(),f_right.no_labels());
+      std::array<INDEX,3> dim;
       if(COUNTING_FACTOR == Chirality::left) {
-         assert(f_right.no_labels() ==  f_right.left_sum_size());
+         dim = {f_right.no_left_labels(), f_right.no_center_left_labels(), f_right.left_sum_size()};
+      } else {
+         dim = {f_right.no_center_right_labels(), f_right.no_right_labels(), f_right.right_sum_size()};
+      }
+
+      tensor3 msg_tmp(dim[0], dim[1], dim[2]);
+      
+      if(COUNTING_FACTOR == Chirality::left) {
+         assert(f_right.no_left_labels() ==  f_right.left_sum_size());
+         assert(f_right.no_center_left_labels() ==  f_right.left_sum_size());
          f_right.MessageCalculation_Naive_Left(msg_tmp);
       } else {
-         assert(f_right.no_labels() ==  f_right.right_sum_size());
+         assert(f_right.no_right_labels() ==  f_right.right_sum_size());
+         assert(f_right.no_center_right_labels() ==  f_right.right_sum_size());
          f_right.MessageCalculation_Naive_Right(msg_tmp);
       }
 
-      matrix msg_marg(f_right.no_labels(), f_right.no_labels(), std::numeric_limits<REAL>::infinity());
+      if(COUNTING_FACTOR == Chirality::left) {
+         if(DIRECTION == Chirality::left) {
+            dim = {f_right.no_left_labels(), f_right.left_sum_size(), 0};
+         } else {
+            dim = {f_right.left_sum_size(), f_right.no_center_left_labels(), 0}; 
+         }
+      } else {
+         if(DIRECTION == Chirality::left) {
+            dim = {f_right.no_center_right_labels(), f_right.right_sum_size(), 0}; 
+         } else {
+            dim = {f_right.right_sum_size(), f_right.no_right_labels(), 0};
+         } 
+      }
+
+      matrix msg_marg(dim[0], dim[1], std::numeric_limits<REAL>::infinity());
+
       if(!transpose_) {
-         for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
-            for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
-               for(INDEX sum=0;sum<f_right.no_labels(); ++sum) {
+         for(INDEX x1=0; x1<msg_tmp.dim1(); ++x1) {
+            for(INDEX x2=0; x2<msg_tmp.dim2(); ++x2) {
+               for(INDEX sum=0;sum<msg_tmp.dim3(); ++sum) {
                   if(DIRECTION == Chirality::left) {
                      msg_marg(x1,sum) = std::min(msg_marg(x1,sum), msg_tmp(x1,x2,sum));
                   } else {
@@ -235,40 +259,48 @@ public:
    {
       for(INDEX x1=0; x1<f_left.dim1(); ++x1) {
          for(INDEX x2=0; x2<f_left.dim2(); ++x2) {
-            assert(std::isnan(msg(x1,x2)) == false);
             f_left(x1,x2) += normalize( msg(x1,x2) );
          }
       }
-      assert(f_left.LowerBound() < std::numeric_limits<REAL>::infinity());
    }
 
    template<typename RIGHT_FACTOR, typename MSG>
    void RepamRight(RIGHT_FACTOR& f_right, MSG& msg)
    {
-      for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
-         for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
-            assert(std::isnan(msg(x1,x2)) == false);
-         }
-      }
       auto& f = (COUNTING_FACTOR == Chirality::left) ? f_right.left() : f_right.right();
-      assert(f.dim3() == f_right.no_labels());
+      //assert(f.dim3() == f_right.no_labels());
 
-      if(COUNTING_FACTOR == Chirality::left) {
-         assert(f_right.left_sum_size() == f_right.no_labels());
-      } else {
-         assert(f_right.right_sum_size() == f_right.no_labels());
-      }
+      //if(COUNTING_FACTOR == Chirality::left) {
+      //   assert(f_right.left_sum_size() == f_right.no_labels());
+      //} else {
+      //   assert(f_right.right_sum_size() == f_right.no_labels());
+      //}
 
       if(!transpose_) {
-         for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
-            for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
-               for(INDEX sum=0;sum<f_right.no_labels(); ++sum) {
-                  if(DIRECTION == Chirality::left) {
-                     f(x1,x2,sum) += normalize( msg(x1,sum) );
-                  } else {
-                     f(x1,x2,sum) += normalize( msg(sum,x2) );
+         if(COUNTING_FACTOR == Chirality::left) {
+            for(INDEX x1=0; x1<f_right.no_left_labels(); ++x1) {
+               for(INDEX x2=0; x2<f_right.no_center_left_labels(); ++x2) {
+                  for(INDEX sum=0;sum<f_right.left_sum_size(); ++sum) {
+                     if(DIRECTION == Chirality::left) {
+                        f(x1,x2,sum) += normalize( msg(x1,sum) );
+                     } else {
+                        f(x1,x2,sum) += normalize( msg(sum,x2) );
+                     }
                   }
                }
+            }
+         } else {
+            for(INDEX x1=0; x1<f_right.no_center_right_labels(); ++x1) {
+               for(INDEX x2=0; x2<f_right.no_right_labels(); ++x2) {
+                  for(INDEX sum=0;sum<f_right.right_sum_size(); ++sum) {
+                     if(DIRECTION == Chirality::left) {
+                        f(x1,x2,sum) += normalize( msg(x1,sum) );
+                     } else {
+                        f(x1,x2,sum) += normalize( msg(sum,x2) );
+                     }
+                  }
+               }
+
             }
          }
       } else {
@@ -280,6 +312,17 @@ public:
 private:
    bool transpose_;
 };
+
+
+
+
+
+
+
+
+
+
+
 
   class DiscreteTomographyMessageCountingPairwise{
 

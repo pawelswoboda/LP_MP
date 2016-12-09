@@ -113,8 +113,10 @@ namespace LP_MP{
           dt_sequential_recursive_message_right>;
 
 
-    using ProblemDecompositionList = meta::list<mrf,dt_sequential>;
-    //using ProblemDecompositionList = meta::list<tighteningMrf,dt>;
+    //using ProblemDecompositionList = meta::list<tighteningMrf,dt_sequential>;
+    //using ProblemDecompositionList = meta::list<mrf,dt_sequential>;
+    //using ProblemDecompositionList = meta::list<mrf,dt_recursive>;
+    using ProblemDecompositionList = meta::list<tighteningMrf,dt_combined>;
 	  
   };
 

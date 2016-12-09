@@ -390,15 +390,19 @@ public:
    }
 
    REAL min_marginal12(const INDEX x1, const INDEX x2) const {
-      REAL marg = msg13(x1,0) + msg23(x2,0);
+      REAL marg = (*this)(x1,x2,0);
       for(INDEX x3=1; x3<dim3_; ++x3) {
-         marg = std::min(marg, msg13(x1,x3) + msg23(x2,x3));
+         marg = std::min(marg, (*this)(x1,x2,x3));
       }
       return marg;
    }
    template<typename MSG>
    void min_marginal12(MSG& msg) const {
-      assert(false);
+      for(INDEX x1=0; x1<dim1_; ++x1) {
+         for(INDEX x2=0; x2<dim2_; ++x2) {
+            msg(x1,x2) = std::numeric_limits<REAL>::infinity();
+         }
+      }
       for(INDEX x1=0; x1<dim1_; ++x1) {
          for(INDEX x2=0; x2<dim2_; ++x2) {
             msg(x1,x2) = min_marginal12(x1,x2);
@@ -445,7 +449,7 @@ public:
 
    REAL msg12(const INDEX x1, const INDEX x2) const { return msg12_[x1*dim2_ + x2]; }
    REAL msg13(const INDEX x1, const INDEX x3) const { return msg13_[x1*dim3_ + x3]; }
-   REAL msg23(const INDEX x2, const INDEX x3) const { return msg12_[x2*dim3_ + x3]; }
+   REAL msg23(const INDEX x2, const INDEX x3) const { return msg23_[x2*dim3_ + x3]; }
 
    REAL& msg12(const INDEX x1, const INDEX x2) { return msg12_[x1*dim2_ + x2]; }
    REAL& msg13(const INDEX x1, const INDEX x3) { return msg13_[x1*dim3_ + x3]; }
