@@ -147,7 +147,6 @@ public:
             assert(false);
          } 
       }
-      assert(f_right.LowerBound() < std::numeric_limits<REAL>::infinity()); 
    }
    private:
    const bool transpose_; // pairwise potential in discrete tomography factor might be transposed
@@ -306,7 +305,6 @@ public:
       } else {
          assert(false);
       } 
-      assert(f_right.LowerBound() < std::numeric_limits<REAL>::infinity());
    }
 
 private:

@@ -78,7 +78,7 @@ namespace LP_MP {
     void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega)
     {
        tensor3 msg_tmp(f_left.no_left_labels(), f_left.no_right_labels(), f_left.up_sum_size());
-       f_left.MessageCalculation_Naive_Up(msg_tmp);
+       f_left.MessageCalculation_Up(msg_tmp);
        //for(auto it=msg_tmp.begin(); it!=msg_tmp.end(); ++it) {
        //   *it = omega*(*it);
        //}
@@ -105,12 +105,12 @@ namespace LP_MP {
              }
           }
        } 
-       assert(l.LowerBound() < std::numeric_limits<REAL>::infinity()); 
+       //assert(l.LowerBound() < std::numeric_limits<REAL>::infinity()); 
     }
 
     template<typename RIGHT_FACTOR, typename MSG>
     void RepamRight(RIGHT_FACTOR& r, const MSG msg){
-       assert(r.LowerBound() < std::numeric_limits<REAL>::infinity()); 
+       //assert(r.LowerBound() < std::numeric_limits<REAL>::infinity()); 
        if(DR == DIRECTION::left) {
           auto& left = r.left();
           assert(left.size() == msg.size());

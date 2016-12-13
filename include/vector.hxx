@@ -86,10 +86,12 @@ public:
    INDEX size() const { return end_ - begin_; }
 
    REAL operator[](const INDEX i) const {
+      assert(i<size());
       assert(!std::isnan(begin_[i]));
       return begin_[i];
    }
    REAL& operator[](const INDEX i) {
+      assert(i<size());
       return begin_[i];
    }
    REAL* begin() const { return begin_; }

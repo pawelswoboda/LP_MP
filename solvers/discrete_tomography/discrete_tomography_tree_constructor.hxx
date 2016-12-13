@@ -129,7 +129,7 @@ namespace LP_MP {
     COUNTING_FACTOR* add_top_factor(const INDEX left_sum, const INDEX right_sum, const INDEX max_sum, const INDEX var1, const INDEX var2)
     {
        assert(var1<var2);
-       auto* f = new COUNTING_FACTOR(1, left_sum, noLabels_, noLabels_, right_sum, 1, std::min(left_sum + right_sum + 2*noLabels_, max_sum));
+       auto* f = new COUNTING_FACTOR(1, left_sum, noLabels_, noLabels_, right_sum, 1, std::min(left_sum + right_sum + 2*noLabels_-3, max_sum));
        pd_.GetLP().AddFactor(f);
        auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
        connect_pairwise_counting_center(mrf.GetPairwiseFactor(var1,var2),f);
@@ -464,6 +464,7 @@ public:
             auto* last_sequential_left = SEQUENTIAL_CONSTRUCTOR::AddProjection(projectionVar.begin(), projectionVar.begin()+no_sequential_factors_left+1, max_sum);
             auto* last_sequential_right = SEQUENTIAL_CONSTRUCTOR::AddProjection(projectionVar.rbegin(), projectionVar.rbegin()+no_sequential_factors_right+1, max_sum);
             auto* f_top = RECURSIVE_CONSTRUCTOR::add_top_factor(last_sequential_left->GetFactor()->sum_size(), last_sequential_right->GetFactor()->sum_size(), max_sum, projectionVar[no_sequential_factors_left-1], projectionVar[no_sequential_factors_left]);
+            assert(f_top->LowerBound() < 10000000);
             connect_chain_recursive_left(last_sequential_left, f_top);
             connect_chain_recursive_right(last_sequential_right, f_top);
             f_top->GetFactor()->summation_cost(summationCost);

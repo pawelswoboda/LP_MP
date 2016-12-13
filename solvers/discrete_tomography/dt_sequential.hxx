@@ -60,19 +60,27 @@ public:
       assert(prev_sum_size <= next_sum_size);
    }
 
+   template<typename LAMBDA>
+   void for_each_label_sum(const LAMBDA&& f) const {
+      assert(prev_sum_size() <= next_sum_size());
+      assert(prev_sum_size() + no_labels()-1 >= next_sum_size());
+      for(INDEX x1=0; x1<no_labels(); ++x1) {
+         for(INDEX x2=0; x2<no_labels(); ++x2) {
+            const INDEX max_sum = std::min(prev_sum_size(), next_sum_size()-x1);
+            for(INDEX sum=0; sum<max_sum; ++sum) {
+               f(x1,x2,sum);
+            }
+         }
+      }
+   }
+
    REAL eval(const INDEX x1, const INDEX x2, const INDEX sum) const {
-      assert(x1 < no_labels() && x2 < no_labels() && sum < prev_.dim2());
+      assert(x1 < no_labels() && x2 < no_labels() && sum < prev_sum_size() && sum+x1 < next_sum_size());
       return prev_(x1,sum) + reg_(x1,x2) + next_(x2, sum+x1);
    }
    REAL LowerBound() const {
       REAL min_value = std::numeric_limits<REAL>::infinity();
-      for(INDEX x1=0; x1<no_labels(); ++x1) {
-         for(INDEX x2=0; x2<no_labels(); ++x2) {
-            for(INDEX sum=0; sum<prev_.dim2(); ++sum) {
-               min_value = std::min(min_value, eval(x1,x2,sum));
-            }
-         }
-      }
+      for_each_label_sum([&](INDEX x1, INDEX x2, INDEX sum) { min_value = std::min(min_value, eval(x1,x2,sum)); });
       return min_value;
    }
 
@@ -82,14 +90,7 @@ public:
 
    void marginalize_pairwise(matrix& msg) const {
       std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
-
-      for(INDEX x1=0; x1<no_labels(); ++x1) {
-         for(INDEX x2=0; x2<no_labels(); ++x2) {
-            for(INDEX sum=0; sum<prev_.dim2(); ++sum) {
-               msg(x1,x2) = std::min(msg(x1,x2), eval(x1,x2,sum));
-            }
-         }
-      }
+      for_each_label_sum([&](INDEX x1, INDEX x2, INDEX sum) { msg(x1,x2) = std::min(msg(x1,x2), eval(x1,x2,sum)); });
    }
 
    REAL& prev(const INDEX state, const INDEX sum) { return prev_(state,sum); }
