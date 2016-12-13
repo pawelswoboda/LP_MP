@@ -1,6 +1,11 @@
 #ifndef LP_MP_MEMORY_arena_HXX
 #define LP_MP_MEMORY_arena_HXX
 
+#pragma once
+
+#include <iostream>
+#include "config.hxx"
+
 /* 
    allocators using a stack and a more general one using a variable size list of stacks for allocating memory for factors and messages.
    The implementation is taken from Alexander Shekhovtsov's TRW-S code https://gitlab.icg.tugraz.at/shekhovt/part_opt and modified to be compatible with std::allocator

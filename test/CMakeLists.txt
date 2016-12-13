@@ -4,6 +4,7 @@ if(BUILD_TESTS)
       #simplex.cpp
       #simplex_marginalization.cpp
       #min_cost_flow.cpp
+      min_conv.cpp
       )
    enable_testing()
 
@@ -25,7 +26,7 @@ if(BUILD_TESTS)
    endif()
 
    if(BUILD_DISCRETE_TOMOGRAPHY)
-      target_sources(test_main PUBLIC discrete_tomography.cpp)
+     #target_sources(test_main PUBLIC discrete_tomography.cpp)
       #target_sources(test_main PUBLIC discrete_tomography_file_input.cpp)
       if(WITH_GUROBI)
       #   target_sources(test_main PUBLIC discrete_tomography_gurobi.cpp)
