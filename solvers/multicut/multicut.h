@@ -25,11 +25,11 @@
 #include <iostream>
 #include <vector>
 
-#include "boost/hana.hpp"
+//#include "boost/hana.hpp"
 
 namespace LP_MP {
 
-namespace hana = boost::hana;
+//namespace hana = boost::hana;
 
 // do zrobienia: possibly rename unary to edge factor
 
@@ -113,23 +113,23 @@ struct FMC_LIFTED_MULTICUT {
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 
 
-   using MessageListHana = hana::tuple<
-      MulticutUnaryTripletMessageContainer, 
-      CutEdgeLiftedMulticutFactorMessageContainer, 
-      LiftedEdgeLiftedMulticutFactorMessageContainer
-         >;
+//   using MessageListHana = hana::tuple<
+//      MulticutUnaryTripletMessageContainer, 
+//      CutEdgeLiftedMulticutFactorMessageContainer, 
+//      LiftedEdgeLiftedMulticutFactorMessageContainer
+//         >;
 
-   using FactorListHana = hana::tuple<
-      MulticutUnaryFactorContainer, 
-      MulticutTripletFactorContainer, 
-      LiftedMulticutCutFactorContainer 
-         >;
+//   using FactorListHana = hana::tuple<
+//      MulticutUnaryFactorContainer, 
+//      MulticutTripletFactorContainer, 
+//      LiftedMulticutCutFactorContainer 
+//         >;
    //using MessageListHana = hana::tuple<
    //   MulticutUnaryTripletMessageContainer, 
    //   CutEdgeLiftedMulticutFactorMessageContainer, 
    //   LiftedEdgeLiftedMulticutFactorMessageContainer
    //      >;
-   using ProblemDecompositionListHana = hana::tuple<LiftedMulticutConstructor>;
+//   using ProblemDecompositionListHana = hana::tuple<LiftedMulticutConstructor>;
 
    /*
    hana::tuple_t<
