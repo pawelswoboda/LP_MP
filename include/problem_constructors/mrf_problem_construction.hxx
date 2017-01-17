@@ -49,6 +49,9 @@ public:
          if(unaryFactor_[node_number] != nullptr) { throw std::runtime_error("unary factor " + std::to_string(node_number) + " already present"); }
       }
       unaryFactor_[node_number] = u;
+      if(node_number > 0 && unaryFactor_[node_number-1]) { // fails for non-contiguous access
+         lp_->AddFactorRelation(unaryFactor_[node_number-1], unaryFactor_[node_number]);
+      }
       
       lp_->AddFactor(u);;
 
@@ -132,9 +135,6 @@ public:
    {
       assert(i1 < GetNumberOfLabels( std::get<0>(GetPairwiseVariables(factorId)) ));
       assert(i2 < GetNumberOfLabels( std::get<1>(GetPairwiseVariables(factorId)) ));
-      const INDEX var1 = std::get<0>(GetPairwiseVariables(factorId));
-      //const INDEX var2 = std::get<1>(GetPairwiseVariables(factorId));
-      //const INDEX label = i2 + i1*GetNumberOfLabels(var2);
       return (*pairwiseFactor_[factorId]->GetFactor())(i1,i2);
    }
 
@@ -372,9 +372,13 @@ public:
 
       this->lp_->AddFactor(t);
 
-      this->lp_->AddFactorRelation(this->GetPairwiseFactor(factor12Id),t);
-      this->lp_->AddFactorRelation(this->GetPairwiseFactor(factor13Id),t);
-      this->lp_->AddFactorRelation(t,this->GetPairwiseFactor(factor23Id));
+      //this->lp_->ForwardPassFactorRelation(this->GetPairwiseFactor(factor12Id),t);
+      //this->lp_->ForwardPassFactorRelation(this->GetPairwiseFactor(factor13Id),t);
+      //this->lp_->ForwardPassFactorRelation(t,this->GetPairwiseFactor(factor23Id));
+
+      //this->lp_->BackwardPassFactorRelation(this->GetPairwiseFactor(factor23Id),t);
+      //this->lp_->BackwardPassFactorRelation(this->GetPairwiseFactor(factor13Id),t);
+      //this->lp_->BackwardPassFactorRelation(t,this->GetPairwiseFactor(factor12Id));
       return t;
    }
    template<typename PAIRWISE_TRIPLET_MESSAGE_CONTAINER>
@@ -595,41 +599,47 @@ namespace UaiMrfInput {
       : pegtl::nothing< Rule > {};
 
    template<> struct action< number_of_variables > {
-      static void apply(const pegtl::action_input & in, MrfInput& input) 
+      template<typename Input>
+      static void apply(const Input& in, MrfInput& input) 
       {
          input.number_of_variables_ = std::stoul(in.string());
       }
    };
 
    template<> struct action< number_of_cliques > {
-      static void apply(const pegtl::action_input & in, MrfInput& input)
+      template<typename Input>
+      static void apply(const Input & in, MrfInput& input)
       {
          input.number_of_cliques_ = std::stoul(in.string()); 
       }
    };
 
    template<> struct action< cardinality > {
-      static void apply(const pegtl::action_input & in, MrfInput& input)
+      template<typename Input>
+      static void apply(const Input & in, MrfInput& input)
       {
          input.cardinality_.push_back(std::stoul(in.string()));
       }
    };
 
    template<> struct action< new_clique_scope > {
-      static void apply(const pegtl::action_input & in, MrfInput& input)
+      template<typename Input>
+      static void apply(const Input & in, MrfInput& input)
       {
          input.clique_scopes_.push_back(std::vector<INDEX>(0));
       }
    };
    template<> struct action< clique_scope > {
-      static void apply(const pegtl::action_input & in, MrfInput& input)
+      template<typename Input>
+      static void apply(const Input & in, MrfInput& input)
       {
          input.clique_scopes_.back().push_back(std::stoul(in.string()));
          assert(input.clique_scopes_.back().back() < input.number_of_variables_);
       }
    };
    template<> struct action< new_function_table > {
-      static void apply(const pegtl::action_input & in, MrfInput& input)
+      template<typename Input>
+      static void apply(const Input & in, MrfInput& input)
       {
          const INDEX no_entries = std::stoul(in.string());
          std::vector<REAL> entries;
@@ -639,7 +649,8 @@ namespace UaiMrfInput {
       }
    };
    template<> struct action< function_table_entry > {
-      static void apply(const pegtl::action_input & in, MrfInput& input)
+      template<typename Input>
+      static void apply(const Input & in, MrfInput& input)
       {
          auto& table = input.function_tables_.back();
          table.push_back(std::stod(in.string()));

@@ -76,10 +76,10 @@ namespace LP_MP {
       const REAL& omega_;
    };
 
-   template<>
-   struct ScaledVec<Vc::Memory<REAL_SIMD>> {
-
-   };
+   //template<>
+   //struct ScaledVec<Vc::Memory<REAL_SIMD>> {
+   //
+   //};
 
    template<typename T>
       struct PlusVec {
@@ -94,6 +94,7 @@ namespace LP_MP {
          const T& a_;
       };
 
+   /*
    template<>
       struct PlusVec<Vc::Memory<REAL_SIMD>> {
          PlusVec(const Vc::Memory<REAL_SIMD>& a) : a_(a) {}
@@ -114,6 +115,7 @@ namespace LP_MP {
          private:
          const Vc::Memory<REAL_SIMD> a_;
       };  
+      */
 
 
    template<typename T>
@@ -129,6 +131,7 @@ namespace LP_MP {
          const T& a_;
       };
 
+/*
    template<>
       struct MinusVec<Vc::Memory<REAL_SIMD>> {
          MinusVec(const Vc::Memory<REAL_SIMD>& a) : a_(a) {}
@@ -149,7 +152,7 @@ namespace LP_MP {
          private:
          const Vc::Memory<REAL_SIMD> a_;
       };  
-
+*/
 
    template<typename T1, typename T2>
    struct PlusExprVec {

@@ -38,11 +38,16 @@ public:
    {
       return std::min(0.0, *std::min_element(this->begin(), this->end()));
    }
-   REAL EvaluatePrimal(PrimalSolutionStorage::Element primal) const
+   REAL EvaluatePrimal() const
    {
       assert(false);
       return 3e13;
    }
+
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<std::array<REAL,9>*>(this) ); }
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+private:
+   std::array<bool,4> primal_;
 };
 
 // left factor is Triplet, right one is TripletPlusSpoke

@@ -43,22 +43,17 @@ namespace LP_MP {
       // for primal computation as in TRW-S, we need to compute restricted messages as well
       template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>
         typename std::enable_if<ENABLE,void>::type
-        ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
+        ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
         {
-           //std::cout << "before restricted allocation\n";
-           vector msgs(i1_,std::numeric_limits<REAL>::infinity());
-          //std::vector<REAL> msgs(i1_,std::numeric_limits<REAL>::infinity());
-          for(INDEX x2=0; x2<i2_; ++x2) {
-            for(INDEX x1=0; x1<i1_; ++x1) {
-              if(rightPrimal[x2*i1_ + x1] == unknownState) {
-                msgs[x1] = std::min(msgs[x1],r[x2*i1_ + x1]);
-              } else if(rightPrimal[x2*i1_ + x1] == true) {
-                msgs[x1] = -std::numeric_limits<REAL>::infinity();
+           // we assume that only r.right_primal was assigned, r.left_primal not
+           assert(r.left_primal_ == i1_);
+           if(r.right_primal_ < i2_) {
+              vector msgs(i1_);
+              for(INDEX x1=0; x1<i1_; ++x1) {
+                 msgs[x1] = r(x1,r.right_primal_);
               }
-            }
-          }
-          msg -= msgs;
-           //std::cout << "before restricted deallocation\n";
+              msg -= msgs;
+           }
         }
 
     // reparametrize left potential for i-th entry of msg
@@ -99,31 +94,11 @@ namespace LP_MP {
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
     //typename std::enable_if<ENABLE,void>::type
     void
-    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, const LEFT_FACTOR& l, typename PrimalSolutionStorage::Element right, const RIGHT_FACTOR& r)
+    ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
-      for(INDEX x1=0; x1<i1_; ++x1) {
-        if(left[x1] == false) {
-          for(INDEX x2=0; x2<i2_; ++x2) {
-            right[x2*i1_ + x1] = false;
-          }
-        } else if(left[x1] == true) {
-          INDEX no_false = 0;
-          for(INDEX x2=0; x2<i2_; ++x2) {
-            if(right[x2*i1_ + x1] == false) {
-              ++no_false;
-            }
-          }
-          if(no_false == i1_-1) {
-            for(INDEX x2=0; x2<i2_; ++x2) {
-              if(right[x2*i1_ + x1] == unknownState) {
-                right[x2*i1_ + x1] = true;
-              }
-            }
-          }
-        } else {
-          assert(false); // unary should have been labelled
-        }
-      }
+       assert(l.primal() < i1_);
+       assert(r.left_primal_ == i1_);
+       r.left_primal_ = l.primal();
     }
 
 
@@ -210,21 +185,16 @@ namespace LP_MP {
       // for primal computation as in TRW-S, we need to compute restricted messages as well
       template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>
         typename std::enable_if<ENABLE,void>::type
-        ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
+        ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
         {
-           vector msgs(i2_,std::numeric_limits<REAL>::infinity());
-          //std::vector<REAL> msgs(i2_,std::numeric_limits<REAL>::infinity());
-          for(INDEX x2=0; x2<i2_; ++x2) {
-            for(INDEX x1=0; x1<i1_; ++x1) {
-              if(rightPrimal[x2*i1_ + x1] == unknownState) {
-                msgs[x2] = std::min(msgs[x2],r[x2*i1_ + x1]);
-              } else if(rightPrimal[x2*i1_ + x1] == true) {
-                msgs[x2] = -std::numeric_limits<REAL>::infinity();
+           assert(r.right_primal_ == i1_);
+           if(r.left_primal_ < i2_) {
+              vector msgs(i2_);
+              for(INDEX x2=0; x2<i2_; ++x2) {
+                 msgs[x2] = r(r.left_primal_,x2);
               }
-            }
-          }
-          msg -= msgs;
-          //assert(false);
+              msg -= msgs;
+           }
         }
 
     // reparametrize left potential for i-th entry of msg
@@ -265,31 +235,11 @@ namespace LP_MP {
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
     //typename std::enable_if<ENABLE,void>::type
     void
-    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, const LEFT_FACTOR& l, typename PrimalSolutionStorage::Element right, const RIGHT_FACTOR& r)
+    ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
-      for(INDEX x2=0; x2<i2_; ++x2) {
-        if(left[x2] == false) {
-          for(INDEX x1=0; x1<i1_; ++x1) {
-            right[x2*i1_ + x1] = false;
-          }
-        } else if(left[x2] == true) {
-          INDEX no_false = 0;
-          for(INDEX x1=0; x1<i1_; ++x1) {
-            if(right[x2*i1_ + x1] == false) {
-              ++no_false;
-            }
-          }
-          if(no_false == i2_-1) {
-            for(INDEX x1=0; x1<i1_; ++x1) {
-              if(right[x2*i1_ + x1] == unknownState) {
-                right[x2*i1_ + x1] = true;
-              }
-            }
-          }
-        } else {
-          assert(false); // unary should have been labelled
-        }
-      }
+       assert(l.primal() < i2_);
+       assert(r.right_primal_ == i2_);
+       r.right_primal_ = l.primal();
     }
 
 
@@ -336,7 +286,7 @@ namespace LP_MP {
       msg -= msgs;
     }
 
-    const INDEX i1_,i2_;
+    const INDEX i1_,i2_; // do zrobienia: these values are not needed, as they can be obtained from the factors whenever they are used
   };
 
   // specialized messages for pairwise/triplet marginalization
@@ -650,11 +600,6 @@ namespace LP_MP {
     void MaximizeLeft(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
     {
        msg -= omega*l;
-      //for(INDEX x3=0; x3<i3_; ++x3) {
-      //  for(INDEX x1=0; x1<i1_; ++x1) {
-      //    msg[x3*i1_ + x1] -= omega*l[x3*i1_ + x1];
-      //  }
-      //}
     }
     template<typename RIGHT_FACTOR, typename G2>
     void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
@@ -734,7 +679,7 @@ namespace LP_MP {
     {
       // do zrobienia: possibly use counter
        for(INDEX x2=0; x2<i2_; ++x2) {
-          for(INDEX x3 = 0; x3<i3_; ++x3) {
+          for(INDEX x3=0; x3<i3_; ++x3) {
              repamPot.msg23(x2,x3) += normalize( msgs(x2,x3) );
           }
        }
@@ -816,11 +761,6 @@ namespace LP_MP {
     void MaximizeLeft(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
     {
        msg -= omega*l;
-      //for(INDEX x3=0; x3<i3_; ++x3) {
-      //  for(INDEX x2=0; x2<i2_; ++x2) {
-      //    msg[x3*i2_ + x2] -= omega*leftPot[x3*i2_ + x2];
-      //  }
-      //}
     }
     template<typename RIGHT_FACTOR, typename G2>
     void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)

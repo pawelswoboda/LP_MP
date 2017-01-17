@@ -123,6 +123,18 @@ ExternalProject_Get_Property(Andres_Project install_dir)
 include_directories(${install_dir}/Dependencies/Source/Andres_Project/include)
 #ENDIF()
 
+list(APPEND DEPENDENCIES Cereal_Project)
+ExternalProject_Add(
+   Cereal_Project
+   GIT_REPOSITORY "https://github.com/USCiLab/cereal.git"
+   GIT_TAG "master"
+   INSTALL_COMMAND "" 
+   BUILD_COMMAND ""
+   CONFIGURE_COMMAND ""
+   )
+ExternalProject_Get_Property(Cereal_Project install_dir)
+include_directories(${install_dir}/Dependencies/Source/Cereal_Project/include)
+
 # command line library
 list(APPEND DEPENDENCIES TCLAP_Project)
 ExternalProject_ADD(

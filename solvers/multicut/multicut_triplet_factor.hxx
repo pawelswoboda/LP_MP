@@ -60,8 +60,17 @@ public:
       }
    }
 
-   REAL EvaluatePrimal(PrimalSolutionStorage::Element primal) const
+   REAL EvaluatePrimal() const
    {
+      assert(std::count(primal_.begin(), primal_.end(), true) != 1);
+      REAL cost = 
+         (*this)[0]*((1-primal_[0])*primal_[1]*primal_[2]) +
+         (*this)[1]*(primal_[0]*(1-primal_[1])*primal_[2]) +
+         (*this)[2]*(primal_[0]*primal_[1]*(1-primal_[2])) +
+         (*this)[3]*(primal_[1]*primal_[2]*primal_[3]) ;
+      return cost;
+
+      /*
       for(INDEX i=0; i<PrimalSize(); ++i) {
          assert(primal[i] != unknownState);
       }
@@ -77,6 +86,7 @@ public:
          return std::numeric_limits<REAL>::infinity();
       }
       return cost;
+      */
    }
 
    /*
@@ -92,6 +102,12 @@ public:
       lp->addLinearInequality(lhs,rhs);
    } 
    */
+
+   void init_primal() {}
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<std::array<REAL,4>*>(this) ); }
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+private:
+   std::array<bool,3> primal_;
 };
 
 

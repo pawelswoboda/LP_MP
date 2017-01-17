@@ -238,16 +238,21 @@ public:
    // register evaluated primal solution
    void RegisterPrimal(PrimalSolutionStorage& p, const REAL cost)
    {
+      assert(false);
+      /*
       if(cost < bestPrimalCost_) {
          // assume solution is feasible
          bestPrimalCost_ = cost;
          std::swap(bestPrimal_, p);
       }
+      */
    }
 
    // evaluate and register primal solution
    void RegisterPrimal(PrimalSolutionStorage& p)
    {
+      assert(false);
+      /*
       const REAL cost = lp_.EvaluatePrimal(p.begin());
       if(cost < bestPrimalCost_) {
          // check constraints
@@ -256,6 +261,7 @@ public:
             std::swap(bestPrimal_, p); // note: the best primal need not be admissible for the current lp, i.e. after tightening, the lp has changed, while best primal possibly has steyed the same.
          }
       }
+      */
    }
 
    REAL lower_bound() const { return lowerBound_; }
@@ -285,16 +291,18 @@ public:
    void Iterate(LpControl c)
    {
       if(c.computePrimal) {
-         Solver<FMC>::lp_.ComputePassAndPrimal(forwardPrimal_, backwardPrimal_);
-         this->RegisterPrimal(forwardPrimal_);
-         this->RegisterPrimal(backwardPrimal_);
+         Solver<FMC>::lp_.ComputePassAndPrimal(iter);
+         //this->RegisterPrimal(forwardPrimal_);
+         //this->RegisterPrimal(backwardPrimal_);
       } else {
          Solver<FMC>::Iterate(c);
       }
+      ++iter;
    }
 
 private:
    PrimalSolutionStorage forwardPrimal_, backwardPrimal_;
+   INDEX iter = 0;
 };
 
 // rounding based on primal heuristics provided by problem constructor

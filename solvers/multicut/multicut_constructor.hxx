@@ -891,7 +891,8 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
       return true;
    }
 
-   void ComputePrimal(PrimalSolutionStorage::Element primal) const
+/*
+   void ComputePrimal() const
    {
       // do zrobienia: templatize for correct graph type
       // do zrobienia: put original graph into multicut constructor and let it be constant, i.e. not reallocate it every time for primal computation. Problem: When adding additional edges, we may not add them to the lifted multicut solver, as extra edges must not participate in cut inequalities
@@ -915,10 +916,12 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
       INDEX i=0; // the index in labeling
       for(const auto& e : unaryFactors_) {
          const auto* f = e.second;
-         f->SetAndPropagatePrimal(primal, labeling.begin()+i);
+         assert(false);
+         //f->SetAndPropagatePrimal(primal, labeling.begin()+i);
          ++i;
       }
    }
+   */
 
 
 
@@ -1617,12 +1620,12 @@ public:
       assert(!HasCutFactor(cut));
       //std::cout << "Add cut with edges ";
       //for(auto i : cut) { std::cout << "(" << std::get<0>(i) << "," << std::get<1>(i) << ");"; } std::cout << "\n";
-      auto* f = new LiftedMulticutCutFactorContainer(LiftedMulticutCutFactor(cut.size()),std::vector<REAL>(cut.size(),0));
+      auto* f = new LiftedMulticutCutFactorContainer(cut.size());
       MULTICUT_CONSTRUCTOR::pd_.GetLP().AddFactor(f);
       // connect the cut edges
       for(INDEX e=0; e<cut.size(); ++e) {
          auto* unaryFactor = MULTICUT_CONSTRUCTOR::GetUnaryFactor(cut[e][0],cut[e][1]);
-         auto* m = new CutEdgeLiftedMulticutFactorMessageContainer(CutEdgeLiftedMulticutFactorMessage(e),unaryFactor,f,1); // do zrobienia: remove 1
+         auto* m = new CutEdgeLiftedMulticutFactorMessageContainer(CutEdgeLiftedMulticutFactorMessage(e),unaryFactor,f);
          MULTICUT_CONSTRUCTOR::pd_.GetLP().AddMessage(m);
       }
       liftedMulticutFactors_.insert(std::make_pair(cut,std::make_pair(f,std::vector<Edge>())));
@@ -1645,9 +1648,8 @@ public:
       auto* f = c.first;
       auto& edgeList = c.second;
       auto* unaryFactor = MULTICUT_CONSTRUCTOR::GetUnaryFactor(i1,i2);
-      f->resize(f->size()+1,0.0);
       f->GetFactor()->IncreaseLifted();
-      auto* m = new LiftedEdgeLiftedMulticutFactorMessageContainer(LiftedEdgeLiftedMulticutFactorMessage(edgeList.size() + cut.size()), unaryFactor, f, 1); // do zrobienia: remove 1
+      auto* m = new LiftedEdgeLiftedMulticutFactorMessageContainer(LiftedEdgeLiftedMulticutFactorMessage(edgeList.size() + cut.size()), unaryFactor, f);
       MULTICUT_CONSTRUCTOR::pd_.GetLP().AddMessage(m);
       c.second.push_back(Edge({i1,i2}));
    }
@@ -1921,6 +1923,7 @@ public:
       return true;
    }
 
+   /* primals are different now!
    void ComputePrimal(PrimalSolutionStorage::Element primal) const
    {
       // do zrobienia: templatize for correct graph type
@@ -1952,6 +1955,8 @@ public:
 
       // now write back primal solution and evaluate cost. 
       // Problem: we have to infer state of tightening edges. Note: Multicut is uniquely determined by baseEdges_, hence labeling of thightening edges can be inferred with union find datastructure.
+      assert(false); // primals are different now!
+
       UnionFind uf(noNodes);
       for(INDEX e=0; e<baseEdges_.size(); ++e) {
          std::array<unsigned char,1> l { bool(labeling[e]) };
@@ -1978,6 +1983,7 @@ public:
          }
       }
    }
+   */
 
 
    private:
@@ -1986,7 +1992,7 @@ public:
       INDEX i; 
       INDEX j; 
       typename MULTICUT_CONSTRUCTOR::UnaryFactorContainer* f;
-      REAL weight() const { return (*f)[0]; }
+      REAL weight() const { return (*f->GetFactor()); }
    };
    bool addingTighteningEdges = false; // controls whether edges are added to baseEdges_
    std::vector<MulticutEdge> baseEdges_;

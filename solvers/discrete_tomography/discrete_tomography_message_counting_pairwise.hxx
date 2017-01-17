@@ -31,7 +31,7 @@ public:
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
+      MakeLeftFactorUniform(f_left, msg, omega);
    }
 
    //template<typename LEFT_FACTOR, typename G3>
@@ -178,7 +178,7 @@ public:
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
+      MakeLeftFactorUniform(f_left, msg, omega);
    }
 
    //template<typename LEFT_FACTOR, typename G3>

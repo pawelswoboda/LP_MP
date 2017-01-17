@@ -36,6 +36,39 @@ void Graph::addEdge(INDEX v, INDEX w)
 
 std::vector<INDEX> Graph::topologicalSort()
 {
+   /*
+   std::vector<bool> visited(V,false);
+   std::vector<INDEX> order;
+   std::deque<SIGNED_INDEX> stack; // change to stack
+
+   for(SIGNED_INDEX i=0; i<V; ++i) {
+      if(visited[i] == false) {
+         visited[i] = true;
+         stack.push_back(i);
+         while(!stack.empty()) {
+            auto v = stack.back();
+            stack.pop_back();
+            if(v>=0) {
+               stack.push_back(-v-1);
+               for(SIGNED_INDEX w : adj[v]) {
+                  // if graph is acyclic, then w may not already be
+                  if(!visited[w]) {
+                     visited[w] = true;
+                     stack.push_back(w); 
+                  } 
+               }
+            } else {
+               order.push_back(-v-1); 
+            } 
+         }
+      }
+   }
+   assert(order.size() == INDEX(V));
+   assert(LP_MP::HasUniqueValues(order));
+   std::reverse(order.begin(),order.end());
+   return std::move(order);
+   */
+
    constexpr unsigned char notMarked = 0;
    constexpr unsigned char tempMarked = 1;
    constexpr unsigned char permMarked = 2;
@@ -50,9 +83,9 @@ std::vector<INDEX> Graph::topologicalSort()
          while(!dfs.empty()){
             INDEX node = dfs.top().first;
             auto& it = dfs.top().second;
-            //if(mark[node] == tempMarked) {
-            //   throw std::runtime_error("graph not a dag");
-            //}
+            if(mark[node] == tempMarked) {
+               throw std::runtime_error("graph not a dag");
+            }
             if(it == adj[node].begin()) { // first visit
                assert(mark[node] == notMarked);
                mark[node] = permMarked;

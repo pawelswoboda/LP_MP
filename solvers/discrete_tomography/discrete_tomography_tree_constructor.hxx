@@ -3,20 +3,20 @@
 
 namespace LP_MP {
 
-  template<typename FMC,
-           INDEX MRF_PROBLEM_CONSTRUCTOR_NO,
-           typename COUNTING_FACTOR,
-           typename COUNTING_MESSAGE_LEFT,
-           typename COUNTING_MESSAGE_RIGHT,
-           typename PAIRWISE_COUNTING_CENTER,
-           typename PAIRWISE_COUNTING_LEFT,
-           typename PAIRWISE_COUNTING_RIGHT,
-           typename LEFT_PAIRWISE_COUNTING_LEFT,
-           typename RIGHT_PAIRWISE_COUNTING_LEFT,
-           typename LEFT_PAIRWISE_COUNTING_RIGHT,
-           typename RIGHT_PAIRWISE_COUNTING_RIGHT
-          > 
-  class DiscreteTomographyTreeConstructor {
+template<typename FMC,
+   INDEX MRF_PROBLEM_CONSTRUCTOR_NO,
+   typename COUNTING_FACTOR,
+   typename COUNTING_MESSAGE_LEFT,
+   typename COUNTING_MESSAGE_RIGHT,
+   typename PAIRWISE_COUNTING_CENTER,
+   typename PAIRWISE_COUNTING_LEFT,
+   typename PAIRWISE_COUNTING_RIGHT,
+   typename LEFT_PAIRWISE_COUNTING_LEFT,
+   typename RIGHT_PAIRWISE_COUNTING_LEFT,
+   typename LEFT_PAIRWISE_COUNTING_RIGHT,
+   typename RIGHT_PAIRWISE_COUNTING_RIGHT
+      > 
+class DiscreteTomographyTreeConstructor {
   public:
     using MrfConstructorType =
       typename meta::at_c<typename FMC::ProblemDecompositionList,MRF_PROBLEM_CONSTRUCTOR_NO>;
@@ -61,7 +61,7 @@ namespace LP_MP {
        assert(c_left->GetFactor()->up_sum_size() == c_top->GetFactor()->left_sum_size());
        assert(c_left->GetFactor()->left().dim1() == c_top->GetFactor()->up().dim1());
        pd_.GetLP().AddFactorRelation(c_left,c_top);
-       auto* m = new COUNTING_MESSAGE_LEFT(c_left, c_top);
+       auto* m = new COUNTING_MESSAGE_LEFT(DIRECTION::left, c_left, c_top);
        pd_.GetLP().AddMessage(m);
     }
     void connect_counting_factors_right(COUNTING_FACTOR* c_right, COUNTING_FACTOR* c_top) {
@@ -69,8 +69,9 @@ namespace LP_MP {
        const INDEX no_right_labels_1 = c_right->GetFactor()->right().dim2();
        const INDEX no_right_labels_2 = c_top->GetFactor()->up().dim2();
        assert(c_right->GetFactor()->right().dim2() == c_top->GetFactor()->up().dim2());
-       pd_.GetLP().AddFactorRelation(c_right,c_top);
-       auto* m = new COUNTING_MESSAGE_RIGHT(c_right, c_top);
+       //pd_.GetLP().AddFactorRelation(c_right,c_top);
+       pd_.GetLP().AddFactorRelation(c_top,c_right);
+       auto* m = new COUNTING_MESSAGE_LEFT(DIRECTION::right, c_right, c_top);
        pd_.GetLP().AddMessage(m);
     }
 
@@ -319,7 +320,7 @@ namespace LP_MP {
     //std::vector<Tree> treeIndices_;
     INDEX noLabels_ = 0;
     Solver<FMC>& pd_;
-  };
+};
 
 // construct one-dimensional discrete tomography problem with sequential factors
 template<typename FMC,
@@ -328,7 +329,8 @@ template<typename FMC,
      typename SUM_PAIRWISE_FACTOR,
      typename SUM_PAIRWISE_MESSAGE_LEFT,
      typename SUM_PAIRWISE_MESSAGE_RIGHT,
-     typename SUM_PAIRWISE_PAIRWISE_MESSAGE>
+     typename SUM_PAIRWISE_PAIRWISE_MESSAGE
+        >
 class dt_sequential_constructor {
 public:
    using sum_factor_type = SUM_FACTOR;
@@ -339,6 +341,12 @@ public:
    dt_sequential_constructor(Solver<FMC>& pd) : pd_(pd) {}
 
    void SetNumberOfLabels(const INDEX noLabels) { noLabels_ = noLabels; }
+
+   //void connect_unary_and_sum_factor(typename MrfConstructorType::UnaryFactorContainer* u, SUM_FACTOR* s)
+   //{
+   //   auto* m = new UNARY_SUM_MESSAGE(u,s);
+   //   pd_.GetLP().AddMessage(m);
+   //}
 
    SUM_FACTOR* AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost)
    {
@@ -366,12 +374,15 @@ public:
          }
       }
 
+      LP_tree tree;
       auto* f_prev = new SUM_FACTOR(noLabels_, 1);
+      //connect_unary_and_sum_factor(mrf.GetUnaryFactor(*projection_var_begin), f_prev);
       pd_.GetLP().AddFactor(f_prev);
       INDEX i=1;
       for(auto it=projection_var_begin+1; it!=projection_var_end; ++it, ++i) {
          const INDEX sum_size = std::min(i*(noLabels_-1)+1, max_sum);
          auto* f = new SUM_FACTOR(noLabels_, sum_size);
+         //connect_unary_and_sum_factor(mrf.GetUnaryFactor(*it), f);
          pd_.GetLP().AddFactor(f);
          auto* f_p = new SUM_PAIRWISE_FACTOR(noLabels_, f_prev->GetFactor()->sum_size(), sum_size);
          pd_.GetLP().AddFactor(f_p);
@@ -380,14 +391,41 @@ public:
          pd_.GetLP().AddMessage(m_l);
          auto* m_r = new SUM_PAIRWISE_MESSAGE_RIGHT(transpose,f,f_p);
          pd_.GetLP().AddMessage(m_r);
-         auto* m_c = new SUM_PAIRWISE_PAIRWISE_MESSAGE(transpose,mrf.GetPairwiseFactor(std::min(*(it-1), *it), std::max(*(it-1), *it)),f_p);
+         auto* p = mrf.GetPairwiseFactor(std::min(*(it-1), *it), std::max(*(it-1), *it));
+         auto* m_c = new SUM_PAIRWISE_PAIRWISE_MESSAGE(transpose, p, f_p);
          pd_.GetLP().AddMessage(m_c);
-         f_prev = f;
 
-         pd_.GetLP().AddFactorRelation(f_prev,f_p);
-         pd_.GetLP().AddFactorRelation(f_p,f);
-         pd_.GetLP().AddFactorRelation(f_p,mrf.GetUnaryFactor(*it));
-         pd_.GetLP().AddFactorRelation(mrf.GetUnaryFactor(*it), f_p);
+         assert(!transpose);
+         std::function<void()> send_up_l = [=]() { m_l->SendMessageToRightContainer(f_prev->GetFactor(),1.0); };
+         std::function<void()> send_down_l = [=]() { f_p->MaximizePotentialAndComputePrimal(); m_l->ReceiveMessageFromRightContainer(); };
+         //tree.AddMessage( send_up_l, send_down_l );
+
+         std::function<void()> send_up_r = [=]() { m_r->ReceiveMessageFromRightContainer(); };
+         std::function<void()> send_down_r = [=]() { m_r->SendMessageToRightContainer(f->GetFactor(),1.0); };
+         //tree.AddMessage( send_up_r, send_down_r );
+
+         // this only works for non-transposed
+         if(!transpose) {
+            pd_.GetLP().AddFactorRelation(f_prev,f_p);
+            pd_.GetLP().AddFactorRelation(f_prev,p);
+            pd_.GetLP().AddFactorRelation(f_p,f);
+            pd_.GetLP().AddFactorRelation(p,f);
+            pd_.GetLP().AddFactorRelation(mrf.GetUnaryFactor(*(it-1)), f_p);
+            pd_.GetLP().AddFactorRelation(f_p,mrf.GetUnaryFactor(*it));
+            //pd_.GetLP().ForwardPassFactorRelation(f_p,p);
+            //pd_.GetLP().BackwardPassFactorRelation(f_p,p);
+            pd_.GetLP().ForwardPassFactorRelation(p,f_p);
+            pd_.GetLP().BackwardPassFactorRelation(p,f_p);
+         } else {
+            assert(false);
+            exit(1);
+            pd_.GetLP().AddFactorRelation(f_p,f_prev);
+            pd_.GetLP().AddFactorRelation(f,f_p);
+            pd_.GetLP().AddFactorRelation(mrf.GetUnaryFactor(*it), f_p);
+            pd_.GetLP().AddFactorRelation(f_p, mrf.GetUnaryFactor(*(it-1)));
+         }
+
+         f_prev = f;
       }
 
       return f_prev;
@@ -487,14 +525,9 @@ public:
             connect_chain_recursive_left(last_sequential_left, recursive_factors[0]);
             connect_chain_recursive_right(last_sequential_right, recursive_factors[1]);
             recursive_factors[2]->GetFactor()->summation_cost(summationCost);
-
-
-
          }
       }
    }
-
-
 
 private:
    INDEX noLabels_ = 0;

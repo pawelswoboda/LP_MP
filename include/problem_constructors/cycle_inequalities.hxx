@@ -205,7 +205,11 @@ Cycle<MRF_CONSTRUCTOR>::maximizeIndependently(const BELIEF_ARRAY& beliefs) const
 {
 	REAL sum=0.0;
 	for(int i=0; i < beliefs.size(); i++) {
-		sum += *std::max_element(beliefs[i].begin(), beliefs[i].end());
+      for(INDEX x1=0; x1<beliefs[i].shape(0); ++x1) {
+         for(INDEX x2=0; x2<beliefs[i].shape(1); ++x2) {
+            sum += *std::max_element(beliefs[i].begin(), beliefs[i].end());
+         }
+      }
 	}
 	return sum;
 }
@@ -560,7 +564,7 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
         //gm_.CopyPairwiseValues( newCluster[index].ij_intersect_loc, beliefs[0].begin() );
         for(INDEX label_i=0; label_i<gm_.GetNumberOfLabels(i); ++label_i) {
            for(INDEX label_j=0; label_j<gm_.GetNumberOfLabels(j); ++label_j) {
-              beliefs[0](label_i,label_j) = -gm_.GetPairwiseValue(newCluster[index].ij_intersect_loc, label_i, label_j);
+              beliefs[0](label_i,label_j) = gm_.GetPairwiseValue(newCluster[index].ij_intersect_loc, label_i, label_j);
            }
         }
 
@@ -570,7 +574,7 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
         //gm_.CopyPairwiseValues( newCluster[index].jk_intersect_loc, beliefs[1].begin() );
         for(INDEX label_j=0; label_j<gm_.GetNumberOfLabels(j); ++label_j) {
            for(INDEX label_k=0; label_k<gm_.GetNumberOfLabels(k); ++label_k) {
-              beliefs[1](label_j,label_k) = -gm_.GetPairwiseValue(newCluster[index].jk_intersect_loc, label_j, label_k);
+              beliefs[1](label_j,label_k) = gm_.GetPairwiseValue(newCluster[index].jk_intersect_loc, label_j, label_k);
            }
         }
 
@@ -580,7 +584,7 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
         //gm_.CopyPairwiseValues( newCluster[index].ki_intersect_loc, beliefs[2].begin() );
         for(INDEX label_i=0; label_i<gm_.GetNumberOfLabels(i); ++label_i) {
            for(INDEX label_k=0; label_k<gm_.GetNumberOfLabels(k); ++label_k) {
-              beliefs[2](label_i,label_k) = -gm_.GetPairwiseValue(newCluster[index].ki_intersect_loc, label_i, label_k);
+              beliefs[2](label_i,label_k) = gm_.GetPairwiseValue(newCluster[index].ki_intersect_loc, label_i, label_k);
            }
         }
 
@@ -1353,6 +1357,7 @@ Cycle<MRF_CONSTRUCTOR>::create_k_projection_graph(
         const auto& max_ij_bij_not_xi_xj = std::get<2>(max_bij_cond);
 
         // For each of their states
+        assert(i<j);
         for(int xi=0; xi < gm_.GetNumberOfLabels(i); xi++) {
            int m = projection_map[i][xi];
 
