@@ -34,18 +34,22 @@ public:
 
    constexpr static INDEX size() { return 1; }
 
-   REAL EvaluatePrimal(const PrimalSolutionStorage::Element primal) const
+   REAL EvaluatePrimal() const
    {
-      assert(primal[0] == false || primal[0] == true);
-      return primal[0]*pot_;
+      return primal_*pot_;
    }
 
    operator REAL() const { return pot_; }
    operator REAL&() { return pot_; }
    //void CreateConstraints(LpInterfaceAdapter* lp) const {} // we do not have to do anything
 
+   void init_primal() {}
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar(pot_); }
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+
 private:
    REAL pot_;
+   bool primal_;
 
    static std::uniform_int_distribution<>::param_type p;
    static decltype(std::bind(std::uniform_int_distribution<>{p}, std::default_random_engine{})) r;

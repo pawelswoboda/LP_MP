@@ -37,6 +37,12 @@ public:
    INDEX GetNumberOfLabels() const { return no_labels_; }
 
    INDEX size() const { return no_labels_*no_vars_; }
+
+   struct Primal {
+      SIGNED_INDEX residual; // what is the residual of currently labelled unaries regarding the projection constraint
+      INDEX no_unaries;
+      INDEX no_labelled_unaries;
+   };
 private:
    const INDEX no_labels_;
    const INDEX no_vars_;
@@ -62,6 +68,19 @@ public:
    DiscreteTomographyUnaryToFactorCountingNaiveMessage(const INDEX idx) : idx_(idx) {}
    template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
    void CreateConstraints(LpInterfaceAdapter* lp,LEFT_FACTOR_TYPE* LeftFactor,RIGHT_FACTOR_TYPE* RightFactor) const;
+
+   template<typename A1, typename A2>
+   void RepamLeft(A1& l, const A2& msgs)
+   {
+   }
+
+   // message is used only for primal rounding
+   template<typename RIGHT_FACTOR, typename MSG>
+   void ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, PrimalSolutionStorage::Element primal)
+   {
+
+   }
+
 private:
    const INDEX idx_; // the position in the factor counting
 };

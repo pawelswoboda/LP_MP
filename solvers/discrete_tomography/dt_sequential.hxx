@@ -34,20 +34,25 @@ public:
       return min_value;
    }
 
-   REAL EvaluatePrimal(PrimalSolutionStorage::Element primal) const {
+   REAL EvaluatePrimal() const {
       return std::numeric_limits<REAL>::infinity();
    }
 
-   REAL& operator()(const INDEX state, const INDEX sum) {
-      return pot_(state,sum);
-   }
+   REAL operator()(const INDEX state, const INDEX sum) const { return pot_(state,sum); }
+   REAL& operator()(const INDEX state, const INDEX sum) { return pot_(state,sum); }
    const matrix& pot() const { return pot_; }
 
    INDEX no_labels() const { return pot_.dim1(); }
    INDEX sum_size() const { return pot_.dim2(); }
    INDEX size() const { return pot_.size(); }
+
+   void init_primal() { state_ = no_labels(); sum_ = sum_size(); }
+   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( state_, sum_ ); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar(pot_); }
 private:
    matrix pot_; // first dimension is state, second one is sum
+   INDEX state_;
+   INDEX sum_;
 };
 
 class dt_sum_state_pairwise_factor {
@@ -84,7 +89,7 @@ public:
       return min_value;
    }
 
-   REAL EvaluatePrimal(PrimalSolutionStorage::Element primal) const {
+   REAL EvaluatePrimal() const {
       return std::numeric_limits<REAL>::infinity();
    }
 
@@ -104,11 +109,81 @@ public:
    INDEX prev_sum_size() const { return prev_.dim2(); }
    INDEX next_sum_size() const { return next_.dim2(); }
    INDEX size() const { return no_labels()*no_labels()*prev_sum_size(); }
+
+   void init_primal() { state_[0] = no_labels(); state_[1] = no_labels(); sum_ = sum_size(); }
+   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( state_, sum_ ); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( prev_, next_, reg_ ); }
 private:
    matrix prev_; // first dimension is state, second one is sum
    matrix next_; // first dimension is state, second one is sum
    matrix reg_; // regularizer
+
+   std::array<INDEX,2> state_;
+   INDEX sum_;
 };
+
+// message between unaries and sum, not necessary for the relaxation. Also does not seem to improve convergence
+/*
+class dt_unary_sum_message {
+public:
+   dt_unary_sum_message() {}
+
+   template<typename RIGHT_FACTOR, typename G2>
+   void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
+      MakeRightFactorUniform(f_right, msg, 1.0);
+   }
+
+   //template<typename RIGHT_FACTOR, typename G2>
+   //void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
+   //   MakeRightFactorUniform(f_right, msg, omega);
+   //}
+
+   template<typename LEFT_FACTOR, typename G3>
+   void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
+      MakeLeftFactorUniform(f_left, msg, omega);
+   }
+
+   //template<typename LEFT_FACTOR, typename G3>
+   //void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
+   //   MakeLeftFactorUniform(f_left, msg, 1.0);
+   //}
+
+   template<typename LEFT_FACTOR, typename MSG>
+   void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega){
+      auto& pot = f_left;
+      msg -= omega*pot;
+   }
+
+   template<typename RIGHT_FACTOR, typename MSG>
+   void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
+      vector marg(f_right.no_labels(), std::numeric_limits<REAL>::infinity());
+      for(INDEX x=0; x<f_right.no_labels(); ++x) {
+         for(INDEX sum=0; sum<f_right.sum_size(); ++sum) {
+            marg[x] = std::min(marg[x], f_right(x,sum));
+         }
+      } 
+      msg -= omega*marg;
+   }
+
+   template<typename LEFT_FACTOR, typename MSG>
+   void RepamLeft(LEFT_FACTOR& f_left, const MSG& msg)
+   {
+      for(INDEX x=0; x<f_left.size(); ++x) {
+         f_left[x] += normalize( msg[x] );
+      }
+   }
+
+   template<typename RIGHT_FACTOR, typename MSG>
+   void RepamRight(RIGHT_FACTOR& f_right, const MSG& msg)
+   {
+      for(INDEX x=0; x<f_right.no_labels(); ++x) {
+         for(INDEX sum=0; sum<f_right.sum_size(); ++sum) {
+            f_right(x,sum) += normalize( msg[x] );
+         }
+      }
+   }
+};
+*/
 
 // left factor is dt_sum_state_factor, right one is dt_sum_state_pairwise_factor
 // DIRECTION signifies: left = sum_state_factor is previous
@@ -137,6 +212,7 @@ public:
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
+      //std::cout << "sum to sum pairwise weight = " << omega << "\n";
       MakeLeftFactorUniform(f_left, msg, omega);
    }
 
@@ -222,7 +298,7 @@ public:
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
+      MakeLeftFactorUniform(f_left, msg, omega);
    }
 
    //template<typename LEFT_FACTOR, typename G3>
@@ -303,25 +379,26 @@ class dt_sum_pairwise_pairwise_message {
 public:
    dt_sum_pairwise_pairwise_message (const bool transpose) : transpose_(transpose) {}
 
-   //template<typename RIGHT_FACTOR, typename G2>
-   //void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-   //   MakeRightFactorUniform(f_right, msg, 1.0);
-   //}
-
    template<typename RIGHT_FACTOR, typename G2>
-   void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+   void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
+      MakeRightFactorUniform(f_right, msg, 1.0);
    }
 
-   //template<typename LEFT_FACTOR, typename G3>
-   //void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-   //   MakeLeftFactorUniform(f_left, msg, omega);
+   //template<typename RIGHT_FACTOR, typename G2>
+   //void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
+   //   MakeRightFactorUniform(f_right, msg, omega);
    //}
 
    template<typename LEFT_FACTOR, typename G3>
-   void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-      MakeLeftFactorUniform(f_left, msg, 1.0);
+   void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
+      //std::cout << "pairwise to sum pairwise weight = " << omega << "\n";
+      MakeLeftFactorUniform(f_left, msg, omega);
    }
+
+   //template<typename LEFT_FACTOR, typename G3>
+   //void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
+   //   MakeLeftFactorUniform(f_left, msg, 1.0);
+   //}
 
    template<typename LEFT_FACTOR, typename MSG>
    void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega){

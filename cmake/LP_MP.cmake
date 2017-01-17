@@ -27,6 +27,7 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/cpp_sort_Pr
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/OpenGM_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/PEGTL_Project")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Andres_Project/include")
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Cereal_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/TCLAP_Project/include")
 
 #add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project")
@@ -45,9 +46,10 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/CS2_CPP_Pro
 
 
 # HDF5 for reading OpenGM and Andres models
+set (HDF5_USE_STATIC_LIBRARIES ON)
 find_package(HDF5 1.8.15 REQUIRED)
 INCLUDE_DIRECTORIES (${HDF5_INCLUDE_DIR})
-set (LINK_LIBS ${LINK_LIBS} ${HDF5_C_STATIC_LIBRARY})
+message(STATUS ${HDF5_LIBRARIES})
 message(STATUS ${HDF5_INCLUDE_DIR})
 
 # GUROBI

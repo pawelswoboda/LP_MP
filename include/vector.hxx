@@ -97,6 +97,11 @@ public:
    REAL* begin() const { return begin_; }
    REAL* end() const { return end_; }
 
+   template<typename ARCHIVE>
+   void serialize(ARCHIVE& ar)
+   {
+      ar( cereal::binary_data( begin_, sizeof(REAL)*size()) );
+   }
 private:
   REAL* begin_;
   REAL* end_;

@@ -15,22 +15,6 @@
 
 using namespace LP_MP;
 
-typedef UnaryLoop<> UnaryLoopType;
-// do zrobienia: use enum chirality type in Pairwise Loop specification
-typedef PairwiseLoop<0> LeftLoopType;
-typedef PairwiseLoop<1> RightLoopType;
-
-typedef SimplexFactor<> Simplex;
-
-typedef PairwiseTripletLoop<0,1> PairwiseTripletLoopType12;
-typedef PairwiseTripletLoop<0,2> PairwiseTripletLoopType13;
-typedef PairwiseTripletLoop<1,2> PairwiseTripletLoopType23;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType12,true,false,false,true> PairwiseTriplet12Message;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType13,true,false,false,true> PairwiseTriplet13Message;
-typedef SimplexMarginalizationMessage<UnaryLoopType,PairwiseTripletLoopType23,true,false,false,true> PairwiseTriplet23Message;
-
-
-
 struct FMC_SRMP { // equivalent to SRMP or TRWS
    constexpr static const char* name = "SRMP for pairwise case = TRWS";
 
@@ -84,8 +68,8 @@ struct FMC_SRMP_T { // equivalent to SRMP or TRWS
 struct FMC_MPLP {
    constexpr static const char* name = "MPLP for pairwise case";
 
-   typedef FactorContainer<Simplex, FMC_MPLP, 0, true> UnaryFactor;
-   typedef FactorContainer<Simplex, FMC_MPLP, 1, false> PairwiseFactor;
+   typedef FactorContainer<UnarySimplexFactor, FMC_MPLP, 0, true> UnaryFactor;
+   typedef FactorContainer<PairwiseSimplexFactor, FMC_MPLP, 1, false> PairwiseFactor;
 
    typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::MPLP>, 0, 1, variableMessageNumber, 1, FMC_MPLP, 0 > UnaryPairwiseMessageLeftContainer;
    typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::MPLP>, 0, 1, variableMessageNumber, 1, FMC_MPLP, 1 > UnaryPairwiseMessageRightContainer;

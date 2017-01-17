@@ -127,83 +127,45 @@ public:
    
 class UnarySimplexFactor : public vector {
 public:
-   UnarySimplexFactor(const std::vector<REAL>& cost)
-      : vector(cost.begin(), cost.end())
-   {}
-   UnarySimplexFactor(const INDEX n)
-      : vector(n, 0.0)
-   {}
+   UnarySimplexFactor(const std::vector<REAL>& cost) : vector(cost.begin(), cost.end()) {}
+   UnarySimplexFactor(const INDEX n) : vector(n, 0.0) {}
 
-   void MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal) const
+   REAL LowerBound() const { return *std::min_element(this->begin(), this->end()); }
+
+   REAL EvaluatePrimal() const { assert(primal_ < size()); return (*this)[primal_]; }
+   void MaximizePotentialAndComputePrimal() 
    {
-      INDEX min_element;
-      REAL min_value = std::numeric_limits<REAL>::infinity();
-      for(INDEX i=0; i<this->size(); ++i) {
-         if(primal[i] == true) {
-            return;
-         } else if(primal[i] == false) {
-            // do nothing
-         } else {
-            assert(primal[i] == unknownState);
-            primal[i] = false;
-            if(min_value >= (*this)[i]) {
-               min_value = (*this)[i];
-               min_element = i;
-            }
-         }
-      }
-      assert(min_element < this->size());
-      primal[min_element] = true;
-   };
-
-   REAL LowerBound() const {
-      return *std::min_element(this->begin(), this->end());
+      primal_ = std::min_element(this->begin(), this->end()) - this->begin();
+      assert(primal_ < size());
    }
 
-   // if there is exactly one unknownIndex (rest false), make it true
-   // if there is already one true index, make all other false
-   void PropagatePrimal(PrimalSolutionStorage::Element primal)
-   {
-      INDEX noTrue = 0;
-      INDEX noUnknown = 0;
-      INDEX unknownIndex;
-      for(INDEX i=0; i<this->size(); ++i) {
-         if(primal[i] == true) { 
-            ++noTrue;
-         }
-         if(primal[i] == unknownState) {
-            ++noUnknown;
-            unknownIndex = i;
-         }
-      }
-      if(noTrue == 0 && noUnknown == 1) {
-         primal[unknownIndex] = true;
-      } else if(noTrue == 1 && noUnknown > 0) {
-         for(INDEX i=0; i<this->size(); ++i) {
-            if(primal[i] == unknownState) {
-               primal[i] = false;
-            }
-         }
-      }
-   }
+   // load/store function for the primal value
+   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector*>(this) ); }
 
-   REAL EvaluatePrimal(const PrimalSolutionStorage::Element primal) const
+   /*
+   // I do not think that both are needed.
+   void serialize_primal(bit_vector primal_bits) const
    {
-      REAL cost;
-      INDEX primalSum = 0;
-      for(INDEX i=0; i<this->size(); ++i) {
-         if(primal[i] == true) { 
-            cost = (*this)[i];
-         }
-         primalSum += primal[i];
-      }
-      if(primalSum == 1) {
-         return cost;
-      } else {
-         //std::cout << "primal not inferred correctly: " << primalSum << "\n";
-         return std::numeric_limits<REAL>::infinity();
-      }
+      std::fill(primal_bits, primal_bits+size(), false);
+      primal_bits[primal_] = true;
    }
+      
+   void deserialize_primal(bit_vector primal_bits) 
+   {
+      assert(std::count(primal_bits, primal_bits+size(), true) == 1);
+      for(INDEX i=0; i<size(); ++i) {
+         if(primal_bits[i] == true) {
+            primal_ = i;
+         }
+      } 
+   }
+   */
+   void init_primal() { primal_ = size(); }
+   INDEX primal() const { return primal_; }
+   void primal(const INDEX p) { primal_ = p; }
+private:
+   INDEX primal_;
 };
 
 // do zrobienia: if pairwise was supplied to us (e.g. external factor, then reflect this in constructor and only allocate space for messages.
@@ -248,7 +210,7 @@ public:
       assert(x1 < dim1_ && x2 < dim2_);
       return pairwise_[x] + left_msg_[x1] + right_msg_[x2];
    }
-   // below is not nice: two values, only differ by const!
+   // below is not nice: two different values, only differ by const!
    REAL operator()(const INDEX x1, const INDEX x2) const {
       assert(x1 < dim1_ && x2 < dim2_);
       return pairwise_[x1*dim2_ + x2] + left_msg_[x1] + right_msg_[x2];
@@ -261,57 +223,83 @@ public:
       REAL lb = std::numeric_limits<REAL>::infinity();
       for(INDEX x1=0; x1<dim1_; ++x1) {
          for(INDEX x2=0; x2<dim2_; ++x2) {
-            //std::cout << (*this)(x1,x2) << ", ";
             lb = std::min(lb, (*this)(x1,x2));
          }
       }
-      //std::cout << "\n";
       return lb;
    }
-
-   REAL EvaluatePrimal(const PrimalSolutionStorage::Element primal) const
-   {
-      REAL cost;
-      INDEX primalSum = 0;
-      for(INDEX i=0; i<dim1_*dim2_; ++i) {
-         if(primal[i] == true) { 
-            cost = (*this)[i];
-         }
-         primalSum += primal[i];
-      }
-      if(primalSum == 1) {
-         return cost;
-      } else {
-         return std::numeric_limits<REAL>::infinity();
-      }
-   }
-
-   // do zrobienia: propagate primal is needed
 
    
    INDEX dim1() const { return dim1_; }
    INDEX dim2() const { return dim2_; }
      
-   REAL& pairwise(const INDEX x1, const INDEX x2) {
-      return pairwise_[x1*dim2_ + x2];
+   REAL& pairwise(const INDEX x1, const INDEX x2) { return pairwise_[x1*dim2_ + x2]; }
+   REAL& left(const INDEX x1) { return left_msg_[x1]; }
+   REAL& right(const INDEX x2) { return right_msg_[x2]; }
+
+   INDEX size() const { return dim1_*dim2_; }
+
+   void init_primal() 
+   {
+      left_primal_ = dim1();
+      right_primal_ = dim2();
    }
-   REAL& left(const INDEX x1) {
-      return left_msg_[x1];
-   }
-   REAL& right(const INDEX x2) {
-      return right_msg_[x2];
+   REAL EvaluatePrimal() const { return (*this)(left_primal_, right_primal_); }
+   void MaximizePotentialAndComputePrimal() 
+   {
+      REAL min_val = std::numeric_limits<REAL>::infinity();
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); ++x2) {
+            if(min_val >= (*this)(x1,x2)) {
+               min_val = (*this)(x1,x2);
+               left_primal_ = x1;
+               right_primal_ = x2;
+            }
+         }
+      }
    }
 
-   INDEX size() const {
-      return dim1_*dim2_;
+   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( left_primal_, right_primal_ ); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( cereal::binary_data( pairwise_, sizeof(REAL)*(size()+dim1()+dim2()) ) ); }
+
+   /*
+   void serialize_primal(bit_vector primal_bits) const
+   {
+      INDEX i=0;
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); ++x2) {
+            primal_bits[i] = false;
+            if(left_primal_ == x1 && right_primal_ == x2) {
+               primal_bits[i] = true;
+            }
+            ++i;
+         } 
+      }
    }
 
+   void deserialize_primal(bit_vector primal_bits) 
+   {
+      INDEX i=0;
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); ++x2) {
+            if(primal_bits[i] == true) {
+               left_primal_ = x1;
+               right_primal_ = x2;
+            }
+            ++i;
+         } 
+      }
+   }
+   */
+
+   INDEX left_primal_, right_primal_; // not so nice: make getters and setters!
 private:
-   // those three pointers should lie contiguously in memory
+   // those three pointers should lie contiguously in memory.
    REAL* pairwise_;
    REAL* left_msg_;
    REAL* right_msg_;
    const INDEX dim1_, dim2_;
+
 };
 
 // factor assumes that triplet potentials is empty and holds only messages to pairwise factors, i.e. is latently factorizable
@@ -453,7 +441,7 @@ public:
 
    REAL& msg12(const INDEX x1, const INDEX x2) { return msg12_[x1*dim2_ + x2]; }
    REAL& msg13(const INDEX x1, const INDEX x3) { return msg13_[x1*dim3_ + x3]; }
-   REAL& msg23(const INDEX x2, const INDEX x3) { return msg12_[x2*dim3_ + x3]; }
+   REAL& msg23(const INDEX x2, const INDEX x3) { return msg23_[x2*dim3_ + x3]; }
 protected:
    const INDEX dim1_, dim2_, dim3_;
    REAL *msg12_, *msg13_, *msg23_;

@@ -9,6 +9,7 @@
 #include <numeric>
 #include <algorithm>
 #include <assert.h>
+#include <cstring>
 
 #include <libgen.h>
 

@@ -7,11 +7,12 @@
 
 namespace LP_MP{
 
-  constexpr static INDEX MinSumConvolutionThreshold = 10;
+  constexpr static INDEX MinSumConvolutionThreshold = 1000000;
   using MinConv = discrete_tomo::MinConv<REAL,INDEX>;
 
   class DiscreteTomographyFactorCounting2{
   public:
+
      DiscreteTomographyFactorCounting2(const INDEX no_left_labels, const INDEX left_sum_size, const INDEX no_center_left_labels, const INDEX no_center_right_labels, const INDEX right_sum_size, const INDEX no_right_labels, const INDEX up_sum_size)
         : reg_(no_center_left_labels, no_center_right_labels, 0.0),
         up_(no_left_labels, no_right_labels, up_sum_size,0.0), 
@@ -25,9 +26,9 @@ namespace LP_MP{
         assert(left_sum_size > 0);
         assert(right_sum_size > 0);
         assert(up_sum_size > 0);
-        assert(up_sum_size <= left_sum_size + no_center_left_labels + no_center_right_labels + right_sum_size);
+        //assert(up_sum_size <= left_sum_size + no_center_left_labels + no_center_right_labels + right_sum_size);
         assert(no_center_left_labels-1 + no_center_right_labels-1 + left_sum_size-1 + right_sum_size-1 >= up_sum_size-1);
-        assert(min_conv_lower_bound() < 0.000000001);
+        //assert(min_conv_lower_bound() < 0.000000001);
      }
      DiscreteTomographyFactorCounting2(const INDEX no_labels, const INDEX left_sum_size, const INDEX right_sum_size, const INDEX up_sum_size)
         : DiscreteTomographyFactorCounting2(no_labels, left_sum_size, no_labels, no_labels, right_sum_size, no_labels, up_sum_size)
@@ -163,14 +164,14 @@ namespace LP_MP{
      }
 
      REAL LowerBound() const {
-        //if(up_.dim3() < MinSumConvolutionThreshold) { // check constant!
-        //   return naive_lower_bound();
-        //} else {
+        if(up_.dim3() < MinSumConvolutionThreshold) { // check constant!
+           return naive_lower_bound();
+        } else {
            return min_conv_lower_bound();
-        //}
+        }
      }
 
-     REAL EvaluatePrimal(PrimalSolutionStorage::Element primal) const {
+     REAL EvaluatePrimal() const {
         return std::numeric_limits<REAL>::infinity();
      }
 
@@ -179,7 +180,6 @@ namespace LP_MP{
      INDEX no_center_left_labels() const { return left_.dim2(); }
      INDEX no_center_right_labels() const { return right_.dim1(); }
      INDEX no_right_labels() const { return right_.dim2(); }
-     //INDEX no_labels() const { return reg_.dim2(); }
      INDEX up_sum_size() const { return up_.dim3(); }
      INDEX left_sum_size() const { return left_.dim3(); }
      INDEX right_sum_size() const { return right_.dim3(); }
@@ -437,9 +437,21 @@ namespace LP_MP{
               });
     }
 
+   void init_primal() { 
+      primal_.left_sum = left_sum_size();
+      primal_.right_sum = right_sum_size();
+      primal.left_label = no_left_labels();
+      primal.center_left_label = no_center_left_labels();
+      primal.center_right_label = no_center_right_labels();
+      primal.right_label = no_right_labels();
+   }
+   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_.left_sum, primal_.right_sum, primal_.left_label, primal_.center_left_label, primal.center_right_label, primal.right_label ); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( reg_, up_, left_, right_ ); }
   private:
     matrix reg_;
     tensor3 up_, left_, right_; 
+
+    struct { INDEX left_sum, right_sum, left_label, center_left_label, center_right_label, right_label; } primal_;
   };
   
   class DiscreteTomographyFactorCounting{
