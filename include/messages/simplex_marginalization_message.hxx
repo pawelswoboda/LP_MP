@@ -375,34 +375,15 @@ namespace LP_MP {
 
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
     typename std::enable_if<ENABLE,void>::type
-    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+    ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
-      assert(r->dim1() == i1_ && r->dim2() == i2_ && r->dim3() == i3_);
-      assert(l->size() == i1_*i2_);
-      for(INDEX x2=0; x2<i2_; ++x2) {
-        for(INDEX x1=0; x1<i1_; ++x1) {
-          if(left[x2*i1_ + x1] == false) {
-            for(INDEX x3=0; x3<i3_; ++x3) {
-              right[x3*i2_*i1_ + x2*i1_ + x1] = false;
-            }
-          } else if(left[x2*i1_ + x1] == true) {
-            INDEX no_false = 0;
-            for(INDEX x3=0; x3<i3_; ++x3) {
-              if(right[x3*i1_*i2_ + x2*i1_ + x1] == false) {
-                ++no_false;
-              }
-            }
-            if(no_false == i3_-1) {
-              for(INDEX x3=0; x3<i3_; ++x3) {
-                if(right[x3*i1_*i2_ + x2*i1_ + x1] == unknownState) {
-                  right[x3*i1_*i2_ + x2*i1_ + x1] = true;
-                }
-              }
-            }
-          } else {
-            // may happen when only part of pairwise was labelled until now
-          }
-        }
+      assert(r.dim1() == i1_ && r.dim2() == i2_ && r.dim3() == i3_);
+      assert(l.size() == i1_*i2_);
+      if(l.left_primal_ < i1_) {
+         r.primal_[0] = l.left_primal_;
+      }
+      if(l.right_primal_ < i2_) {
+         r.primal_[1] = l.right_primal_;
       }
     }
 
@@ -541,34 +522,15 @@ namespace LP_MP {
 
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
     typename std::enable_if<ENABLE,void>::type
-    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+    ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
-      assert(r->dim1() == i1_ && r->dim2() == i2_ && r->dim3() == i3_);
-      assert(l->size() == i1_*i3_);
-      for(INDEX x3=0; x3<i3_; ++x3) {
-        for(INDEX x1=0; x1<i1_; ++x1) {
-          if(left[x3*i1_ + x1] == false) {
-            for(INDEX x2=0; x2<i2_; ++x2) {
-              right[x3*i2_*i1_ + x2*i1_ + x1] = false;
-            }
-          } else if(left[x3*i1_ + x1] == true) {
-            INDEX no_false = 0;
-            for(INDEX x2=0; x2<i2_; ++x2) {
-              if(right[x3*i1_*i2_ + x2*i1_ + x1] == false) {
-                ++no_false;
-              }
-            }
-            if(no_false == i2_-1) {
-              for(INDEX x2=0; x2<i2_; ++x2) {
-                if(right[x3*i1_*i2_ + x2*i1_ + x1] == unknownState) {
-                  right[x3*i1_*i2_ + x2*i1_ + x1] = true;
-                }
-              }
-            }
-          } else {
-            // may happen when only part of pairwise was labelled until now
-          }
-        }
+      assert(r.dim1() == i1_ && r.dim2() == i2_ && r.dim3() == i3_);
+      assert(l.size() == i1_*i3_);
+      if(l.left_primal_ < i1_) {
+         r.primal_[0] = l.left_primal_;
+      }
+      if(l.right_primal_ < i3_) {
+         r.primal_[2] = l.right_primal_;
       }
     }
 
@@ -702,34 +664,15 @@ namespace LP_MP {
 
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
     typename std::enable_if<ENABLE,void>::type
-    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+    ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
-      assert(r->dim1() == i1_ && r->dim2() == i2_ && r->dim3() == i3_);
-      assert(l->size() == i2_*i3_);
-      for(INDEX x3=0; x3<i3_; ++x3) {
-        for(INDEX x2=0; x2<i2_; ++x2) {
-          if(left[x3*i2_ + x2] == false) {
-            for(INDEX x1=0; x1<i1_; ++x1) {
-              right[x3*i2_*i1_ + x2*i1_ + x1] = false;
-            }
-          } else if(left[x3*i2_ + x2] == true) {
-            INDEX no_false = 0;
-            for(INDEX x1=0; x1<i1_; ++x1) {
-              if(right[x3*i1_*i2_ + x2*i1_ + x1] == false) {
-                ++no_false;
-              }
-            }
-            if(no_false == i1_-1) {
-              for(INDEX x1=0; x1<i1_; ++x1) {
-                if(right[x3*i1_*i2_ + x2*i1_ + x1] == unknownState) {
-                  right[x3*i1_*i2_ + x2*i1_ + x1] = true;
-                }
-              }
-            }
-          } else {
-            // may happen when only part of pairwise was labelled until now
-          }
-        }
+      assert(r.dim1() == i1_ && r.dim2() == i2_ && r.dim3() == i3_);
+      assert(l.size() == i2_*i3_);
+      if(l.left_primal_ < i2_) {
+         r.primal_[1] = l.left_primal_;
+      }
+      if(l.right_primal_ < i3_) {
+         r.primal_[2] = l.right_primal_;
       }
     }
 

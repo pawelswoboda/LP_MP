@@ -13,6 +13,10 @@ add_definitions(-DIL_STD)
 add_definitions(-ffast-math)
 add_definitions(-march=native)
 
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+set(BUILD_SHARED_LIBRARIES OFF)
+set(CMAKE_EXE_LINKER_FLAG "-static")
+
 # Vc for SIMD
 find_package(Vc 1.2.0 REQUIRED PATHS "${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/Vc_Project/cmake" "${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Vc_Project/cmake")
 include_directories(${Vc_INCLUDE_DIR}) 
@@ -46,7 +50,7 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/CS2_CPP_Pro
 
 
 # HDF5 for reading OpenGM and Andres models
-set (HDF5_USE_STATIC_LIBRARIES ON)
+# set (HDF5_USE_STATIC_LIBRARIES ON)
 find_package(HDF5 1.8.15 REQUIRED)
 INCLUDE_DIRECTORIES (${HDF5_INCLUDE_DIR})
 message(STATUS ${HDF5_LIBRARIES})

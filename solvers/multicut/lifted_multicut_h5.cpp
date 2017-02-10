@@ -3,7 +3,8 @@
 #include "solver.hxx"
 using namespace LP_MP;
 using FMC = FMC_LIFTED_MULTICUT;
-using SolverType = ProblemConstructorRoundingSolver<FMC>;
+//using SolverType = ProblemConstructorRoundingSolver<FMC>;
+using SolverType = Solver<FMC>;
 //using InputFct = MulticutH5Input::ParseLiftedProblem<SolverType>;
 int main(int argc, char* argv[])
 {

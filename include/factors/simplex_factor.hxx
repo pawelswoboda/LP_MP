@@ -80,22 +80,9 @@ public:
       }
    }
 
-   REAL EvaluatePrimal(const PrimalSolutionStorage::Element primal) const
+   REAL EvaluatePrimal() const
    {
-      REAL cost;
-      INDEX primalSum = 0;
-      for(INDEX i=0; i<this->size(); ++i) {
-         if(primal[i] == true) { 
-            cost = (*this)[i];
-         }
-         primalSum += primal[i];
-      }
-      if(primalSum == 1) {
-         return cost;
-      } else {
-         //std::cout << "primal not inferred correctly: " << primalSum << "\n";
          return std::numeric_limits<REAL>::infinity();
-      }
    }
 
   //INDEX GetNumberOfAuxVariables() const { return 0; }
@@ -135,8 +122,10 @@ public:
    REAL EvaluatePrimal() const { assert(primal_ < size()); return (*this)[primal_]; }
    void MaximizePotentialAndComputePrimal() 
    {
-      primal_ = std::min_element(this->begin(), this->end()) - this->begin();
-      assert(primal_ < size());
+      if(primal_ >= size()) {
+         primal_ = std::min_element(this->begin(), this->end()) - this->begin();
+         assert(primal_ < size());
+      }
    }
 
    // load/store function for the primal value
@@ -163,6 +152,7 @@ public:
    */
    void init_primal() { primal_ = size(); }
    INDEX primal() const { return primal_; }
+   INDEX& primal() { return primal_; }
    void primal(const INDEX p) { primal_ = p; }
 private:
    INDEX primal_;
@@ -244,7 +234,11 @@ public:
       left_primal_ = dim1();
       right_primal_ = dim2();
    }
-   REAL EvaluatePrimal() const { return (*this)(left_primal_, right_primal_); }
+   REAL EvaluatePrimal() const { 
+      assert(left_primal_ < dim1());
+      assert(right_primal_ < dim2());
+      return (*this)(left_primal_, right_primal_); 
+   }
    void MaximizePotentialAndComputePrimal() 
    {
       REAL min_val = std::numeric_limits<REAL>::infinity();
@@ -348,22 +342,10 @@ public:
       return val;
    }
 
-   REAL EvaluatePrimal(const PrimalSolutionStorage::Element primal) const
+   REAL EvaluatePrimal() const
    {
-      REAL cost;
-      INDEX primalSum = 0;
-
-      for(INDEX i=0; i<dim1_*dim2_; ++i) {
-         if(primal[i] == true) { 
-            cost = (*this)[i];
-         }
-         primalSum += primal[i];
-      }
-      if(primalSum == 1) {
-         return cost;
-      } else {
-         return std::numeric_limits<REAL>::infinity();
-      }
+      assert(primal_[0] < dim1_ && primal_[1] < dim2_ && primal_[2] < dim3_);
+      return msg12(primal_[0], primal_[1]) + msg13(primal_[0], primal_[2]) + msg23(primal_[1], primal_[2]);
    }
 
    REAL operator()(const INDEX x1, const INDEX x2, const INDEX x3) const {
@@ -442,6 +424,21 @@ public:
    REAL& msg12(const INDEX x1, const INDEX x2) { return msg12_[x1*dim2_ + x2]; }
    REAL& msg13(const INDEX x1, const INDEX x3) { return msg13_[x1*dim3_ + x3]; }
    REAL& msg23(const INDEX x2, const INDEX x3) { return msg23_[x2*dim3_ + x3]; }
+
+   void init_primal() {
+      primal_[0] = dim1_;
+      primal_[1] = dim2_;
+      primal_[2] = dim3_;
+   }
+   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) 
+   { 
+      ar( cereal::binary_data( msg12_, sizeof(REAL)*(dim1()*dim2()) ) );
+      ar( cereal::binary_data( msg13_, sizeof(REAL)*(dim1()*dim3()) ) );
+      ar( cereal::binary_data( msg23_, sizeof(REAL)*(dim2()*dim3()) ) );
+   }
+
+   std::array<INDEX,3> primal_;
 protected:
    const INDEX dim1_, dim2_, dim3_;
    REAL *msg12_, *msg13_, *msg23_;

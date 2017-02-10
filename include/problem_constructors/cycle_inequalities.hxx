@@ -83,7 +83,7 @@ private:
    template<typename BELIEF_ARRAY>
    REAL maximizeCycle(const BELIEF_ARRAY& beliefs) const;//, std::vector<std::set<SIGNED_INDEX> >& cyclePi) const;
    template<typename BELIEF_ARRAY>
-   REAL maximizeTriangle(const BELIEF_ARRAY& beliefs) const;
+   REAL minimizeTriangle(const BELIEF_ARRAY& beliefs) const;
 
    // UAI 2012
    static bool edge_sorting(std::list<int> i, std::list<int> j);
@@ -205,11 +205,11 @@ Cycle<MRF_CONSTRUCTOR>::maximizeIndependently(const BELIEF_ARRAY& beliefs) const
 {
 	REAL sum=0.0;
 	for(int i=0; i < beliefs.size(); i++) {
-      for(INDEX x1=0; x1<beliefs[i].shape(0); ++x1) {
-         for(INDEX x2=0; x2<beliefs[i].shape(1); ++x2) {
-            sum += *std::max_element(beliefs[i].begin(), beliefs[i].end());
-         }
-      }
+      //for(INDEX x1=0; x1<beliefs[i].shape(0); ++x1) {
+      //   for(INDEX x2=0; x2<beliefs[i].shape(1); ++x2) {
+            sum += *std::min_element(beliefs[i].begin(), beliefs[i].end());
+      //   }
+      //}
 	}
 	return sum;
 }
@@ -241,10 +241,10 @@ REAL getValCycle(std::vector<MulDimArr*> & beliefs, std::vector<bool> & b_transp
 template<typename MRF_CONSTRUCTOR>
 template<typename BELIEF_ARRAY>
 REAL 
-Cycle<MRF_CONSTRUCTOR>::maximizeTriangle(const BELIEF_ARRAY& beliefs) const
+Cycle<MRF_CONSTRUCTOR>::minimizeTriangle(const BELIEF_ARRAY& beliefs) const
 {
    assert(beliefs.size() == 3);
-   REAL max_val = -std::numeric_limits<REAL>::infinity();
+   REAL max_val = std::numeric_limits<REAL>::infinity();
 
    // Fix value of the first variable
    const INDEX dim1 = beliefs[0].shape(0);
@@ -254,7 +254,7 @@ Cycle<MRF_CONSTRUCTOR>::maximizeTriangle(const BELIEF_ARRAY& beliefs) const
    for(INDEX i1=0; i1<dim1; ++i1) {
       for(INDEX i2=0; i2<dim2; ++i2) {
          for(INDEX i3=0; i3<dim3; ++i3) {
-            max_val = std::max(max_val, beliefs[0](i1,i2) + beliefs[1](i2,i3) + beliefs[2](i3,i1));
+            max_val = std::min(max_val, beliefs[0](i1,i2) + beliefs[1](i2,i3) + beliefs[2](i3,i1));
          }
       }
    }
@@ -601,8 +601,8 @@ Cycle<MRF_CONSTRUCTOR>::TightenTriplet(
         //std::vector<std::set<SIGNED_INDEX> > cyclePi;
         const REAL boundIndep = maximizeIndependently(b);
         //const REAL boundCycle = maximizeCycle(b);
-        const REAL boundCycle = maximizeTriangle(b);
-        newCluster[index].bound = boundIndep - boundCycle;
+        const REAL boundCycle = minimizeTriangle(b);
+        newCluster[index].bound = boundCycle - boundIndep; 
         assert(newCluster[index].bound >=  - eps);
         index++;
      }

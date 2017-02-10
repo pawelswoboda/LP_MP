@@ -459,21 +459,24 @@ namespace TorresaniEtAlInput {
       : pegtl::nothing< Rule > {};
 
    template<> struct action< no_left_nodes > {
-      static void apply(const pegtl::action_input& in, GraphMatchingInput& gmInput)
+      template<typename INPUT>
+      static void apply(const INPUT& in, GraphMatchingInput& gmInput)
       {
          gmInput.leftGraph_.resize(std::stoul(in.string()));
       }
    };
     
    template<> struct action< no_right_nodes > {
-      static void apply(const pegtl::action_input& in, GraphMatchingInput& gmInput)
+      template<typename INPUT>
+      static void apply(const INPUT& in, GraphMatchingInput& gmInput)
       {
          gmInput.rightGraph_.resize(std::stoul(in.string()));
       }
    };
     
    template<> struct action< assignment > {
-      static void apply(const pegtl::action_input& in, GraphMatchingInput& gmInput)
+      template<typename INPUT>
+      static void apply(const INPUT& in, GraphMatchingInput& gmInput)
       {
          std::istringstream iss(in.string());
          INDEX assignment_no; iss >> assignment_no;
@@ -492,7 +495,8 @@ namespace TorresaniEtAlInput {
       }
    };
    template<> struct action< quadratic_pot > {
-      static void apply(const pegtl::action_input & in, GraphMatchingInput& gmInput)
+      template<typename INPUT>
+      static void apply(const INPUT & in, GraphMatchingInput& gmInput)
       {
          std::istringstream iss(in.string());
          INDEX assignment1; iss >> assignment1;
@@ -1004,7 +1008,6 @@ namespace TorresaniEtAlInput {
    bool ParseProblemMCF(const std::string& filename, Solver<FMC>& s)
    {
       auto input = ParseFile(filename);
-      //construct_mcf( s, input );
       construct_gm( s, input );
       construct_mp( s, input );
       construct_mcf( s, input );
@@ -1015,7 +1018,6 @@ namespace TorresaniEtAlInput {
    bool ParseProblemHungarian(const std::string& filename, Solver<FMC>& s)
    {
       auto input = ParseFile(filename);
-      //construct_mcf( s, input );
       construct_gm( s, input );
       construct_mcf( s, input );
       return true;
@@ -1052,7 +1054,8 @@ namespace UaiGraphMatchingInput {
       : pegtl::nothing< Rule > {};
 
    template<> struct action< variable > {
-      static void apply(const pegtl::action_input & in, matching & m)
+      template<typename INPUT>
+      static void apply(const INPUT & in, matching & m)
       { 
          const INDEX var = std::stoul(in.string());
          assert(m.size() == var);
@@ -1061,7 +1064,8 @@ namespace UaiGraphMatchingInput {
    };
 
    template<> struct action< label > {
-      static void apply(const pegtl::action_input & in, matching & m)
+      template<typename INPUT>
+      static void apply(const INPUT & in, matching & m)
       { 
          const std::string slack = "slack";
          if(slack == in.string()) {
@@ -1179,8 +1183,7 @@ namespace UaiGraphMatchingInput {
       auto& matching = std::get<1>(i);
       auto constraints = invert_matching(matching);
       for(auto& c : constraints) {
-         const INDEX unary_no = mrf_right.AddUnaryFactor(std::vector<REAL>(c.size()+1,0.0)); // extra label is for non-assignment of label
-         auto* u_r = mrf_right.GetUnaryFactor(unary_no);
+         auto* u_r = mrf_right.AddUnaryFactor(std::vector<REAL>(c.size()+1,0.0)); // extra label is for non-assignment of label
          for(INDEX var_label=0; var_label<c.size(); ++var_label) {
             const INDEX var = std::get<0>(c[var_label]);
             const INDEX label = std::get<1>(c[var_label]);

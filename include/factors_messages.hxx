@@ -70,6 +70,7 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency, CheckPrimalConsistency
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasPrimalSize,PrimalSize);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotentialAndComputePrimal, MaximizePotentialAndComputePrimal);
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables);
@@ -105,11 +106,9 @@ struct LeftMessageFuncGetter
    constexpr static bool CanCallSendMessage() 
    { return MSG_CONTAINER::CanCallSendMessageToRightContainer(); }
 
-   // do zrobienia: Is LEFT_FACTOR parameter needed at all? same for RightMessageFuncGetter
-   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    constexpr static bool 
    CanCallSendMessages()
-   { return MSG_CONTAINER::template CanCallSendMessagesToRightContainer<LEFT_FACTOR, MSG_ARRAY, ITERATOR>(); }
+   { return MSG_CONTAINER::CanCallSendMessagesToRightContainer(); }
 
    // do zrobienia: rename CanPropagatePrimalThroughMessage
    constexpr static bool CanComputePrimalThroughMessage()
@@ -145,10 +144,9 @@ struct RightMessageFuncGetter
    constexpr static bool CanCallSendMessage() 
    { return MSG_CONTAINER::CanCallSendMessageToLeftContainer(); }
 
-   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    constexpr static bool
    CanCallSendMessages()
-   { return MSG_CONTAINER::template CanCallSendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>(); }
+   { return MSG_CONTAINER::CanCallSendMessagesToLeftContainer(); }
 
    constexpr static bool CanComputePrimalThroughMessage()
    { return MSG_CONTAINER::CanComputeLeftFromRightPrimal(); }
@@ -188,8 +186,7 @@ struct MessageDispatcher
    }
 
    // batch message sending
-   template<typename FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   constexpr static bool CanCallSendMessages() { return FuncGetter<MSG_CONTAINER>::template CanCallSendMessages<FACTOR, MSG_ARRAY, ITERATOR>(); }
+   constexpr static bool CanCallSendMessages() { return FuncGetter<MSG_CONTAINER>::CanCallSendMessages(); }
 
    template<typename FACTOR, typename MSG_ARRAY, typename ITERATOR>
    static void SendMessages(const FACTOR& f, const MSG_ARRAY& msgs, ITERATOR omegaBegin)
@@ -481,6 +478,11 @@ public:
       //global_real_block_allocator.deallocate(mem,sizeof(FactorContainerType));
    }
 
+   virtual MessageTypeAdapter* clone(FactorTypeAdapter* l, FactorTypeAdapter* r) const final
+   {
+      auto* m = new MessageContainer(msg_op_, static_cast<LeftFactorContainer*>(l), static_cast<RightFactorContainer*>(r));
+      return m; 
+   }
 
 
    constexpr static bool
@@ -522,7 +524,7 @@ public:
       return FunctionExistence::HasReceiveRestrictedMessageFromLeft<MessageType, void, 
       LeftFactorType, MessageContainerType>(); 
    }
-   void ReceiveRestrictedMessageFromLeftContainer(PrimalSolutionStorage::Element primal)
+   void ReceiveRestrictedMessageFromLeftContainer()
    {
       leftFactor_->conditionally_init_primal(rightFactor_->primal_access_);
       msg_op_.ReceiveRestrictedMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<OneSideMessageContainerView<Chirality::right>*>(this));
@@ -555,7 +557,7 @@ public:
       msg_op_.SendMessageToLeft(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega);
    }
 
-   constexpr static bool CanCallSendMessagesToLeftContainerTest()
+   constexpr static bool CanCallSendMessagesToLeftContainer()
    {
       // possibly the below is to complicated. meta::find will be easier
       constexpr INDEX msg_array_number = RightFactorContainer::template FindMessageDispatcherTypeIndex<MessageDispatcher<MessageContainerType,RightMessageFuncGetter>>();
@@ -564,12 +566,15 @@ public:
       return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RightFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, typename std::vector<REAL>::iterator>();
    }
 
+   /*
    template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    constexpr static bool
    CanCallSendMessagesToLeftContainer()
    { 
       return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RIGHT_FACTOR, MSG_ARRAY, MSG_ARRAY, ITERATOR>();
    }
+   */
+
    template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
    {
@@ -617,12 +622,24 @@ public:
       //return MessageType::SendMessagesToLeft(rightFactor, repam, static_cast<const ViewWrapper>(msgs.begin()), omegaBegin);
    }
 
+   /*
    template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    constexpr static bool
    CanCallSendMessagesToRightContainer()
    { 
       return FunctionExistence::HasSendMessagesToRight<MessageType, void, LEFT_FACTOR, MSG_ARRAY, MSG_ARRAY, ITERATOR>(); 
    }
+   */
+
+   constexpr static bool CanCallSendMessagesToRightContainer()
+   {
+      // possibly the below is to complicated. meta::find will be easier
+      constexpr INDEX msg_array_number = LeftFactorContainer::template FindMessageDispatcherTypeIndex<MessageDispatcher<MessageContainerType,LeftMessageFuncGetter>>();
+      using msg_container_type = meta::at_c<typename LeftFactorContainer::msg_container_type_list, msg_array_number>;
+      using MSG_ARRAY_ITERATOR = decltype(std::declval<msg_container_type>().begin());
+      return FunctionExistence::HasSendMessagesToLeft<MessageType, void, LeftFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, typename std::vector<REAL>::iterator>();
+   }
+
    template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    static void SendMessagesToRightContainer(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
    {
@@ -660,43 +677,81 @@ public:
    constexpr static bool
    CanComputeRightFromLeftPrimal()
    {
-      return FunctionExistence::HasComputeRightFromLeftPrimal<MessageType,void, LeftFactorType, RightFactorType>();
+      return CanComputeRightFromLeftPrimalWithoutReturn() || CanComputeRightFromLeftPrimalWithReturn();
    }
    constexpr static bool
    CanComputeLeftFromRightPrimal()
    {
-      return FunctionExistence::HasComputeLeftFromRightPrimal<MessageType,void, LeftFactorType, RightFactorType>();
+      return CanComputeLeftFromRightPrimalWithoutReturn() || CanComputeLeftFromRightPrimalWithReturn();
+   } 
+
+   constexpr static bool
+   CanComputeRightFromLeftPrimalWithoutReturn()
+   {
+      return FunctionExistence::HasComputeRightFromLeftPrimal<MessageType, void, LeftFactorType, RightFactorType>();
+   }
+   constexpr static bool
+   CanComputeLeftFromRightPrimalWithoutReturn()
+   {
+      return FunctionExistence::HasComputeLeftFromRightPrimal<MessageType, void, LeftFactorType, RightFactorType>();
+   }
+
+   constexpr static bool
+   CanComputeRightFromLeftPrimalWithReturn()
+   {
+      return FunctionExistence::HasComputeRightFromLeftPrimal<MessageType, bool, LeftFactorType, RightFactorType>();
+   }
+   constexpr static bool
+   CanComputeLeftFromRightPrimalWithReturn()
+   {
+      return FunctionExistence::HasComputeLeftFromRightPrimal<MessageType, bool, LeftFactorType, RightFactorType>();
    }
 
    void ComputeRightFromLeftPrimal() 
    {
       rightFactor_->conditionally_init_primal(leftFactor_->primal_access_);
-      msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-      rightFactor_->PropagatePrimal();
-      rightFactor_->ComputePrimalThroughMessages();
+      static_if<CanComputeRightFromLeftPrimalWithoutReturn()>([&](auto f) {
+        f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+        rightFactor_->PropagatePrimal();
+        rightFactor_->ComputePrimalThroughMessages();
+      }).else_([&](auto f) {
+        const bool changed = f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+        if(changed) {
+          rightFactor_->PropagatePrimal();
+          rightFactor_->ComputePrimalThroughMessages();
+        }
+      });
    }
 
    void ComputeLeftFromRightPrimal()
    {
       leftFactor_->conditionally_init_primal(rightFactor_->primal_access_);
-      msg_op_.ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-      leftFactor_->PropagatePrimal();
-      leftFactor_->ComputePrimalThroughMessages();
+      static_if<CanComputeLeftFromRightPrimalWithoutReturn()>([&](auto f) {
+        f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+        leftFactor_->PropagatePrimal();
+        leftFactor_->ComputePrimalThroughMessages();
+      }).else_([&](auto f) {
+        const bool changed = f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+        if(changed) {
+          leftFactor_->PropagatePrimal();
+          leftFactor_->ComputePrimalThroughMessages();
+        }
+      });
    }
 
    constexpr static bool
    CanCheckPrimalConsistency()
    {
       return FunctionExistence::HasCheckPrimalConsistency<MessageType,bool,
-          typename LeftFactorContainer::FactorType*,
-          typename RightFactorContainer::FactorType*>();
+          typename LeftFactorContainer::FactorType,
+          typename RightFactorContainer::FactorType>();
    }
 
    bool CheckPrimalConsistency() const final
    { 
       bool ret;
       static_if<CanCheckPrimalConsistency()>([&](auto f) {
-            ret = f(msg_op_).CheckPrimalConsistency(leftFactor_->GetFactor(), rightFactor_->GetFactor());
+            ret = f(msg_op_).CheckPrimalConsistency(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
       }).else_([&](auto f) {
                ret = true;
       });
@@ -821,8 +876,8 @@ public:
    //REAL GetLeftMessage(const INDEX i) const { return msg_op_.GetLeftMessage(i,*this); }
    //REAL GetRightMessage(const INDEX i) const { return msg_op_.GetRightMessage(i,*this);  }
 
-   //FactorTypeAdapter* GetLeftFactor() const { return leftFactor_; }
-   //FactorTypeAdapter* GetRightFactor() const { return rightFactor_; }
+   FactorTypeAdapter* GetLeftFactorTypeAdapter() const { return leftFactor_; }
+   FactorTypeAdapter* GetRightFactorTypeAdapter() const { return rightFactor_; }
    // do zrobienia: Rename Get{Left|Right}FactorContainer
    LeftFactorContainer* GetLeftFactor() const final { return leftFactor_; }
    RightFactorContainer* GetRightFactor() const final { return rightFactor_; }
@@ -1023,14 +1078,14 @@ public:
    virtual bool SendsMessageToLeft() const final
    {
       return 
-         this->CanCallSendMessagesToLeftContainerTest() || 
+         this->CanCallSendMessagesToLeftContainer() || 
          this->CanCallSendMessageToLeftContainer();
    }
    virtual bool SendsMessageToRight() const final
    {
       return 
-         //CanCallSendMessagesToRightContainer() || 
-         CanCallSendMessageToRightContainer();
+         this->CanCallSendMessagesToRightContainer() || 
+         this->CanCallSendMessageToRightContainer();
    }
    virtual bool ReceivesMessageFromLeft() const final
    {
@@ -1058,11 +1113,10 @@ public:
    }
 
    // for traversing a tree
-   virtual void send_message_up(FactorTypeAdapter* lower, FactorTypeAdapter* upper) // final
+   virtual void send_message_up(Chirality c) final
    {
-      if(leftFactor_ == lower) {
+      if(c == Chirality::right) { // right factor is top one
          leftFactor_->GetFactor()->init_primal();
-         assert(rightFactor_ == upper);
          static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
                f(this)->ReceiveMessageFromLeftContainer();
          }).else_([&](auto f) {
@@ -1072,28 +1126,35 @@ public:
                   assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
                });
          });
-      } else if(rightFactor_ == lower) {
-         assert(leftFactor_ == upper);
       } else {
-         assert(false);
+         rightFactor_->GetFactor()->init_primal();
+         static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
+               f(this)->ReceiveMessageFromRightContainer();
+         }).else_([&](auto f) {
+               static_if<CanCallSendMessageToLeftContainer()>([&](auto f2) {
+                        f2(this)->SendMessageToLeftContainer(rightFactor_->GetFactor(),1.0);
+               }).else_([](auto f3) {
+                  assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
+               });
+         });
       }
    }
 
    
-   void track_solution_down_tree(Chirality c) // final
+   virtual void track_solution_down(Chirality c) final
    {
       // we can assume that upper factor has already (partially) computed primal.
       // we check whether we can receive restricted messages from upper and compute primal in lower. If yes, we receive restricted message, compute primal in lower factor and propagate it back to upper factor.
-      // if this is not possibly, we propagate primal labeling of upper to lower
-      if(c == Chirality::left) { //
-         static_if<LeftFactorContainer::CanComputePrimal()>([&]( auto f) {
+      // if this is not possible, we propagate primal labeling of upper to lower
+      if(c == Chirality::right) { // right factor is upper
+         static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromRightContainer()>([&](auto f) {
                   std::stringstream ss;
                   // receive restricted messages 
                   std::stringstream dual;
                   cereal::BinaryOutputArchive ar_in(dual);
                   leftFactor_->GetFactor()->serialize_dual( ar_in );
 
-                  ReceiveRestrictedMessageFromRightContainer();
+                  f(this)->ReceiveRestrictedMessageFromRightContainer();
 
                   // compute primal in lower
                   leftFactor_->MaximizePotentialAndComputePrimal();
@@ -1103,14 +1164,44 @@ public:
                   leftFactor_->GetFactor()->serialize_dual( ar_out );
 
                   // propagate back to upper
-                  ComputeRightFromLeftPrimal(); 
+                  f(this)->ComputeRightFromLeftPrimal(); 
 
          }).else_([&](auto f) {
-            f(this)->ComputeLeftFromRightPrimal();
+            static_if<CanComputeLeftFromRightPrimal()>([&](auto f2) {
+                  f2(this)->ComputeLeftFromRightPrimal();
+            }).else_([&](auto) {
+               assert(false);
+            });
          });
 
-      } else if(c == Chirality::right) {
-         assert(false);
+      } else if(c == Chirality::left) { // left factor is upper
+         static_if<RightFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromLeftContainer()>([&](auto f) {
+                  std::stringstream ss;
+                  // receive restricted messages 
+                  std::stringstream dual;
+                  cereal::BinaryOutputArchive ar_in(dual);
+                  rightFactor_->GetFactor()->serialize_dual( ar_in );
+
+                  f(this)->ReceiveRestrictedMessageFromLeftContainer();
+
+                  // compute primal in lower
+                  rightFactor_->MaximizePotentialAndComputePrimal();
+
+                  // restore dual reparametrization to before restricted messages were sent.
+                  cereal::BinaryInputArchive ar_out(dual);
+                  rightFactor_->GetFactor()->serialize_dual( ar_out );
+
+                  // propagate back to upper
+                  f(this)->ComputeLeftFromRightPrimal(); 
+
+         }).else_([&](auto f) {
+            static_if<CanComputeRightFromLeftPrimal()>([&](auto f2) {
+                  f2(this)->ComputeRightFromLeftPrimal();
+            }).else_([&](auto) {
+               assert(false);
+            });
+         });
+
       } else {
          assert(false);
       } 
@@ -1130,6 +1221,19 @@ protected:
       }
    };
 };
+
+// additionally store message difference between left and right factor (might be != 0) for use in Frank-Wolfe algorithm decomposition
+template<typename MESSAGE_CONTAINER>
+class FwMessageContainer : public MESSAGE_CONTAINER {
+   template<typename... ARGS>
+   FwMessageContainer(const INDEX msg_size, ARGS... args):
+      MESSAGE_CONTAINER(args...),
+      msg_diff_(msg_size)
+   {}
+private:
+   std::vector<REAL> msg_diff_; // change to vector
+};
+
 
 
 // container class for factors. Here we hold the factor, all connected messages, reparametrization storage and perform reparametrization and coordination for sending and receiving messages.
@@ -1183,6 +1287,11 @@ public:
       //global_real_block_allocator.deallocate(mem,sizeof(FactorContainerType));
    }
 
+   virtual FactorTypeAdapter* clone() const final
+   {
+      auto* c = new FactorContainer(factor_);
+      return c;
+   }
 
    template<typename MESSAGE_DISPATCHER_TYPE, typename MESSAGE_TYPE> 
    void AddMessage(MESSAGE_TYPE* m) { 
@@ -1231,6 +1340,12 @@ public:
    CanComputePrimal()
    {
       return COMPUTE_PRIMAL_SOLUTION;
+   }
+
+   constexpr static bool
+   CanMaximizePotentialAndComputePrimal()
+   {
+      return FunctionExistence::HasMaximizePotentialAndComputePrimal<FactorType,void>();
    }
 
    constexpr static bool
@@ -1307,11 +1422,12 @@ public:
       });
    }
 
-   void MaximizePotentialAndComputePrimal()
+   virtual void MaximizePotentialAndComputePrimal() final
    {
-      static_if<COMPUTE_PRIMAL_SOLUTION>([&](auto f) {
+      static_if<CanMaximizePotentialAndComputePrimal()>([&](auto f) {
             f(factor_).MaximizePotentialAndComputePrimal();
       });
+      if(!CanMaximizePotentialAndComputePrimal()) { assert(false); }
    }
 
    // do zrobienia: rename PropagatePrimalThroughMessages
@@ -1404,7 +1520,7 @@ public:
       if( no_calls > 0 ) { // no need to construct currentRepam, if it will not be used at all
          // make a copy of the current reparametrization. The new messages are computed on it. Messages are updated implicitly and hence possibly the new reparametrization is automatically adjusted, which would interfere with message updates
          auto omegaIt = omega.begin();
-         FactorType tmp_factor = factor_;
+         FactorType tmp_factor(factor_);
 
          meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
                constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
@@ -1510,8 +1626,9 @@ public:
    template<typename MESSAGE_DISPATCHER_TYPE>
    constexpr static bool CanCallSendMessages(MESSAGE_DISPATCHER_TYPE t) 
    {
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      return MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<FactorContainerType, decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>();
+      //constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      //return MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<FactorContainerType, decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>();
+      return MESSAGE_DISPATCHER_TYPE::CanCallSendMessages();
    }
    template<typename MESSAGE_DISPATCHER_TYPE>
    constexpr static bool CanCallSendMessage(MESSAGE_DISPATCHER_TYPE t) 
@@ -1561,7 +1678,8 @@ public:
       const INDEX no_msgs = std::get<n>(msg_).size();
       if(cur_msg_idx < no_msgs) {
          if( MESSAGE_DISPATCHER_TYPE::CanCallSendMessage() || 
-             MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<decltype(*this), decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>() )
+             //MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<decltype(*this), decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>() )
+             MESSAGE_DISPATCHER_TYPE::CanCallSendMessages() )
             return true;
          else return false;
       } else {
@@ -1629,6 +1747,7 @@ public:
    REAL& operator[](const INDEX i) { return RepamStorageType::operator[](i); }
    */
 
+   // do zrobienia: remove
    std::vector<REAL> GetReparametrizedPotential() const final
    {
       assert(false);
@@ -1639,11 +1758,13 @@ public:
       return repam;
    }
 
+   // do zrobienia: remove
    INDEX size() const final { 
       return factor_.size();
       //return RepamStorageType::size(); 
    }
 
+   // do zrobienia: remove
    constexpr static bool CanComputePrimalSize()
    {
       return FunctionExistence::HasPrimalSize<FactorType,INDEX>();
@@ -1671,16 +1792,36 @@ public:
 
    FactorType* GetFactor() const { return &factor_; }
    FactorType* GetFactor() { return &factor_; }
+   // do zrobienia: delete below four functions
    void SetPrimalOffset(const INDEX n) final { primalOffset_ = n; } // this function is used in AddFactor in LP class
    INDEX GetPrimalOffset() const final { return primalOffset_; }
 
   void SetAuxOffset(const INDEX n) final { auxOffset_ = n; }
   INDEX GetAuxOffset() const final { return auxOffset_; }
+
+  template<typename MESSAGE_TYPE>
+  auto get_messages() const 
+  {
+     // check that MESSAGE_TYPE has current factor type either as right or as left factor (but not both!)
+     static_assert(MESSAGE_TYPE::left_factor_number == FACTOR_NO || MESSAGE_TYPE::right_factor_number == FACTOR_NO,"");
+     static_assert(MESSAGE_TYPE::left_factor_number == MESSAGE_TYPE::right_factor_number,"");
+     if(MESSAGE_TYPE::left_factor_number == FACTOR_NO) {
+        static constexpr INDEX n = FindMessageDispatcherTypeIndex<MessageDispatcher<MESSAGE_TYPE, LeftMessageFuncGetter>>();
+        return std::get<n>(msg_);
+     } else {
+        static constexpr INDEX n = FindMessageDispatcherTypeIndex<MessageDispatcher<MESSAGE_TYPE, RightMessageFuncGetter>>();
+        return std::get<n>(msg_);
+     }
+  }
    
 protected:
    FactorType factor_; // the factor operation
 public:
-   INDEX primal_access_ = 0; // counts when primal was accessed last, do zrobienia: make setter and getter for clean interface
+   INDEX primal_access_ = 0; // counts when primal was accessed last, do zrobienia: make setter and getter for clean interface or make MessageContainer a friend
+   virtual void init_primal() final
+   {
+      factor_.init_primal();
+   }
    void conditionally_init_primal(const INDEX timestamp) 
    {
       assert(primal_access_ <= timestamp);

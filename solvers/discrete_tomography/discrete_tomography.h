@@ -230,7 +230,8 @@ namespace LP_MP{
     
     template<>
        struct action<pegtl::string<'('>> {
-          static void apply(const pegtl::action_input& in, Projections& p)
+       template<typename INPUT>
+          static void apply(const INPUT& in, Projections& p)
           {
              p.projectionCost.push_back({});
           }
@@ -238,7 +239,8 @@ namespace LP_MP{
 
     template<>
        struct action<real_number> {
-          static void apply(const pegtl::action_input& in, Projections& p)
+       template<typename INPUT>
+          static void apply(const INPUT& in, Projections& p)
           {
              p.projectionCost.back().push_back(std::stod(in.string()));
              //realStack.push(std::stod(in.string()));
@@ -247,7 +249,8 @@ namespace LP_MP{
 
     template<>
        struct action<first_positive_integer> {
-          static void apply(const pegtl::action_input& in, Projections& p)
+       template<typename INPUT>
+          static void apply(const INPUT& in, Projections& p)
           {
              p.projectionVar.push_back({});
              p.projectionVar.back().push_back(std::stoul(in.string()));
@@ -256,7 +259,8 @@ namespace LP_MP{
 
     template<>
        struct action<positive_integer> {
-          static void apply(const pegtl::action_input& in, Projections& p)
+       template<typename INPUT>
+          static void apply(const INPUT& in, Projections& p)
           {
              p.projectionVar.back().push_back(std::stoul(in.string()));
              //integerStack.push(std::stoul(in.string()));
@@ -284,7 +288,10 @@ namespace LP_MP{
        }
        assert(p.projectionVar.size() == p.projectionCost.size());
        for(INDEX i=0; i<p.projectionVar.size(); ++i) {
-          pd.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i]);
+          LP_tree t;
+          pd.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i], &t);
+          t.compute_subgradient();
+          assert(false); 
        }
        return true;
     }

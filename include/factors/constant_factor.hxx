@@ -15,12 +15,16 @@ public:
 
    REAL LowerBound() const { return offset_; }
 
-   REAL EvaluatePrimal(const PrimalSolutionStorage::Element primal) const
+   REAL EvaluatePrimal() const
    {
       return offset_;
    }
 
    void AddToOffset(const REAL delta) { offset_ += delta; }
+
+   void init_primal() {}
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar(offset_); }
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) {}
 private:
    REAL offset_;
 };

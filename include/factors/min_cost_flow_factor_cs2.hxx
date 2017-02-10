@@ -40,6 +40,7 @@ public:
       }
       //minCostFlow_->SortArcs();
       minCostFlow_->Solve(); // to initialize data structures
+      primal_.resize(edges.size());
       //repamUpdateFlow_->SortArcs();
       //repamUpdateFlow_->run_cs2(); // to initialize data structures
    }
@@ -51,9 +52,14 @@ public:
       //delete graph_; // one has to delete the graph at the end! However add copy constructor
    }
 
-   template<typename REPAM_ARRAY>
-   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
+   REAL EvaluatePrimal() const
    {
+      assert(primal_.size() == this->size());
+      REAL cost = 0.0;
+      for(INDEX i=0; i<primal_.size(); ++i) {
+         cost += primal_[i]*minCostFlow_->GetCost(i);
+      }
+      return cost;
       // do zrobienia: we must check feasiblity of primal as regards flow constraints. For this, a feasible flow on auxiliary variables must be built.
       // check feasibility
       /*
@@ -70,12 +76,6 @@ public:
          }
       }
       */
-      REAL cost = 0;
-      for(INDEX i=0; i<repam.size(); ++i) {
-         assert(primal[i] != unknownState);
-         cost += repam[i]*primal[i];
-      }
-      return cost;
       // to do: this is a very hacky implementation and it need not be correct for anything except assignment problems!
       // first check whether primal belongs to a feasible flow
       /*
@@ -112,8 +112,7 @@ public:
       */
    }
 
-   template<typename REPAM_ARRAY>
-   void MaximizePotential(const REPAM_ARRAY& repam)
+   void MaximizePotential()
    { 
       minCostFlow_->Solve();
       //for(INDEX e; e<repam.size(); ++e) {
@@ -127,8 +126,7 @@ public:
       //assert(ret == MinCostFlowSolverType::OPTIMAL);
    }
 
-   template<typename REPAM_ARRAY>
-   void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
+   void MaximizePotentialAndComputePrimal()
    { 
       std::cout << "round mcf\n";
       std::cout << "problem is with infinities!\n";
@@ -138,13 +136,14 @@ public:
       //   minCostFlow_->set_cost(e,repam[e]);
       //}
       minCostFlow_->Solve();
-      assert(repam.size() == no_binary_edges_);
-      for(INDEX e=0; e<repam.size(); ++e) {
+      for(INDEX e=0; e<primal_.size(); ++e) {
          // here we assume that flow is 0/1
          // but there may be edges that are not 0/1, e.g. slack edges, which are auxiliary ones
          //assert(-1 <= minCostFlow_->GetFlow(e) && minCostFlow_->GetFlow(e) <= 1);
-         primal[e] = minCostFlow_->GetFlow(e);
+         primal_[e] = minCostFlow_->GetFlow(e);
+         //std::cout << INDEX(primal_[e]) << ",";
       }
+      //std::cout << std::endl;
    }
 
    // sometimes reverse edges have to be set as well
@@ -165,10 +164,8 @@ public:
       */
    }
 
-   template<typename REPAM_ARRAY>
-   REAL LowerBound(const REPAM_ARRAY& repamPot) const
+   REAL LowerBound() const
    {
-      assert(repamPot.size() == size());
       return minCostFlow_->Solve();
    }
 
@@ -362,14 +359,25 @@ public:
      }
   }
 
+  void init_primal() { std::fill(primal_.begin(), primal_.end(), 2); }
+  template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
+  template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) 
+  { 
+     assert(false);
+  }
+
+   std::vector<unsigned char> primal_;
 private:
    // note: this is also given to the reparametrization storage and hence points to the reparametrized potential. Use shared_ptr?
    MinCostFlowSolverType* minCostFlow_;
    MinCostFlowSolverType* repamUpdateFlow_;
    const std::vector<SIGNED_INDEX> demand_;
    const INDEX no_binary_edges_;
+
+
 };
 
+/*
 template<typename FACTOR_CONTAINER>
 class MinCostFlowReparametrizationStorageCS2 {
 public:
@@ -449,6 +457,7 @@ private:
    MinCostFlowSolverType* repamUpdateFlow_;
    const INDEX no_binary_edges_;
 };
+*/
 
 
 // used in graph matching via mcf. 
@@ -462,6 +471,10 @@ class UnaryToAssignmentMessageCS2 {
 public:
    UnaryToAssignmentMessageCS2(const std::vector<INDEX>& edges) : edges_(edges) {
       assert(edges_.size() >= 2);
+      for(auto e : edges) {
+         std::cout << e << ",";
+      } 
+      std::cout << std::endl;
    }
 
    template<typename LEFT_POT, typename MSG_ARRAY>
@@ -587,19 +600,25 @@ public:
 
    template<bool ENABLE = (MPT == MessagePassingType::HUNGARIAN), typename LEFT_FACTOR, typename RIGHT_FACTOR>
    typename std::enable_if<ENABLE,void>::type
-   ComputeLeftFromRightPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+   ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
    {
-      for(INDEX e=0; e<edges_.size(); ++e) {
-         left[e] = right[edges_[e]];
+      for(INDEX i=0; i<edges_.size(); ++i) {
+         if(r.primal_[ edges_[i] ] > 0) {
+            l.primal() = i;
+         }
       }
    }
 
    template<bool ENABLE = (MPT == MessagePassingType::SRMP), typename LEFT_FACTOR, typename RIGHT_FACTOR>
    typename std::enable_if<ENABLE,void>::type
-   ComputeRightFromLeftPrimal(typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, const typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+   ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
    {
       for(INDEX e=0; e<edges_.size(); ++e) {
-         right[edges_[e]] = left[e];
+         if(l.primal() == e) {
+            r.primal_[edges_[e]] = 1;
+         } else {
+            r.primal_[edges_[e]] = 0;
+         } 
       }
    }
 

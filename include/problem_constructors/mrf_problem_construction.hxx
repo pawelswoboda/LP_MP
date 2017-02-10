@@ -158,25 +158,88 @@ public:
    template<typename STREAM>
    void WritePrimal(STREAM& s, PrimalSolutionStorage& primal) const 
    {
-      if(unaryFactor_.size() > 0) {
-        for(INDEX i=0; i<unaryFactor_.size()-1; ++i) { // -1 because you asking for the last factor later
-            auto* f = unaryFactor_[i];
-            const INDEX primal_offset = f->GetPrimalOffset();
-            for(INDEX x=0; x<f->size(); ++x) {
-               if(primal[primal_offset + x] == true) {
-                  s << x << ", ";
-               }
-            }
-         }
-         auto* f = unaryFactor_.back();
-         const INDEX primal_offset = f->GetPrimalOffset();
-         for(INDEX x=0; x<f->size(); ++x) {
-            if(primal[primal_offset + x] == true) {
-               s << x;
-            }
+      // hack for accuracy for rebuttal in cvpr. Motor, car, hotel and house correct match are identities. Compute accuracies based on that
+      INDEX no_correct_matches = 0;
+      for(INDEX i=0; i<unaryFactor_.size(); ++i) {
+         if(unaryFactor_[i]->GetFactor()->primal() == i) {
+            ++no_correct_matches;
          }
       }
+      const REAL accuracy = REAL(no_correct_matches) / REAL(unaryFactor_.size());
+      if(unaryFactor_.size() > 0) {
+        for(INDEX i=0; i<unaryFactor_.size()-1; ++i) {
+           s << unaryFactor_[i]->GetFactor()->primal() << ", ";
+         }
+         auto* f = unaryFactor_.back();
+         s << f->GetFactor()->primal() << "\n";
+      }
    }
+
+  // build tree of unary and pairwise factors
+  template<typename LEFT_MESSAGE, typename RIGHT_MESSAGE>
+  LP_tree AddTree(std::vector<UnaryFactorContainer*> u, std::vector<PairwiseFactorContainer*> p)
+  {
+     assert(u.size() == p.size()+1);
+     LP_tree t;
+     // assume root is the last element of u. build tree recursively from root
+     auto* root = u.back();
+     u.resize(u.size()-1);
+
+     // extract messages joining unaries and pairwise
+     std::set<UnaryFactorContainer*> u_set;
+     for(auto* f : u) { u_set.insert(f); }
+     std::set<PairwiseFactorContainer*> p_set;
+     for(auto* f : p) { p_set.insert(f); }
+
+     std::deque<UnaryFactorContainer*> u_stack;
+     u_stack.push_back(root);
+
+     while(!u_stack.empty()) {
+        auto* f = u_stack.first();
+        u.pop_front();
+        u_set.erase(f);
+
+        {
+           auto msgs = f->get_messages<LEFT_MESSAGE>();
+           for(auto it=msgs.begin(); it!= msgs.end(); ++it) {
+              auto* p_cand = (*it)->GetRightFactor();
+              if(p_set[p_cand]) {
+                 p_set.erase(p_cand);
+                 t.AddMessage((*it), Chirality::left); // or right?
+                 // search for the other unary connected to p_cand
+                 auto msgs_other = p_cand->get_message<RIGHT_MESSAGE>();
+                 assert(msgs_other.size() == 1);
+                 auto* u_other = msgs_other.begin()->GetLeftFactor();
+                 assert(u_set.find(u_other) != std::set::end);
+                 t.AddMessage(*(msgs_other.begin()), Chirality::right);
+                 u_stack.push_back(u_other);
+              }
+           }
+        }
+
+        {
+           auto msgs = f->get_messages<RIGHT_MESSAGE>();
+           for(auto it=msgs.begin(); it!= msgs.end(); ++it) {
+              auto* p_cand = (*it)->GetRightFactor();
+              if(p_set[p_cand]) {
+                 p_set.erase(p_cand);
+                 t.AddMessage((*it), Chirality::left); // or right?
+                 // search for the other unary connected to p_cand
+                 auto msgs_other = p_cand->get_message<RIGHT_MESSAGE>();
+                 assert(msgs_other.size() == 1);
+                 auto* u_other = msgs_other.begin()->GetLeftFactor();
+                 assert(u_set.find(u_other) != std::set::end);
+                 t.AddMessage(*(msgs_other.begin()), Chirality::right);
+                 u_stack.push_back(u_other);
+              }
+           }
+        }
+     }
+
+     assert(p_set.empty());
+
+     return t;
+  }
 
 protected:
    std::vector<UnaryFactorContainer*> unaryFactor_;
@@ -545,7 +608,7 @@ namespace UaiMrfInput {
    struct clique_scope_line : pegtl::seq< opt_whitespace, new_clique_scope, pegtl::plus< opt_whitespace, clique_scope >, opt_whitespace, pegtl::eol > {};
    struct clique_scopes_end
    {
-      template< pegtl::apply_mode A, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+      template< pegtl::apply_mode A, pegtl::rewind_mode M, template< typename ... > class Action, template< typename ... > class Control, typename Input >
          static bool match( Input & in, MrfInput& input )
          {
             return input.number_of_cliques_ == input.clique_scopes_.size();
@@ -558,7 +621,7 @@ namespace UaiMrfInput {
    struct function_table_entry : pegtl::seq< real_number > {};
    struct function_tables_end
    {
-      template< pegtl::apply_mode A, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+      template< pegtl::apply_mode A, pegtl::rewind_mode M, template< typename ... > class Action, template< typename ... > class Control, typename Input >
          static bool match( Input & in, MrfInput& input )
          {
             return input.number_of_cliques_ == input.function_tables_.size();
@@ -566,7 +629,7 @@ namespace UaiMrfInput {
    };
    struct function_table_end
    {
-      template< pegtl::apply_mode A, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+      template< pegtl::apply_mode A, pegtl::rewind_mode M, template< typename ... > class Action, template< typename ... > class Control, typename Input >
          static bool match( Input & in, MrfInput& input )
          {
             auto& table = input.function_tables_.back();

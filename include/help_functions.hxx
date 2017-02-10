@@ -90,6 +90,21 @@ bool HasUniqueValues(const std::vector<T>& v)
    return true;
 }
 
+// find out smallest and second smallest without branching
+template<typename T, typename ITERATOR>
+std::array<T,2> two_smallest_elements(ITERATOR begin, ITERATOR end)
+{
+  T smallest = std::numeric_limits<T>::infinity();
+  T second_smallest = std::numeric_limits<T>::infinity();
+  for(; begin!=end; ++begin) {
+    const REAL min = std::min(smallest, *begin);
+    const REAL max = std::max(smallest, *begin);
+    smallest = min;
+    second_smallest = std::min(max, second_smallest);
+  }
+  return {smallest, second_smallest};
+}
+
 // return indices belonging to the three smallest entries
 template<class T>
 std::tuple<size_t,size_t,size_t> MinThreeIndices(const std::vector<T>& v)

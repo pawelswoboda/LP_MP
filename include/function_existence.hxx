@@ -24,7 +24,8 @@ private: \
       std::is_same< \
       decltype( std::declval<T>() .MEMBER ( std::declval<Args>()...) ), \
       Ret \
-         >::type { return typename std::is_same<Ret,Ret>::type{}; }; \
+         >::type { \
+           return typename  std::is_same< decltype( std::declval<T>() .MEMBER ( std::declval<Args>()...) ), Ret >::type{}; } \
 \
    template<typename> \
    static constexpr std::false_type check(...) { return std::false_type{}; }; \

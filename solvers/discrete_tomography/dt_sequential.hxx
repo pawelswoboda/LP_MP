@@ -27,15 +27,29 @@ public:
    }
 
    REAL LowerBound() const {
-      REAL min_value = std::numeric_limits<REAL>::infinity();
-      for(auto it=pot_.begin(); it!=pot_.end(); ++it) {
-         min_value = std::min(min_value, *it);
-      }
-      return min_value;
+      return *std::min_element(pot_.begin(), pot_.end());
+      //REAL min_value = std::numeric_limits<REAL>::infinity();
+      //for(auto it=pot_.begin(); it!=pot_.end(); ++it) {
+      //   min_value = std::min(min_value, *it);
+      //}
+      //return min_value;
    }
 
    REAL EvaluatePrimal() const {
       return std::numeric_limits<REAL>::infinity();
+   }
+
+   void MaximizePotentialAndComputePrimal() {
+      REAL min_value = std::numeric_limits<REAL>::infinity();
+      for(INDEX state=0; state<no_labels(); ++state) {
+         for(INDEX sum=0; sum<sum_size(); ++sum) {
+            if((*this)(state, sum) < min_value) {
+               state_ = state;
+               sum_ = sum;
+               min_value = (*this)(state,sum);
+            }
+         }
+      } 
    }
 
    REAL operator()(const INDEX state, const INDEX sum) const { return pot_(state,sum); }
@@ -49,10 +63,11 @@ public:
    void init_primal() { state_ = no_labels(); sum_ = sum_size(); }
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( state_, sum_ ); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar(pot_); }
-private:
-   matrix pot_; // first dimension is state, second one is sum
+
    INDEX state_;
    INDEX sum_;
+private:
+   matrix pot_; // first dimension is state, second one is sum
 };
 
 class dt_sum_state_pairwise_factor {
@@ -110,16 +125,16 @@ public:
    INDEX next_sum_size() const { return next_.dim2(); }
    INDEX size() const { return no_labels()*no_labels()*prev_sum_size(); }
 
-   void init_primal() { state_[0] = no_labels(); state_[1] = no_labels(); sum_ = sum_size(); }
+   void init_primal() { state_[0] = no_labels(); state_[1] = no_labels(); sum_[0] = prev_sum_size(); sum_[1] = next_sum_size(); }
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( state_, sum_ ); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( prev_, next_, reg_ ); }
+
+   std::array<INDEX,2> state_;
+   std::array<INDEX,2> sum_; // both sums are not strictly needed, they help however in labeling
 private:
    matrix prev_; // first dimension is state, second one is sum
    matrix next_; // first dimension is state, second one is sum
    matrix reg_; // regularizer
-
-   std::array<INDEX,2> state_;
-   INDEX sum_;
 };
 
 // message between unaries and sum, not necessary for the relaxation. Also does not seem to improve convergence
@@ -250,6 +265,22 @@ public:
       msg -= omega*msgs;
    }
 
+   template<typename RIGHT_FACTOR, typename MSG>
+   void ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, MSG& msg)
+   {
+      matrix msgs(r.no_labels(), DIRECTION == Chirality::left ? r.prev_sum_size() : r.next_sum_size(), std::numeric_limits<REAL>::infinity());
+
+      if(DIRECTION == Chirality::left) {
+         assert(r.state_[1] < r.no_labels() && r.sum_[1] < r.next_sum_size());
+         for(INDEX state=0; state<std::min(r.no_labels(), r.sum_[1]+1); ++state) {
+            msgs(state, r.sum_[1] - state) = r.eval(state, r.state_[1], r.sum_[1] - state);
+         }
+      } else {
+         assert(false);
+      } 
+      msg -= msgs;
+   }
+
    template<typename LEFT_FACTOR, typename MSG>
    void RepamLeft(LEFT_FACTOR& f_left, const MSG& msg)
    {
@@ -275,6 +306,33 @@ public:
          }
       }
    }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+   {
+      if(DIRECTION == Chirality::left) {
+         r.state_[0] = l.state_;
+         r.sum_[0] = l.sum_;
+      } else {
+         r.state_[1] = l.state_;
+         r.sum_[1] = l.sum_;
+      } 
+   }
+
+   /*
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r) {
+      if(DIRECTION == Chirality::left) {
+         assert(r.state_[0] < r.no_labels() && r.sum_[0] < r.prev_sum_size());
+         l.state_ = r.state_[0];
+         l.sum_ = r.sum_[0];
+      } else {
+         assert(r.state_[1] < r.no_labels() && r.sum_[1] < r.prev_sum_size());
+         l.state_ = r.state_[1]; 
+         l.sum_ = r.sum_[1];
+      } 
+   }
+   */
 private:
    bool transpose_; // not needed
 };

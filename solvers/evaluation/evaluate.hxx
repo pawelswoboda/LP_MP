@@ -32,6 +32,12 @@ void RunSolver(INPUT_FUNCTION f, const std::vector<std::string>& datasets, std::
       solverOptions.insert(solverOptions.begin(), std::string("LP_MP evaluation tool"));
       solverOptions.push_back("-i");
       solverOptions.push_back(dataset);
+      solverOptions.push_back("-o");
+      std::string output_file = ExtractFilename(dataset);
+      output_file.append("_solution_");
+      output_file.append(algorithmName);
+      output_file.append(".txt");
+      solverOptions.push_back(output_file);
    
       // do zrobienia: fetch version number automatically from CMakeLists.txt
       //TCLAP::CmdLine cmd(std::string("Command line options for evaluation run"), ' ', "0.0.1");

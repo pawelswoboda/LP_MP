@@ -31,6 +31,7 @@ class FactorTypeAdapter
 {
 public:
    virtual ~FactorTypeAdapter() {}
+   virtual FactorTypeAdapter* clone() const = 0;
    virtual void UpdateFactor(const std::vector<REAL>& omega) = 0;
    virtual void UpdateFactorPrimal(const std::vector<REAL>& omega, const INDEX iteration) = 0;
    virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
@@ -44,14 +45,16 @@ public:
    virtual bool CanSendMessage(const INDEX i) const = 0;
    virtual REAL LowerBound() const = 0;
    virtual std::vector<REAL> GetReparametrizedPotential() const = 0;
+   virtual void init_primal() = 0;
+   virtual void MaximizePotentialAndComputePrimal() = 0;
    //virtual PrimalSolutionStorageAdapter* AllocatePrimalSolutionStorage() const = 0;
    //virtual bool CanComputePrimalSolution() const = 0;
    // the offset in the primal storage
-   virtual void SetPrimalOffset(const INDEX) = 0;
-   virtual INDEX GetPrimalOffset() const = 0;
+   virtual void SetPrimalOffset(const INDEX) = 0; // do zrobienia: delete
+   virtual INDEX GetPrimalOffset() const = 0; // do zrobienia: delete
    
-   virtual void SetAuxOffset(const INDEX n) = 0;
-   virtual INDEX GetAuxOffset() const = 0;
+   virtual void SetAuxOffset(const INDEX n) = 0; // do zrobienia: delete
+   virtual INDEX GetAuxOffset() const = 0; // do zrobienia: delete
    
    // do zrobienia: this function is not needed. Evaluation can be performed automatically
    virtual REAL EvaluatePrimal() const = 0;
@@ -68,6 +71,7 @@ class MessageTypeAdapter
 {
 public:
    virtual ~MessageTypeAdapter() {}
+   virtual MessageTypeAdapter* clone(FactorTypeAdapter* l, FactorTypeAdapter* r) const = 0;
    virtual FactorTypeAdapter* GetLeftFactor() const = 0;
    virtual FactorTypeAdapter* GetRightFactor() const = 0;
    //virtual bool CheckPrimalConsistency(typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right) const = 0;
@@ -76,8 +80,11 @@ public:
    virtual bool ReceivesMessageFromLeft() const = 0;
    virtual bool ReceivesMessageFromRight() const = 0;
    virtual bool CheckPrimalConsistency() const = 0;
+   virtual FactorTypeAdapter* GetRightFactorTypeAdapter() const = 0;
+   virtual FactorTypeAdapter* GetLeftFactorTypeAdapter() const = 0;
 
-   //virtual void send_message_up(FactorTypeAdapter* lower, FactorTypeAdapter* upper) = 0;
+   virtual void send_message_up(Chirality c) = 0;
+   virtual void track_solution_down(Chirality c) = 0;
    
    // Also true, if SendMessagesTo{Left|Right} is active. Used for weight computation. Disregard message in weight computation if it does not send messages at all
    // do zrobienia: throw them out again
@@ -118,13 +125,62 @@ public:
       for(INDEX i=0; i<m_.size(); i++) { delete m_[i]; }
       for(INDEX i=0; i<f_.size(); i++) { delete f_[i]; }
    }
-   // make a deep copy of factors and messages. Adjust pointers of messages
-   LP(const LP& o) {
+
+   // make a deep copy of factors and messages. Adjust pointers to messages and factors
+   LP(const LP& o) 
+   {
       f_.reserve(o.f_.size());
       assert(false);
-      for(auto& f : o.f_) {
-
+      std::map<FactorTypeAdapter*, FactorTypeAdapter*> factor_map; // translate addresses from o's factors to this' factors
+      f_.reserve(o.f_.size());
+      for(auto* f : o.f_) {
+         auto* clone = f->clone();
+         this->AddFactor(clone);
+         factor_map.insert(std::make_pair(f, clone));
       }
+      m_.reserve(o.m_.size());
+      for(auto* m : o.m_) {
+         auto* left = m->GetLeftFactorTypeAdapter();
+         auto* right = m->GetRightFactorTypeAdapter();
+         auto* left_clone = factor_map[left];
+         auto* right_clone = factor_map[right];
+         auto* clone = m->clone(left_clone, right_clone);
+         this->AddMessage(m);
+      }
+
+      forwardOrdering_.reserve(o.forwardOrdering_.size());
+      for(auto* f : o.forwardOrdering_) {
+        forwardOrdering_.push_back( factor_map[f] );
+      }
+
+      backwardOrdering_.reserve(o.backwardOrdering_.size());
+      for(auto* f : o.backwardOrdering_) {
+        backwardOrdering_.push_back( factor_map[f] );
+      }
+
+      forwardUpdateOrdering_.reserve(o.forwardUpdateOrdering_.size());
+      for(auto* f : o.forwardUpdateOrdering_) {
+        forwardUpdateOrdering_.push_back( factor_map[f] );
+      }
+
+      backwardUpdateOrdering_.reserve(o.backwardUpdateOrdering_.size());
+      for(auto* f : o.backwardUpdateOrdering_) {
+        backwardUpdateOrdering_.push_back( factor_map[f] );
+      }
+
+      omegaForward_ = o.omegaForward_;
+      omegaForward_ = o.omegaForward_;
+
+      forward_pass_factor_rel_.reserve(o.forward_pass_factor_rel_.size());
+      for(auto f : o.forward_pass_factor_rel_) {
+        forward_pass_factor_rel_.push_back( std::make_pair(factor_map[f.first], factor_map[f.second]) );
+      }
+
+      backward_pass_factor_rel_.reserve(o.backward_pass_factor_rel_.size());
+      for(auto f : o.backward_pass_factor_rel_) {
+        backward_pass_factor_rel_.push_back( std::make_pair(factor_map[f.first], factor_map[f.second]) );
+      }
+   }
    /*
    std::vector<FactorTypeAdapter*> f_; // note that here the factors are stored in the original order they were given. They will be output in this order as well, e.g. by problemDecomposition
    std::vector<MessageTypeAdapter*> m_;
@@ -139,7 +195,6 @@ public:
 
    LPReparametrizationMode repamMode_ = LPReparametrizationMode::Undefined;
    */
-   }
 
    INDEX AddFactor(FactorTypeAdapter* f)
    {
@@ -340,38 +395,56 @@ private:
 };
 
 // factors are arranged in trees.
-/*
 class LP_tree
 {
 public:
-   void AddMessage(MessageTypeAdapter* m, FactorTypeAdapter* lower_factor, FactorTypeAdapter* upper_factor) 
+   void AddMessage(MessageTypeAdapter* m, Chirality c) // chirality denotes which factor is upper
    {
-      if(lower_factor == m->GetLeftFactor()) {
-         tree_messages_.push_back(std::make_tuple(m, Chirality::left));
-      } else {
-         tree_messages_.push_back(std::make_tuple(m, Chirality::right));
-      }
+      tree_messages_.push_back(std::make_tuple(m, c));
    }
-   void compute_tree_subgradient()
+   void compute_subgradient()
    {
-      // reparametrize everything into upmost factor
+      // send messages up the tree
       for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
          auto* m = std::get<0>(*it);
          Chirality c = std::get<1>(*it);
          m->send_message_up(c);
       }
       // compute primal for topmost factor
-      if(std::get<1>(tree_messages_.back()) == Chirality::left) {
-         tree_messages_.back()->RightFactor()->MaximizePotentialAndComputePrimal();
+      if(std::get<1>(tree_messages_.back()) == Chirality::right) {
+         // init primal for right factor!
+         std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->MaximizePotentialAndComputePrimal();
       } else {
-         tree_messages_.back()->LeftFactor()->MaximizePotentialAndComputePrimal(); 
+         // init primal for left factor!
+         std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->MaximizePotentialAndComputePrimal(); 
       }
       // track down optimal primal solution
       for(auto it = tree_messages_.rbegin(); it!= tree_messages_.rend(); ++it) {
          auto* m = std::get<0>(*it);
          Chirality c = std::get<1>(*it);
-         m->trace_solution_down_tree(c);
+         m->track_solution_down(c);
       } 
+   }
+
+   REAL lower_bound() const 
+   {
+      REAL lb = 0.0;
+      for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
+         auto* m = std::get<0>(*it);
+         Chirality c = std::get<1>(*it);
+         if(std::get<1>(tree_messages_.back()) == Chirality::right) {
+            lb += std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->LowerBound();
+         } else {
+            lb += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->LowerBound(); 
+         }
+      }
+      if(std::get<1>(tree_messages_.back()) == Chirality::right) {
+         lb += std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->LowerBound();
+      } else {
+         lb += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->LowerBound(); 
+      }
+      return lb;
+      
    }
 protected:
    std::vector< std::tuple<MessageTypeAdapter*, Chirality>> tree_messages_; // messages forming a tree. Chirality says which side comprises the lower  factor
@@ -386,7 +459,6 @@ class LP_with_trees : public LP
 protected:
    std::vector<LP_tree> trees_;
 };
-*/
 
 inline void LP::Init()
 {
@@ -485,6 +557,7 @@ REAL LP::EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEn
    for(; factorIt!=factorEndIt; ++factorIt) {
       cost += (*factorIt)->EvaluatePrimal();
    }
+   std::cout << "primal cost = " << cost << "\n";
    return cost;
 }
 
@@ -493,6 +566,7 @@ REAL LP::EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEn
 template<typename FACTOR_ITERATOR>
 void LP::WritePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, std::ofstream& fs) const
 {
+  assert(false); // write primal is implemented in problem constructor
    for(; factorIt!=factorEndIt; ++factorIt) {
       (*factorIt)->WritePrimal(fs);
    }
@@ -598,55 +672,33 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
       }
    }
 
-
    omega.clear();
    omega.resize(std::distance(factorIt, factorEndIt),std::vector<REAL>(0));
    for(auto it=factorIt; it!=factorEndIt; ++it) {
-      const INDEX i = factorToIndex[*it];
-      for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
-         if(mIt.CanSendMessage()) {
-            auto* f_connected = mIt.GetConnectedFactor();
-            const INDEX j = factorToIndex[ f_connected ];
-            if(i<j || last_receiving_factor[j] > i) {
-               omega[i].push_back(1.0/REAL(no_receiving_factors_later[i] + std::max(no_send_factors_later[i], no_send_factors[i] - no_send_factors_later[i])));
-            } else {
-               omega[i].push_back(0.0);
-            } 
-         }
-      }
+     const INDEX i = std::distance(factorIt, it);
+     assert(i == factorToIndex[*it]);
+     for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
+       if(mIt.CanSendMessage()) {
+         auto* f_connected = mIt.GetConnectedFactor();
+         const INDEX j = factorToIndex[ f_connected ];
+         assert(i != j);
+         if(i<j || last_receiving_factor[j] > i) {
+           omega[i].push_back(1.0/REAL(no_receiving_factors_later[i] + std::max(no_send_factors_later[i], no_send_factors[i] - no_send_factors_later[i])));
+         } else {
+           omega[i].push_back(0.0);
+         } 
+       }
+     }
+     //assert(i != 233);
    }
 
-
-   /*
-   for(auto* m : m_) {
-      auto* f_left = m->GetLeftFactor();
-      const INDEX index_left = factorToIndex[f_left];
-      auto* f_right = m->GetRightFactor();
-      const INDEX index_right = factorToIndex[f_right];
-      assert(index_left != index_right);
-
-      if(m->SendsMessageToRight()) {
-         if(index_left < index_right) {
-            omega[index_left].push_back(1.0/REAL(no_receiving_factors_later[index_left] + std::max(no_send_factors_later[index_left], no_send_factors[index_left] - no_send_factors_later[index_left])));
-         } else {
-            omega[index_left].push_back(0.0);
-         }
-      }
-      if(m->SendsMessageToLeft()) {
-         if(index_right < index_left) {
-            omega[index_right].push_back(1.0/REAL(no_receiving_factors_later[index_right] + std::max(no_send_factors_later[index_right], no_send_factors[index_right] - no_send_factors_later[index_right])));
-         } else {
-            omega[index_right].push_back(0.0);
-         }
-      }
-   }
-   */
 
    // check whether all messages were added to m_. Possibly, this can be automated: Traverse all factors, get all messages, add them to m_ and avoid duplicates along the way.
    assert(2*m_.size() == std::accumulate(f_.begin(), f_.end(), 0, [](INDEX sum, auto* f){ return sum + f->GetNoMessages(); }));
    assert(HasUniqueValues(m_));
    for(INDEX i=0; i<f_.size(); ++i) {
       assert(omega[i].size() <= (*(factorIt+i))->GetNoMessages());
+      const REAL omega_sum = std::accumulate(omega[i].begin(), omega[i].end(), 0.0); 
       assert(std::accumulate(omega[i].begin(), omega[i].end(), 0.0) <= 1.0 + eps);
    }
 
@@ -654,9 +706,14 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
    for(INDEX i=0; i<omega.size(); ++i) {
       if( (*(factorIt+i))->FactorUpdated() ) {
          omega_filtered.push_back(omega[i]);
+      } else {
+        assert(omega[i].size() == 0);
       }
    }
    std::swap(omega,omega_filtered);
+
+   // rewrite omega to be a fixed two dimensional array
+
    //auto last_valid_omega = std::remove_if(omega.begin(), omega.end(), [&](auto& weights) { 
    //      const INDEX i = &weights - &*omega.begin();
    //      return !(*(factorIt+i))->FactorUpdated();
@@ -786,7 +843,8 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
       // do zrobienia: let the factor below be variable and specified on the command line
       // better for rounding
       if((*factorIt)->FactorUpdated()) {
-         omega.push_back(std::vector<REAL>(fcIt->size(), 1.0/REAL(2.0*fcIt->size() + leave_weight) ));
+         //omega.push_back(std::vector<REAL>(fcIt->size(), 1.0/REAL(2.0*fcIt->size() + 50.0 + leave_weight) ));
+         omega.push_back(std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size()) ));
       }
       //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 1.0) );
       // better for dual convergence
