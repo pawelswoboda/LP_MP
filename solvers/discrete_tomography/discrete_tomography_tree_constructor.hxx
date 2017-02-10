@@ -348,17 +348,17 @@ public:
    //   pd_.GetLP().AddMessage(m);
    //}
 
-   SUM_FACTOR* AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost)
+   SUM_FACTOR* AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost, LP_tree* tree = nullptr)
    {
       assert(summationCost.size() > 0);
       const INDEX max_sum = std::max(noLabels_,INDEX(summationCost.size()));
-      auto* f = AddProjection(projectionVar.begin(), projectionVar.end(), max_sum);
+      auto* f = AddProjection(projectionVar.begin(), projectionVar.end(), max_sum, tree);
       f->GetFactor()->summation_cost(summationCost);
       return f;
    }
 
    template<typename ITERATOR>
-   SUM_FACTOR* AddProjection(ITERATOR projection_var_begin, ITERATOR projection_var_end, const INDEX max_sum)
+   SUM_FACTOR* AddProjection(ITERATOR projection_var_begin, ITERATOR projection_var_end, const INDEX max_sum, LP_tree* tree = nullptr)
    { 
       auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
       assert(noLabels_ > 0);
@@ -374,7 +374,6 @@ public:
          }
       }
 
-      LP_tree tree;
       auto* f_prev = new SUM_FACTOR(noLabels_, 1);
       //connect_unary_and_sum_factor(mrf.GetUnaryFactor(*projection_var_begin), f_prev);
       pd_.GetLP().AddFactor(f_prev);
@@ -396,13 +395,10 @@ public:
          pd_.GetLP().AddMessage(m_c);
 
          assert(!transpose);
-         std::function<void()> send_up_l = [=]() { m_l->SendMessageToRightContainer(f_prev->GetFactor(),1.0); };
-         std::function<void()> send_down_l = [=]() { f_p->MaximizePotentialAndComputePrimal(); m_l->ReceiveMessageFromRightContainer(); };
-         //tree.AddMessage( send_up_l, send_down_l );
-
-         std::function<void()> send_up_r = [=]() { m_r->ReceiveMessageFromRightContainer(); };
-         std::function<void()> send_down_r = [=]() { m_r->SendMessageToRightContainer(f->GetFactor(),1.0); };
-         //tree.AddMessage( send_up_r, send_down_r );
+         if(tree != nullptr) {
+            tree->AddMessage( m_l, Chirality::right );
+            tree->AddMessage( m_r, Chirality::left );
+         }
 
          // this only works for non-transposed
          if(!transpose) {

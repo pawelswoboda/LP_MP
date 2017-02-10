@@ -440,12 +440,12 @@ namespace LP_MP{
    void init_primal() { 
       primal_.left_sum = left_sum_size();
       primal_.right_sum = right_sum_size();
-      primal.left_label = no_left_labels();
-      primal.center_left_label = no_center_left_labels();
-      primal.center_right_label = no_center_right_labels();
-      primal.right_label = no_right_labels();
+      primal_.left_label = no_left_labels();
+      primal_.center_left_label = no_center_left_labels();
+      primal_.center_right_label = no_center_right_labels();
+      primal_.right_label = no_right_labels();
    }
-   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_.left_sum, primal_.right_sum, primal_.left_label, primal_.center_left_label, primal.center_right_label, primal.right_label ); }
+   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_.left_sum, primal_.right_sum, primal_.left_label, primal_.center_left_label, primal_.center_right_label, primal_.right_label ); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( reg_, up_, left_, right_ ); }
   private:
     matrix reg_;

@@ -108,7 +108,7 @@ struct FMC_LIFTED_MULTICUT {
       LiftedEdgeLiftedMulticutFactorMessageContainer
          >;
 
-   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,2>;
+   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,3>;
    using LiftedMulticutConstructor = LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 
@@ -431,7 +431,8 @@ namespace MulticutH5Input {
    {
       auto& mc = pd.template GetProblemConstructor<0>();
       
-      andres::graph::GridGraph<2> originalGraph;
+      //andres::graph::GridGraph<2> originalGraph;
+      andres::graph::Graph<> originalGraph;
       andres::graph::Graph<> liftedGraph;
       std::vector<REAL> edgeValues;
 

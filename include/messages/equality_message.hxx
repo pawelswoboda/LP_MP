@@ -57,9 +57,9 @@ public:
    void ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, typename PrimalSolutionStorage::Element rightPrimal)
    {
       if(rightPrimal[rightVar_] == false) {
-         msg[0] -= std::numeric_limits<REAL>::infinity();
-      } else if(rightPrimal[rightVar_] == true) {
          msg[0] -= -std::numeric_limits<REAL>::infinity();
+      } else if(rightPrimal[rightVar_] == true) {
+         msg[0] -= std::numeric_limits<REAL>::infinity();
       }
    }
 
@@ -67,9 +67,9 @@ public:
    void ReceiveRestrictedMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg, typename PrimalSolutionStorage::Element leftPrimal)
    { 
       if(leftPrimal[leftVar_] == false) {
-         msg[0] -= std::numeric_limits<REAL>::infinity();
-      } else if(leftPrimal[leftVar_] == true) {
          msg[0] -= -std::numeric_limits<REAL>::infinity();
+      } else if(leftPrimal[leftVar_] == true) {
+         msg[0] -= std::numeric_limits<REAL>::infinity();
       }
    }
 
@@ -182,33 +182,44 @@ public:
 
    template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = C == Chirality::right, typename LEFT_FACTOR, typename RIGHT_FACTOR>
    typename std::enable_if<PROPAGATE_PRIMAL_TO_LEFT_TMP,void>::type
-   ComputeLeftFromRightPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+   ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
    {
-      if(right[rightVar_] == true) { 
-         left[leftVar_] = true;
-         // do zrobienia: it would be nice to set all other entries to false
-      } else if(right[rightVar_] == false) {
-         left[leftVar_] = false;
+      if(r.primal() == rightVar_) { 
+         l.primal() = leftVar_;
+      //} else if(right[rightVar_] == false) {
+      //   left[leftVar_] = false;
       }
    }
 
    template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = C == Chirality::left, typename LEFT_FACTOR, typename RIGHT_FACTOR>
    typename std::enable_if<PROPAGATE_PRIMAL_TO_RIGHT_TMP,void>::type
-   ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+   ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
    {
-      if(left[leftVar_] == true) { 
-         right[rightVar_] = true;
-         // do zrobienia: it would be nice to set all other entries to false
-      } else if(left[leftVar_] == false) {
-         right[rightVar_] = false;
+      if(r.primal() >= r.size() ) { // this is only valid for graph matching, where the last label means non-assignment
+         r.primal() = r.size()-1;
       }
+      if(l.primal() == leftVar_) { 
+         r.primal() = rightVar_;
+      } 
+         // do zrobienia: it would be nice to set all other entries to false
+      //} else if(left[leftVar_] == false) {
+      //   right[rightVar_] = false;
    }
   
    // here it is checked whether labeling on left side and labeling on right side fulfill the constraints of the message
    // note: If we build an LP-model, this could be checked automatically!
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, PrimalSolutionStorage::Element rightPrimal) const
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
    {
-      return leftPrimal[leftVar_] == rightPrimal[rightVar_];
+      if(l.primal() == leftVar_) {
+         if(r.primal() != rightVar_) std::cout << "kwaskwaskwas1\n";
+         return r.primal() == rightVar_;
+      }
+      if(r.primal() == rightVar_) {
+         if(l.primal() != leftVar_) std::cout << "kwaskwaskwas2\n";
+         return l.primal() == leftVar_;
+      }
+      return true;
    }
 
 

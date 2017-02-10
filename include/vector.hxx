@@ -2,6 +2,7 @@
 #define LP_MP_VECTOR_HXX
 
 #include "memory_allocator.hxx"
+#include "cereal/archives/binary.hpp"
 
 namespace LP_MP {
 

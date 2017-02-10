@@ -18,7 +18,9 @@ public:
       cutEdgeContrib_(0.0),
       liftedEdgeContrib_(0.0),
       liftedEdgeForcedContrib_(0.0) 
-   {}
+   {
+   assert(false);
+   }
    //LiftedMulticutCutFactor(const INDEX noCutEdges, const INDEX noLiftedEdges) : noCutEdges_(noCutEdges), noLiftedEdges_(noLiftedEdges) {}
 
    // the feasible set is: When the ordinary edges are all one (cut), then the lifted edges must be one as well

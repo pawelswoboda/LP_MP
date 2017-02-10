@@ -112,7 +112,7 @@ public:
    {
       if(outputFileArg_.isSet()) {
          std::ofstream output_file;
-         output_file.open(outputFile_);
+         output_file.open(outputFile_, std::ofstream::out | std::ofstream::app);
          if(!output_file.is_open()) {
             throw std::runtime_error("could not open file " + outputFile_);
          }
@@ -387,6 +387,7 @@ public:
          this->Iterate(c);
          this->PostIterate(c);
          c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
+         this->WritePrimal();
       }
       if(!c.error) {
          this->End();
