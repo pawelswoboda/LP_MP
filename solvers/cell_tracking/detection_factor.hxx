@@ -578,6 +578,12 @@ public:
       detection_outgoing_cost += *std::min_element(r.outgoing_begin(), r.outgoing_end());
     }
 
+    const REAL orig = r.incoming(incoming_edge_index_);
+    r.incoming(incoming_edge_index_) = std::numeric_limits<REAL>::infinity();
+    const REAL min_incoming_val = *std::min_element(r.incoming_begin(), r.incoming_end());
+    r.incoming(incoming_edge_index_) = orig;
+
+    /*
     REAL min_incoming_val = std::numeric_limits<REAL>::infinity();
     INDEX c=0;
     for(auto it = r.incoming_begin(); it!=r.incoming_end(); ++it, ++c) {
@@ -585,6 +591,8 @@ public:
         min_incoming_val = std::min(min_incoming_val, *it);
       } 
     }
+    */
+
     msg[0] -= std::min(detection_outgoing_cost + r.incoming(incoming_edge_index_) , 0.0)
       - std::min(detection_outgoing_cost + min_incoming_val, 0.0); // or +- exchanged 
   }
@@ -617,6 +625,12 @@ public:
   { 
     const REAL detection_incoming_cost = l[0] + *std::min_element(l.incoming_begin(), l.incoming_end());
 
+    const REAL orig = l.outgoing(outgoing_edge_index_);
+    l.outgoing(outgoing_edge_index_) = std::numeric_limits<REAL>::infinity();
+    const REAL min_outgoing_val = *std::min_element(l.outgoing_begin(), l.outgoing_end());
+    l.outgoing(outgoing_edge_index_) = orig;
+
+    /*
     REAL min_outgoing_val = std::numeric_limits<REAL>::infinity();
     INDEX c=0;
     for(auto it = l.outgoing_begin(); it!=l.outgoing_end(); ++it, ++c) {
@@ -624,8 +638,20 @@ public:
         min_outgoing_val = std::min(min_outgoing_val, *it);
       } 
     }
+    */
+
+    /*
+    auto smallest = two_smallest_elements<REAL>(l.outgoing_begin(), l.outgoing_end());
+    REAL min_outgoing_val;
+    if(l.outgoing(outgoing_edge_index_) == smallest[0]) {
+      min_outgoing_val = smallest[1];
+    } else {
+      min_outgoing_val = smallest[0];
+    }
+    */
+
     msg[0] -= std::min(detection_incoming_cost + l.outgoing(outgoing_edge_index_),  0.0)
-      - std::min(detection_incoming_cost + min_outgoing_val,  0.0); // or +- exchanged
+      - std::min(detection_incoming_cost + min_outgoing_val,  0.0);
   }
 
   template<typename LEFT_FACTOR, typename G2>
@@ -871,13 +897,13 @@ public:
 
 
   template<typename RIGHT_FACTOR, typename MSG>
-  void ReceiveMessageFromRight(const RIGHT_FACTOR& r, MSG& msg) 
+  void ReceiveMessageFromRight(RIGHT_FACTOR& r, MSG& msg) 
   {
     make_right_factor_uniform(r,msg); 
   }
 
   template<typename RIGHT_FACTOR, typename MSG>
-  void ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, MSG& msg) 
+  void ReceiveRestrictedMessageFromRight(RIGHT_FACTOR& r, MSG& msg) 
   {
     assert(at_most_one_cell_factor_index_ < r.size());
     if(r.primal_ == r.size()) { // no element chosen yet
@@ -928,17 +954,12 @@ public:
     msg[0] -= omega*l.cost_of_detection();
   }
   template<typename RIGHT_FACTOR, typename G2>
-  void make_right_factor_uniform(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
+  void make_right_factor_uniform(RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
   {
-    // compute cost without current factor,
-    auto smallest = two_smallest_elements<REAL>(r.begin(), r.end());
     const REAL cur_detection_cost = r[at_most_one_cell_factor_index_];
-    REAL rest_cost;
-    if(smallest[0] == cur_detection_cost) {
-      rest_cost = std::min(0.0, smallest[1]);
-    } else {
-      rest_cost = std::min(0.0, smallest[0]);
-    }
+    r[at_most_one_cell_factor_index_] = std::numeric_limits<REAL>::infinity();
+    const REAL rest_cost = std::min(0.0, *std::min_element(r.begin(), r.end()));
+    r[at_most_one_cell_factor_index_] = cur_detection_cost;
 
     msg[0] -= omega*(cur_detection_cost - rest_cost);
   }

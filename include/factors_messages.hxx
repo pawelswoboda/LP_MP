@@ -16,6 +16,8 @@
 #include <assert.h>
 #include <cxxabi.h>
 
+#include <mutex>
+
 #include "template_utilities.hxx"
 #include "function_existence.hxx"
 #include "meta/meta.hpp"
@@ -492,7 +494,13 @@ public:
       RightFactorType, MessageContainerType>(); 
    }
    void ReceiveMessageFromRightContainer()
-   { msg_op_.ReceiveMessageFromRight(*rightFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::right>*>(this) ); }
+   {
+     auto& mtx = GetRightFactor()->mutex_;
+     std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
+     if(lck.try_lock()) {
+       msg_op_.ReceiveMessageFromRight(*rightFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::right>*>(this) ); 
+     }
+   }
 
    // do zrobienia: must use one additional argument for primal storage
    constexpr static bool
@@ -515,7 +523,11 @@ public:
    }
    void ReceiveMessageFromLeftContainer()
    { 
-      msg_op_.ReceiveMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<MessageContainerView<Chirality::left>*>(this) ); 
+     auto& mtx = GetLeftFactor()->mutex_;
+     std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
+     if(lck.try_lock()) {
+       msg_op_.ReceiveMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<MessageContainerView<Chirality::left>*>(this) ); 
+     }
    }
 
    constexpr static bool
@@ -540,8 +552,11 @@ public:
 
    void SendMessageToRightContainer(LeftFactorType* l, const REAL omega)
    {
-      //msg_op_.SendMessageToRight(leftFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::left>*>(this), omega);
-      msg_op_.SendMessageToRight(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega);
+     auto& mtx = GetRightFactor()->mutex_;
+     std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
+     if(lck.try_lock()) {
+       msg_op_.SendMessageToRight(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega);
+     }
    }
 
    constexpr static bool
@@ -553,8 +568,11 @@ public:
 
    void SendMessageToLeftContainer(RightFactorType* r, const REAL omega)
    {
-      //msg_op_.SendMessageToLeft(rightFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::right>*>(this), omega);
+     auto& mtx = GetLeftFactor()->mutex_;
+     std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
+     if(lck.try_lock()) {
       msg_op_.SendMessageToLeft(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega);
+     }
    }
 
    constexpr static bool CanCallSendMessagesToLeftContainer()
@@ -1276,15 +1294,15 @@ public:
    // overloaded new so that factor containers are allocated by global block allocator consecutively
    void* operator new(std::size_t size)
    {
-      assert(size == sizeof(FactorContainerType));
-      //return (void*) global_real_block_allocator.allocate(size/sizeof(REAL),1);
+      //assert(size == sizeof(FactorContainerType));
+      //return (void*) global_real_block_allocator.allocate(size/sizeof(REAL)+1,1);
       return Allocator::get().allocate(1);
    }
    void operator delete(void* mem)
    {
       Allocator::get().deallocate((FactorContainerType*) mem);
       //assert(false);
-      //global_real_block_allocator.deallocate(mem,sizeof(FactorContainerType));
+      //global_real_block_allocator.deallocate((double*)mem,sizeof(FactorContainerType)/sizeof(REAL)+1);
    }
 
    virtual FactorTypeAdapter* clone() const final
@@ -1330,9 +1348,10 @@ public:
 
    void UpdateFactor(const std::vector<REAL>& omega) final
    {
-      ReceiveMessages(omega);
-      MaximizePotential();
-      SendMessages(omega);
+     std::lock_guard<std::mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
+     ReceiveMessages(omega);
+     MaximizePotential();
+     SendMessages(omega);
    }
 
    // do zrobienia: possibly also check if method present
@@ -1369,6 +1388,7 @@ public:
 
    void UpdateFactorPrimal(const std::vector<REAL>& omega, INDEX primal_access) final
    {
+     std::lock_guard<std::mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
       assert(primal_access > 0); // otherwise primal is not initialized in first iteration
       conditionally_init_primal(primal_access);
       if(CanComputePrimal()) { // do zrobienia: for now
@@ -1391,15 +1411,6 @@ public:
             cereal::BinaryInputArchive ar_out(dual);
             factor_.serialize_dual( ar_out );
 
-            /*
-            //auto cur_factor(factor_);
-            // first we compute restricted incoming messages, on which to compute the primal
-            ReceiveRestrictedMessages();
-            // now we compute primal
-            MaximizePotentialAndComputePrimal();
-            // restore original reparametrization, but leave primal as computed above intact!
-            factor_ = cur_factor;
-            */
             MaximizePotential();
          } else {
             MaximizePotentialAndComputePrimal();
@@ -1496,7 +1507,8 @@ public:
       return noMessages;
    }
 
-   INDEX no_send_messages_calls() const {
+   INDEX no_send_messages_calls() const 
+   {
       INDEX no_calls = 0;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_calls](auto l) {
             constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
@@ -1511,40 +1523,48 @@ public:
       return no_calls;
    }
 
+   template<typename ITERATOR>
+   void CallSendMessages(FactorType& factor, ITERATOR omegaIt) 
+   {
+     meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+         constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+         // check whether the message supports batch updates. If so, call batch update.
+         // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
+         static_if<CanCallSendMessages(l)>([&](auto f) {
+             const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
+             if(omega_sum > 0.0) { 
+               l.SendMessages(factor, std::get<n>(msg_), omegaIt);
+             }
+             omegaIt += std::get<n>(msg_).size();
+             }).else_([&](auto f) {
+               static_if<CanCallSendMessage(l)>([&](auto f) {
+                   for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
+                     if(*omegaIt != 0.0) {
+                       l.SendMessage(&factor, *(*it), *omegaIt); 
+                     }
+                   }
+               });
+             });
+     });
+   }
+
    void SendMessages(const std::vector<REAL>& omega) 
    {
       // do zrobienia: condition no_send_messages_calls also on omega. whenever omega is zero, we will not send messages
       const INDEX no_calls = no_send_messages_calls();
 
-      // do zrobienia: also do not construct currentRepam, if exactly one message update call will be issued. 
-      if( no_calls > 0 ) { // no need to construct currentRepam, if it will not be used at all
+      if(no_calls == 1) {
+        CallSendMessages(factor_, omega.begin());
+      } else if( no_calls > 1 ) {
          // make a copy of the current reparametrization. The new messages are computed on it. Messages are updated implicitly and hence possibly the new reparametrization is automatically adjusted, which would interfere with message updates
          auto omegaIt = omega.begin();
          FactorType tmp_factor(factor_);
 
-         meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
-               constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
-               // check whether the message supports batch updates. If so, call batch update. If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
-               static_if<CanCallSendMessages(l)>([&](auto f) {
-                     const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
-                     if(omega_sum > 0.0) { 
-                        l.SendMessages(tmp_factor, std::get<n>(msg_), omegaIt);
-                     }
-                     omegaIt += std::get<n>(msg_).size();
-               }).else_([&](auto f) {
-                  static_if<CanCallSendMessage(l)>([&](auto f) {
-                        for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
-                           if(*omegaIt != 0.0) {
-                              l.SendMessage(&tmp_factor, *(*it), *omegaIt); 
-                           }
-                        }
-                  });
-               });
-         });
-         assert(omegaIt == omega.end());
+         CallSendMessages(tmp_factor, omega.begin());
+      } else {
+        assert(omega.size() == 0.0);
       }
-   }
-
+   } 
 
    template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
    MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX msgNo) const 
@@ -1626,14 +1646,11 @@ public:
    template<typename MESSAGE_DISPATCHER_TYPE>
    constexpr static bool CanCallSendMessages(MESSAGE_DISPATCHER_TYPE t) 
    {
-      //constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      //return MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<FactorContainerType, decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>();
       return MESSAGE_DISPATCHER_TYPE::CanCallSendMessages();
    }
    template<typename MESSAGE_DISPATCHER_TYPE>
    constexpr static bool CanCallSendMessage(MESSAGE_DISPATCHER_TYPE t) 
    {
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       return MESSAGE_DISPATCHER_TYPE::CanCallSendMessage();
    }
 
@@ -1677,11 +1694,11 @@ public:
       constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       const INDEX no_msgs = std::get<n>(msg_).size();
       if(cur_msg_idx < no_msgs) {
-         if( MESSAGE_DISPATCHER_TYPE::CanCallSendMessage() || 
-             //MESSAGE_DISPATCHER_TYPE::template CanCallSendMessages<decltype(*this), decltype(std::get<n>(msg_)), std::vector<REAL>::iterator>() )
-             MESSAGE_DISPATCHER_TYPE::CanCallSendMessages() )
+         if( CanCallSendMessage(MESSAGE_DISPATCHER_TYPE{}) || CanCallSendMessages(MESSAGE_DISPATCHER_TYPE{}) ) {
             return true;
-         else return false;
+         } else {
+           return false;
+         }
       } else {
          return CanSendMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, cur_msg_idx - no_msgs);
       }
@@ -1967,6 +1984,10 @@ public:
          throw std::runtime_error("create constraints not implemented by factor");
       });
    }
+
+
+   // concurrency: in the future only hold a mutex if concurrency is enabled.
+   std::mutex mutex_;
 };
 
 } // end namespace LP_MP
