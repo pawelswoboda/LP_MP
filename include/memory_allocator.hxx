@@ -6,6 +6,7 @@
 #include <iostream>
 #include <cstring>
 #include "config.hxx"
+#include "spinlock.hxx"
 
 /* 
    allocators using a stack and a more general one using a variable size list of stacks for allocating memory for factors and messages.
@@ -106,6 +107,7 @@ template<typename T1, typename T2>
 		size_t current_reserved;
 		size_t current_used;
 		int alloc_count;
+    spinlock lock_;
 	private:
 		void took_mem(size_t size_bytes);
 		void released_mem(size_t size_bytes);
@@ -454,7 +456,8 @@ template<typename T>
 	//inline
   template<typename T>
 	void block_arena<T>::reserve(size_t reserve_buffer_size){
-#pragma omp critical(mem_allocation)
+    std::lock_guard<spinlock> lock(lock_);
+//#pragma omp critical(mem_allocation)
 		{
 			clean_garbage();
 			add_buffer(reserve_buffer_size);
@@ -478,7 +481,8 @@ template<typename T>
 
   template<typename T>
 	block_arena<T>::~block_arena(){
-#pragma omp critical (mem_allocation)
+    std::lock_guard<spinlock> lock(lock_);
+//#pragma omp critical (mem_allocation)
 		{
 			clean_garbage();
       std::cout << "no buffers = " << buffers.size() << "\n";
@@ -575,7 +579,8 @@ template<typename T>
   template<typename T>
 	T * block_arena<T>::allocate(size_t n, int align){
 		T * P;
-#pragma omp critical (mem_allocation)
+    std::lock_guard<spinlock> lock(lock_);
+//#pragma omp critical (mem_allocation)
 		P = protect_allocate(n, align);
 		return P;
 	};
@@ -637,7 +642,8 @@ template<typename T>
 
   template<typename T>
 	void block_arena<T>::deallocate(void * vP){
-#pragma omp critical (mem_allocation)
+    std::lock_guard<spinlock> lock(lock_);
+//#pragma omp critical (mem_allocation)
 		protect_deallocate(vP);
 	};
 

@@ -19,6 +19,7 @@
 #include <iterator>
 #include "primal_solution_storage.hxx"
 #include "lp_interface/lp_interface.h"
+#include <thread>
 
 namespace LP_MP {
 
@@ -378,7 +379,7 @@ public:
       void WritePrimal(const INDEX factorIndexBegin, const INDEX factorIndexEnd, std::ofstream& fs) const;
 
    LPReparametrizationMode GetRepamMode() const { return repamMode_; }
-private:
+protected:
    // do zrobienia: possibly hold factors and messages in shared_ptr?
    std::vector<FactorTypeAdapter*> f_; // note that here the factors are stored in the original order they were given. They will be output in this order as well, e.g. by problemDecomposition
    std::vector<MessageTypeAdapter*> m_;
@@ -393,6 +394,71 @@ private:
 
    LPReparametrizationMode repamMode_ = LPReparametrizationMode::Undefined;
 };
+
+class LP_concurrent : public LP {
+public:
+  LP_concurrent(const INDEX no_threads = std::thread::hardware_concurrency())
+    : threads_(no_threads)
+  {
+    std::cout << "number of threads = " << threads_.size() << "\n";
+    assert(no_threads >= 1);
+  }
+
+  template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
+   void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
+   {
+
+     // idea for load-balancing: measure time a thread needs to finish. Adjust numbers of factors based on this.
+
+     auto worker = [this] (auto factor_begin, auto factor_end, auto omega_it) {
+       for(; factor_begin!=factor_end; ++factor_begin, ++omega_it) {
+         this->UpdateFactor(*factor_begin, *omega_it);
+       }
+     };
+
+     const int grainsize = std::distance(factorIt, factorItEnd) / threads_.size();
+     //std::cout << grainsize << "\n";
+
+     for(auto it = std::begin(threads_); it != std::end(threads_) - 1; ++it) {
+       *it = std::thread(worker, factorIt, factorIt + grainsize, omegaIt);
+       factorIt += grainsize;
+       omegaIt += grainsize;
+     }
+     threads_.back() = std::thread(worker, factorIt, factorItEnd, omegaIt);
+
+     for(auto&& i : threads_) {
+       i.join();
+     } 
+   }
+
+  void ComputePass()
+  {
+    this->ComputePass(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), this->omegaForward_.begin());
+    this->ComputePass(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), this->omegaBackward_.begin());
+  }
+
+private:
+
+  template<typename LAMBDA, typename FACTOR_ITERATOR>
+  void iterate_over_factors(LAMBDA& f, FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end)
+  {
+     const int grainsize = std::distance(factor_begin, factor_end) / threads_.size();
+
+     for(auto it = std::begin(threads_); it != std::end(threads_) - 1; ++it) {
+       *it = std::thread(f, factor_begin, factor_begin + grainsize);
+       factor_begin += grainsize;
+     }
+     threads_.back() = std::thread(f, factor_begin, factor_end);
+
+     for(auto&& i : threads_) {
+       i.join();
+     }
+
+  }
+
+  std::vector<std::thread> threads_; // thread pool to be reused
+};
+
 
 // factors are arranged in trees.
 class LP_tree
@@ -689,7 +755,6 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
          } 
        }
      }
-     //assert(i != 233);
    }
 
 
