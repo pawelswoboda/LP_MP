@@ -34,7 +34,11 @@ public:
 
    Solver()
       : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
+#ifdef LP_MP_PARALLEL
       lp_(LP_concurrent()),
+#else
+      lp_(LP()),
+#endif
       // do zrobienia: use perfect forwarding or std::piecewise_construct
       problemConstructor_(tupleMaker(ProblemDecompositionList{}, *this)),
       // build the standard command line arguments
@@ -267,7 +271,12 @@ public:
    REAL lower_bound() const { return lowerBound_; }
 protected:
    TCLAP::CmdLine cmd_;
+
+#ifdef LP_MP_PARALLEL
    LP_concurrent lp_;
+#else
+   LP lp_;
+#endif
 
    tuple_from_list<ProblemDecompositionList> problemConstructor_;
 

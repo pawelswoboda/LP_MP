@@ -13,6 +13,8 @@
 #include <cassert>
 #include <limits>
 
+#define LP_MP_PARALLEL // enable parallel computation
+
 // type definitions for LP_MP
 
 namespace LP_MP {
