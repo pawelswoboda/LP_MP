@@ -19,7 +19,9 @@
 #include <iterator>
 #include "primal_solution_storage.hxx"
 #include "lp_interface/lp_interface.h"
+#include "two_dimensional_variable_array.hxx"
 #include <thread>
+#include <future>
 
 namespace LP_MP {
 
@@ -27,14 +29,16 @@ namespace LP_MP {
 class MessageTypeAdapter;
 class MessageIterator;
 
+using weight_vector = two_dim_variable_array<REAL>::ArrayAccessObject;
+
 // pure virtual base class for factor container used by LP class
 class FactorTypeAdapter
 {
 public:
    virtual ~FactorTypeAdapter() {}
    virtual FactorTypeAdapter* clone() const = 0;
-   virtual void UpdateFactor(const std::vector<REAL>& omega) = 0;
-   virtual void UpdateFactorPrimal(const std::vector<REAL>& omega, const INDEX iteration) = 0;
+   virtual void UpdateFactor(const weight_vector& omega) = 0;
+   virtual void UpdateFactorPrimal(const weight_vector& omega, const INDEX iteration) = 0;
    virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
    virtual INDEX size() const = 0;
    virtual INDEX PrimalSize() const = 0;
@@ -325,10 +329,10 @@ public:
    void ComputeWeights(const LPReparametrizationMode m);
    void ComputeAnisotropicWeights();
    template<typename FACTOR_ITERATOR>
-   void ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, std::vector<std::vector<REAL> >& omega); 
+   void ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, two_dim_variable_array<REAL>& omega); 
    void ComputeUniformWeights();
    template<typename FACTOR_ITERATOR>
-   void ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, std::vector<std::vector<REAL> >& omega, const REAL leave_weight = 0.01); // do zrobienia: rename to isotropic weights
+   void ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, two_dim_variable_array<REAL>& omega, const REAL leave_weight = 0.01); // do zrobienia: rename to isotropic weights
 
    REAL LowerBound() const
    {
@@ -352,7 +356,7 @@ public:
    template<typename FACTOR_ITERATOR>
    REAL EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt) const;
 
-   void UpdateFactor(FactorTypeAdapter* f, const std::vector<REAL>& omega) // perform one block coordinate step for factor f
+   void UpdateFactor(FactorTypeAdapter* f, const weight_vector& omega) // perform one block coordinate step for factor f
    {
       f->UpdateFactor(omega);
    }
@@ -365,7 +369,7 @@ public:
 
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
    void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt);
-   void UpdateFactorPrimal(FactorTypeAdapter* f, const std::vector<REAL>& omega, const INDEX iteration)
+   void UpdateFactorPrimal(FactorTypeAdapter* f, const weight_vector& omega, const INDEX iteration)
    {
       f->UpdateFactorPrimal(omega, iteration);
    }
@@ -385,7 +389,7 @@ protected:
    std::vector<MessageTypeAdapter*> m_;
    std::vector<FactorTypeAdapter*> forwardOrdering_, backwardOrdering_; // separate forward and backward ordering are not needed: Just store factorOrdering_ and generate forward order by begin() and backward order by rbegin().
    std::vector<FactorTypeAdapter*> forwardUpdateOrdering_, backwardUpdateOrdering_; // like forwardOrdering_, but includes only those factors where UpdateFactor actually does something
-   std::vector<std::vector<REAL> > omegaForward_, omegaBackward_;
+   two_dim_variable_array<REAL> omegaForward_, omegaBackward_;
    std::vector<std::pair<FactorTypeAdapter*, FactorTypeAdapter*> > forward_pass_factor_rel_, backward_pass_factor_rel_; // factor ordering relations. First factor must come before second factor. factorRel_ must describe a DAG
 
    
@@ -417,7 +421,6 @@ public:
      };
 
      const int grainsize = std::distance(factorIt, factorItEnd) / threads_.size();
-     //std::cout << grainsize << "\n";
 
      for(auto it = std::begin(threads_); it != std::end(threads_) - 1; ++it) {
        *it = std::thread(worker, factorIt, factorIt + grainsize, omegaIt);
@@ -456,7 +459,7 @@ private:
 
   }
 
-  std::vector<std::thread> threads_; // thread pool to be reused
+  mutable std::vector<std::thread> threads_; // thread pool to be reused
 };
 
 
@@ -679,8 +682,11 @@ std::vector<std::vector<FactorTypeAdapter*> > LP::ComputeFactorConnection(FACTOR
 // do zrobienia: possibly templatize this for use with iterators
 // note: this function is not working properly. We should only compute factors for messages which can actually send
 template<typename FACTOR_ITERATOR>
-void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, std::vector<std::vector<REAL> >& omega)
+void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, two_dim_variable_array<REAL>& omega)
 {
+  std::cout << "anisotropic weight computation temporariliy disabled\n";
+  ComputeUniformWeights(factorIt, factorEndIt, omega);
+  /*
    assert(std::distance(factorIt,factorEndIt) == f_.size());
    std::map<FactorTypeAdapter*, INDEX> factorToIndex;
    std::map<INDEX, FactorTypeAdapter*> indexToFactor;
@@ -767,7 +773,7 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
       assert(std::accumulate(omega[i].begin(), omega[i].end(), 0.0) <= 1.0 + eps);
    }
 
-   std::vector<std::vector<REAL>> omega_filtered;
+   two_dim_variable_array omega_filtered;
    for(INDEX i=0; i<omega.size(); ++i) {
       if( (*(factorIt+i))->FactorUpdated() ) {
          omega_filtered.push_back(omega[i]);
@@ -777,6 +783,7 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
    }
    std::swap(omega,omega_filtered);
 
+   */
    // rewrite omega to be a fixed two dimensional array
 
    //auto last_valid_omega = std::remove_if(omega.begin(), omega.end(), [&](auto& weights) { 
@@ -893,29 +900,29 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
 // do zrobienia: make omega a TwoDimVariableArray, same in ComputeAnisotropicWeights
 // leave_weight signals how much weight to leave in sending factor. Important for rounding and tightening
 template<typename FACTOR_ITERATOR>
-void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, std::vector<std::vector<REAL> >& omega, const REAL leave_weight)
+void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, two_dim_variable_array<REAL>& omega, const REAL leave_weight)
 {
    assert(leave_weight >= 0.0 && leave_weight <= 1.0);
    assert(factorEndIt - factorIt == f_.size());
    std::vector<std::vector<FactorTypeAdapter*> > fc = ComputeSendFactorConnection(factorIt,factorEndIt);
    assert(f_.size() == fc.size());
 
-   omega.clear();
-   omega.reserve(factorEndIt-factorIt);
-   auto omegaIt = omega.begin();
+   std::vector<INDEX> omega_size(std::distance(factorIt, factorEndIt),0);
    auto fcIt = fc.begin();
+   INDEX c=0;
    for(; factorIt != factorEndIt; ++factorIt, ++fcIt) {
-      // do zrobienia: let the factor below be variable and specified on the command line
-      // better for rounding
       if((*factorIt)->FactorUpdated()) {
-         //omega.push_back(std::vector<REAL>(fcIt->size(), 1.0/REAL(2.0*fcIt->size() + 50.0 + leave_weight) ));
-         omega.push_back(std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size()) ));
+        omega_size[c] = fcIt->size();
+        ++c;
       }
-      //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size() + 1.0) );
-      // better for dual convergence
-      //(*omegaIt) = std::vector<REAL>(fcIt->size(), 1.0/REAL(fcIt->size()) );
    }
-   omega.shrink_to_fit();
+   omega_size.resize(c);
+   omega = two_dim_variable_array<REAL>(omega_size);
+   for(INDEX i=0; i<omega.size(); ++i) {
+     for(INDEX j=0; j<omega[i].size(); ++j) {
+       omega[i][j] = 1.0/REAL( omega[i].size() );
+     }
+   }
 }
 
 inline void LP::ComputePassAndPrimal(const INDEX iteration)

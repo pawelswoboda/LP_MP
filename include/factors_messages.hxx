@@ -495,11 +495,12 @@ public:
    }
    void ReceiveMessageFromRightContainer()
    {
+#ifdef LP_MP_PARALLEL
      auto& mtx = GetRightFactor()->mutex_;
      std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
-     if(lck.try_lock()) {
+     if(lck.try_lock()) 
+#endif
        msg_op_.ReceiveMessageFromRight(*rightFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::right>*>(this) ); 
-     }
    }
 
    // do zrobienia: must use one additional argument for primal storage
@@ -523,11 +524,12 @@ public:
    }
    void ReceiveMessageFromLeftContainer()
    { 
+#ifdef LP_MP_PARALLEL
      auto& mtx = GetLeftFactor()->mutex_;
      std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
-     if(lck.try_lock()) {
+     if(lck.try_lock())
+#endif
        msg_op_.ReceiveMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<MessageContainerView<Chirality::left>*>(this) ); 
-     }
    }
 
    constexpr static bool
@@ -552,11 +554,12 @@ public:
 
    void SendMessageToRightContainer(LeftFactorType* l, const REAL omega)
    {
+#ifdef LP_MP_PARALLEL
      auto& mtx = GetRightFactor()->mutex_;
      std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
-     if(lck.try_lock()) {
+     if(lck.try_lock())
+#endif
        msg_op_.SendMessageToRight(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega);
-     }
    }
 
    constexpr static bool
@@ -568,11 +571,12 @@ public:
 
    void SendMessageToLeftContainer(RightFactorType* r, const REAL omega)
    {
+#ifdef LP_MP_PARALLEL
      auto& mtx = GetLeftFactor()->mutex_;
      std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
-     if(lck.try_lock()) {
+     if(lck.try_lock()) 
+#endif
       msg_op_.SendMessageToLeft(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega);
-     }
    }
 
    constexpr static bool CanCallSendMessagesToLeftContainer()
@@ -1346,9 +1350,11 @@ public:
       return msg_val + GetMessageSum(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{},i);
    }
 
-   void UpdateFactor(const std::vector<REAL>& omega) final
+   void UpdateFactor(const weight_vector& omega) final
    {
+#ifdef LP_MP_PARALLEL
      std::lock_guard<std::mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
+#endif
      ReceiveMessages(omega);
      MaximizePotential();
      SendMessages(omega);
@@ -1386,9 +1392,11 @@ public:
       return FunctionExistence::HasMaximizePotential<FactorType,void>();
    }
 
-   void UpdateFactorPrimal(const std::vector<REAL>& omega, INDEX primal_access) final
+   void UpdateFactorPrimal(const weight_vector& omega, INDEX primal_access) final
    {
+#ifdef LP_MP_PARALLEL
      std::lock_guard<std::mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
+#endif
       assert(primal_access > 0); // otherwise primal is not initialized in first iteration
       conditionally_init_primal(primal_access);
       if(CanComputePrimal()) { // do zrobienia: for now
@@ -1454,7 +1462,8 @@ public:
       });
    }
 
-   void ReceiveMessages(const std::vector<REAL>& omega) 
+   template<typename WEIGHT_VEC>
+   void ReceiveMessages(const WEIGHT_VEC& omega) 
    {
       // note: currently all messages are received, even if not needed. Change this again.
       auto omegaIt = omega.begin();
@@ -1548,7 +1557,8 @@ public:
      });
    }
 
-   void SendMessages(const std::vector<REAL>& omega) 
+   template<typename WEIGHT_VEC>
+   void SendMessages(const WEIGHT_VEC& omega) 
    {
       // do zrobienia: condition no_send_messages_calls also on omega. whenever omega is zero, we will not send messages
       const INDEX no_calls = no_send_messages_calls();
@@ -1987,7 +1997,9 @@ public:
 
 
    // concurrency: in the future only hold a mutex if concurrency is enabled.
+#ifdef LP_MP_PARALLEL
    std::mutex mutex_;
+#endif
 };
 
 } // end namespace LP_MP
