@@ -684,9 +684,7 @@ std::vector<std::vector<FactorTypeAdapter*> > LP::ComputeFactorConnection(FACTOR
 template<typename FACTOR_ITERATOR>
 void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, two_dim_variable_array<REAL>& omega)
 {
-  std::cout << "anisotropic weight computation temporariliy disabled\n";
-  ComputeUniformWeights(factorIt, factorEndIt, omega);
-  /*
+
    assert(std::distance(factorIt,factorEndIt) == f_.size());
    std::map<FactorTypeAdapter*, INDEX> factorToIndex;
    std::map<INDEX, FactorTypeAdapter*> indexToFactor;
@@ -744,21 +742,43 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
       }
    }
 
-   omega.clear();
-   omega.resize(std::distance(factorIt, factorEndIt),std::vector<REAL>(0));
-   for(auto it=factorIt; it!=factorEndIt; ++it) {
-     const INDEX i = std::distance(factorIt, it);
-     assert(i == factorToIndex[*it]);
-     for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
-       if(mIt.CanSendMessage()) {
-         auto* f_connected = mIt.GetConnectedFactor();
-         const INDEX j = factorToIndex[ f_connected ];
-         assert(i != j);
-         if(i<j || last_receiving_factor[j] > i) {
-           omega[i].push_back(1.0/REAL(no_receiving_factors_later[i] + std::max(no_send_factors_later[i], no_send_factors[i] - no_send_factors_later[i])));
-         } else {
-           omega[i].push_back(0.0);
-         } 
+   std::vector<INDEX> omega_size(f_.size());
+   {
+     INDEX c=0;
+     std::vector<std::vector<FactorTypeAdapter*> > fc = ComputeSendFactorConnection(factorIt,factorEndIt); // possibly not the most efficient way!
+     auto fcIt = fc.begin();
+     for(auto it=factorIt; it!=factorEndIt; ++it, ++fcIt) {
+       if((*it)->FactorUpdated()) {
+         omega_size[c] = fcIt->size();
+         ++c;
+       }
+     }
+     omega_size.resize(c);
+   }
+
+   omega = two_dim_variable_array<REAL>(omega_size);
+
+   {
+     INDEX c=0;
+     for(auto it=factorIt; it!=factorEndIt; ++it) {
+       const INDEX i = std::distance(factorIt, it);
+       assert(i == factorToIndex[*it]);
+       if((*it)->FactorUpdated()) {
+         INDEX k=0;
+         for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
+           if(mIt.CanSendMessage()) {
+             auto* f_connected = mIt.GetConnectedFactor();
+             const INDEX j = factorToIndex[ f_connected ];
+             assert(i != j);
+             if(i<j || last_receiving_factor[j] > i) {
+               omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(no_send_factors_later[i], no_send_factors[i] - no_send_factors_later[i])));
+             } else {
+               omega[c][k] = 0.0;
+             } 
+           ++k;
+           }
+         }
+         ++c;
        }
      }
    }
@@ -767,23 +787,12 @@ void LP::ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR fac
    // check whether all messages were added to m_. Possibly, this can be automated: Traverse all factors, get all messages, add them to m_ and avoid duplicates along the way.
    assert(2*m_.size() == std::accumulate(f_.begin(), f_.end(), 0, [](INDEX sum, auto* f){ return sum + f->GetNoMessages(); }));
    assert(HasUniqueValues(m_));
-   for(INDEX i=0; i<f_.size(); ++i) {
-      assert(omega[i].size() <= (*(factorIt+i))->GetNoMessages());
-      const REAL omega_sum = std::accumulate(omega[i].begin(), omega[i].end(), 0.0); 
+   for(INDEX i=0; i<omega.size(); ++i) {
+      //assert(omega[i].size() <= (*(factorIt+i))->GetNoMessages());
+      //const REAL omega_sum = std::accumulate(omega[i].begin(), omega[i].end(), 0.0); 
       assert(std::accumulate(omega[i].begin(), omega[i].end(), 0.0) <= 1.0 + eps);
    }
 
-   two_dim_variable_array omega_filtered;
-   for(INDEX i=0; i<omega.size(); ++i) {
-      if( (*(factorIt+i))->FactorUpdated() ) {
-         omega_filtered.push_back(omega[i]);
-      } else {
-        assert(omega[i].size() == 0);
-      }
-   }
-   std::swap(omega,omega_filtered);
-
-   */
    // rewrite omega to be a fixed two dimensional array
 
    //auto last_valid_omega = std::remove_if(omega.begin(), omega.end(), [&](auto& weights) { 
