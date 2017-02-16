@@ -588,70 +588,78 @@ public:
       return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RightFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, typename std::vector<REAL>::iterator>();
    }
 
-   /*
-   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   constexpr static bool
-   CanCallSendMessagesToLeftContainer()
-   { 
-      return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RIGHT_FACTOR, MSG_ARRAY, MSG_ARRAY, ITERATOR>();
-   }
-   */
+   template<Chirality C> class MessageContainerView; // forward declaration. Put MessageIteratorView after definition of MessageContainerView
+   template<Chirality CHIRALITY, typename MESSAGE_ITERATOR>
+   struct MessageIteratorView {
+#ifdef LP_MP_PARALLEL
+     MessageIteratorView(MESSAGE_ITERATOR it, std::vector<bool>::iterator lock_it) : it_(it), lock_it_(lock_it) {}
+#else
+     MessageIteratorView(MESSAGE_ITERATOR it) : it_(it) {} 
+#endif
+     MessageContainerView<CHIRALITY>& operator*() const {
+       return *(static_cast<MessageContainerView<CHIRALITY>*>( *it_ )); 
+     }
+     MessageIteratorView<CHIRALITY,MESSAGE_ITERATOR>& operator++() {
+       ++it_;
+#ifdef LP_MP_PARALLEL
+       ++lock_it_;
+       while(*lock_it_ == false) { // this will always terminate: the lock_rec has one more entry than there are msgs and last entry is always true
+         ++it_;
+         ++lock_it_; 
+       }
+#endif
+       return *this;
+     }
+     bool operator==(const MessageIteratorView<CHIRALITY,MESSAGE_ITERATOR>& o) const {
+       return it_ == o.it_; 
+     }
+     bool operator!=(const MessageIteratorView<CHIRALITY,MESSAGE_ITERATOR>& o) const {
+       return it_ != o.it_; 
+     }
+     private:
+     MESSAGE_ITERATOR it_;
+#ifdef LP_MP_PARALLEL
+     std::vector<bool>::iterator lock_it_;
+#endif
+   };
+
 
    template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
    {
-      // this is not nice: heavy static casting!
-      // We get msgs an array with pointers to messages. We wrap it so that operator[] gives a reference to the respective message with the correct view
-      struct MessageIterator {
-         using type = decltype(msgs.begin());
-         MessageIterator(type it) : it_(it) {}
-         MessageContainerView<Chirality::right>& operator*() const {
-            return *(static_cast<MessageContainerView<Chirality::right>*>( *it_ )); 
-         }
-         MessageIterator operator++() {
-            ++it_;
-            return *this;
-         }
-         bool operator==(const MessageIterator& o) const {
-            return it_ == o.it_; 
-         }
-         bool operator!=(const MessageIterator& o) const {
-            return it_ != o.it_; 
-         }
-         private:
-         type it_;
-      };
-      return MessageType::SendMessagesToLeft(rightFactor, MessageIterator(msgs.begin()), MessageIterator(msgs.end()), omegaBegin);
+#ifdef LP_MP_PARALLEL
+      // record which factors were locked here
+      std::vector<bool> lock_rec(msgs.size()+1); // replace with own vector
+      lock_rec[msgs.size()] = true;
+      // first lock as many adjacent factors as possible.
+      auto lock_it = lock_rec.begin();
+      for(auto it=msgs.begin(); it!=msgs.end(); ++it, ++lock_it) {
+        auto& mtx = (*it)->GetLeftFactor()->mutex_;
+        if(mtx.try_lock()) { // mark that factor was locked by this process
+          *lock_it = true;
+        } else {
+          *lock_it = false; 
+        }
+      }
+      assert(lock_it+1 == lock_rec.end());
 
-      //struct ViewWrapper : public MSG_ARRAY {
-      //   MessageContainerView<Chirality::right>& operator*() const {
-      //      return *static_cast<MessageContainerView<Chirality::right>*>( &(this->operator*()) ); 
-      //   }
-      //   MessageContainerView<Chirality::right>& operator[](const INDEX i) const  {
-      //      // not supported anymore, just use iterators
-      //      assert(false);
-      //   }
-      //   private:
-      //   const MSG_ARRAY& a_;
-      //   //MessageContainerView<Chirality::right>& operator[](const INDEX i) const 
-      //   //{ 
-      //   //   //return *static_cast<MessageContainerView<Chirality::right>*>( (static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
-      //   //   return *static_cast<MessageContainerView<Chirality::right>*>( (static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
-      //   //   //return *static_cast<MessageContainerView<Chirality::right>*>( operator[](i) ); 
-      //   //   //return operator[](i);
-      //   //}
-      //};
-      //return MessageType::SendMessagesToLeft(rightFactor, repam, static_cast<const ViewWrapper>(msgs.begin()), omegaBegin);
-   }
+      using MessageIteratorType = MessageIteratorView<Chirality::right, decltype(msgs.begin())>;
+      MessageType::SendMessagesToLeft(rightFactor, MessageIteratorType(msgs.begin(), lock_rec.begin()), MessageIteratorType(msgs.end(), lock_rec.end()-1), omegaBegin);
 
-   /*
-   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   constexpr static bool
-   CanCallSendMessagesToRightContainer()
-   { 
-      return FunctionExistence::HasSendMessagesToRight<MessageType, void, LEFT_FACTOR, MSG_ARRAY, MSG_ARRAY, ITERATOR>(); 
+      // unlock those factors which were locked above
+      lock_it = lock_rec.begin();
+      for(auto it=msgs.begin(); it!=msgs.end(); ++it, ++lock_it) {
+        if(*lock_it) {
+          (*it)->GetLeftFactor()->mutex_.unlock();
+        }
+      }
+      assert(lock_it+1 == lock_rec.end());
+#else 
+      using MessageIteratorType = MessageIteratorView<Chirality::right, decltype(msgs.begin())>;
+      return MessageType::SendMessagesToLeft(rightFactor, MessageIteratorType(msgs.begin()), MessageIteratorType(msgs.end()), omegaBegin);
+#endif
+
    }
-   */
 
    constexpr static bool CanCallSendMessagesToRightContainer()
    {
@@ -665,35 +673,37 @@ public:
    template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    static void SendMessagesToRightContainer(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
    {
-      // do zrobienia: unify message iterators
-      struct MessageIterator {
-         using type = decltype(msgs.begin());
-         MessageIterator(type it) : it_(it) {}
-         MessageContainerView<Chirality::left>& operator*() const {
-            return *(static_cast<MessageContainerView<Chirality::left>*>( *it_ )); 
-         }
-         MessageIterator operator++() {
-            ++it_;
-            return *this;
-         }
-         bool operator==(const MessageIterator& o) const {
-            return it_ == o.it_; 
-         }
-         bool operator!=(const MessageIterator& o) const {
-            return it_ != o.it_;
-         }
-         private:
-         type it_;
-      };
-      return MessageType::SendMessagesToRight(leftFactor, MessageIterator(msgs.begin()), MessageIterator(msgs.end()), omegaBegin);
-      //struct ViewWrapper : public MSG_ARRAY {
-      //   MessageContainerView<Chirality::left>& operator[](const INDEX i) const 
-      //   { 
-      //      assert(false); // make as in SendMessagesToLeftContainer
-      //      return *static_cast<MessageContainerView<Chirality::left>*>( (static_cast<const MSG_ARRAY*>(this)->operator[](i)) ); 
-      //   }
-      //};
-      //MessageType::SendMessagesToRight(leftFactor, repam, *static_cast<const ViewWrapper*>(&msgs), omegaBegin);
+#ifdef LP_MP_PARALLEL
+      // record which factors were locked here
+      std::vector<bool> lock_rec(msgs.size()+1); // replace with own vector
+      lock_rec[msgs.size()] = true;
+      // first lock as many adjacent factors as possible.
+      auto lock_it = lock_rec.begin();
+      for(auto it=msgs.begin(); it!=msgs.end(); ++it, ++lock_it) {
+        auto& mtx = (*it)->GetRightFactor()->mutex_;
+        if(mtx.try_lock()) { // mark that factor was locked by this process
+          *lock_it = true;
+        } else {
+          *lock_it = false; 
+        }
+      }
+      assert(lock_it+1 == lock_rec.end());
+
+      using MessageIteratorType = MessageIteratorView<Chirality::left, decltype(msgs.begin())>;
+      MessageType::SendMessagesToRight(leftFactor, MessageIteratorType(msgs.begin(), lock_rec.begin()), MessageIteratorType(msgs.end(), lock_rec.end()-1), omegaBegin);
+
+      // unlock those factors which were locked above
+      lock_it = lock_rec.begin();
+      for(auto it=msgs.begin(); it!=msgs.end(); ++it, ++lock_it) {
+        if(*lock_it) {
+          (*it)->GetRightFactor()->mutex_.unlock();
+        }
+      }
+      assert(lock_it+1 == lock_rec.end());
+#else 
+      using MessageIteratorType = MessageIteratorView<Chirality::left, decltype(msgs.begin())>;
+      return MessageType::SendMessagesToLeft(leftFactor, MessageIteratorType(msgs.begin()), MessageIteratorType(msgs.end()), omegaBegin);
+#endif
    }
 
    constexpr static bool
