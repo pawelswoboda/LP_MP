@@ -733,6 +733,17 @@ stack_allocator<REAL> global_real_stack_allocator(global_real_stack_arena);
 block_arena<REAL> global_real_block_arena;
 block_allocator<REAL> global_real_block_allocator(global_real_block_arena);
 
+constexpr INDEX no_stack_allocators = 4;
+std::array<block_arena<REAL>, no_stack_allocators> global_real_block_arena_array;
+
+template <std::size_t... I, typename RandomAccessIterator>
+std::array<block_allocator<REAL>, no_stack_allocators> make_block_allocator_array(RandomAccessIterator& first, std::integer_sequence<size_t,I...>) {
+  return std::array<block_allocator<REAL>, no_stack_allocators>{ { first[I]... } };
+}
+
+std::array<block_allocator<REAL>, no_stack_allocators> global_real_block_allocator_array ( make_block_allocator_array(global_real_block_arena_array, std::make_integer_sequence<size_t,no_stack_allocators>{} ) ) ;
+
+thread_local INDEX stack_allocator_index = 0;
 // do zrobienia: both above allocators do not destroy their arenas
 } // end namespace LP_MP
 

@@ -28,7 +28,7 @@ public:
   vector(ITERATOR begin, ITERATOR end)
   {
     const INDEX size = std::distance(begin,end);
-    begin_ = global_real_block_allocator.allocate(size);
+    begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size);
     assert(begin_ != nullptr);
     end_ = begin_ + size;
     for(auto it=this->begin(); begin!=end; ++begin, ++it) {
@@ -38,7 +38,7 @@ public:
 
   vector(const INDEX size) 
   {
-    begin_ = global_real_block_allocator.allocate(size);
+    begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size);
     assert(begin_ != nullptr);
     end_ = begin_ + size;
   }
@@ -48,10 +48,10 @@ public:
      std::fill(begin_,end_,value);
   }
   ~vector() {
-     global_real_block_allocator.deallocate(begin_,1);
+     global_real_block_allocator_array[stack_allocator_index].deallocate(begin_,1);
   }
    vector(const vector& o)  {
-      begin_ = global_real_block_allocator.allocate(o.size());
+      begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(o.size());
       end_ = begin_ + o.size();
       assert(begin_ != nullptr);
       auto it = begin_;

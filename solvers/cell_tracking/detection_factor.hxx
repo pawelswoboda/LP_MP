@@ -33,19 +33,19 @@ public:
   {
     assert(can_exit == true); // true for mother machine only
     assert(no_outgoing_edges+can_exit == no_outgoing_edges + 1);
-    pot_ = global_real_block_allocator.allocate(size());
+    pot_ = global_real_block_allocator_array[stack_allocator_index].allocate(size());
     assert(pot_ != nullptr);
     std::fill(pot_+1, pot_ + size(), 0.0);
     pot_[0] = detection_cost;
   }
   ~detection_factor() {
-    global_real_block_allocator.deallocate(pot_,1);
+    global_real_block_allocator_array[stack_allocator_index].deallocate(pot_,1);
   }
   detection_factor(const detection_factor& o) 
     : no_incoming_edges_(o.no_incoming_edges_),
     no_outgoing_edges_(o.no_outgoing_edges_)
   {
-    pot_ = global_real_block_allocator.allocate(size());
+    pot_ = global_real_block_allocator_array[stack_allocator_index].allocate(size());
     assert(pot_ != nullptr);
     for(INDEX i=0; i<size(); ++i) { pot_[i] = o.pot_[i]; }
   }
