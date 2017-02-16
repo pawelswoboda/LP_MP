@@ -11,6 +11,8 @@
 /* 
    allocators using a stack and a more general one using a variable size list of stacks for allocating memory for factors and messages.
    The implementation is taken from Alexander Shekhovtsov's TRW-S code https://gitlab.icg.tugraz.at/shekhovt/part_opt and modified to be compatible with std::allocator
+
+   do zrobienia: make allocator work in multiples of bytes, not in multiples of ints, as malloc also allocates in bytes.
  */
 
 namespace LP_MP {
@@ -735,3 +737,4 @@ block_allocator<REAL> global_real_block_allocator(global_real_block_arena);
 } // end namespace LP_MP
 
 #endif // LP_MP_MEMORY_arena_HXX
+

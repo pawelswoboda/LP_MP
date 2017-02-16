@@ -461,6 +461,27 @@ namespace cell_tracking_parser {
         } 
       }
 
+    INDEX max_out_degree = 0;
+    INDEX max_in_degree = 0;
+    INDEX sum_out_degree = 0;
+    INDEX sum_in_degree = 0;
+    INDEX no_factors = 0;
+    for(auto& d : i.cell_detection_stat_) {
+      for(auto& f : d) {
+        max_out_degree = std::max(max_out_degree, std::get<2>(f));
+        max_in_degree = std::max(max_in_degree, std::get<3>(f));
+
+        sum_out_degree += std::get<2>(f);
+        sum_in_degree += std::get<3>(f);
+        if(std::get<2>(f) > 0 || std::get<3>(f) > 0) no_factors++;
+      }
+    }
+    std::cout << "maximum out-degree of detection factors = " << max_out_degree << "\n";
+    std::cout << "maximum in-degree of detection factors = " << max_in_degree << "\n";
+
+    std::cout << "average out-degree of detection factors = " << REAL(sum_out_degree)/REAL(no_factors) << "\n";
+    std::cout << "average in-degree of detection factors = " << REAL(sum_in_degree)/REAL(no_factors) << "\n";
+
       return read_suc;
    }
 } // end namespace cell_tracking_parser

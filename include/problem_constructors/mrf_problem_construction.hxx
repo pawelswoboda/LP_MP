@@ -177,7 +177,7 @@ public:
 
   // build tree of unary and pairwise factors
   template<typename LEFT_MESSAGE, typename RIGHT_MESSAGE>
-  LP_tree AddTree(std::vector<UnaryFactorContainer*> u, std::vector<PairwiseFactorContainer*> p)
+  LP_tree add_tree(std::vector<UnaryFactorContainer*> u, std::vector<PairwiseFactorContainer*> p)
   {
      assert(u.size() == p.size()+1);
      LP_tree t;
@@ -200,17 +200,17 @@ public:
         u_set.erase(f);
 
         {
-           auto msgs = f->get_messages<LEFT_MESSAGE>();
+           auto msgs = f->template get_messages<LEFT_MESSAGE>();
            for(auto it=msgs.begin(); it!= msgs.end(); ++it) {
               auto* p_cand = (*it)->GetRightFactor();
               if(p_set[p_cand]) {
                  p_set.erase(p_cand);
                  t.AddMessage((*it), Chirality::left); // or right?
                  // search for the other unary connected to p_cand
-                 auto msgs_other = p_cand->get_message<RIGHT_MESSAGE>();
+                 auto msgs_other = p_cand->template get_message<RIGHT_MESSAGE>();
                  assert(msgs_other.size() == 1);
                  auto* u_other = msgs_other.begin()->GetLeftFactor();
-                 assert(u_set.find(u_other) != std::set::end);
+                 assert(u_set.find(u_other) != u_set.end());
                  t.AddMessage(*(msgs_other.begin()), Chirality::right);
                  u_stack.push_back(u_other);
               }
@@ -218,17 +218,17 @@ public:
         }
 
         {
-           auto msgs = f->get_messages<RIGHT_MESSAGE>();
+           auto msgs = f->template get_messages<RIGHT_MESSAGE>();
            for(auto it=msgs.begin(); it!= msgs.end(); ++it) {
               auto* p_cand = (*it)->GetRightFactor();
               if(p_set[p_cand]) {
                  p_set.erase(p_cand);
                  t.AddMessage((*it), Chirality::left); // or right?
                  // search for the other unary connected to p_cand
-                 auto msgs_other = p_cand->get_message<RIGHT_MESSAGE>();
+                 auto msgs_other = p_cand->template get_message<RIGHT_MESSAGE>();
                  assert(msgs_other.size() == 1);
                  auto* u_other = msgs_other.begin()->GetLeftFactor();
-                 assert(u_set.find(u_other) != std::set::end);
+                 assert(u_set.find(u_other) != u_set.end());
                  t.AddMessage(*(msgs_other.begin()), Chirality::right);
                  u_stack.push_back(u_other);
               }

@@ -277,21 +277,21 @@ public:
   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( incoming_edge_, outgoing_edge_ ); }
   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( cereal::binary_data( pot_, sizeof(REAL)*size()) ); }
 
-  void sort_incoming_cost(vector& v) const
+  void sort_incoming_cost(vector<REAL>& v) const
   {
      assert(v.size() == std::min(no_incoming_edges(), max_detections_));
      std::partial_sort_copy(incoming_begin(), incoming_end(), v.begin(), v.end());
      std::partial_sum(v.begin(), v.end(), v.begin());
   }
 
-  void sort_outgoing_cost(vector& v) const
+  void sort_outgoing_cost(vector<REAL>& v) const
   {
      assert(v.size() == std::min(no_outgoing_edges(), max_detections_));
      std::partial_sort_copy(outgoing_begin(), outgoing_end(), v.begin(), v.end());
      std::partial_sum(v.begin(), v.end(), v.begin()); 
   }
 
-  REAL detection_cost(const vector& smallest_incoming, const vector& smallest_outgoing) const 
+  REAL detection_cost(const vector<REAL>& smallest_incoming, const vector<REAL>& smallest_outgoing) const 
   {
      REAL min_detection_cost = 0.0; // for no detection
 
@@ -306,7 +306,7 @@ public:
      return min_detection_cost; 
   }
 
-  REAL appearance_cost(const vector& smallest_outgoing) const 
+  REAL appearance_cost(const vector<REAL>& smallest_outgoing) const 
   {
     REAL min_appearance_cost = std::numeric_limits<REAL>::infinity();
     for(INDEX no_detections=1; no_detections<=max_detections_; ++no_detections) {
@@ -316,7 +316,7 @@ public:
     return min_appearance_cost; 
   }
 
-  REAL disappearance_cost(const vector& smallest_incoming) const 
+  REAL disappearance_cost(const vector<REAL>& smallest_incoming) const 
   {
     REAL min_disappearance_cost = std::numeric_limits<REAL>::infinity();
     for(INDEX no_detections=1; no_detections<=max_detections_; ++no_detections) {
@@ -328,9 +328,9 @@ public:
 
   REAL LowerBound() const
   {
-     vector smallest_incoming( std::min(no_incoming_edges(), max_detections_) );
+     vector<REAL> smallest_incoming( std::min(no_incoming_edges(), max_detections_) );
      sort_incoming_cost(smallest_incoming);
-     vector smallest_outgoing( std::min(no_outgoing_edges(), max_detections_) );
+     vector<REAL> smallest_outgoing( std::min(no_outgoing_edges(), max_detections_) );
      sort_outgoing_cost(smallest_outgoing);
 
      const REAL min_detection_cost = detection_cost(smallest_incoming, smallest_outgoing);
@@ -345,10 +345,10 @@ public:
   {
      const REAL current_arc_cost = outgoing(outgoing_edge_index);
 
-     vector smallest_incoming( std::min(no_incoming_edges(), max_detections_) );
+     vector<REAL> smallest_incoming( std::min(no_incoming_edges(), max_detections_) );
      sort_incoming_cost(smallest_incoming);
 
-     vector smallest_outgoing( std::min(no_outgoing_edges(), max_detections_+1) );
+     vector<REAL> smallest_outgoing( std::min(no_outgoing_edges(), max_detections_+1) );
      sort_outgoing_cost(smallest_outgoing);
 
      assert(max_detections_ <= no_incoming_edges() || no_incoming_edges() == 0);
@@ -429,10 +429,10 @@ public:
   {
      const REAL current_arc_cost = incoming(incoming_edge_index);
 
-     vector smallest_incoming( std::min(no_incoming_edges(), max_detections_) );
+     vector<REAL> smallest_incoming( std::min(no_incoming_edges(), max_detections_) );
      sort_incoming_cost(smallest_incoming);
 
-     vector smallest_outgoing( std::min(no_outgoing_edges(), max_detections_+1) );
+     vector<REAL> smallest_outgoing( std::min(no_outgoing_edges(), max_detections_+1) );
      sort_outgoing_cost(smallest_outgoing);
 
      assert(max_detections_ <= no_incoming_edges() || no_incoming_edges() == 0);
@@ -806,7 +806,7 @@ private:
 // multiple cell detection hypotheses can be mutually exclusive. 
 // simplex x1 + ... + xn <= 1
 // to account for overlapping detections: only one can be active
-class at_most_one_cell_factor : public vector {
+class at_most_one_cell_factor : public vector<REAL> {
 
   friend class at_most_one_cell_message;
 
@@ -816,7 +816,7 @@ public:
   constexpr static INDEX no_primal_active = std::numeric_limits<INDEX>::max()-1;
   constexpr static INDEX primal_infeasible = std::numeric_limits<INDEX>::max()-2;
 
-   at_most_one_cell_factor(const INDEX size) : vector(size)
+   at_most_one_cell_factor(const INDEX size) : vector<REAL>(size)
    {}
 
    REAL LowerBound() const {
@@ -839,7 +839,7 @@ public:
 
    void init_primal() { primal_ = no_primal_decision; }
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
-   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector*>(this) ); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector<REAL>*>(this) ); }
 private:
    INDEX primal_;
 };

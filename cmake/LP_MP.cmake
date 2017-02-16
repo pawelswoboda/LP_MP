@@ -74,6 +74,11 @@ if(WITH_LOCALSOLVER)
   find_package(LocalSolver)
 endif(WITH_LOCALSOLVER)
 
+# Parallelisation support
+if(PARALLEL_OPTIMIZATION)
+  add_definitions(-DLP_MP_PARALLEL) 
+endif(PARALLEL_OPTIMIZATION)
+
 IF(UNIX AND NOT APPLE)
    find_library(TR rt)
    set(LINK_RT true)
@@ -88,6 +93,7 @@ include_directories(include)
 include_directories(lib)
 include_directories(.)
 add_subdirectory(solvers)
+add_subdirectory(lib)
 add_subdirectory(test)
 
 
