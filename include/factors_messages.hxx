@@ -497,7 +497,7 @@ public:
    {
 #ifdef LP_MP_PARALLEL
      auto& mtx = GetRightFactor()->mutex_;
-     std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
+     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock()) 
 #endif
        msg_op_.ReceiveMessageFromRight(*rightFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::right>*>(this) ); 
@@ -526,7 +526,7 @@ public:
    { 
 #ifdef LP_MP_PARALLEL
      auto& mtx = GetLeftFactor()->mutex_;
-     std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
+     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock())
 #endif
        msg_op_.ReceiveMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<MessageContainerView<Chirality::left>*>(this) ); 
@@ -556,7 +556,7 @@ public:
    {
 #ifdef LP_MP_PARALLEL
      auto& mtx = GetRightFactor()->mutex_;
-     std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
+     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock())
 #endif
        msg_op_.SendMessageToRight(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega);
@@ -573,7 +573,7 @@ public:
    {
 #ifdef LP_MP_PARALLEL
      auto& mtx = GetLeftFactor()->mutex_;
-     std::unique_lock<std::mutex> lck(mtx,std::defer_lock);
+     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock()) 
 #endif
       msg_op_.SendMessageToLeft(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega);
@@ -623,6 +623,26 @@ public:
 #endif
    };
 
+   template<typename IT>
+   struct omega_iterator_with_lock {
+     omega_iterator_with_lock(IT it, std::vector<bool>::iterator lock_it) : it_(it), lock_it_(lock_it) {}
+     omega_iterator_with_lock& operator++() {
+       ++it_;
+       ++lock_it_;
+       while(*lock_it_ == false) { // this will always terminate: the lock_it_ has one more entry than there are elements pointed to by it_ and last entry is always true
+         ++it_;
+         ++lock_it_;
+       }
+       return *this;
+     }
+     auto operator*() const { return *it_; }
+     bool operator==(const omega_iterator_with_lock<IT>& o) const { return it_ == o.it_; }
+     bool operator!=(const omega_iterator_with_lock<IT>& o) const { return it_ != o.it_; }
+
+     private:
+     IT it_;
+     std::vector<bool>::iterator lock_it_;
+   };
 
    template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
@@ -642,9 +662,11 @@ public:
         }
       }
       assert(lock_it+1 == lock_rec.end());
+      std::fill(lock_rec.begin(), lock_rec.end(), true);
 
       using MessageIteratorType = MessageIteratorView<Chirality::right, decltype(msgs.begin())>;
-      MessageType::SendMessagesToLeft(rightFactor, MessageIteratorType(msgs.begin(), lock_rec.begin()), MessageIteratorType(msgs.end(), lock_rec.end()-1), omegaBegin);
+      omega_iterator_with_lock<decltype(omegaBegin)> omega_it(omegaBegin, lock_rec.begin()) ;
+      MessageType::SendMessagesToLeft(rightFactor, MessageIteratorType(msgs.begin(), lock_rec.begin()), MessageIteratorType(msgs.end(), lock_rec.end()-1), omega_it);
 
       // unlock those factors which were locked above
       lock_it = lock_rec.begin();
@@ -680,17 +702,17 @@ public:
       // first lock as many adjacent factors as possible.
       auto lock_it = lock_rec.begin();
       for(auto it=msgs.begin(); it!=msgs.end(); ++it, ++lock_it) {
-        auto& mtx = (*it)->GetRightFactor()->mutex_;
-        if(mtx.try_lock()) { // mark that factor was locked by this process
+        if((*it)->GetRightFactor()->mutex_.try_lock()) { // mark that factor was locked by this process
           *lock_it = true;
         } else {
           *lock_it = false; 
         }
       }
-      assert(lock_it+1 == lock_rec.end());
+      //std::fill(lock_rec.begin(), lock_rec.end(), true);
 
       using MessageIteratorType = MessageIteratorView<Chirality::left, decltype(msgs.begin())>;
-      MessageType::SendMessagesToRight(leftFactor, MessageIteratorType(msgs.begin(), lock_rec.begin()), MessageIteratorType(msgs.end(), lock_rec.end()-1), omegaBegin);
+      omega_iterator_with_lock<decltype(omegaBegin)> omega_it(omegaBegin, lock_rec.begin()) ;
+      MessageType::SendMessagesToRight(leftFactor, MessageIteratorType(msgs.begin(), lock_rec.begin()), MessageIteratorType(msgs.end(), lock_rec.end()-1), omega_it);
 
       // unlock those factors which were locked above
       lock_it = lock_rec.begin();
@@ -702,7 +724,7 @@ public:
       assert(lock_it+1 == lock_rec.end());
 #else 
       using MessageIteratorType = MessageIteratorView<Chirality::left, decltype(msgs.begin())>;
-      return MessageType::SendMessagesToLeft(leftFactor, MessageIteratorType(msgs.begin()), MessageIteratorType(msgs.end()), omegaBegin);
+      return MessageType::SendMessagesToRight(leftFactor, MessageIteratorType(msgs.begin()), MessageIteratorType(msgs.end()), omegaBegin);
 #endif
    }
 
@@ -1363,7 +1385,7 @@ public:
    void UpdateFactor(const weight_vector& omega) final
    {
 #ifdef LP_MP_PARALLEL
-     std::lock_guard<std::mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
+     std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
 #endif
      ReceiveMessages(omega);
      MaximizePotential();
@@ -1405,7 +1427,7 @@ public:
    void UpdateFactorPrimal(const weight_vector& omega, INDEX primal_access) final
    {
 #ifdef LP_MP_PARALLEL
-     std::lock_guard<std::mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
+     std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
 #endif
       assert(primal_access > 0); // otherwise primal is not initialized in first iteration
       conditionally_init_primal(primal_access);
@@ -2006,9 +2028,9 @@ public:
    }
 
 
-   // concurrency: in the future only hold a mutex if concurrency is enabled.
+   // a recursive mutex is required only for SendMessagesTo{Left|Right}, as multiple messages may be have the same endpoints. Then the corresponding lock is acquired multiple times
 #ifdef LP_MP_PARALLEL
-   std::mutex mutex_;
+   std::recursive_mutex mutex_;
 #endif
 };
 

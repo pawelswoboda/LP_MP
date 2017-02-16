@@ -401,7 +401,7 @@ protected:
 
 class LP_concurrent : public LP {
 public:
-  LP_concurrent(const INDEX no_threads = std::thread::hardware_concurrency())
+  LP_concurrent(const INDEX no_threads = 1)// std::thread::hardware_concurrency())
     : threads_(no_threads)
   {
     std::cout << "number of threads = " << threads_.size() << "\n";
@@ -412,9 +412,10 @@ public:
    void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
    {
 
-     // idea for load-balancing: measure time a thread needs to finish. Adjust numbers of factors based on this.
+     // idea for load-balancing: measure time a thread needs to finish. Adjust numbers of factors given to each thread based on this.
 
-     auto worker = [this] (auto factor_begin, auto factor_end, auto omega_it) {
+     auto worker = [this] (auto factor_begin, auto factor_end, auto omega_it, const INDEX allocator_index ) {
+       stack_allocator_index = allocator_index;
        for(; factor_begin!=factor_end; ++factor_begin, ++omega_it) {
          this->UpdateFactor(*factor_begin, *omega_it);
        }
@@ -422,12 +423,14 @@ public:
 
      const int grainsize = std::distance(factorIt, factorItEnd) / threads_.size();
 
+     INDEX c=0;
      for(auto it = std::begin(threads_); it != std::end(threads_) - 1; ++it) {
-       *it = std::thread(worker, factorIt, factorIt + grainsize, omegaIt);
+       *it = std::thread(worker, factorIt, factorIt + grainsize, omegaIt, c%global_real_block_allocator_array.size());
        factorIt += grainsize;
        omegaIt += grainsize;
+       ++c;
      }
-     threads_.back() = std::thread(worker, factorIt, factorItEnd, omegaIt);
+     threads_.back() = std::thread(worker, factorIt, factorItEnd, omegaIt, c%global_real_block_allocator_array.size());
 
      for(auto&& i : threads_) {
        i.join();
