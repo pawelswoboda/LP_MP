@@ -1289,21 +1289,7 @@ class FwMessageContainer : public MESSAGE_CONTAINER {
    {}
 private:
    std::vector<REAL> msg_diff_; // change to vector
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
 };
-
-// additionally store message difference between left and right factor (might be != 0) for use in Frank-Wolfe algorithm decomposition
-template<typename MESSAGE_CONTAINER>
-class FwMessageContainer : public MESSAGE_CONTAINER {
-   template<typename... ARGS>
-   FwMessageContainer(const INDEX msg_size, ARGS... args):
-      MESSAGE_CONTAINER(args...),
-      msg_diff_(msg_size)
-   {}
-private:
-   std::vector<REAL> msg_diff_; // change to vector
-};
-
 
 
 
@@ -1517,22 +1503,6 @@ public:
       if(!CanMaximizePotentialAndComputePrimal()) { assert(false); }
    }
 
-=======
-   {
-      static_if<CanMaximizePotential()>([&](auto f) {
-            f(factor_).MaximizePotential();
-      });
-   }
-
-   virtual void MaximizePotentialAndComputePrimal() final
-   {
-      static_if<CanMaximizePotentialAndComputePrimal()>([&](auto f) {
-            f(factor_).MaximizePotentialAndComputePrimal();
-      });
-      if(!CanMaximizePotentialAndComputePrimal()) { assert(false); }
-   }
-
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
    // do zrobienia: rename PropagatePrimalThroughMessages
    void ComputePrimalThroughMessages() const
    {
