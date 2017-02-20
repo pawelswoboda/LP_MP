@@ -6,7 +6,10 @@
 #include "cell_tracking_constructor.hxx"
 #include "conservation_tracking_constructor.hxx"
 #include "LP_MP.h"
+<<<<<<< HEAD
 #include "sat_interface.hxx"
+=======
+>>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
 
 namespace LP_MP {
   /*
