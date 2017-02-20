@@ -22,6 +22,8 @@
 #include "two_dimensional_variable_array.hxx"
 #include <thread>
 #include <future>
+#include "memory_allocator.hxx"
+#include "sat_interface.hxx"
 
 namespace LP_MP {
 
@@ -201,24 +203,19 @@ public:
    LPReparametrizationMode repamMode_ = LPReparametrizationMode::Undefined;
    */
 
-   INDEX AddFactor(FactorTypeAdapter* f)
+   template<typename FACTOR_CONTAINER_TYPE>
+   INDEX AddFactor(FACTOR_CONTAINER_TYPE* f)
    {
-      //INDEX primalOffset;
-      //if(f_.size() ==0) {
-      //   primalOffset = 0;
-      //} else {
-      //   primalOffset = f_.back()->GetPrimalOffset() + f_.back()->PrimalSize();
-      //}
-      //std::cout << "primal offset = " << primalOffset << "\n";
-      //f->SetPrimalOffset(primalOffset);
       f_.push_back(f);
       return f_.size() - 1;
-
    }
+
    INDEX GetNumberOfFactors() const { return f_.size(); }
    FactorTypeAdapter* GetFactor(const INDEX i) const { return f_[i]; }
    INDEX size() const { INDEX size=0; for(auto* f : f_) { size += f->size(); } return size; }
-   INDEX AddMessage(MessageTypeAdapter* m)
+
+   template<typename MESSAGE_CONTAINER_TYPE>
+   INDEX AddMessage(MESSAGE_CONTAINER_TYPE* m)
    {
       m_.push_back(m);
       // do zrobienia: check whether left and right factors are in f_
@@ -331,8 +328,9 @@ public:
    template<typename FACTOR_ITERATOR>
    void ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, two_dim_variable_array<REAL>& omega); 
    void ComputeUniformWeights();
+   void ComputeDampedUniformWeights();
    template<typename FACTOR_ITERATOR>
-   void ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, two_dim_variable_array<REAL>& omega, const REAL leave_weight = 0.01); // do zrobienia: rename to isotropic weights
+   void ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, two_dim_variable_array<REAL>& omega, const REAL leave_weight = 0.001); // do zrobienia: rename to isotropic weights
 
    REAL LowerBound() const
    {
@@ -401,7 +399,7 @@ protected:
 
 class LP_concurrent : public LP {
 public:
-  LP_concurrent(const INDEX no_threads = 1)// std::thread::hardware_concurrency())
+  LP_concurrent(const INDEX no_threads = std::thread::hardware_concurrency())
     : threads_(no_threads)
   {
     std::cout << "number of threads = " << threads_.size() << "\n";
@@ -464,6 +462,52 @@ private:
 
   mutable std::vector<std::thread> threads_; // thread pool to be reused
 };
+
+template<typename BASE_LP_CLASS>
+class LP_sat : public BASE_LP_CLASS
+{
+public:
+  template<typename FACTOR_CONTAINER_TYPE>
+  INDEX AddFactor(FACTOR_CONTAINER_TYPE* f) 
+  {
+    sat_var_.push_back(sat_.nVars());
+    f->construct_sat_clauses(sat_);
+    INDEX n = BASE_LP_CLASS::AddFactor(f);
+    factor_to_index_.insert(std::make_pair(f,n));
+    return n;
+  }
+
+   template<typename MESSAGE_CONTAINER_TYPE>
+   INDEX AddMessage(MESSAGE_CONTAINER_TYPE* m)
+   {
+     const INDEX left_factor_number = factor_to_index_[m->GetLeftFactor()];
+     const INDEX right_factor_number = factor_to_index_[m->GetRightFactor()];
+     auto* left = this->f_[left_factor_number];
+     auto* right = this->f_[right_factor_number];
+     m->construct_sat_clauses(sat_, *left, *right, sat_var_[left_factor_number], sat_var_[right_factor_number]);
+
+     return BASE_LP_CLASS::AddMessage(m);
+   }
+
+   void compute_pass_reduce_sat(const REAL th) const
+   {
+
+   }
+   template<typename FACTOR_ITERATOR, typename WEIGHT_ITERATOR>
+   void compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, const REAL sat_th)
+   {
+     sat_vec<sat_literal> assumptions;
+     for(auto it=factor_begin; it!=factor_end; ++it, ++omega_begin) {
+       const INDEX factor_number = factor_to_index_[*it];
+       (*it)->UpdateFactorSAT(*omega_begin, sat_th, sat_var_[factor_number], assumptions);
+     }
+   }
+private:
+   std::map<FactorTypeAdapter*,INDEX> factor_to_index_;
+   std::vector<sat_var> sat_var_;
+   Glucose::SimpSolver sat_;
+};
+
 
 
 // factors are arranged in trees.
@@ -581,6 +625,8 @@ inline void LP::ComputeWeights(const LPReparametrizationMode m)
          ComputeAnisotropicWeights();
       } else if(m == LPReparametrizationMode::Uniform) {
          ComputeUniformWeights();
+      } else if(m == LPReparametrizationMode::DampedUniform) {
+         ComputeDampedUniformWeights();
       } else {
          throw std::runtime_error("unknown repam mode");
       }
@@ -598,11 +644,18 @@ inline void LP::ComputeAnisotropicWeights()
 inline void LP::ComputeUniformWeights()
 {
    if(repamMode_ != LPReparametrizationMode::Uniform) {
-      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_);
-      ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackward_);
-      //assert(omegaForward_.size() == forwardOrdering_.size()); // need not be true for factors that are not sending/receiving
-      //assert(omegaBackward_.size() == forwardOrdering_.size());
+      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_, 0);
+      ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackward_, 0);
       repamMode_ = LPReparametrizationMode::Uniform;
+   };
+}
+
+inline void LP::ComputeDampedUniformWeights()
+{
+   if(repamMode_ != LPReparametrizationMode::DampedUniform) {
+      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_, 1);
+      ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackward_, 1);
+      repamMode_ = LPReparametrizationMode::DampedUniform;
    };
 }
 

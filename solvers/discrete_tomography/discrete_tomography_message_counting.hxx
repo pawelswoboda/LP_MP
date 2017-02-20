@@ -90,7 +90,7 @@ namespace LP_MP {
     void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega) const
     {
        if( dr_ == DIRECTION::left ){
-          tensor3 msg_tmp(f_right.no_left_labels(), f_right.no_center_left_labels(), f_right.left_sum_size());
+          tensor3<REAL> msg_tmp(f_right.no_left_labels(), f_right.no_center_left_labels(), f_right.left_sum_size());
 
           f_right.MessageCalculation_Naive_Left(msg_tmp);
 
@@ -99,7 +99,7 @@ namespace LP_MP {
           //}
           msg -= omega*msg_tmp;
        } else if(dr_ == DIRECTION::right) {
-          tensor3 msg_tmp(f_right.no_center_right_labels(), f_right.no_right_labels(), f_right.right_sum_size());
+          tensor3<REAL> msg_tmp(f_right.no_center_right_labels(), f_right.no_right_labels(), f_right.right_sum_size());
 
           f_right.MessageCalculation_Naive_Right(msg_tmp);
 
@@ -115,7 +115,7 @@ namespace LP_MP {
     template<typename LEFT_FACTOR, typename MSG>
     void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega) const
     {
-       tensor3 msg_tmp(f_left.no_left_labels(), f_left.no_right_labels(), f_left.up_sum_size());
+       tensor3<REAL> msg_tmp(f_left.no_left_labels(), f_left.no_right_labels(), f_left.up_sum_size());
        f_left.MessageCalculation_Up(msg_tmp);
        //for(auto it=msg_tmp.begin(); it!=msg_tmp.end(); ++it) {
        //   *it = omega*(*it);

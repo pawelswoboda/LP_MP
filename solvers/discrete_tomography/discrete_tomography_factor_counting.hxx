@@ -187,10 +187,10 @@ namespace LP_MP{
      REAL& right(const INDEX x_cr, const INDEX x_r, const INDEX sum) { return right_(x_cr, x_r, sum); }
      REAL& left(const INDEX x_l, const INDEX x_cl, const INDEX sum) { return left_(x_l, x_cl, sum); }
      REAL& up(const INDEX x_left, const INDEX x_right, const INDEX sum) { return up_(x_left, x_right, sum); }
-     matrix& reg() { return reg_; }
-     tensor3& right() { return right_; }
-     tensor3& left() { return left_; }
-     tensor3& up() { return up_; }
+     matrix<REAL>& reg() { return reg_; }
+     tensor3<REAL>& right() { return right_; }
+     tensor3<REAL>& left() { return left_; }
+     tensor3<REAL>& up() { return up_; }
 
 
 
@@ -448,8 +448,8 @@ namespace LP_MP{
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_.left_sum, primal_.right_sum, primal_.left_label, primal_.center_left_label, primal_.center_right_label, primal_.right_label ); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( reg_, up_, left_, right_ ); }
   private:
-    matrix reg_;
-    tensor3 up_, left_, right_; 
+    matrix<REAL> reg_;
+    tensor3<REAL> up_, left_, right_; 
 
     struct { INDEX left_sum, right_sum, left_label, center_left_label, center_right_label, right_label; } primal_;
   };

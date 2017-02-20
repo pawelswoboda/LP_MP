@@ -371,6 +371,7 @@ namespace cell_tracking_parser {
       auto& cell_tracking_constructor = s.template GetProblemConstructor<0>();
 
       cell_tracking_constructor.set_number_of_timesteps( i.cell_detection_stat_.size() );
+      //std::cout << "Exclusion constraints disabled\n";
       for(INDEX t=0; t<i.cell_detection_stat_.size(); ++t) {
         for(INDEX n=0; n<i.cell_detection_stat_[t].size(); ++n) {
           const REAL detection_cost = std::get<0>(i.cell_detection_stat_[t][n]);
@@ -439,7 +440,7 @@ namespace cell_tracking_parser {
       auto& cell_tracking_constructor = s.template GetProblemConstructor<0>();
       // add exit constraints based on positions of cell detection hypotheses
       // coordinates are in format (upper,lower) with upper < lower (hence coordinates are inverted!)
-      //std::cout << "Exit constraints currently deactivated.\n";
+      std::cout << "Exit constraints disabled\n";
       for(INDEX t=0; t<i.cell_detection_stat_.size(); ++t) {
         // possibly better: if there exists cell strictly between i and j, then no exit constraint needs to be added
         for(INDEX d1=0; d1<i.cell_detection_stat_[t].size(); ++d1) {
@@ -452,10 +453,10 @@ namespace cell_tracking_parser {
             assert(upper_bound_d2 < lower_bound_d2);
             //std::cout << "t=" << t << ", H1=" << d1 << "(" << lower_bound_d1 << "," << upper_bound_d1 << "), H2=" << d2 << "(" << lower_bound_d2 << "," << upper_bound_d2 << ")\n";
             if(upper_bound_d1 > lower_bound_d2) {
-              cell_tracking_constructor.add_exit_constraint(t,d1,d2);
+              //cell_tracking_constructor.add_exit_constraint(t,d1,d2);
             }
             if(upper_bound_d2 > lower_bound_d1) {
-              cell_tracking_constructor.add_exit_constraint(t,d2,d1);
+              //cell_tracking_constructor.add_exit_constraint(t,d2,d1);
             }
           }
         } 

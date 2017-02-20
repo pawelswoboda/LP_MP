@@ -50,11 +50,7 @@ namespace LP_MP {
    constexpr SIGNED_INDEX variableMessageSize = -1;
 
    // do zrobienia: maybe put this into LP_MP.h
-   struct LpReparametrizationModetest {
-      enum class LPReparametrizationMode {Anisotropic, Uniform, Undefined} mode;
-      REAL weight;
-   };
-   enum class LPReparametrizationMode {Anisotropic, Uniform, Undefined};
+   enum class LPReparametrizationMode {Anisotropic, Uniform, DampedUniform, Undefined};
 
    inline LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
    {
@@ -63,14 +59,10 @@ namespace LP_MP {
       if(s == "anisotropic") {
          //return LpReparametrizationMode({mode::anisotropic,0.0});
          return LPReparametrizationMode::Anisotropic;
-      } else if(s.length() >= uniform.length() && std::equal(uniform.begin(), uniform.end(), s.begin())) {
-         //if(s.length() == uniform.length()) {
-         //   return LpReparametrizationMode({mode::uniform,0.0});
-         //} else {
-         //   const REAL weight = std::stod( s.substr(uniform.length()) );
-         //   return LpReparametrizationMode({mode::uniform,weight});
-         //}
+      } else if(s == "uniform") {
          return LPReparametrizationMode::Uniform;
+      } else if(s == "damped_uniform") {
+         return LPReparametrizationMode::DampedUniform;
       } else {
          throw std::runtime_error("reparametrization mode " + s + " unknown");
       }

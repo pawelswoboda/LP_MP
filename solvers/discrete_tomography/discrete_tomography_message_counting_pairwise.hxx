@@ -62,15 +62,15 @@ public:
    template<typename RIGHT_FACTOR, typename MSG>
    void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
       if(TYPE == CountingPairwiseMessageType::center) {
-         matrix msg_tmp(f_right.no_center_left_labels(), f_right.no_center_right_labels());
+         matrix<REAL> msg_tmp(f_right.no_center_left_labels(), f_right.no_center_right_labels());
          f_right.MessageCalculation_Reg(msg_tmp);
          msg -= omega*msg_tmp;
       } else if(TYPE == CountingPairwiseMessageType::left) {
-         matrix msg_tmp(f_right.no_left_labels(), f_right.no_center_left_labels());
+         matrix<REAL> msg_tmp(f_right.no_left_labels(), f_right.no_center_left_labels());
          f_right.MessageCalculation_Naive_Left(msg_tmp);
          msg -= omega*msg_tmp;
       } else if(TYPE == CountingPairwiseMessageType::right) {
-         matrix msg_tmp(f_right.no_center_right_labels(), f_right.no_right_labels());
+         matrix<REAL> msg_tmp(f_right.no_center_right_labels(), f_right.no_right_labels());
          f_right.MessageCalculation_Naive_Right(msg_tmp);
          msg -= omega*msg_tmp;
       } else {
@@ -207,7 +207,7 @@ public:
          dim = {f_right.no_center_right_labels(), f_right.no_right_labels(), f_right.right_sum_size()};
       }
 
-      tensor3 msg_tmp(dim[0], dim[1], dim[2]);
+      tensor3<REAL> msg_tmp(dim[0], dim[1], dim[2]);
       
       if(COUNTING_FACTOR == Chirality::left) {
          assert(f_right.no_left_labels() ==  f_right.left_sum_size());
@@ -233,7 +233,7 @@ public:
          } 
       }
 
-      matrix msg_marg(dim[0], dim[1], std::numeric_limits<REAL>::infinity());
+      matrix<REAL> msg_marg(dim[0], dim[1], std::numeric_limits<REAL>::infinity());
 
       if(!transpose_) {
          for(INDEX x1=0; x1<msg_tmp.dim1(); ++x1) {

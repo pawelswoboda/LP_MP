@@ -54,7 +54,7 @@ public:
 
    REAL operator()(const INDEX state, const INDEX sum) const { return pot_(state,sum); }
    REAL& operator()(const INDEX state, const INDEX sum) { return pot_(state,sum); }
-   const matrix& pot() const { return pot_; }
+   const matrix<REAL>& pot() const { return pot_; }
 
    INDEX no_labels() const { return pot_.dim1(); }
    INDEX sum_size() const { return pot_.dim2(); }
@@ -67,7 +67,7 @@ public:
    INDEX state_;
    INDEX sum_;
 private:
-   matrix pot_; // first dimension is state, second one is sum
+   matrix<REAL> pot_; // first dimension is state, second one is sum
 };
 
 class dt_sum_state_pairwise_factor {
@@ -108,7 +108,7 @@ public:
       return std::numeric_limits<REAL>::infinity();
    }
 
-   void marginalize_pairwise(matrix& msg) const {
+   void marginalize_pairwise(matrix<REAL>& msg) const {
       std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
       for_each_label_sum([&](INDEX x1, INDEX x2, INDEX sum) { msg(x1,x2) = std::min(msg(x1,x2), eval(x1,x2,sum)); });
    }
@@ -132,9 +132,9 @@ public:
    std::array<INDEX,2> state_;
    std::array<INDEX,2> sum_; // both sums are not strictly needed, they help however in labeling
 private:
-   matrix prev_; // first dimension is state, second one is sum
-   matrix next_; // first dimension is state, second one is sum
-   matrix reg_; // regularizer
+   matrix<REAL> prev_; // first dimension is state, second one is sum
+   matrix<REAL> next_; // first dimension is state, second one is sum
+   matrix<REAL> reg_; // regularizer
 };
 
 // message between unaries and sum, not necessary for the relaxation. Also does not seem to improve convergence
@@ -244,7 +244,7 @@ public:
 
    template<typename RIGHT_FACTOR, typename MSG>
    void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
-      matrix msgs(f_right.no_labels(), DIRECTION == Chirality::left ? f_right.prev_sum_size() : f_right.next_sum_size(), std::numeric_limits<REAL>::infinity());
+      matrix<REAL> msgs(f_right.no_labels(), DIRECTION == Chirality::left ? f_right.prev_sum_size() : f_right.next_sum_size(), std::numeric_limits<REAL>::infinity());
       for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
          for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
             if(DIRECTION == Chirality::left) {
@@ -268,7 +268,7 @@ public:
    template<typename RIGHT_FACTOR, typename MSG>
    void ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, MSG& msg)
    {
-      matrix msgs(r.no_labels(), DIRECTION == Chirality::left ? r.prev_sum_size() : r.next_sum_size(), std::numeric_limits<REAL>::infinity());
+      matrix<REAL> msgs(r.no_labels(), DIRECTION == Chirality::left ? r.prev_sum_size() : r.next_sum_size(), std::numeric_limits<REAL>::infinity());
 
       if(DIRECTION == Chirality::left) {
          assert(r.state_[1] < r.no_labels() && r.sum_[1] < r.next_sum_size());
@@ -381,15 +381,15 @@ public:
          assert(1 == f_right.no_right_labels());
          dim = {f_right.no_center_right_labels(), 1, f_right.right_sum_size()}; 
       }
-      tensor3 msgs(dim[0], dim[1], dim[2]);
+      tensor3<REAL> msgs(dim[0], dim[1], dim[2]);
 
       if(DIRECTION == Chirality::left) {
          f_right.MessageCalculation_Left(msgs);
-         matrix_view_of_tensor<0> msgs_reduced(msgs,0);
+         matrix_view_of_tensor<0,REAL> msgs_reduced(msgs,0);
          msg -= omega*msgs_reduced;
       } else {
          f_right.MessageCalculation_Right(msgs);
-         matrix_view_of_tensor<1> msgs_reduced(msgs,0);
+         matrix_view_of_tensor<1,REAL> msgs_reduced(msgs,0);
          msg -= omega*msgs_reduced;
       }
    }
@@ -465,7 +465,7 @@ public:
 
    template<typename RIGHT_FACTOR, typename MSG>
    void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
-      matrix msgs(f_right.no_labels(), f_right.no_labels());
+      matrix<REAL> msgs(f_right.no_labels(), f_right.no_labels());
       f_right.marginalize_pairwise(msgs);
       if(transpose_) {
          msgs.transpose();

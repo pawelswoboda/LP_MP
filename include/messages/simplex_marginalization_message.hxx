@@ -6,6 +6,8 @@
 #include "vector.hxx"
 #include "message_loops.hxx"
 #include "memory_allocator.hxx"
+#include <cmath>
+#include "config.hxx"
 
 namespace LP_MP {
 
@@ -48,7 +50,7 @@ namespace LP_MP {
            // we assume that only r.right_primal was assigned, r.left_primal not
            assert(r.left_primal_ == i1_);
            if(r.right_primal_ < i2_) {
-              vector msgs(i1_);
+              vector<REAL> msgs(i1_);
               for(INDEX x1=0; x1<i1_; ++x1) {
                  msgs[x1] = r(x1,r.right_primal_);
               }
@@ -133,7 +135,7 @@ namespace LP_MP {
     template<typename RIGHT_FACTOR, typename G2>
     void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
     {
-       vector msgs(i1_,std::numeric_limits<REAL>::infinity());
+       vector<REAL> msgs(i1_,std::numeric_limits<REAL>::infinity());
        //std::vector<REAL> msgs(i1_,std::numeric_limits<REAL>::infinity());
        //REAL msgs[i1_];
        //for(INDEX x1=0; x1<i1_; ++x1) {
@@ -189,7 +191,7 @@ namespace LP_MP {
         {
            assert(r.right_primal_ == i1_);
            if(r.left_primal_ < i2_) {
-              vector msgs(i2_);
+              vector<REAL> msgs(i2_);
               for(INDEX x2=0; x2<i2_; ++x2) {
                  msgs[x2] = r(r.left_primal_,x2);
               }
@@ -274,7 +276,7 @@ namespace LP_MP {
     template<typename RIGHT_FACTOR, typename G2>
     void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
     {
-      vector msgs(i2_, std::numeric_limits<REAL>::infinity());//std::vector<REAL, stack_allocator<REAL>>;
+      vector<REAL> msgs(i2_, std::numeric_limits<REAL>::infinity());//std::vector<REAL, stack_allocator<REAL>>;
       //vector_type msgs(i2_,std::numeric_limits<REAL>::infinity(), global_real_stack_allocator);
       //std::vector<REAL> msgs(i2_,std::numeric_limits<REAL>::infinity());
       for(INDEX x1=0; x1<i1_; ++x1) {
@@ -424,7 +426,7 @@ namespace LP_MP {
     template<typename RIGHT_FACTOR, typename G2>
     void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
     {
-       matrix msgs(i1_,i2_, std::numeric_limits<REAL>::infinity());
+       matrix<REAL> msgs(i1_,i2_, std::numeric_limits<REAL>::infinity());
        r.min_marginal12(msgs);
        msg -= omega*msgs;
     }
@@ -566,7 +568,7 @@ namespace LP_MP {
     template<typename RIGHT_FACTOR, typename G2>
     void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
     {
-       matrix msgs(i1_,i3_, std::numeric_limits<REAL>::infinity());
+       matrix<REAL> msgs(i1_,i3_, std::numeric_limits<REAL>::infinity());
        r.min_marginal13(msgs);
        msg -= omega*msgs;
     }
@@ -708,7 +710,7 @@ namespace LP_MP {
     template<typename RIGHT_FACTOR, typename G2>
     void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
     {
-       matrix msgs(i2_,i3_, std::numeric_limits<REAL>::infinity());
+       matrix<REAL> msgs(i2_,i3_, std::numeric_limits<REAL>::infinity());
        r.min_marginal23(msgs);
        msg -= omega*msgs;
     }

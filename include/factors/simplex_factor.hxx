@@ -112,10 +112,10 @@ public:
 };
 
    
-class UnarySimplexFactor : public vector {
+class UnarySimplexFactor : public vector<REAL> {
 public:
-   UnarySimplexFactor(const std::vector<REAL>& cost) : vector(cost.begin(), cost.end()) {}
-   UnarySimplexFactor(const INDEX n) : vector(n, 0.0) {}
+   UnarySimplexFactor(const std::vector<REAL>& cost) : vector<REAL>(cost.begin(), cost.end()) {}
+   UnarySimplexFactor(const INDEX n) : vector<REAL>(n, 0.0) {}
 
    REAL LowerBound() const { return *std::min_element(this->begin(), this->end()); }
 
@@ -130,7 +130,7 @@ public:
 
    // load/store function for the primal value
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
-   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector*>(this) ); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector<REAL>*>(this) ); }
 
    /*
    // I do not think that both are needed.
@@ -161,7 +161,7 @@ private:
 // do zrobienia: if pairwise was supplied to us (e.g. external factor, then reflect this in constructor and only allocate space for messages.
 // When tightening, we can simply replace pairwise pointer to external factor with an explicit copy. Reallocate left_msg_ and right_msg_ to make memory contiguous? Not sure, depends whether we use block_allocator, which will not acually release the memory
 // when factor is copied, then pairwise_ must only be copied if it is actually modified. This depends on whether we execute SMRP or MPLP style message passing. Templatize for this possibility
-class PairwiseSimplexFactor {
+class PairwiseSimplexFactor : public vector_expression<REAL, PairwiseSimplexFactor> {
 public:
    PairwiseSimplexFactor(const INDEX dim1, const INDEX dim2) : dim1_(dim1), dim2_(dim2)
    {
@@ -297,7 +297,7 @@ private:
 };
 
 // factor assumes that triplet potentials is empty and holds only messages to pairwise factors, i.e. is latently factorizable
-class SimpleTighteningTernarySimplexFactor {
+class SimpleTighteningTernarySimplexFactor : public vector_expression<REAL, SimpleTighteningTernarySimplexFactor> {
 public:
    SimpleTighteningTernarySimplexFactor(const INDEX dim1, const INDEX dim2, const INDEX dim3) : dim1_(dim1), dim2_(dim2), dim3_(dim3) 
    {

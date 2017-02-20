@@ -33,6 +33,7 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/PEGTL_Proje
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Andres_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Cereal_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/TCLAP_Project/include")
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Glucose_Project")
 
 #add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project")
 #set(LEMON_INCLUDE_DIRS

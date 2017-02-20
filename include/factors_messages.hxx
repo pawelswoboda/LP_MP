@@ -16,6 +16,8 @@
 #include <assert.h>
 #include <cxxabi.h>
 
+#include "sat_interface.hxx"
+
 #include <mutex>
 
 #include "template_utilities.hxx"
@@ -68,6 +70,7 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeLeftFromRightPrimal, ComputeLeftFromRig
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeRightFromLeftPrimal, ComputeRightFromLeftPrimal); 
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency, CheckPrimalConsistency); 
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_reduce_sat, reduce_sat);
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasPrimalSize,PrimalSize);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal);
@@ -1424,6 +1427,25 @@ public:
       return FunctionExistence::HasMaximizePotential<FactorType,void>();
    }
 
+   constexpr static bool
+   can_reduce_sat()
+   {
+      return FunctionExistence::has_reduce_sat<FactorType, void, sat_vec<sat_literal>, REAL, sat_var>(); 
+   }
+
+   void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec<sat_literal>& assumptions)
+   {
+#ifdef LP_MP_PARALLEL
+     std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
+#endif
+     ReceiveMessages();
+     MaximizePotential();
+     static_if<can_reduce_sat()>([&](auto f) {
+       f(factor_).reduce_sat(assumptions, th, begin);
+     });
+     SendMessages();
+   }
+
    void UpdateFactorPrimal(const weight_vector& omega, INDEX primal_access) final
    {
 #ifdef LP_MP_PARALLEL
@@ -1462,7 +1484,6 @@ public:
       } 
 
       ReceiveMessages(omega);
-      MaximizePotentialAndComputePrimal();
       SendMessages(omega);
    }
 

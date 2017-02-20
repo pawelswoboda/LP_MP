@@ -14,6 +14,7 @@ OPTION(BUILD_DISCRETE_TOMOGRAPHY_EVALUATION "Build discrete tomography evaluatio
 OPTION(BUILD_TESTS "Build tests" ON)
 OPTION(WITH_GUROBI "LP interface to gurobi" OFF)
 OPTION(WITH_CPLEX "LP interface to Cplex" OFF)
+OPTION(WITH_SAT_BASED_ROUNDING "Use the glucose SAT solver to decode a primal solution based on reparametrization" OFF)
 OPTION(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
 
 if(DOWNLOAD_DEPENDENCIES)

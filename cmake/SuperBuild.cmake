@@ -172,6 +172,18 @@ ExternalProject_ADD(
    )
 ExternalProject_Get_Property(CS2_CPP_Project install_dir)
 
+list(APPEND DEPENDENCIES Glucose_Project)
+ExternalProject_ADD(
+   Glucose_Project
+   GIT_REPOSITORY "https://github.com/wadoon/glucose.git"
+   GIT_TAG "master"
+   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/Glucose_Project"
+   BUILD_COMMAND make
+   INSTALL_COMMAND ""
+   CONFIGURE_COMMAND cmake ../../Source/Glucose_Project/
+   )
+ExternalProject_Get_Property(CS2_CPP_Project install_dir)
+
 ExternalProject_Add (LP_MP
    DEPENDS ${DEPENDENCIES}
    SOURCE_DIR ${PROJECT_SOURCE_DIR}

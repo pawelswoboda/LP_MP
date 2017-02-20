@@ -10,11 +10,16 @@ namespace LP_MP {
 // possibly holding size explicitly is not needed: It is held by allocator as well
 
 // primitive expression templates for vector
-template<typename E>
+template<typename T, typename E>
 class vector_expression {
 public:
-   double operator[](const INDEX i) const { return static_cast<E const&>(*this)[i]; }
+   T operator[](const INDEX i) const { return static_cast<E const&>(*this)[i]; }
+   T operator()(const INDEX i1, const INDEX i2) const { return static_cast<E const&>(*this)(i1,i2); }
+   T operator()(const INDEX i1, const INDEX i2, const INDEX i3) const { return static_cast<E const&>(*this)(i1,i2,i3); }
    INDEX size() const { return static_cast<E const&>(*this).size(); }
+   INDEX dim1() const { return static_cast<E const&>(*this).dim1(); }
+   INDEX dim2() const { return static_cast<E const&>(*this).dim2(); }
+   INDEX dim3() const { return static_cast<E const&>(*this).dim3(); }
 
    E& operator()() { return static_cast<E&>(*this); }
    const E& operator()() const { return static_cast<const E&>(*this); }
@@ -22,7 +27,7 @@ public:
 
 // possibly also support different allocators: a pure stack allocator without block might be a good choice as well for short-lived memory
 template<typename T=REAL>
-class vector : public vector_expression<vector<T>> {
+class vector : public vector_expression<T,vector<T>> {
 public:
   template<typename ITERATOR>
   vector(ITERATOR begin, ITERATOR end)
@@ -58,19 +63,19 @@ public:
       for(auto o_it = o.begin(); o_it!=o.end(); ++it, ++o_it) { *it = *o_it; }
    }
    template<typename E>
-   void operator=(const vector_expression<E>& o) {
+   void operator=(const vector_expression<T,E>& o) {
       assert(size() == o.size());
       for(INDEX i=0; i<o.size(); ++i) { 
          (*this)[i] = o[i]; }
    }
    template<typename E>
-   void operator-=(const vector_expression<E>& o) {
+   void operator-=(const vector_expression<T,E>& o) {
       assert(size() == o.size());
       for(INDEX i=0; i<o.size(); ++i) { 
          (*this)[i] -= o[i]; } 
    }
    template<typename E>
-   void operator+=(const vector_expression<E>& o) {
+   void operator+=(const vector_expression<T,E>& o) {
       assert(size() == o.size());
       for(INDEX i=0; i<o.size(); ++i) { 
          (*this)[i] += o[i]; } 
@@ -79,7 +84,7 @@ public:
 
    // force construction from expression template
    template<typename E>
-   vector(vector_expression<E>& v) : vector(v.size())
+   vector(vector_expression<T,E>& v) : vector(v.size())
    {
       for(INDEX i=0; v.size(); ++i) {
          (*this)[i] = v[i];
@@ -176,7 +181,7 @@ protected:
 };
 
 template<INDEX FIXED_DIM, typename T=REAL>
-class matrix_view_of_tensor : public vector_expression<matrix_view_of_tensor<FIXED_DIM,T>> {
+class matrix_view_of_tensor : public vector_expression<T,matrix_view_of_tensor<FIXED_DIM,T>> {
 public:
    matrix_view_of_tensor(tensor3<T>& t, const INDEX fixed_index) : fixed_index_(fixed_index), t_(t) {}
    ~matrix_view_of_tensor() {
@@ -230,9 +235,9 @@ private:
 };
 
 // primitive expression templates for all the above linear algebraic classes
-template<typename T>
-struct scaled_vector : public vector_expression<scaled_vector<T>> {
-   scaled_vector(const T& omega, const T& a) : omega_(omega), a_(a) {}
+template<typename T, typename E>
+struct scaled_vector : public vector_expression<T,scaled_vector<T,E>> {
+   scaled_vector(const T& omega, const E& a) : omega_(omega), a_(a) {}
    const T operator[](const INDEX i) const {
       return omega_*a_[i];
    }
@@ -247,20 +252,20 @@ struct scaled_vector : public vector_expression<scaled_vector<T>> {
    INDEX dim2() const { return a_.dim2(); }
    INDEX dim3() const { return a_.dim3(); }
    private:
-   const T& a_;
+   const E& a_;
    const T omega_;
 };
 
 
-template<typename T>
-scaled_vector<T> const
-operator*(const T omega, T const& v) {
-   return scaled_vector<T>(omega, v);
+template<typename T, typename E>
+scaled_vector<T,vector_expression<T,E>> 
+operator*(const T omega, const vector_expression<T,E> & v) {
+   return scaled_vector<T,vector_expression<T,E>>(omega, v);
 }
 
-template<typename T>
-struct minus_vector : public vector_expression<minus_vector<T>> {
-   minus_vector(const T& a) : a_(a) {}
+template<typename T, typename E>
+struct minus_vector : public vector_expression<T,minus_vector<T,E>> {
+   minus_vector(const E& a) : a_(a) {}
    const T operator[](const INDEX i) const {
       return -a_[i];
    }
@@ -275,13 +280,13 @@ struct minus_vector : public vector_expression<minus_vector<T>> {
    INDEX dim2() const { return a_.dim2(); }
    INDEX dim3() const { return a_.dim3(); }
    private:
-   const T& a_;
+   const E& a_;
 };
 
-template<typename T>
-minus_vector<T> const
-operator-(T const& v) {
-   return minus_vector<T>(v);
+template<typename T, typename E>
+minus_vector<T,vector_expression<T,E>> 
+operator-(vector_expression<T,E> const& v) {
+   return minus_vector<T,vector_expression<T,E>>(v);
 }
 
 } // end namespace LP_MP

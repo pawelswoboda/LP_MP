@@ -733,7 +733,12 @@ stack_allocator<REAL> global_real_stack_allocator(global_real_stack_arena);
 block_arena<REAL> global_real_block_arena;
 block_allocator<REAL> global_real_block_allocator(global_real_block_arena);
 
+#ifdef LP_MP_PARALLEL
 constexpr INDEX no_stack_allocators = 4;
+#else
+constexpr INDEX no_stack_allocators = 1;
+#endif
+
 std::array<block_arena<REAL>, no_stack_allocators> global_real_block_arena_array;
 
 template <std::size_t... I, typename RandomAccessIterator>

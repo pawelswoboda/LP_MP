@@ -36,7 +36,7 @@ namespace LP_MP {
                std::vector<Index> idxb_;
                std::vector<Index> outA_;
                std::vector<Index> outB_;
-               vector c_;
+               vector<REAL> c_;
                std::vector<Index> cp_;
                Value minimum_ = std::numeric_limits<Value>::infinity();
 
