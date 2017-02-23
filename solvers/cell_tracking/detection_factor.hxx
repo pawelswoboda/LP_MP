@@ -4,10 +4,7 @@
 #include "config.hxx"
 #include "vector.hxx"
 #include "cereal/types/array.hpp"
-<<<<<<< HEAD
 #include "sat_interface.hxx"
-=======
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
 
 namespace LP_MP {
 
@@ -99,7 +96,6 @@ public:
   }
 
   void MaximizePotentialAndComputePrimal() {
-<<<<<<< HEAD
     if(incoming_edge_ < no_incoming_edges() && outgoing_edge_ < no_outgoing_edges()) {
       return;
     }
@@ -108,59 +104,32 @@ public:
       return;
     }
     if(outgoing_edge_ == no_edge_taken && no_outgoing_edges() > 0) {
-=======
-    if(incoming_edge_ == no_edge_taken) {
-      outgoing_edge_ = no_edge_taken;
-      return;
-    }
-    if(outgoing_edge_ == no_edge_taken) {
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
       incoming_edge_ = no_edge_taken;
       return;
     }
 
-<<<<<<< HEAD
     INDEX incoming_cand = no_edge_taken;
-=======
-    INDEX incoming_cand = 0;
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
     REAL lb = pot_[0];
     if(no_incoming_edges() > 0) {
       incoming_cand = std::min_element(incoming_begin(), incoming_end()) - incoming_begin();
       lb += incoming(incoming_cand); 
     }
-<<<<<<< HEAD
     INDEX outgoing_cand = no_edge_taken;
-=======
-    INDEX outgoing_cand = 0;
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
     if(no_outgoing_edges() > 0) {
       outgoing_cand = std::min_element(outgoing_begin(), outgoing_end()) - outgoing_begin();
       lb += outgoing(outgoing_cand); 
     }
     // one edge already labelled
-<<<<<<< HEAD
     if(incoming_edge_ < no_incoming_edges() && no_outgoing_edges() > 0 && outgoing_edge_ == no_primal_decision) {
       assert(outgoing_edge_ == no_primal_decision);
       outgoing_edge_ = outgoing_cand;
       return;
     } else if(outgoing_edge_ < no_outgoing_edges() && no_incoming_edges() > 0 && incoming_edge_ == no_primal_decision) {
-=======
-    if(incoming_edge_ < no_incoming_edges() && no_outgoing_edges() > 0) {
-      assert(outgoing_edge_ == no_primal_decision);
-      outgoing_edge_ = outgoing_cand;
-      return;
-    } else if(outgoing_edge_ < no_outgoing_edges() && no_incoming_edges() > 0) {
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
       assert(incoming_edge_ == no_primal_decision);
       incoming_edge_ = incoming_cand;
       return;
     }
     // no edge labelled yet
-<<<<<<< HEAD
-=======
-    assert(incoming_edge_ == no_primal_decision && outgoing_edge_ == no_primal_decision);
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
     if(lb < 0.0) {
       incoming_edge_ = incoming_cand;
       outgoing_edge_ = outgoing_cand;
@@ -216,7 +185,6 @@ public:
 
   INDEX outgoing_edge() const { return outgoing_edge_; }
   INDEX incoming_edge() const { return incoming_edge_; }
-<<<<<<< HEAD
 
   bool detection_active() const {
     return (incoming_edge_ < no_incoming_edges() || outgoing_edge_ < no_outgoing_edges());
@@ -226,38 +194,44 @@ public:
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
     // create variables
-    auto detection_var = s.newVar(false); //detection will rather be false
+    auto detection_var = s.nVars();
+    s.new_var(); //detection will rather be false
+    //std::cout << "first var in detection factor = " << detection_var << "\n";
     auto incoming_var = create_sat_variables(s, no_incoming_edges());
     auto outgoing_var = create_sat_variables(s, no_outgoing_edges());
-    auto incoming_sum = add_at_most_one_constraint_sat(s, incoming_var.begin(), incoming_var.end());
     auto outgoing_sum = add_at_most_one_constraint_sat(s, outgoing_var.begin(), outgoing_var.end());
+    auto incoming_sum = add_at_most_one_constraint_sat(s, incoming_var.begin(), incoming_var.end());
 
     // detection var must be equal to incoming and outgoing var
-    make_sat_var_equal(s, detection_var,~incoming_var);
-    make_sat_var_equal(s, detection_var,~outgoing_var);
+    make_sat_var_equal(s, to_literal(detection_var),to_literal(incoming_sum));
+    make_sat_var_equal(s, to_literal(detection_var),to_literal(outgoing_sum));
   }
 
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
   {
     const REAL cost = LowerBound();
+    if(cost <= -th) {
+      //std::cout << "in reduction: detection factor must be on\n";
+      assumptions.push_back(to_literal(begin));
+    }
     if(cost <= th) {
       const REAL incoming_min = *std::min_element(incoming_begin(), incoming_end());
       for(INDEX i=0; i<no_incoming_edges(); ++i) {
         if(incoming(i) > incoming_min + th) { 
-           assumptions.push(~(begin+1+i));
+           assumptions.push_back(~to_literal(begin+1+i));
          }
       }
 
       const REAL outgoing_min = *std::min_element(outgoing_begin(), outgoing_end());
       for(INDEX i=0; i<no_outgoing_edges(); ++i) {
         if(outgoing(i) > outgoing_min + th) { 
-           assumptions.push(~(begin+1+no_incoming_edges()+i));
+           assumptions.push_back(~to_literal(begin+1+no_incoming_edges()+i));
          }
       } 
     } else {
       for(auto i=0; i<this->size(); ++i) {
-        assumptions.push(~(begin+i));
+        assumptions.push_back(~to_literal(begin+i));
       }
     }
   }
@@ -265,16 +239,20 @@ public:
   template<typename SAT_SOLVER>
   void convert_primal(SAT_SOLVER& s, sat_var first)
   {
-    if(s.value(first)) {
+    assert(s.get_model()[first] != CMSat::l_Undef);
+    if(s.get_model()[first] == CMSat::l_True) {
+      //std::cout << "in primal conversion: detection factor is on\n";
       // find index of incoming and outgoing active edge
       for(INDEX i=first+1; i<first+1+no_incoming_edges(); ++i) {
-        if(s.value(i)) {
+        if(s.get_model()[i] == CMSat::l_True) {
           incoming_edge_ = i-first-1;
+          //std::cout << "incoming edge = " << i << ", ";
         }
       }
       for(INDEX i=first+1+no_incoming_edges(); i<first+size(); ++i) {
-        if(s.value(i)) {
+        if(s.get_model()[i] == CMSat::l_True) {
           outgoing_edge_ = i-first-1-no_incoming_edges();
+          //std::cout << "outgoing edge = " << i << "\n";
         }
       }
     } else {
@@ -284,8 +262,6 @@ public:
   }
 
 
-=======
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
 private:
   const INDEX no_incoming_edges_, no_outgoing_edges_;
   REAL* pot_;
@@ -654,10 +630,6 @@ public:
   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
   bool ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
   {
-<<<<<<< HEAD
-=======
-    return false;
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
     if(l.outgoing_edge_ == outgoing_edge_index_ && r.incoming_edge_ != incoming_edge_index_) {
       r.incoming_edge_ = incoming_edge_index_;
       return true;
@@ -668,10 +640,6 @@ public:
   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
   bool ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r) 
   {
-<<<<<<< HEAD
-=======
-    return false;
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
     if(r.incoming_edge_ == incoming_edge_index_ && r.outgoing_edge_ != outgoing_edge_index_) {
       l.outgoing_edge_ = outgoing_edge_index_;
       return true;
@@ -714,7 +682,6 @@ public:
   template<typename RIGHT_FACTOR, typename G2>
   void ReceiveRestrictedMessageFromRight(RIGHT_FACTOR& r, G2& msg)
   { 
-<<<<<<< HEAD
     if(r.incoming_edge_ < r.no_incoming_edges()) { // incoming edge has already been picked
       if(r.incoming_edge_ == incoming_edge_index_) {
         const REAL val_prev = msg.GetLeftFactor()->GetFactor()->outgoing(outgoing_edge_index_);
@@ -727,18 +694,6 @@ public:
         const REAL val = msg.GetLeftFactor()->GetFactor()->outgoing(outgoing_edge_index_);
         //assert(msg.GetLeftFactor()->GetFactor()->outgoing(outgoing_edge_index_) > 10000);
       }
-=======
-    return;
-    if(r.incoming_edge_ < r.no_incoming_edges()) { // incoming edge has already been picked
-      if(r.incoming_edge_ == incoming_edge_index_) {
-        msg[0] -= -std::numeric_limits<REAL>::infinity(); 
-        assert(msg.GetLeftFactor()->GetFactor()->outgoing(outgoing_edge_index_) < -10000);
-      } else {
-        msg[0] -= std::numeric_limits<REAL>::infinity(); 
-        assert(msg.GetLeftFactor()->GetFactor()->outgoing(outgoing_edge_index_) > 10000);
-      }
-      //assert(r.incoming_edge_ != incoming_edge_index_);
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
     } else { // no incoming edge has been picked yet.
       return;
       make_right_factor_uniform(r,msg); 
@@ -787,10 +742,6 @@ public:
   template<typename LEFT_FACTOR, typename G2>
   void ReceiveRestrictedMessageFromLeft(LEFT_FACTOR& l, G2& msg)
   { 
-<<<<<<< HEAD
-=======
-    return;
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
     if(l.outgoing_edge_ < l.no_outgoing_edges()) { // outgoing edge has already been picked
       if(l.outgoing_edge_ == outgoing_edge_index_) {
         msg[0] -= -std::numeric_limits<REAL>::infinity(); 
@@ -818,7 +769,6 @@ public:
     r.incoming(incoming_edge_index_) += msg;
   }
 
-<<<<<<< HEAD
   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
   {
@@ -836,10 +786,8 @@ public:
   {
     auto left_var = left_begin+1+l.no_incoming_edges() + outgoing_edge_index_;
     auto right_var = right_begin+1+ incoming_edge_index_;
-    make_sat_var_equal(s, left_var, right_var);
+    make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
   }
-=======
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
 private:
   const INDEX outgoing_edge_index_;
   const INDEX incoming_edge_index_;
@@ -981,8 +929,6 @@ public:
      } else if(primal_ == no_primal_active || no_primal_decision) {
        return 0.0;
      } else {
-       return 1000;
-       assert(false);
        return std::numeric_limits<REAL>::infinity();
      }
    }
@@ -990,7 +936,6 @@ public:
    void init_primal() { primal_ = no_primal_decision; }
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector<REAL>*>(this) ); }
-<<<<<<< HEAD
 
   template<typename SAT_SOLVER>
   void construct_sat_clauses(SAT_SOLVER& s) const
@@ -1004,7 +949,7 @@ public:
   {
     for(INDEX i=0; i<this->size(); ++i) {
       if((*this)[i] > th) { 
-        assumptions.push(~(begin+i)); 
+        assumptions.push_back(~to_literal(begin+i)); 
       }
     }
   }
@@ -1013,7 +958,7 @@ public:
   void convert_primal(SAT_SOLVER& s, sat_var first)
   {
     for(INDEX i=0; i<this->size(); ++i) {
-      if(s.value(first+i)) {
+      if(s.get_model()[first+i] == CMSat::l_True) {
         primal_ = i;
         return;
       }
@@ -1021,8 +966,6 @@ public:
     primal_ = no_primal_active;
   }
 
-=======
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
 private:
    INDEX primal_;
 };
@@ -1051,25 +994,17 @@ public:
   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
   {
-<<<<<<< HEAD
-    //std::cout << "promote to exclusion constraint\n";
-=======
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
     if(l.incoming_edge_ < l.no_incoming_edges() || l.outgoing_edge_ < l.no_outgoing_edges()) {
       if(r.primal_ == at_most_one_cell_factor::no_primal_decision || r.primal_ == at_most_one_cell_factor_index_) {
         r.primal_ = at_most_one_cell_factor_index_;
       } else {
         r.primal_ = at_most_one_cell_factor::primal_infeasible; // more than two detections active
       }
-<<<<<<< HEAD
     } else {
       if(r.primal_ == r.no_primal_decision) {
         r.primal_ = r.no_primal_active;
       }
     }
-=======
-    } 
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
   }
 
   template<typename LEFT_FACTOR, typename MSG>
@@ -1101,7 +1036,6 @@ public:
   void ReceiveRestrictedMessageFromRight(RIGHT_FACTOR& r, MSG& msg) 
   {
     assert(at_most_one_cell_factor_index_ < r.size());
-<<<<<<< HEAD
     //std::cout << "r.primal = " << r.primal_ << " = " << r.no_primal_active << "\n";
     if(r.primal_ == r.no_primal_active || r.primal_ == r.no_primal_decision) { // no element chosen yet
       //make_right_factor_uniform(r, msg);
@@ -1117,20 +1051,11 @@ public:
         msg[0] -= -100000;//std::numeric_limits<REAL>::infinity();
         const REAL val = msg.GetLeftFactor()->GetFactor()->operator[](0);
         //assert(msg.GetLeftFactor()->GetFactor()->operator[](0) < -10000);
-=======
-    if(r.primal_ == r.size()) { // no element chosen yet
-      //make_right_factor_uniform(r, msg);
-    } else if(r.primal_ < r.size()) { // one element already chosen
-      if(r.primal_ == at_most_one_cell_factor_index_) {
-        msg[0] -= -100000;//std::numeric_limits<REAL>::infinity();
-        assert(msg.GetLeftFactor()->GetFactor()->operator[](0) < -10000);
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
       } else {
         //assert(r.primal_ < r.size());
         const REAL test_val_prev = msg.GetLeftFactor()->GetFactor()->operator[](0);
         msg[0] -= 100000;//std::numeric_limits<REAL>::infinity();
         const REAL test_val = msg.GetLeftFactor()->GetFactor()->operator[](0);
-<<<<<<< HEAD
         //assert(test_val > 10000);
         //assert(msg.GetLeftFactor()->GetFactor()->operator[](0) > 10000);
       }
@@ -1141,16 +1066,6 @@ public:
       const REAL test_val = msg.GetLeftFactor()->GetFactor()->operator[](0);
       //assert(test_val > 10000);
       //assert(msg.GetLeftFactor()->GetFactor()->operator[](0) > 10000); 
-=======
-        assert(test_val > 10000);
-        assert(msg.GetLeftFactor()->GetFactor()->operator[](0) > 10000);
-      }
-    } else {
-        msg[0] -= 100000;//std::numeric_limits<REAL>::infinity();
-        const REAL test_val = msg.GetLeftFactor()->GetFactor()->operator[](0);
-        assert(test_val > 10000);
-        assert(msg.GetLeftFactor()->GetFactor()->operator[](0) > 10000); 
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
     }
   }
   /*
@@ -1189,7 +1104,6 @@ public:
 
     msg[0] -= omega*(cur_detection_cost - rest_cost);
   }
-<<<<<<< HEAD
 
   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
@@ -1210,10 +1124,8 @@ public:
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
     auto right_var = right_begin+at_most_one_cell_factor_index_;
-    make_sat_var_equal(s, left_begin, right_var);
+    make_sat_var_equal(s, to_literal(left_begin), to_literal(right_var));
   }
-=======
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
 private:
    const INDEX at_most_one_cell_factor_index_;
 };
@@ -1224,14 +1136,11 @@ private:
 class exit_constraint_factor : public std::array<REAL,2> {
   template<exit_constraint_position POSITION> friend class exit_constraint_message;
 public:
-<<<<<<< HEAD
 
   constexpr static INDEX no_primal_decision = std::numeric_limits<INDEX>::max();
   constexpr static INDEX no_primal_active = std::numeric_limits<INDEX>::max()-1;
   constexpr static INDEX primal_infeasible = std::numeric_limits<INDEX>::max()-2; 
 
-=======
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
   using repam_type = std::array<REAL,2>;
   REAL LowerBound() const 
   {
@@ -1239,27 +1148,15 @@ public:
   }
   REAL EvaluatePrimal() const 
   {
-<<<<<<< HEAD
     if(primal_ < this->size()) {
       return (*this)[primal_];
     } else if(primal_ == no_primal_active) {
       return 0.0;
     } else {
-=======
-    if(primal_[0] && !primal_[1]) {
-      return (*this)[0];
-    } else if(primal_[1] && !primal_[0]) {
-      return (*this)[0];
-    } else if(!primal_[0] && !primal_[1]) {
-      return 0.0;
-    } else {
-      //assert(false);
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
       return std::numeric_limits<REAL>::infinity();
     }
   }
 
-<<<<<<< HEAD
   void init_primal() { primal_ = no_primal_decision; }
   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<repam_type*>(this) ); }
@@ -1270,12 +1167,14 @@ public:
     auto var = create_sat_variables(s, this->size());
     add_at_most_one_constraint_sat(s,var.begin(), var.end());
   }
+
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
   {
+    // do zrobienia: if reparametrization is < -th, then disallow no edge to be taken!
     for(INDEX i=0; i<this->size(); ++i) {
       if((*this)[i] > th) { 
-        assumptions.push(~(begin+i)); 
+        assumptions.push_back(~to_literal(begin+i)); 
       }
     }
   }
@@ -1284,7 +1183,7 @@ public:
   void convert_primal(SAT_SOLVER& s, sat_var first) 
   {
     for(INDEX i=0; i<this->size(); ++i) {
-      if(s.value(first+i)) {
+      if(s.get_model()[first+i] == CMSat::l_True) {
         primal_ = i;
         return;
       }
@@ -1294,13 +1193,6 @@ public:
 
 private:
   INDEX primal_;
-=======
-  void init_primal() { primal_[0] = true; primal_[1] = true; }
-  template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
-  template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<repam_type*>(this) ); }
-private:
-  std::array<bool,2> primal_;
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
 };
 
 // left is detection_factor, right is exit_constraint_factor
@@ -1338,11 +1230,7 @@ public:
     //assert(false);
     if(POSITION == exit_constraint_position::lower) {
       if(l.outgoing_edge_ == l.no_outgoing_edges() - 1) {
-<<<<<<< HEAD
         r.primal_ = 0;
-=======
-        r.primal_[0] = true;
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
       } 
     } else {
 
@@ -1404,25 +1292,40 @@ public:
       msg[0] -= r[1] - std::min(0.0, r[0]);
     }
   }
-<<<<<<< HEAD
+
+  template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+  bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
+  {
+    if(POSITION == exit_constraint_position::lower) {
+      if(r.primal_ == 0) {
+        return l.outgoing_edge_ == l.no_outgoing_edges()-1;
+      } else {
+        return l.outgoing_edge_ < l.no_outgoing_edges()-1 || l.outgoing_edge_ == l.no_edge_taken;
+      }
+    } else {
+      if(r.primal_ == 1) {
+        return l.outgoing_edge_ < l.no_outgoing_edges()-1;
+      } else {
+        return l.outgoing_edge_ == l.no_outgoing_edges()-1 || l.outgoing_edge_ == l.no_edge_taken;
+      }
+    }
+  }
 
   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
     if(POSITION == exit_constraint_position::lower) {
-      make_sat_var_equal(s, left_begin+1+l.no_incoming_edges() + l.no_outgoing_edges()-1, right_begin);
+      make_sat_var_equal(s, to_literal(left_begin+l.size()-1), to_literal(right_begin));
     } else {
       // get indicator variable for sum of outgoing edges without last one
-      std::vector<sat_var> outgoing_var(l.no_outgoing_edges());
+      std::vector<sat_var> outgoing_var(l.no_outgoing_edges()-1);
       for(INDEX i=0; i<outgoing_var.size(); ++i) {
         outgoing_var[i] = left_begin+1+l.no_incoming_edges()+i;
       }
       auto c = add_at_most_one_constraint_sat(s, outgoing_var.begin(), outgoing_var.end());
-      make_sat_var_equal(s, c, right_begin+1);
+      make_sat_var_equal(s, to_literal(c), to_literal(right_begin+1));
     }
   }
-=======
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
 };
 
 // obsolete factors and messages //

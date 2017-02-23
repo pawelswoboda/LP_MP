@@ -172,15 +172,15 @@ ExternalProject_ADD(
    )
 ExternalProject_Get_Property(CS2_CPP_Project install_dir)
 
-list(APPEND DEPENDENCIES Glucose_Project)
+list(APPEND DEPENDENCIES CryptoMiniSat_Project)
 ExternalProject_ADD(
-   Glucose_Project
-   GIT_REPOSITORY "https://github.com/wadoon/glucose.git"
+   CryptoMiniSat_Project
+   GIT_REPOSITORY "https://github.com/msoos/cryptominisat.git"
    GIT_TAG "master"
-   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/Glucose_Project"
+   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/CryptoMiniSat_Project"
    BUILD_COMMAND make
    INSTALL_COMMAND ""
-   CONFIGURE_COMMAND cmake ../../Source/Glucose_Project/
+   CONFIGURE_COMMAND cmake ../../Source/CryptoMiniSat_Project/
    )
 ExternalProject_Get_Property(CS2_CPP_Project install_dir)
 

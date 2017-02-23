@@ -8,9 +8,13 @@ namespace LP_MP {
 // class holding state of variable and sum of chain up to that variable
 class dt_sum_state_factor {
 public:
+   constexpr static INDEX no_primal_decision = std::numeric_limits<INDEX>::max();
+
    dt_sum_state_factor(const INDEX no_labels, const INDEX sum_size) 
       : pot_(no_labels, sum_size, 0.0)
-   {}
+   {
+   assert(pot_.dim1() > 0);
+   }
 
    template<typename ARRAY>
    void summation_cost(const ARRAY& cost) {
@@ -41,9 +45,10 @@ public:
 
    void MaximizePotentialAndComputePrimal() {
       REAL min_value = std::numeric_limits<REAL>::infinity();
+      assert(sum_ == no_primal_decision && state_ == no_primal_decision);
       for(INDEX state=0; state<no_labels(); ++state) {
          for(INDEX sum=0; sum<sum_size(); ++sum) {
-            if((*this)(state, sum) < min_value) {
+            if((*this)(state, sum) <= min_value) {
                state_ = state;
                sum_ = sum;
                min_value = (*this)(state,sum);
@@ -60,7 +65,7 @@ public:
    INDEX sum_size() const { return pot_.dim2(); }
    INDEX size() const { return pot_.size(); }
 
-   void init_primal() { state_ = no_labels(); sum_ = sum_size(); }
+   void init_primal() { state_ = no_primal_decision; sum_ = no_primal_decision; }
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( state_, sum_ ); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar(pot_); }
 
@@ -72,6 +77,8 @@ private:
 
 class dt_sum_state_pairwise_factor {
 public:
+   constexpr static INDEX no_primal_decision = std::numeric_limits<INDEX>::max();
+
    dt_sum_state_pairwise_factor(const INDEX no_labels, const INDEX prev_sum_size, const INDEX next_sum_size) 
       : prev_(no_labels, prev_sum_size, 0.0),
       next_(no_labels, next_sum_size, 0.0),
@@ -125,7 +132,7 @@ public:
    INDEX next_sum_size() const { return next_.dim2(); }
    INDEX size() const { return no_labels()*no_labels()*prev_sum_size(); }
 
-   void init_primal() { state_[0] = no_labels(); state_[1] = no_labels(); sum_[0] = prev_sum_size(); sum_[1] = next_sum_size(); }
+   void init_primal() { state_[0] = no_primal_decision; state_[1] = no_primal_decision; sum_[0] = no_primal_decision; sum_[1] = no_primal_decision; }
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( state_, sum_ ); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( prev_, next_, reg_ ); }
 

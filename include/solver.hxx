@@ -20,7 +20,13 @@ namespace LP_MP {
 // binds together problem constructors and solver and organizes input/output
 // base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
 
-template<typename FMC>
+template<typename FMC,
+#ifdef LP_MP_PARALLEL
+  typename LP_TYPE = LP
+#else
+    typename LP_TYPE = LP_concurrent
+#endif
+    >
 class Solver {
    // initialize a tuple uniformly
    //template <class T, class LIST>
@@ -29,16 +35,13 @@ class Solver {
       std::tuple<ARGS...> tupleMaker(meta::list<ARGS...>, T& t) { return std::make_tuple(ARGS(t)...); }
 
 public:
+   using SolverType = Solver<FMC,LP_TYPE>;
    using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
    using FactorMessageConnection = FMC;
 
    Solver()
       : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
-#ifdef LP_MP_PARALLEL
-      lp_(LP_concurrent()),
-#else
-      lp_(LP()),
-#endif
+      lp_(LP_TYPE()),
       // do zrobienia: use perfect forwarding or std::piecewise_construct
       problemConstructor_(tupleMaker(ProblemDecompositionList{}, *this)),
       // build the standard command line arguments
@@ -72,10 +75,10 @@ public:
       }
    }
 
-   template<typename INPUT_FUNCTION, typename... ARGS>
+   template<class INPUT_FUNCTION, typename... ARGS>
    bool ReadProblem(INPUT_FUNCTION inputFct, ARGS... args)
    {
-      const bool success = inputFct(inputFile_,*this,args...);
+      const bool success = inputFct(inputFile_, *this, args...);
 
       assert(success);
       if(!success) throw std::runtime_error("could not parse problem file");
@@ -209,7 +212,7 @@ public:
       return std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_);
    }
 
-   LP& GetLP() { return lp_; }
+   LP_TYPE& GetLP() { return lp_; }
    
    // called before first iterations
    void Begin() {}
@@ -270,13 +273,9 @@ public:
 
    REAL lower_bound() const { return lowerBound_; }
 protected:
-   TCLAP::CmdLine cmd_;
+   LP_TYPE lp_;
 
-#ifdef LP_MP_PARALLEL
-   LP_concurrent lp_;
-#else
-   LP lp_;
-#endif
+   TCLAP::CmdLine cmd_;
 
    tuple_from_list<ProblemDecompositionList> problemConstructor_;
 
@@ -293,18 +292,18 @@ protected:
 };
 
 // local rounding interleaved with message passing 
-template<typename FMC>
-class MpRoundingSolver : public Solver<FMC>
+template<typename FMC, typename LP_TYPE = LP>
+class MpRoundingSolver : public Solver<FMC, LP_TYPE>
 {
 public:
    void Iterate(LpControl c)
    {
       if(c.computePrimal) {
-         Solver<FMC>::lp_.ComputePassAndPrimal(iter);
+         Solver<FMC,LP_TYPE>::lp_.ComputePassAndPrimal(iter);
          //this->RegisterPrimal(forwardPrimal_);
          //this->RegisterPrimal(backwardPrimal_);
       } else {
-         Solver<FMC>::Iterate(c);
+         Solver<FMC,LP_TYPE>::Iterate(c);
       }
       ++iter;
    }
@@ -648,6 +647,17 @@ int main(int argc, char* argv[]) \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }
+
+// Macro for generating main function with specific solver with SAT based rounding
+#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_SAT(FMC,PARSE_PROBLEM_FUNCTION,VISITOR) \
+using namespace LP_MP; \
+int main(int argc, char* argv[]) \
+{ \
+   VisitorSolver<MpRoundingSolver<FMC,LP_sat<LP>>,VISITOR> solver(argc,argv); \
+   solver.ReadProblem(PARSE_PROBLEM_FUNCTION<Solver<FMC,LP_sat<LP>>>); \
+   return solver.Solve(); \
+}
+
 
 } // end namespace LP_MP
 

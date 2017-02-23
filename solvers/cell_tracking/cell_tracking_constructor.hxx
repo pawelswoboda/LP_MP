@@ -15,8 +15,8 @@ template<typename DETECTION_FACTOR_CONTAINER, typename AT_MOST_ONE_CELL_FACTOR_C
 class cell_tracking_constructor {
 public:
   using CONSTRUCTOR = cell_tracking_constructor<DETECTION_FACTOR_CONTAINER, AT_MOST_ONE_CELL_FACTOR_CONTAINER, TRANSITION_MESSAGE_CONTAINER, AT_MOST_ONE_CELL_MESSAGE_CONTAINER>;
-  template<typename FMC>
-  cell_tracking_constructor(Solver<FMC>& solver) : lp_(&solver.GetLP()) {}
+  template<typename SOLVER>
+  cell_tracking_constructor(SOLVER& solver) {}
 
   // temporary structure which counts how many incoming and outgoing edges are already used by messages for building the model
   struct transition_count {
@@ -38,7 +38,8 @@ public:
     detection_factors_.resize(t);
   }
 
-  DETECTION_FACTOR_CONTAINER* add_detection_hypothesis(const INDEX timestep, const INDEX number, const REAL detection_cost, const INDEX no_incoming_edges, const INDEX no_outgoing_edges, const REAL exit_cost)
+  template<typename LP_TYPE>
+  DETECTION_FACTOR_CONTAINER* add_detection_hypothesis(LP_TYPE& lp, const INDEX timestep, const INDEX number, const REAL detection_cost, const INDEX no_incoming_edges, const INDEX no_outgoing_edges, const REAL exit_cost)
   {
 
     assert(timestep < detection_factors_.size());
@@ -49,16 +50,17 @@ public:
 
     if(detection_cost == 0.0 && no_incoming_edges == 0 && no_outgoing_edges == 0 && exit_cost == 0.0) { return nullptr; }
 
-    auto* f = new DETECTION_FACTOR_CONTAINER(no_incoming_edges, no_outgoing_edges, detection_cost, true);
+    auto* f = new DETECTION_FACTOR_CONTAINER(std::max(no_incoming_edges,INDEX(1)), no_outgoing_edges, detection_cost, true);
     f->GetFactor()->outgoing( f->GetFactor()->no_outgoing_edges()-1 ) = exit_cost;
-    lp_->AddFactor(f);
+    lp.AddFactor(f);
     detection_factors_[timestep][number] = f;
     //std::cout << "Added ";
     //std::cout << "H: " << timestep << ", " << number << ", " << detection_cost << std::endl;
     return f; 
   }
 
-  AT_MOST_ONE_CELL_FACTOR_CONTAINER* add_exclusion_constraint(const INDEX timestep, const std::vector<INDEX>& cell_detections)
+  template<typename LP_TYPE>
+  AT_MOST_ONE_CELL_FACTOR_CONTAINER* add_exclusion_constraint(LP_TYPE& lp, const INDEX timestep, const std::vector<INDEX>& cell_detections)
   {
     INDEX size = 0;
     for(INDEX i=0; i<cell_detections.size(); ++i) {
@@ -69,7 +71,7 @@ public:
     if(size == 0) { return nullptr; }
 
     auto* e = new AT_MOST_ONE_CELL_FACTOR_CONTAINER(size);
-    lp_->AddFactor(e);
+    lp.AddFactor(e);
     //std::cout << "Added Excusion for time " << timestep << ": ";
     INDEX msg_idx = 0;
     for(INDEX i=0; i<cell_detections.size(); ++i) {
@@ -77,59 +79,61 @@ public:
       if(detection_factors_[timestep][ cell_detections[i] ] != nullptr) {
         auto* m = new AT_MOST_ONE_CELL_MESSAGE_CONTAINER(msg_idx, detection_factors_[ timestep ][ cell_detections[i] ], e);
         ++msg_idx;
-        lp_->AddMessage(m); 
+        lp.AddMessage(m); 
       }
     }
     //std::cout << std::endl;
     return e; 
   }
 
-  void add_cell_transition(const INDEX timestep, const INDEX prev_cell, const INDEX next_cell, const REAL cost, transition_count& tc) 
+  template<typename LP_TYPE>
+  void add_cell_transition(LP_TYPE& lp, const INDEX timestep, const INDEX prev_cell, const INDEX next_cell, const REAL cost, transition_count& tc) 
   {
     auto* out_cell_factor = detection_factors_[timestep][prev_cell];
     const INDEX outgoing_edge_index  = tc[timestep][prev_cell][1];
     assert( out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) == 0.0 );
-    //out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) = 0.5*cost;
-    out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) = cost;
+    out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) = 0.5*cost;
+    //out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) = cost;
     tc[timestep][prev_cell][1]++;
 
     auto* in_cell_factor = detection_factors_[timestep+1][next_cell];
     const INDEX incoming_edge_index = tc[timestep+1][next_cell][0];
     assert( in_cell_factor->GetFactor()->incoming(incoming_edge_index) == 0.0 );
     tc[timestep+1][next_cell][0]++;
-    //in_cell_factor->GetFactor()->incoming(incoming_edge_index) = 0.5*cost;
+    in_cell_factor->GetFactor()->incoming(incoming_edge_index) = 0.5*cost;
     auto* m = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor, false, outgoing_edge_index, incoming_edge_index);
-    lp_->AddMessage(m);
+    lp.AddMessage(m);
 
     //std::cout << "MA: " << timestep << " " << prev_cell << ", " << next_cell << " " << cost << std::endl;
   }
 
-  void add_cell_division(const INDEX timestep, const INDEX prev_cell, const INDEX next_cell_1, const INDEX next_cell_2, const REAL cost, transition_count& tc) 
+  template<typename LP_TYPE>
+  void add_cell_division(LP_TYPE& lp, const INDEX timestep, const INDEX prev_cell, const INDEX next_cell_1, const INDEX next_cell_2, const REAL cost, transition_count& tc) 
   {
     auto* out_cell_factor = detection_factors_[timestep][prev_cell];
     const INDEX outgoing_edge_index  = tc[timestep][prev_cell][1];
     assert( out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) == 0.0 );
-    //out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) = 1.0/3.0*cost;
-    out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) = cost;
+    out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) = 1.0/3.0*cost;
+    //out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) = cost;
     tc[timestep][prev_cell][1]++;
 
     auto* in_cell_factor_1 = detection_factors_[timestep+1][next_cell_1];
     const INDEX incoming_edge_index_1 = tc[timestep+1][next_cell_1][0];
     assert( in_cell_factor_1->GetFactor()->incoming(incoming_edge_index_1) == 0.0 );
-    //in_cell_factor_1->GetFactor()->incoming(incoming_edge_index_1) = 1.0/3.0*cost;
+    in_cell_factor_1->GetFactor()->incoming(incoming_edge_index_1) = 1.0/3.0*cost;
     tc[timestep+1][next_cell_1][0]++;
     
     auto* in_cell_factor_2 = detection_factors_[timestep+1][next_cell_2];
     const INDEX incoming_edge_index_2 = tc[timestep+1][next_cell_2][0];
     assert( in_cell_factor_2->GetFactor()->incoming(incoming_edge_index_2) == 0.0 );
-    //in_cell_factor_2->GetFactor()->incoming(incoming_edge_index_2) = 1.0/3.0*cost;
+    in_cell_factor_2->GetFactor()->incoming(incoming_edge_index_2) = 1.0/3.0*cost;
     tc[timestep+1][next_cell_2][0]++;
     
     auto* m1 = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor_1, true, outgoing_edge_index, incoming_edge_index_1);
-    lp_->AddMessage(m1);
+    lp.AddMessage(m1);
     
     auto* m2 = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor_2, true, outgoing_edge_index, incoming_edge_index_2);
-    lp_->AddMessage(m2);
+    lp.AddMessage(m2);
 
     //std::cout << "DA: " << timestep << " " << prev_cell << ", " << next_cell_1 << " " << next_cell_2 << " " << cost << std::endl;
   }
@@ -152,7 +156,6 @@ public:
   }
 
 protected:
-  LP* lp_;
   using detection_factors_storage = std::vector<std::vector<DETECTION_FACTOR_CONTAINER*>>;
   detection_factors_storage detection_factors_;
   //std::map<std::tuple<INDEX,INDEX,INDEX>, TRANSITION_FACTOR_CONTAINER*> transition_factors_;
@@ -169,7 +172,8 @@ template<typename CELL_TRACKING_CONSTRUCTOR,
 class cell_tracking_mother_machine_constructor : public CELL_TRACKING_CONSTRUCTOR {
 public:
   using CELL_TRACKING_CONSTRUCTOR::CELL_TRACKING_CONSTRUCTOR;
-  void add_exit_constraint(const INDEX timestep, const INDEX lower_cell_detection, const INDEX upper_cell_detection)
+  template<typename LP_TYPE>
+  void add_exit_constraint(LP_TYPE& lp, const INDEX timestep, const INDEX lower_cell_detection, const INDEX upper_cell_detection)
   {
     if(this->detection_factors_[timestep][lower_cell_detection] == nullptr || this->detection_factors_[timestep][upper_cell_detection] == nullptr) { 
       return;
@@ -178,11 +182,11 @@ public:
     if(this->detection_factors_[timestep][upper_cell_detection]->GetFactor()->no_outgoing_edges() > 1) { // only if there are outgoing edges which are not exit ones do we need exit constraints
       //std::cout << " add factor";
       auto* e = new EXIT_CONSTRAINT_FACTOR();
-      this->lp_->AddFactor(e);
+      lp.AddFactor(e);
       auto* m_lower = new EXIT_CONSTRAINT_LOWER_MESSAGE(this->detection_factors_[timestep][lower_cell_detection], e);
-      this->lp_->AddMessage(m_lower);
+      lp.AddMessage(m_lower);
       auto* m_upper = new EXIT_CONSTRAINT_UPPER_MESSAGE(this->detection_factors_[timestep][upper_cell_detection], e);
-      this->lp_->AddMessage(m_upper); 
+      lp.AddMessage(m_upper); 
     }
     //std::cout << "\n";
   } 
@@ -365,16 +369,14 @@ namespace cell_tracking_parser {
       return success;
    }
 
-   template<typename FMC>
-   void construct_tracking_problem(input& i, Solver<FMC>& s)
+   template<typename SOLVER>
+   void construct_tracking_problem(input& i, SOLVER& s)
    {
       auto& cell_tracking_constructor = s.template GetProblemConstructor<0>();
+      auto& lp = s.GetLP();
 
+      //std::cout << "exclusion constraints disabled\n";
       cell_tracking_constructor.set_number_of_timesteps( i.cell_detection_stat_.size() );
-<<<<<<< HEAD
-      //std::cout << "Exclusion constraints disabled\n";
-=======
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
       for(INDEX t=0; t<i.cell_detection_stat_.size(); ++t) {
         for(INDEX n=0; n<i.cell_detection_stat_[t].size(); ++n) {
           const REAL detection_cost = std::get<0>(i.cell_detection_stat_[t][n]);
@@ -383,10 +385,10 @@ namespace cell_tracking_parser {
           const INDEX no_outgoing_edges = std::get<3>(i.cell_detection_stat_[t][n]);
 
           //assert(t != i.cell_detection_stat_.size()-1 || exit_cost == 0.0);
-          cell_tracking_constructor.add_detection_hypothesis( t, n, detection_cost, no_incoming_edges, no_outgoing_edges, exit_cost );
+          cell_tracking_constructor.add_detection_hypothesis( lp, t, n, detection_cost, no_incoming_edges, no_outgoing_edges, exit_cost );
         }
         for(const auto& detections : i.exclusions_[t]) {
-          cell_tracking_constructor.add_exclusion_constraint(t, detections ); 
+          cell_tracking_constructor.add_exclusion_constraint(lp, t, detections ); 
         }
         /* check whether all cell hypotheses are covered by exclusion constraints (must be valid for mother machine)
         std::vector<INDEX> all_indices;
@@ -405,7 +407,7 @@ namespace cell_tracking_parser {
         const INDEX prev_cell = std::get<1>(t);
         const INDEX next_cell = std::get<2>(t);
         const REAL cost = std::get<3>(t);
-        cell_tracking_constructor.add_cell_transition( timestep, prev_cell, next_cell, cost, tc );
+        cell_tracking_constructor.add_cell_transition( lp, timestep, prev_cell, next_cell, cost, tc );
       }
       for(auto& t : i.divisions_) {
         const INDEX timestep = std::get<0>(t);
@@ -413,7 +415,7 @@ namespace cell_tracking_parser {
         const INDEX next_cell_1 = std::get<2>(t);
         const INDEX next_cell_2 = std::get<3>(t);
         const REAL cost = std::get<4>(t);
-        cell_tracking_constructor.add_cell_division( timestep, prev_cell, next_cell_1, next_cell_2, cost, tc );
+        cell_tracking_constructor.add_cell_division( lp, timestep, prev_cell, next_cell_1, next_cell_2, cost, tc );
       }
       for(INDEX t=0; t<i.cell_detection_stat_.size(); ++t) {
         for(INDEX j=0; j<i.cell_detection_stat_[t].size(); ++j) {
@@ -424,8 +426,8 @@ namespace cell_tracking_parser {
    }
 
    // we assume problem with single constructor
-   template<typename FMC>
-   bool ParseProblem(const std::string& filename, Solver<FMC>& s)
+   template<typename SOLVER>
+   bool ParseProblem(const std::string& filename, SOLVER& s)
    {
      input i;
      const bool read_suc = read_input(filename, i);
@@ -433,8 +435,8 @@ namespace cell_tracking_parser {
      return read_suc;
    }
 
-   template<typename FMC>
-   bool ParseProblemMotherMachine(const std::string& filename, Solver<FMC>& s)
+   template<typename SOLVER>
+   bool ParseProblemMotherMachine(const std::string& filename, SOLVER& s)
    {
      input i;
      const bool read_suc = read_input(filename, i);
@@ -443,11 +445,7 @@ namespace cell_tracking_parser {
       auto& cell_tracking_constructor = s.template GetProblemConstructor<0>();
       // add exit constraints based on positions of cell detection hypotheses
       // coordinates are in format (upper,lower) with upper < lower (hence coordinates are inverted!)
-<<<<<<< HEAD
-      std::cout << "Exit constraints disabled\n";
-=======
-      //std::cout << "Exit constraints currently deactivated.\n";
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
+      //std::cout << "Exit constraints disabled\n";
       for(INDEX t=0; t<i.cell_detection_stat_.size(); ++t) {
         // possibly better: if there exists cell strictly between i and j, then no exit constraint needs to be added
         for(INDEX d1=0; d1<i.cell_detection_stat_[t].size(); ++d1) {
@@ -460,17 +458,10 @@ namespace cell_tracking_parser {
             assert(upper_bound_d2 < lower_bound_d2);
             //std::cout << "t=" << t << ", H1=" << d1 << "(" << lower_bound_d1 << "," << upper_bound_d1 << "), H2=" << d2 << "(" << lower_bound_d2 << "," << upper_bound_d2 << ")\n";
             if(upper_bound_d1 > lower_bound_d2) {
-<<<<<<< HEAD
-              //cell_tracking_constructor.add_exit_constraint(t,d1,d2);
+              cell_tracking_constructor.add_exit_constraint(s.GetLP(), t,d1,d2);
             }
             if(upper_bound_d2 > lower_bound_d1) {
-              //cell_tracking_constructor.add_exit_constraint(t,d2,d1);
-=======
-              cell_tracking_constructor.add_exit_constraint(t,d1,d2);
-            }
-            if(upper_bound_d2 > lower_bound_d1) {
-              cell_tracking_constructor.add_exit_constraint(t,d2,d1);
->>>>>>> 50f351e47fc311f373f1af914ee3938caee18993
+              cell_tracking_constructor.add_exit_constraint(s.GetLP(), t,d2,d1);
             }
           }
         } 

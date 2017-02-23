@@ -25,6 +25,37 @@ public:
    const E& operator()() const { return static_cast<const E&>(*this); }
 };
 
+template<typename T, typename E>
+class matrix_expression {
+public:
+   T operator[](const INDEX i) const { return static_cast<E const&>(*this)[i]; }
+   INDEX size() const { return static_cast<E const&>(*this).size(); }
+
+   T operator()(const INDEX i1, const INDEX i2) const { return static_cast<E const&>(*this)(i1,i2); }
+   INDEX dim1() const { return static_cast<E const&>(*this).dim1(); }
+   INDEX dim2() const { return static_cast<E const&>(*this).dim2(); }
+
+   E& operator()() { return static_cast<E&>(*this); }
+   const E& operator()() const { return static_cast<const E&>(*this); }
+};
+
+template<typename T, typename E>
+class tensor3_expression {
+public:
+   T operator[](const INDEX i) const { return static_cast<E const&>(*this)[i]; }
+   INDEX size() const { return static_cast<E const&>(*this).size(); }
+
+   T operator()(const INDEX i1, const INDEX i2) const { return static_cast<E const&>(*this)(i1,i2); }
+   T operator()(const INDEX i1, const INDEX i2, const INDEX i3) const { return static_cast<E const&>(*this)(i1,i2,i3); }
+   INDEX dim1() const { return static_cast<E const&>(*this).dim1(); }
+   INDEX dim2() const { return static_cast<E const&>(*this).dim2(); }
+   INDEX dim3() const { return static_cast<E const&>(*this).dim3(); }
+
+   E& operator()() { return static_cast<E&>(*this); }
+   const E& operator()() const { return static_cast<const E&>(*this); }
+};
+
+
 // possibly also support different allocators: a pure stack allocator without block might be a good choice as well for short-lived memory
 template<typename T=REAL>
 class vector : public vector_expression<T,vector<T>> {
@@ -33,6 +64,7 @@ public:
   vector(ITERATOR begin, ITERATOR end)
   {
     const INDEX size = std::distance(begin,end);
+    assert(size > 0);
     begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size);
     assert(begin_ != nullptr);
     end_ = begin_ + size;
@@ -44,12 +76,14 @@ public:
   vector(const INDEX size) 
   {
     begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size);
+    assert(size > 0);
     assert(begin_ != nullptr);
     end_ = begin_ + size;
   }
   vector(const INDEX size, const T value) 
      : vector(size)
   {
+     assert(size > 0);
      std::fill(begin_,end_,value);
   }
   ~vector() {
@@ -117,10 +151,25 @@ private:
 };
 
 template<typename T=REAL>
-class matrix : public vector<T> {
+class matrix : public matrix_expression<T,matrix<T>> {
 public:
-   matrix(const INDEX d1, const INDEX d2) : vector<T>(d1*d2), dim2_(d2) {}
-   matrix(const INDEX d1, const INDEX d2, const T val) : vector<T>(d1*d2), dim2_(d2) {
+   T& operator[](const INDEX i) { return vec_[i]; }
+   const T operator[](const INDEX i) const { return vec_[i]; }
+   INDEX size() const { return vec_.size(); }
+   template<typename ARCHIVE>
+   void serialize(ARCHIVE& ar)
+   {
+      ar( vec_ );
+   }
+
+   T* begin() const { return vec_.begin(); }
+   T* end() const { return vec_.end(); }
+
+   matrix(const INDEX d1, const INDEX d2) : vec_(d1*d2), dim2_(d2) {
+      assert(d1 > 0 && d2 > 0);
+   }
+   matrix(const INDEX d1, const INDEX d2, const T val) : vec_(d1*d2), dim2_(d2) {
+      assert(d1 > 0 && d2 > 0);
       std::fill(this->begin(), this->end(), val);
    }
    //matrix(const matrix& o) vector(o) {
@@ -129,17 +178,17 @@ public:
    void operator=(const matrix<T>& o) {
       assert(this->size() == o.size() && o.dim2_ == dim2_);
       for(INDEX i=0; i<o.size(); ++i) { 
-         (*this)[i] = o[i]; 
+         vec_[i] = o[i]; 
       }
    }
    T& operator()(const INDEX x1, const INDEX x2) {
       assert(x1<dim1() && x2<dim2());
-      return (*this)[x1*dim2_ + x2]; 
+      return vec_[x1*dim2_ + x2]; 
    }
-   T operator()(const INDEX x1, const INDEX x2) const { return (*this)[x1*dim2_ + x2]; }
-   T operator()(const INDEX x1, const INDEX x2, const INDEX x3) const { assert(x3 == 0); return (*this)[x1*dim2_ + x2]; } // sometimes we treat a matrix as a tensor with trivial last dimension
-   T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) { assert(x3 == 0); return (*this)[x1*dim2_ + x2]; } // sometimes we treat a matrix as a tensor with trivial last dimension
-   const INDEX dim1() const { return this->size()/dim2_; }
+   T operator()(const INDEX x1, const INDEX x2) const { return vec_[x1*dim2_ + x2]; }
+   T operator()(const INDEX x1, const INDEX x2, const INDEX x3) const { assert(x3 == 0); return vec_[x1*dim2_ + x2]; } // sometimes we treat a matrix as a tensor with trivial last dimension
+   T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) { assert(x3 == 0); return vec_[x1*dim2_ + x2]; } // sometimes we treat a matrix as a tensor with trivial last dimension
+   const INDEX dim1() const { return vec_.size()/dim2_; }
    const INDEX dim2() const { return dim2_; }
 
    void transpose() {
@@ -151,11 +200,12 @@ public:
       }
    }
 protected:
+   vector<T> vec_;
    const INDEX dim2_;
 };
 
 template<typename T=REAL>
-class tensor3 : public vector<T> {
+class tensor3 : public vector<T> { // do zrobienia: remove
 public:
    tensor3(const INDEX d1, const INDEX d2, const INDEX d3) : vector<T>(d1*d2*d3), dim2_(d2), dim3_(d3) {}
    tensor3(const INDEX d1, const INDEX d2, const INDEX d3, const T val) : tensor3<T>(d1,d2,d3) {
@@ -264,6 +314,13 @@ operator*(const T omega, const vector_expression<T,E> & v) {
 }
 
 template<typename T, typename E>
+scaled_vector<T,matrix_expression<T,E>> 
+operator*(const T omega, const matrix_expression<T,E> & v) {
+   return scaled_vector<T,matrix_expression<T,E>>(omega, v);
+}
+
+
+template<typename T, typename E>
 struct minus_vector : public vector_expression<T,minus_vector<T,E>> {
    minus_vector(const E& a) : a_(a) {}
    const T operator[](const INDEX i) const {
@@ -284,10 +341,33 @@ struct minus_vector : public vector_expression<T,minus_vector<T,E>> {
 };
 
 template<typename T, typename E>
+struct minus_matrix : public matrix_expression<T,minus_matrix<T,E>> {
+   minus_matrix(const E& a) : a_(a) {}
+   const T operator[](const INDEX i) const {
+      return -a_[i];
+   }
+   const T operator()(const INDEX i, const INDEX j) const {
+      return -a_(i,j);
+   }
+   INDEX size() const { return a_.size(); }
+   INDEX dim1() const { return a_.dim1(); }
+   INDEX dim2() const { return a_.dim2(); }
+   private:
+   const E& a_;
+};
+
+template<typename T, typename E>
 minus_vector<T,vector_expression<T,E>> 
 operator-(vector_expression<T,E> const& v) {
    return minus_vector<T,vector_expression<T,E>>(v);
 }
+
+template<typename T, typename E>
+minus_matrix<T,matrix_expression<T,E>> 
+operator-(matrix_expression<T,E> const& v) {
+   return minus_matrix<T,matrix_expression<T,E>>(v);
+}
+
 
 } // end namespace LP_MP
 

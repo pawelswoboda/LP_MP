@@ -71,6 +71,7 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeRightFromLeftPrimal, ComputeRightFromLe
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency, CheckPrimalConsistency); 
 LP_MP_FUNCTION_EXISTENCE_CLASS(has_reduce_sat, reduce_sat);
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_convert_primal, convert_primal);
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasPrimalSize,PrimalSize);
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal);
@@ -1427,23 +1428,37 @@ public:
       return FunctionExistence::HasMaximizePotential<FactorType,void>();
    }
 
+   template<typename SAT_SOLVER>
+   constexpr static bool can_convert_primal()
+   {
+      return FunctionExistence::has_convert_primal<FactorType,void, SAT_SOLVER, sat_var>(); 
+   }
+   //void convert_primal(Glucose::SimpSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   void convert_primal(CMSat::SATSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   {
+      static_if<can_convert_primal<decltype(sat)>()>([&](auto f) { 
+            f(factor_).convert_primal(sat, sat_begin);
+            });
+      assert(can_convert_primal<decltype(sat)>);
+   }
+
    constexpr static bool
    can_reduce_sat()
    {
       return FunctionExistence::has_reduce_sat<FactorType, void, sat_vec<sat_literal>, REAL, sat_var>(); 
    }
 
-   void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec<sat_literal>& assumptions)
+   void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec<sat_literal>& assumptions) final
    {
 #ifdef LP_MP_PARALLEL
      std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
 #endif
-     ReceiveMessages();
+     ReceiveMessages(omega);
      MaximizePotential();
      static_if<can_reduce_sat()>([&](auto f) {
        f(factor_).reduce_sat(assumptions, th, begin);
      });
-     SendMessages();
+     SendMessages(omega);
    }
 
    void UpdateFactorPrimal(const weight_vector& omega, INDEX primal_access) final
@@ -1881,18 +1896,28 @@ public:
   INDEX GetAuxOffset() const final { return auxOffset_; }
 
   template<typename MESSAGE_TYPE>
+  constexpr static 
+  INDEX get_message_number()
+  {
+     static_assert(MESSAGE_TYPE::leftFactorNumber == FACTOR_NO || MESSAGE_TYPE::rightFactorNumber == FACTOR_NO,"");
+     static_assert(MESSAGE_TYPE::leftFactorNumber != MESSAGE_TYPE::rightFactorNumber,""); // otherwise we cannot distinguish
+
+     constexpr bool left = MESSAGE_TYPE::leftFactorNumber == FACTOR_NO;
+     using dispatcher_type = typename meta::if_c<left, MessageDispatcher<MESSAGE_TYPE, LeftMessageFuncGetter> , MessageDispatcher<MESSAGE_TYPE, RightMessageFuncGetter>>;
+     return  FindMessageDispatcherTypeIndex<dispatcher_type>();
+
+     //if(MESSAGE_TYPE::leftFactorNumber == FACTOR_NO) {
+     //   return FindMessageDispatcherTypeIndex<MessageDispatcher<MESSAGE_TYPE, LeftMessageFuncGetter>>();
+     //} else {
+     //   return FindMessageDispatcherTypeIndex<MessageDispatcher<MESSAGE_TYPE, RightMessageFuncGetter>>();
+     //} 
+  }
+
+  template<typename MESSAGE_TYPE>
   auto get_messages() const 
   {
-     // check that MESSAGE_TYPE has current factor type either as right or as left factor (but not both!)
-     static_assert(MESSAGE_TYPE::left_factor_number == FACTOR_NO || MESSAGE_TYPE::right_factor_number == FACTOR_NO,"");
-     static_assert(MESSAGE_TYPE::left_factor_number == MESSAGE_TYPE::right_factor_number,"");
-     if(MESSAGE_TYPE::left_factor_number == FACTOR_NO) {
-        static constexpr INDEX n = FindMessageDispatcherTypeIndex<MessageDispatcher<MESSAGE_TYPE, LeftMessageFuncGetter>>();
-        return std::get<n>(msg_);
-     } else {
-        static constexpr INDEX n = FindMessageDispatcherTypeIndex<MessageDispatcher<MESSAGE_TYPE, RightMessageFuncGetter>>();
-        return std::get<n>(msg_);
-     }
+     std::cout << "message number = " << get_message_number<MESSAGE_TYPE>()  << "\n";
+     return std::get< get_message_number<MESSAGE_TYPE>() >(msg_);
   }
    
 protected:

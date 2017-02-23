@@ -41,6 +41,9 @@ public:
    virtual FactorTypeAdapter* clone() const = 0;
    virtual void UpdateFactor(const weight_vector& omega) = 0;
    virtual void UpdateFactorPrimal(const weight_vector& omega, const INDEX iteration) = 0;
+   virtual void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec<sat_literal>& assumptions) = 0;
+   //virtual void convert_primal(Glucose::SimpSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
+   virtual void convert_primal(CMSat::SATSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
    virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
    virtual INDEX size() const = 0;
    virtual INDEX PrimalSize() const = 0;
@@ -471,7 +474,8 @@ public:
   INDEX AddFactor(FACTOR_CONTAINER_TYPE* f) 
   {
     sat_var_.push_back(sat_.nVars());
-    f->construct_sat_clauses(sat_);
+    //std::cout << "number of variables in sat_ = " << sat_var_[sat_var_.size()-1] << "\n";
+    f->GetFactor()->construct_sat_clauses(sat_);
     INDEX n = BASE_LP_CLASS::AddFactor(f);
     factor_to_index_.insert(std::make_pair(f,n));
     return n;
@@ -482,30 +486,80 @@ public:
    {
      const INDEX left_factor_number = factor_to_index_[m->GetLeftFactor()];
      const INDEX right_factor_number = factor_to_index_[m->GetRightFactor()];
-     auto* left = this->f_[left_factor_number];
-     auto* right = this->f_[right_factor_number];
-     m->construct_sat_clauses(sat_, *left, *right, sat_var_[left_factor_number], sat_var_[right_factor_number]);
+     auto* left = m->GetLeftFactor()->GetFactor();
+     auto* right = m->GetRightFactor()->GetFactor();
+     m->GetMessageOp().construct_sat_clauses(sat_, *left, *right, sat_var_[left_factor_number], sat_var_[right_factor_number]);
 
      return BASE_LP_CLASS::AddMessage(m);
    }
 
-   void compute_pass_reduce_sat(const REAL th) const
+   void ComputePassAndPrimal(const INDEX iteration)
    {
-
+     compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), this->omegaForward_.begin(), cur_forward_th_, forward_feasible_bound_, forward_infeasible_bound_);
+     compute_pass_reduce_sat(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), this->omegaBackward_.begin(), cur_backward_th_, backward_feasible_bound_, backward_infeasible_bound_);
    }
    template<typename FACTOR_ITERATOR, typename WEIGHT_ITERATOR>
-   void compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, const REAL sat_th)
+   void compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, REAL& sat_th, REAL& sat_feasible_bound, REAL& sat_infeasible_bound)
    {
      sat_vec<sat_literal> assumptions;
      for(auto it=factor_begin; it!=factor_end; ++it, ++omega_begin) {
        const INDEX factor_number = factor_to_index_[*it];
        (*it)->UpdateFactorSAT(*omega_begin, sat_th, sat_var_[factor_number], assumptions);
      }
+     // run sat solver on reduced problem
+     //decltype(sat_) sat_copy(sat_);
+     //const auto feasible = sat_.solve();
+     const auto feasible = sat_.solve(&assumptions);
+     //const auto feasible = sat_copy.solve();
+     //assert(sat_copy.nVars() == sat_.nVars());
+
+     if(feasible == CMSat::l_True) {
+       for(sat_var i=0; i<sat_.nVars(); ++i) {
+         assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
+       }
+       // convert sat solution to original solution format and compute primal cost
+       for(INDEX i=0; i<this->f_.size(); ++i) {
+         assert(factor_to_index_[this->f_[i]] == i);
+         this->f_[i]->convert_primal(sat_, sat_var_[i]);
+       }
+       REAL primal_cost = this->EvaluatePrimal(this->f_.begin(), this->f_.end());
+       std::cout << "sat solution cost = " << primal_cost << ", sat threshold = " << sat_th << "\n"; 
+     } else {
+       std::cout << "sat not feasible with current threshold = " << sat_th << "\n";
+     }
+     adjust_th(feasible == CMSat::l_True, sat_th, sat_feasible_bound, sat_infeasible_bound);
    }
 private:
-   std::map<FactorTypeAdapter*,INDEX> factor_to_index_;
+
+   void adjust_th(const bool feasible, REAL& cur_th, REAL& feasible_bound, REAL& infeasible_bound)
+   {
+     assert(infeasible_bound <= cur_th && cur_th <= feasible_bound);
+     if(feasible) {
+       if(cur_th >= feasible_bound - 0.01) {
+         feasible_bound *= 0.8;
+         infeasible_bound *= 0.8;
+       }
+       cur_th += (infeasible_bound - cur_th)/2.0; 
+       feasible_bound = std::min(feasible_bound, cur_th);
+     } else {
+        cur_th += (feasible_bound - cur_th)/2.0;
+        if(cur_th <= infeasible_bound - 0.001) {
+          infeasible_bound *= 1.2;
+          feasible_bound *= 1.2;
+        }
+       infeasible_bound = std::max(infeasible_bound, cur_th);
+     } 
+   }
+
+   std::map<FactorTypeAdapter*,INDEX> factor_to_index_; // possibly make hash out of this
    std::vector<sat_var> sat_var_;
-   Glucose::SimpSolver sat_;
+   //Glucose::SimpSolver sat_;
+   CMSat::SATSolver sat_;
+
+   REAL cur_forward_th_ = 1.0;
+   REAL cur_backward_th_ = 1.0;
+   REAL forward_feasible_bound_ = 2.0, forward_infeasible_bound_ = 0;
+   REAL backward_feasible_bound_ = 2.0, backward_infeasible_bound_ = 0;
 };
 
 
@@ -527,11 +581,13 @@ public:
          m->send_message_up(c);
       }
       // compute primal for topmost factor
+      // also init primal for top factor, all other primals were initialized already by send_message_up
       if(std::get<1>(tree_messages_.back()) == Chirality::right) {
          // init primal for right factor!
+         std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->init_primal();
          std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->MaximizePotentialAndComputePrimal();
       } else {
-         // init primal for left factor!
+         std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->init_primal(); 
          std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->MaximizePotentialAndComputePrimal(); 
       }
       // track down optimal primal solution
@@ -561,6 +617,31 @@ public:
       }
       return lb;
       
+   }
+
+   template<typename FACTOR_TYPE>
+   std::vector<FACTOR_TYPE*> get_factors() const
+   {
+      std::vector<FACTOR_TYPE*> factors;
+      std::set<FACTOR_TYPE*> factor_present;
+      for(auto& t : tree_messages_) {
+
+         auto* left = std::get<0>(t)->GetLeftFactorTypeAdapter();
+         auto* left_cast = dynamic_cast<FACTOR_TYPE*>(left);
+         if(left_cast && factor_present.find(left_cast) == factor_present.end()) {
+            factors.push_back(left_cast);
+            factor_present.insert(left_cast);
+         }
+
+         auto* right = std::get<0>(t)->GetRightFactorTypeAdapter();
+         auto* right_cast = dynamic_cast<FACTOR_TYPE*>(right);
+         if(right_cast && factor_present.find(right_cast) == factor_present.end()) {
+            factors.push_back(right_cast);
+            factor_present.insert(right_cast);
+         } 
+
+      }
+      return std::move(factors);
    }
 protected:
    std::vector< std::tuple<MessageTypeAdapter*, Chirality>> tree_messages_; // messages forming a tree. Chirality says which side comprises the lower  factor
