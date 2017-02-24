@@ -34,6 +34,7 @@ namespace LP_MP {
 
    enum class Chirality {left,right};
    enum class MessageSendingType {SRMP,MPLP}; // also add full, for always sending and receiving messages
+   enum class Direction {forward, backward};
 
    constexpr REAL eps = 1e-8;
    

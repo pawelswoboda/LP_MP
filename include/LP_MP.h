@@ -470,6 +470,8 @@ template<typename BASE_LP_CLASS>
 class LP_sat : public BASE_LP_CLASS
 {
 public:
+  using LP_type = LP_sat<BASE_LP_CLASS>;
+
   template<typename FACTOR_CONTAINER_TYPE>
   INDEX AddFactor(FACTOR_CONTAINER_TYPE* f) 
   {
@@ -493,41 +495,81 @@ public:
      return BASE_LP_CLASS::AddMessage(m);
    }
 
+   static bool solve_sat_problem(LP_type* c, sat_vec<sat_literal> assumptions)
+   {
+     const auto feasible = c->sat_.solve(&assumptions);
+     return feasible == CMSat::l_True;
+   }
+
    void ComputePassAndPrimal(const INDEX iteration)
    {
-     compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), this->omegaForward_.begin(), cur_forward_th_, forward_feasible_bound_, forward_infeasible_bound_);
-     compute_pass_reduce_sat(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), this->omegaBackward_.begin(), cur_backward_th_, backward_feasible_bound_, backward_infeasible_bound_);
+     bool sat_call_finished;
+     if(cur_sat_reduction_direction_ == Direction::forward) {
+       sat_call_finished = compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), this->omegaForward_.begin(), cur_forward_th_, forward_feasible_bound_, forward_infeasible_bound_);
+       this->ComputePass(this->backwardUpdateOrdering_.rbegin(), this->backwardUpdateOrdering_.rend(), this->omegaBackward_.begin());
+     } else {
+       this->ComputePass(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), this->omegaBackward_.begin());
+       sat_call_finished = compute_pass_reduce_sat(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), this->omegaBackward_.begin(), cur_backward_th_, backward_feasible_bound_, backward_infeasible_bound_);
+     }
+
+     if(sat_call_finished) {
+       std::cout << "next sat reduction is in direction ";
+       if(cur_sat_reduction_direction_ == Direction::forward) {
+         cur_sat_reduction_direction_ = Direction::backward;
+         std::cout << "backward\n";
+       } else {
+         cur_sat_reduction_direction_ = Direction::forward;
+         std::cout << "forward\n";
+       }
+     }
    }
    template<typename FACTOR_ITERATOR, typename WEIGHT_ITERATOR>
-   void compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, REAL& sat_th, REAL& sat_feasible_bound, REAL& sat_infeasible_bound)
+   bool compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, REAL& sat_th, REAL& sat_feasible_bound, REAL& sat_infeasible_bound)
    {
      sat_vec<sat_literal> assumptions;
      for(auto it=factor_begin; it!=factor_end; ++it, ++omega_begin) {
        const INDEX factor_number = factor_to_index_[*it];
        (*it)->UpdateFactorSAT(*omega_begin, sat_th, sat_var_[factor_number], assumptions);
      }
-     // run sat solver on reduced problem
-     //decltype(sat_) sat_copy(sat_);
-     //const auto feasible = sat_.solve();
-     const auto feasible = sat_.solve(&assumptions);
-     //const auto feasible = sat_copy.solve();
-     //assert(sat_copy.nVars() == sat_.nVars());
-
-     if(feasible == CMSat::l_True) {
-       for(sat_var i=0; i<sat_.nVars(); ++i) {
-         assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
-       }
-       // convert sat solution to original solution format and compute primal cost
-       for(INDEX i=0; i<this->f_.size(); ++i) {
-         assert(factor_to_index_[this->f_[i]] == i);
-         this->f_[i]->convert_primal(sat_, sat_var_[i]);
-       }
-       REAL primal_cost = this->EvaluatePrimal(this->f_.begin(), this->f_.end());
-       std::cout << "sat solution cost = " << primal_cost << ", sat threshold = " << sat_th << "\n"; 
-     } else {
-       std::cout << "sat not feasible with current threshold = " << sat_th << "\n";
+     // run sat solver on reduced problem asynchronuously
+     if(!sat_handle_.valid()) { 
+       std::cout << "start sat calculation\n";
+       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions);
+       return true;
      }
-     adjust_th(feasible == CMSat::l_True, sat_th, sat_feasible_bound, sat_infeasible_bound);
+
+     const auto sat_state = sat_handle_.wait_for(std::chrono::seconds(0));
+     if(sat_state == std::future_status::deferred) {
+       assert(false); // this should not happen, we launch immediately!
+       throw std::runtime_error("asynchronuous sat was deferred, but this should not happen");
+     } else if(sat_state == std::future_status::ready) {
+
+       std::cout << "collect sat result\n";
+       const bool feasible = sat_handle_.get();
+       if(feasible) {
+         for(sat_var i=0; i<sat_.nVars(); ++i) {
+           assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
+         }
+         // convert sat solution to original solution format and compute primal cost
+         for(INDEX i=0; i<this->f_.size(); ++i) {
+           assert(factor_to_index_[this->f_[i]] == i);
+           this->f_[i]->convert_primal(sat_, sat_var_[i]);
+         }
+         REAL primal_cost = this->EvaluatePrimal(this->f_.begin(), this->f_.end());
+         std::cout << "sat solution cost = " << primal_cost << ", sat threshold = " << sat_th << "\n"; 
+       } else {
+         std::cout << "sat not feasible with current threshold = " << sat_th << "\n";
+       }
+       adjust_th(feasible, sat_th, sat_feasible_bound, sat_infeasible_bound);
+
+       std::cout << "restart sat calculation\n";
+       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions);
+       return true;
+
+     } else {
+       std::cout << "do not call sat, it is currently running\n";
+       return false;
+     }
    }
 private:
 
@@ -536,18 +578,16 @@ private:
      assert(infeasible_bound <= cur_th && cur_th <= feasible_bound);
      if(feasible) {
        if(cur_th >= feasible_bound - 0.01) {
-         feasible_bound *= 0.8;
          infeasible_bound *= 0.8;
        }
-       cur_th += (infeasible_bound - cur_th)/2.0; 
        feasible_bound = std::min(feasible_bound, cur_th);
+       cur_th += (infeasible_bound - cur_th)/2.0; 
      } else {
-        cur_th += (feasible_bound - cur_th)/2.0;
-        if(cur_th <= infeasible_bound - 0.001) {
-          infeasible_bound *= 1.2;
-          feasible_bound *= 1.2;
+        if(cur_th <= infeasible_bound + 0.001) {
+          feasible_bound *= 2.0;
         }
-       infeasible_bound = std::max(infeasible_bound, cur_th);
+        infeasible_bound = std::max(infeasible_bound, cur_th);
+        cur_th += (feasible_bound - cur_th)/2.0;
      } 
    }
 
@@ -560,6 +600,9 @@ private:
    REAL cur_backward_th_ = 1.0;
    REAL forward_feasible_bound_ = 2.0, forward_infeasible_bound_ = 0;
    REAL backward_feasible_bound_ = 2.0, backward_infeasible_bound_ = 0;
+
+   decltype(std::async(std::launch::async, solve_sat_problem, nullptr, sat_vec<sat_literal>{} )) sat_handle_;
+   Direction cur_sat_reduction_direction_ = Direction::forward;
 };
 
 
