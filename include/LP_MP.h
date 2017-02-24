@@ -495,10 +495,11 @@ public:
      return BASE_LP_CLASS::AddMessage(m);
    }
 
-   static bool solve_sat_problem(LP_type* c, sat_vec<sat_literal> assumptions)
+   static bool solve_sat_problem(LP_type* c, sat_vec<sat_literal> assumptions, REAL* sat_th, REAL* sat_feasible_bound, REAL* sat_infeasible_bound)
    {
-     const auto feasible = c->sat_.solve(&assumptions);
-     return feasible == CMSat::l_True;
+     const bool feasible = c->sat_.solve(&assumptions) == CMSat::l_True;
+     adjust_th(feasible , *sat_th, *sat_feasible_bound, *sat_infeasible_bound);
+     return feasible;
    }
 
    void ComputePassAndPrimal(const INDEX iteration)
@@ -534,7 +535,7 @@ public:
      // run sat solver on reduced problem asynchronuously
      if(!sat_handle_.valid()) { 
        std::cout << "start sat calculation\n";
-       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions);
+       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &sat_th, &sat_feasible_bound, &sat_infeasible_bound);
        return true;
      }
 
@@ -560,10 +561,9 @@ public:
        } else {
          std::cout << "sat not feasible with current threshold = " << sat_th << "\n";
        }
-       adjust_th(feasible, sat_th, sat_feasible_bound, sat_infeasible_bound);
 
        std::cout << "restart sat calculation\n";
-       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions);
+       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &sat_th, &sat_feasible_bound, &sat_infeasible_bound);
        return true;
 
      } else {
@@ -573,7 +573,7 @@ public:
    }
 private:
 
-   void adjust_th(const bool feasible, REAL& cur_th, REAL& feasible_bound, REAL& infeasible_bound)
+   static void adjust_th(const bool feasible, REAL& cur_th, REAL& feasible_bound, REAL& infeasible_bound)
    {
      assert(infeasible_bound <= cur_th && cur_th <= feasible_bound);
      if(feasible) {
@@ -596,12 +596,12 @@ private:
    //Glucose::SimpSolver sat_;
    CMSat::SATSolver sat_;
 
-   REAL cur_forward_th_ = 1.0;
-   REAL cur_backward_th_ = 1.0;
-   REAL forward_feasible_bound_ = 2.0, forward_infeasible_bound_ = 0;
-   REAL backward_feasible_bound_ = 2.0, backward_infeasible_bound_ = 0;
+   REAL cur_forward_th_ = 0.01;
+   REAL cur_backward_th_ = 0.01;
+   REAL forward_feasible_bound_ = 2.0*cur_forward_th_, forward_infeasible_bound_ = 0;
+   REAL backward_feasible_bound_ = 2.0*cur_backward_th_, backward_infeasible_bound_ = 0;
 
-   decltype(std::async(std::launch::async, solve_sat_problem, nullptr, sat_vec<sat_literal>{} )) sat_handle_;
+   decltype(std::async(std::launch::async, solve_sat_problem, nullptr, sat_vec<sat_literal>{}, nullptr, nullptr, nullptr)) sat_handle_;
    Direction cur_sat_reduction_direction_ = Direction::forward;
 };
 

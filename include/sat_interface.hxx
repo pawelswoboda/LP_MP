@@ -70,8 +70,7 @@ namespace LP_MP {
     constexpr INDEX th = 3; // pursue a direct approach until 6 variables, and if more a recursive one
     const INDEX n = std::distance(var_begin, var_end);
     assert(n > 0);
-    if(n == 1) { return *var_begin; }
-    else if(n <= th) {
+    if(n <= th) {
       return add_at_most_one_constraint_naive_sat(s, var_begin, var_end);
     } else {
       if(n <= 3*th) {

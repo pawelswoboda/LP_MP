@@ -16,6 +16,8 @@ Additionally, interfaces to the (I)LP-solvers [gurobi](http://www.gurobi.com) an
 
 Parallel optimization can be enabled in cmake by setting `LP_MP_PARALLEL` to `ON`.
 
+SAT-based rounding can be enabled for some problems by setting `WITH_SAT_BASED_ROUNDING` to `ON`.
+
 A large number of datasets can be automatically downloaded for evaluating solvers.
 
 ## Installation
