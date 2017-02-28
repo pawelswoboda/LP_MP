@@ -4,26 +4,33 @@
 #include "config.hxx"
 //#include "simp/SimpSolver.h"
 #include "cryptominisat5/cryptominisat.h"
+extern "C" {
+#include "lglib.h"
+}
 
 namespace LP_MP {
 
   using sat_var = int;
   //using sat_var = Glucose::Var;
-  using sat_literal = CMSat::Lit;
+  using sat_literal = int;
+  //using sat_literal = CMSat::Lit;
   template<typename T>
   using sat_vec = std::vector<T>;
 
   sat_literal to_literal(const sat_var v) 
   {
-   return CMSat::Lit(v,false);
+    return v+1;
+    //return CMSat::Lit(v,false);
     //return CMSat::mkLit(v,false);
   }
 
   template<typename SAT_SOLVER>
   void make_sat_var_equal(SAT_SOLVER& s, const sat_literal i, const sat_literal j)
   {
-      s.add_clause({i,~j});
-      s.add_clause({~i,j}); 
+    lgladd(s, i); lgladd(s, -j); lgladd(s, 0); 
+    lgladd(s, -i); lgladd(s, j); lgladd(s, 0); 
+      //s.add_clause({i,-j});
+      //s.add_clause({-i,j}); 
   }
 
   template<typename SAT_SOLVER>
@@ -31,8 +38,9 @@ namespace LP_MP {
   {
     std::vector<sat_var> v(n);
     for(INDEX i=0; i<n; ++i) {
-      v.push_back(s.nVars());
-      s.new_var(); 
+      //v.push_back(s.nVars());
+      //s.new_var(); 
+      v.push_back( lglincvar(s)-1 );
     }
     return std::move(v);
   }
@@ -46,20 +54,33 @@ namespace LP_MP {
     }
     for(INDEX i=0; i<n; ++i) {
       for(INDEX j=i+1; j<n; ++j) {
-        s.add_clause({~to_literal(*(var_begin+i)), ~to_literal(*(var_begin+j))});
+        //s.add_clause({-to_literal(*(var_begin+i)), -to_literal(*(var_begin+j))});
+        lgladd(s, -to_literal(*(var_begin+i)));
+        lgladd(s, -to_literal(*(var_begin+j)));
+        lgladd(s, 0);
       }
     }
-    auto c = s.nVars();
-    s.new_var();
+    auto c = lglmaxvar(s);
+    //auto c = s.nVars();
+    //s.new_var();
     for(INDEX i=0; i<n; ++i) {
-      s.add_clause({to_literal(c),~to_literal(*(var_begin+i))});
+      //s.add_clause({to_literal(c),-to_literal(*(var_begin+i))});
+      lgladd(s, to_literal(c));
+      lgladd(s, -to_literal(*(var_begin+i)));
+      lgladd(s, 0);
     }
     
-    sat_vec<sat_literal> v({~to_literal(c)});
+
+    lgladd(s, -to_literal(c));
     for(INDEX i=0; i<n; ++i) {
-      v.push_back(to_literal(*(var_begin+i)));
+      lgladd(s, to_literal(*(var_begin+i)));
     }
-    s.add_clause(v); 
+    lgladd(s, 0);
+    //sat_vec<sat_literal> v({-to_literal(c)});
+    //for(INDEX i=0; i<n; ++i) {
+    //  v.push_back(to_literal(*(var_begin+i)));
+    //}
+    //s.add_clause(v); 
 
     return c; 
   }

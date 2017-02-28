@@ -1434,7 +1434,8 @@ public:
       return FunctionExistence::has_convert_primal<FactorType,void, SAT_SOLVER, sat_var>(); 
    }
    //void convert_primal(Glucose::SimpSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
-   void convert_primal(CMSat::SATSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   //void convert_primal(CMSat::SATSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   void convert_primal(LGL* sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
    {
       static_if<can_convert_primal<decltype(sat)>()>([&](auto f) { 
             f(factor_).convert_primal(sat, sat_begin);

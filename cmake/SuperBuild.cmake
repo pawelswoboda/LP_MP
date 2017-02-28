@@ -184,6 +184,19 @@ ExternalProject_ADD(
    )
 ExternalProject_Get_Property(CS2_CPP_Project install_dir)
 
+# lingeling SAT solver
+list(APPEND DEPENDENCIES Lingeling_Project)
+ExternalProject_ADD(
+   Lingeling_Project
+   URL "http://fmv.jku.at/lingeling/lingeling-bal-2293bef-151109.tar.gz"
+   INSTALL_COMMAND ""
+   BUILD_IN_SOURCE 1
+   BUILD_COMMAND "make"
+   CONFIGURE_COMMAND "./configure.sh"
+   )
+ExternalProject_Get_Property(TCLAP_Project install_dir)
+
+
 ExternalProject_Add (LP_MP
    DEPENDS ${DEPENDENCIES}
    SOURCE_DIR ${PROJECT_SOURCE_DIR}

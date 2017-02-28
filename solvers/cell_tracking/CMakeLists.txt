@@ -1,5 +1,6 @@
 add_executable( cell_tracking cell_tracking.cpp ${headers} ${sources} )
-target_link_libraries( cell_tracking Vc m stdc++ pthread cryptominisat5 )
+target_link_libraries( cell_tracking Vc m stdc++ pthread lgl )
+#target_link_libraries( cell_tracking Vc m stdc++ pthread cryptominisat5 )
 #target_link_libraries( cell_tracking Vc m stdc++ pthread glucose )
 
 add_library( json_cpp jsoncpp.cpp )

@@ -194,8 +194,10 @@ public:
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
     // create variables
-    auto detection_var = s.nVars();
-    s.new_var(); //detection will rather be false
+    auto detection_var = lglmaxvar(s);
+    lglincvar(s); 
+    //auto detection_var = s.nVars();
+    //s.new_var(); //detection will rather be false
     //std::cout << "first var in detection factor = " << detection_var << "\n";
     auto incoming_var = create_sat_variables(s, no_incoming_edges());
     auto outgoing_var = create_sat_variables(s, no_outgoing_edges());
@@ -219,19 +221,19 @@ public:
       const REAL incoming_min = *std::min_element(incoming_begin(), incoming_end());
       for(INDEX i=0; i<no_incoming_edges(); ++i) {
         if(incoming(i) > incoming_min + th) { 
-           assumptions.push_back(~to_literal(begin+1+i));
+           assumptions.push_back(-to_literal(begin+1+i));
          }
       }
 
       const REAL outgoing_min = *std::min_element(outgoing_begin(), outgoing_end());
       for(INDEX i=0; i<no_outgoing_edges(); ++i) {
         if(outgoing(i) > outgoing_min + th) { 
-           assumptions.push_back(~to_literal(begin+1+no_incoming_edges()+i));
+           assumptions.push_back(-to_literal(begin+1+no_incoming_edges()+i));
          }
       } 
     } else {
       for(auto i=0; i<this->size(); ++i) {
-        assumptions.push_back(~to_literal(begin+i));
+        assumptions.push_back(-to_literal(begin+i));
       }
     }
   }
@@ -239,18 +241,22 @@ public:
   template<typename SAT_SOLVER>
   void convert_primal(SAT_SOLVER& s, sat_var first)
   {
-    assert(s.get_model()[first] != CMSat::l_Undef);
-    if(s.get_model()[first] == CMSat::l_True) {
+    //assert(s.get_model()[first] != CMSat::l_Undef);
+    //std::cout << lglmaxvar(s) << "\n";
+    if(lglderef(s, to_literal(first)) == 1) {
+    //if(s.get_model()[first] == CMSat::l_True) {
       //std::cout << "in primal conversion: detection factor is on\n";
       // find index of incoming and outgoing active edge
       for(INDEX i=first+1; i<first+1+no_incoming_edges(); ++i) {
-        if(s.get_model()[i] == CMSat::l_True) {
+        if(lglderef(s,to_literal(i)) == 1) {
+        //if(s.get_model()[i] == CMSat::l_True) {
           incoming_edge_ = i-first-1;
           //std::cout << "incoming edge = " << i << ", ";
         }
       }
       for(INDEX i=first+1+no_incoming_edges(); i<first+size(); ++i) {
-        if(s.get_model()[i] == CMSat::l_True) {
+        if(lglderef(s,to_literal(i)) == 1) {
+        //if(s.get_model()[i] == CMSat::l_True) {
           outgoing_edge_ = i-first-1-no_incoming_edges();
           //std::cout << "outgoing edge = " << i << "\n";
         }
@@ -949,7 +955,7 @@ public:
   {
     for(INDEX i=0; i<this->size(); ++i) {
       if((*this)[i] > th) { 
-        assumptions.push_back(~to_literal(begin+i)); 
+        assumptions.push_back(-to_literal(begin+i)); 
       }
     }
   }
@@ -958,7 +964,8 @@ public:
   void convert_primal(SAT_SOLVER& s, sat_var first)
   {
     for(INDEX i=0; i<this->size(); ++i) {
-      if(s.get_model()[first+i] == CMSat::l_True) {
+      if(lglderef(s, to_literal(first+i)) == true) {
+      //if(s.get_model()[first+i] == CMSat::l_True) {
         primal_ = i;
         return;
       }
@@ -1174,7 +1181,7 @@ public:
     // do zrobienia: if reparametrization is < -th, then disallow no edge to be taken!
     for(INDEX i=0; i<this->size(); ++i) {
       if((*this)[i] > th) { 
-        assumptions.push_back(~to_literal(begin+i)); 
+        assumptions.push_back(-to_literal(begin+i)); 
       }
     }
   }
@@ -1183,7 +1190,8 @@ public:
   void convert_primal(SAT_SOLVER& s, sat_var first) 
   {
     for(INDEX i=0; i<this->size(); ++i) {
-      if(s.get_model()[first+i] == CMSat::l_True) {
+      if(lglderef(s, to_literal(first+i)) == true) {
+      //if(s.get_model()[first+i] == CMSat::l_True) {
         primal_ = i;
         return;
       }

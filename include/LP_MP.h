@@ -43,7 +43,8 @@ public:
    virtual void UpdateFactorPrimal(const weight_vector& omega, const INDEX iteration) = 0;
    virtual void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec<sat_literal>& assumptions) = 0;
    //virtual void convert_primal(Glucose::SimpSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
-   virtual void convert_primal(CMSat::SATSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
+   //virtual void convert_primal(CMSat::SATSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
+   virtual void convert_primal(LGL*, sat_var) = 0; // this is not nice: the solver should be templatized
    virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
    virtual INDEX size() const = 0;
    virtual INDEX PrimalSize() const = 0;
@@ -469,13 +470,68 @@ private:
 template<typename BASE_LP_CLASS>
 class LP_sat : public BASE_LP_CLASS
 {
+private:
+  struct sat_th {
+    sat_th() 
+      : th(0.01),
+      feasible_bound(0.1),
+      infeasible_bound(0.0)
+    {}
+
+    void adjust_th(const bool feasible)
+    {
+      assert(infeasible_bound <= th && th <= feasible_bound);
+      if(feasible) {
+        if(th >= feasible_bound - 0.01) {
+          infeasible_bound *= 0.8;
+        }
+        feasible_bound = std::min(feasible_bound, th);
+        th += (infeasible_bound - th)/2.0; 
+      } else {
+        if(th <= infeasible_bound + 0.001) {
+          feasible_bound *= 2.0;
+        }
+        infeasible_bound = std::max(infeasible_bound, th);
+        th += (feasible_bound - th)/2.0;
+      } 
+    }
+
+    REAL th, feasible_bound, infeasible_bound;
+  };
+
+
 public:
   using LP_type = LP_sat<BASE_LP_CLASS>;
+
+  LP_sat()
+  {
+    sat_ = lglinit();
+    assert(sat_ != nullptr);
+    //sat_.set_no_simplify(); // seems to make solver much faster
+  }
+
+  ~LP_sat()
+  {
+    lglrelease(sat_);
+  }
+
+  LP_sat(LP_sat& o)
+    : factor_to_index_(o.factor_to_index_),
+    sat_var_(lglclone(o.sat_var_)),
+    forward_sat_th_(o.forward_sat_th_), 
+    backward_sat_th_(backward_sat_th_),
+    cur_sat_reduction_direction_(o.cur_sat_reduction_direction_)
+
+  {
+    assert(sat_handle_.valid()); //should not be copied and we assume that currently no sat solver is running
+  }
+
 
   template<typename FACTOR_CONTAINER_TYPE>
   INDEX AddFactor(FACTOR_CONTAINER_TYPE* f) 
   {
-    sat_var_.push_back(sat_.nVars());
+    sat_var_.push_back( lglmaxvar(sat_) );
+    //sat_var_.push_back(sat_.nVars());
     //std::cout << "number of variables in sat_ = " << sat_var_[sat_var_.size()-1] << "\n";
     f->GetFactor()->construct_sat_clauses(sat_);
     INDEX n = BASE_LP_CLASS::AddFactor(f);
@@ -495,10 +551,23 @@ public:
      return BASE_LP_CLASS::AddMessage(m);
    }
 
-   static bool solve_sat_problem(LP_type* c, sat_vec<sat_literal> assumptions, REAL* sat_th, REAL* sat_feasible_bound, REAL* sat_infeasible_bound)
+   static bool solve_sat_problem(LP_type* c, sat_vec<sat_literal> assumptions, sat_th* th)
    {
-     const bool feasible = c->sat_.solve(&assumptions) == CMSat::l_True;
-     adjust_th(feasible , *sat_th, *sat_feasible_bound, *sat_infeasible_bound);
+     //for(const auto lit : assumptions) {
+     for(INDEX i=0; i<assumptions.size(); ++i) {
+       lglassume( c->sat_, assumptions[i] );
+     }
+     for(INDEX i=0; i<lglmaxvar(c->sat_); ++i) {
+       lglfreeze(c->sat_, to_literal(i));
+     }
+     const int sat_ret = lglsat(c->sat_);
+     //lglmeltall(c->sat_);
+     std::cout << "solved sat " << sat_ret << "\n";
+
+     const bool feasible = sat_ret == LGL_SATISFIABLE;
+     //solve(&assumptions) == CMSat::l_True;
+     //const bool feasible = c->sat_.solve(&assumptions) == CMSat::l_True;
+     th->adjust_th(feasible);
      return feasible;
    }
 
@@ -506,11 +575,11 @@ public:
    {
      bool sat_call_finished;
      if(cur_sat_reduction_direction_ == Direction::forward) {
-       sat_call_finished = compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), this->omegaForward_.begin(), cur_forward_th_, forward_feasible_bound_, forward_infeasible_bound_);
+       sat_call_finished = compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), this->omegaForward_.begin(), forward_sat_th_);
        this->ComputePass(this->backwardUpdateOrdering_.rbegin(), this->backwardUpdateOrdering_.rend(), this->omegaBackward_.begin());
      } else {
        this->ComputePass(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), this->omegaBackward_.begin());
-       sat_call_finished = compute_pass_reduce_sat(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), this->omegaBackward_.begin(), cur_backward_th_, backward_feasible_bound_, backward_infeasible_bound_);
+       sat_call_finished = compute_pass_reduce_sat(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), this->omegaBackward_.begin(), backward_sat_th_);
      }
 
      if(sat_call_finished) {
@@ -524,18 +593,19 @@ public:
        }
      }
    }
+
    template<typename FACTOR_ITERATOR, typename WEIGHT_ITERATOR>
-   bool compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, REAL& sat_th, REAL& sat_feasible_bound, REAL& sat_infeasible_bound)
+   bool compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, sat_th& th)
    {
      sat_vec<sat_literal> assumptions;
      for(auto it=factor_begin; it!=factor_end; ++it, ++omega_begin) {
        const INDEX factor_number = factor_to_index_[*it];
-       (*it)->UpdateFactorSAT(*omega_begin, sat_th, sat_var_[factor_number], assumptions);
+       (*it)->UpdateFactorSAT(*omega_begin, th.th, sat_var_[factor_number], assumptions);
      }
      // run sat solver on reduced problem asynchronuously
      if(!sat_handle_.valid()) { 
        std::cout << "start sat calculation\n";
-       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &sat_th, &sat_feasible_bound, &sat_infeasible_bound);
+       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
        return true;
      }
 
@@ -548,8 +618,9 @@ public:
        std::cout << "collect sat result\n";
        const bool feasible = sat_handle_.get();
        if(feasible) {
-         for(sat_var i=0; i<sat_.nVars(); ++i) {
-           assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
+         for(sat_var i=0; i<lglmaxvar(sat_); ++i) {
+         //for(sat_var i=0; i<sat_.nVars(); ++i) {
+           //assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
          }
          // convert sat solution to original solution format and compute primal cost
          for(INDEX i=0; i<this->f_.size(); ++i) {
@@ -557,13 +628,13 @@ public:
            this->f_[i]->convert_primal(sat_, sat_var_[i]);
          }
          REAL primal_cost = this->EvaluatePrimal(this->f_.begin(), this->f_.end());
-         std::cout << "sat solution cost = " << primal_cost << ", sat threshold = " << sat_th << "\n"; 
+         std::cout << "sat solution cost = " << primal_cost << ", sat threshold = " << th.th << "\n"; 
        } else {
-         std::cout << "sat not feasible with current threshold = " << sat_th << "\n";
+         std::cout << "sat not feasible with current threshold = " << th.th << "\n";
        }
 
        std::cout << "restart sat calculation\n";
-       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &sat_th, &sat_feasible_bound, &sat_infeasible_bound);
+       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
        return true;
 
      } else {
@@ -573,35 +644,15 @@ public:
    }
 private:
 
-   static void adjust_th(const bool feasible, REAL& cur_th, REAL& feasible_bound, REAL& infeasible_bound)
-   {
-     assert(infeasible_bound <= cur_th && cur_th <= feasible_bound);
-     if(feasible) {
-       if(cur_th >= feasible_bound - 0.01) {
-         infeasible_bound *= 0.8;
-       }
-       feasible_bound = std::min(feasible_bound, cur_th);
-       cur_th += (infeasible_bound - cur_th)/2.0; 
-     } else {
-        if(cur_th <= infeasible_bound + 0.001) {
-          feasible_bound *= 2.0;
-        }
-        infeasible_bound = std::max(infeasible_bound, cur_th);
-        cur_th += (feasible_bound - cur_th)/2.0;
-     } 
-   }
-
    std::map<FactorTypeAdapter*,INDEX> factor_to_index_; // possibly make hash out of this
    std::vector<sat_var> sat_var_;
    //Glucose::SimpSolver sat_;
-   CMSat::SATSolver sat_;
+   //CMSat::SATSolver sat_;
+   LGL* sat_;
 
-   REAL cur_forward_th_ = 0.01;
-   REAL cur_backward_th_ = 0.01;
-   REAL forward_feasible_bound_ = 2.0*cur_forward_th_, forward_infeasible_bound_ = 0;
-   REAL backward_feasible_bound_ = 2.0*cur_backward_th_, backward_infeasible_bound_ = 0;
+   sat_th forward_sat_th_, backward_sat_th_;
 
-   decltype(std::async(std::launch::async, solve_sat_problem, nullptr, sat_vec<sat_literal>{}, nullptr, nullptr, nullptr)) sat_handle_;
+   decltype(std::async(std::launch::async, solve_sat_problem, nullptr, sat_vec<sat_literal>{}, nullptr)) sat_handle_;
    Direction cur_sat_reduction_direction_ = Direction::forward;
 };
 

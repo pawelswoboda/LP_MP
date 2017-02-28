@@ -41,7 +41,7 @@ public:
 
    Solver()
       : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
-      lp_(LP_TYPE()),
+      lp_(),
       // do zrobienia: use perfect forwarding or std::piecewise_construct
       problemConstructor_(tupleMaker(ProblemDecompositionList{}, *this)),
       // build the standard command line arguments
