@@ -206,8 +206,8 @@ namespace MulticutOpenGmInput {
       return out;
    }
 
-   template<typename FMC>
-   bool ParseProblem(const std::string filename, Solver<FMC>& pd)
+   template<typename SOLVER>
+   bool ParseProblem(const std::string filename, SOLVER& pd)
    {
       //read with hdf5
       auto fileHandle = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -311,37 +311,37 @@ namespace MulticutTextInput {
       std::vector<std::tuple<INDEX,INDEX,REAL>> edges_;
    };
 
-   template<typename FMC, typename Rule >
+   template<typename SOLVER, typename Rule >
       struct action
       : pegtl::nothing< Rule > {};
 
 
-   template<typename FMC> struct action<FMC, positive_integer > {
+   template<typename SOLVER> struct action<SOLVER, positive_integer > {
       template<typename INPUT>
-      static void apply(const INPUT & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
+      static void apply(const INPUT & in, SOLVER&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
       {
          integer_stack.push(std::stoul(in.string())); 
       }
    };
-   template<typename FMC> struct action<FMC, real_number > {
+   template<typename SOLVER> struct action<SOLVER, real_number > {
       template<typename INPUT>
-      static void apply(const INPUT & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
+      static void apply(const INPUT & in, SOLVER&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
       {
          real_stack.push(std::stod(in.string())); 
       }
    };
-   template<typename FMC> struct action<FMC, numberOfVariables_line > {
+   template<typename SOLVER> struct action<SOLVER, numberOfVariables_line > {
       template<typename INPUT>
-      static void apply(const INPUT & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const INPUT & in, SOLVER&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 1);
          mcInput.numberOfVariables_ = integer_stack.top();
          integer_stack.pop();
       }
    };
-   template<typename FMC> struct action<FMC, edge_line > {
+   template<typename SOLVER> struct action<SOLVER, edge_line > {
       template<typename INPUT>
-      static void apply(const INPUT & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const INPUT & in, SOLVER& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 2);
          assert(real_stack.size() == 1);
@@ -360,21 +360,21 @@ namespace MulticutTextInput {
          mc.AddUnaryFactor( i1,i2,cost );
       }
    };
-   template<typename FMC> struct action<FMC, pegtl::eof> {
+   template<typename SOLVER> struct action<SOLVER, pegtl::eof> {
       template<typename INPUT>
-      static void apply(const INPUT & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput& mcInput)
+      static void apply(const INPUT & in, SOLVER& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput& mcInput)
       {}
    };
 
-   template<typename FMC>
+   template<typename SOLVER>
       struct actionSpecialization {
-         template<typename RULE> struct type : public action<FMC,RULE> {};
+         template<typename RULE> struct type : public action<SOLVER,RULE> {};
       };
 
 
-   template<typename FMC> struct action<FMC, lifted_edge_line > {
+   template<typename SOLVER> struct action<SOLVER, lifted_edge_line > {
       template<typename INPUT>
-      static void apply(const INPUT & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const INPUT & in, SOLVER& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 2);
          assert(real_stack.size() == 1);
@@ -395,8 +395,8 @@ namespace MulticutTextInput {
    };
 
       
-   template<typename FMC>
-   bool ParseProblem(const std::string filename, Solver<FMC>& pd)
+   template<typename SOLVER>
+   bool ParseProblem(const std::string filename, SOLVER& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;
@@ -405,11 +405,11 @@ namespace MulticutTextInput {
 
       pegtl::file_parser problem(filename);
 
-      return problem.parse< grammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, mcInput);
+      return problem.parse< grammar, actionSpecialization<SOLVER>::template type >(pd, integer_stack, real_stack, mcInput);
    }
 
-   template<typename FMC>
-   bool ParseLiftedProblem(const std::string filename, Solver<FMC>& pd)
+   template<typename SOLVER>
+   bool ParseLiftedProblem(const std::string filename, SOLVER& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;
@@ -417,7 +417,7 @@ namespace MulticutTextInput {
       std::cout << "parsing " << filename << "\n";
 
       pegtl::file_parser problem(filename);
-      return problem.parse< LiftedMulticutGrammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, mcInput);
+      return problem.parse< LiftedMulticutGrammar, actionSpecialization<SOLVER>::template type >(pd, integer_stack, real_stack, mcInput);
    }
 
 

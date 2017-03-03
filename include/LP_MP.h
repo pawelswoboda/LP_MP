@@ -24,6 +24,7 @@
 #include <future>
 #include "memory_allocator.hxx"
 #include "sat_interface.hxx"
+#include "tclap/CmdLine.h"
 
 namespace LP_MP {
 
@@ -130,7 +131,7 @@ inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, 
 
 class LP {
 public:
-   LP() {}
+   LP(TCLAP::CmdLine& cmd) {}
    ~LP() 
    {
       for(INDEX i=0; i<m_.size(); i++) { delete m_[i]; }
@@ -159,6 +160,18 @@ public:
          this->AddMessage(m);
       }
 
+      ordering_valid_ = o.ordering_valid_;
+      omega_anisotropic_valid_ = o.omega_anisotropic_valid_ ;
+      omega_isotropic_valid_ = o.omega_isotropic_valid_ ;
+      omega_isotropic_damped_valid_ = o.omega_isotropic_damped_valid_ ;
+
+      omegaForwardAnisotropic_ = o.omegaForwardAnisotropic_; 
+      omegaBackwardAnisotropic_ = o.omegaBackwardAnisotropic_;
+      omegaForwardIsotropic_ = o.omegaForwardIsotropic_; 
+      omegaBackwardIsotropic_ = o.omegaBackwardIsotropic_;
+      omegaForwardIsotropicDamped_ = o.omegaForwardIsotropicDamped_; 
+      omegaBackwardIsotropicDamped_ = o.omegaBackwardIsotropicDamped_;
+
       forwardOrdering_.reserve(o.forwardOrdering_.size());
       for(auto* f : o.forwardOrdering_) {
         forwardOrdering_.push_back( factor_map[f] );
@@ -178,9 +191,6 @@ public:
       for(auto* f : o.backwardUpdateOrdering_) {
         backwardUpdateOrdering_.push_back( factor_map[f] );
       }
-
-      omegaForward_ = o.omegaForward_;
-      omegaForward_ = o.omegaForward_;
 
       forward_pass_factor_rel_.reserve(o.forward_pass_factor_rel_.size());
       for(auto f : o.forward_pass_factor_rel_) {
@@ -210,6 +220,7 @@ public:
    template<typename FACTOR_CONTAINER_TYPE>
    INDEX AddFactor(FACTOR_CONTAINER_TYPE* f)
    {
+      set_flags_dirty();
       f_.push_back(f);
       return f_.size() - 1;
    }
@@ -221,6 +232,7 @@ public:
    template<typename MESSAGE_CONTAINER_TYPE>
    INDEX AddMessage(MESSAGE_CONTAINER_TYPE* m)
    {
+      set_flags_dirty();
       m_.push_back(m);
       // do zrobienia: check whether left and right factors are in f_
 
@@ -254,8 +266,8 @@ public:
       BackwardPassFactorRelation(f1,f2);
    }
 
-   void ForwardPassFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2) { assert(f1!=f2); forward_pass_factor_rel_.push_back({f1,f2}); }
-   void BackwardPassFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2) { assert(f1!=f2); backward_pass_factor_rel_.push_back({f1,f2}); }
+   void ForwardPassFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2) { set_flags_dirty(); assert(f1!=f2); forward_pass_factor_rel_.push_back({f1,f2}); }
+   void BackwardPassFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2) { set_flags_dirty(); assert(f1!=f2); backward_pass_factor_rel_.push_back({f1,f2}); }
 
 
    void Init(); // must be called after all messages and factors have been added
@@ -318,6 +330,9 @@ public:
    }
    void SortFactors()
    {
+      if(ordering_valid_) { return; }
+      ordering_valid_ = true;
+
       SortFactors(forward_pass_factor_rel_, forwardOrdering_, forwardUpdateOrdering_);
       SortFactors(backward_pass_factor_rel_, backwardOrdering_, backwardUpdateOrdering_);
    }
@@ -327,7 +342,11 @@ public:
    template<typename FACTOR_ITERATOR>
       std::vector<std::vector<FactorTypeAdapter*> > ComputeSendFactorConnection(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt);
 
-   void ComputeWeights(const LPReparametrizationMode m);
+   //void ComputeWeights(const LPReparametrizationMode m);
+   void set_reparametrization(const LPReparametrizationMode r) 
+   {
+      repamMode_ = r;
+   }
    void ComputeAnisotropicWeights();
    template<typename FACTOR_ITERATOR>
    void ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, two_dim_variable_array<REAL>& omega); 
@@ -385,13 +404,54 @@ public:
       void WritePrimal(const INDEX factorIndexBegin, const INDEX factorIndexEnd, std::ofstream& fs) const;
 
    LPReparametrizationMode GetRepamMode() const { return repamMode_; }
+
+   void set_flags_dirty()
+   {
+      ordering_valid_ = false;
+      omega_anisotropic_valid_ = false;
+      omega_isotropic_valid_ = false;
+      omega_isotropic_damped_valid_ = false;
+   }
+
+   // return type for get_omega
+   struct omega_storage {
+      two_dim_variable_array<REAL>& forward;
+      two_dim_variable_array<REAL>& backward;
+   };
+
+   omega_storage get_omega()
+   {
+      assert(repamMode_ != LPReparametrizationMode::Undefined);
+      SortFactors();
+      if(repamMode_ == LPReparametrizationMode::Anisotropic) {
+         ComputeAnisotropicWeights();
+         return omega_storage{omegaForwardAnisotropic_, omegaBackwardAnisotropic_};
+      } else if(repamMode_ == LPReparametrizationMode::Uniform) {
+         ComputeUniformWeights();
+         return omega_storage{omegaForwardIsotropic_, omegaBackwardIsotropic_};
+      } else if(repamMode_ == LPReparametrizationMode::DampedUniform) {
+         ComputeDampedUniformWeights();
+         return omega_storage{omegaForwardIsotropicDamped_, omegaBackwardIsotropicDamped_};
+      } else {
+         throw std::runtime_error("no reparametrization mode set");
+      }
+   }
 protected:
    // do zrobienia: possibly hold factors and messages in shared_ptr?
    std::vector<FactorTypeAdapter*> f_; // note that here the factors are stored in the original order they were given. They will be output in this order as well, e.g. by problemDecomposition
    std::vector<MessageTypeAdapter*> m_;
+
+   bool ordering_valid_ = false;
    std::vector<FactorTypeAdapter*> forwardOrdering_, backwardOrdering_; // separate forward and backward ordering are not needed: Just store factorOrdering_ and generate forward order by begin() and backward order by rbegin().
    std::vector<FactorTypeAdapter*> forwardUpdateOrdering_, backwardUpdateOrdering_; // like forwardOrdering_, but includes only those factors where UpdateFactor actually does something
-   two_dim_variable_array<REAL> omegaForward_, omegaBackward_;
+
+   bool omega_anisotropic_valid_ = false;
+   two_dim_variable_array<REAL> omegaForwardAnisotropic_, omegaBackwardAnisotropic_;
+   bool omega_isotropic_valid_ = false;
+   two_dim_variable_array<REAL> omegaForwardIsotropic_, omegaBackwardIsotropic_;
+   bool omega_isotropic_damped_valid_ = false;
+   two_dim_variable_array<REAL> omegaForwardIsotropicDamped_, omegaBackwardIsotropicDamped_;
+
    std::vector<std::pair<FactorTypeAdapter*, FactorTypeAdapter*> > forward_pass_factor_rel_, backward_pass_factor_rel_; // factor ordering relations. First factor must come before second factor. factorRel_ must describe a DAG
 
    
@@ -401,14 +461,25 @@ protected:
    LPReparametrizationMode repamMode_ = LPReparametrizationMode::Undefined;
 };
 
-class LP_concurrent : public LP {
+template<typename BASE_LP_CLASS>
+class LP_concurrent : public BASE_LP_CLASS {
 public:
-  LP_concurrent(const INDEX no_threads = std::thread::hardware_concurrency())
-    : threads_(no_threads)
+  LP_concurrent(TCLAP::CmdLine& cmd) 
+    : BASE_LP_CLASS(cmd),
+    num_lp_threads_arg_("","numLpThreads","number of threads for message passing, default = 1",false,1,&positiveIntegerConstraint,cmd)
+  {}
+  void Begin()
   {
+    threads_ = decltype(threads_)(num_lp_threads_arg_.getValue());
     std::cout << "number of threads = " << threads_.size() << "\n";
-    assert(no_threads >= 1);
   }
+
+  //LP_concurrent(const INDEX no_threads = std::thread::hardware_concurrency())
+  //  : threads_(no_threads)
+  //{
+  //  std::cout << "number of threads = " << threads_.size() << "\n";
+  //  assert(no_threads >= 1);
+  //}
 
   template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
    void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
@@ -461,10 +532,11 @@ private:
      for(auto&& i : threads_) {
        i.join();
      }
-
   }
 
   mutable std::vector<std::thread> threads_; // thread pool to be reused
+
+  TCLAP::ValueArg<INDEX> num_lp_threads_arg_;
 };
 
 template<typename BASE_LP_CLASS>
@@ -503,7 +575,7 @@ private:
 public:
   using LP_type = LP_sat<BASE_LP_CLASS>;
 
-  LP_sat()
+  LP_sat(TCLAP::CmdLine& cmd) : BASE_LP_CLASS(cmd)
   {
     sat_ = lglinit();
     assert(sat_ != nullptr);
@@ -530,25 +602,25 @@ public:
   template<typename FACTOR_CONTAINER_TYPE>
   INDEX AddFactor(FACTOR_CONTAINER_TYPE* f) 
   {
-    sat_var_.push_back( lglmaxvar(sat_) );
-    //sat_var_.push_back(sat_.nVars());
-    //std::cout << "number of variables in sat_ = " << sat_var_[sat_var_.size()-1] << "\n";
-    f->GetFactor()->construct_sat_clauses(sat_);
-    INDEX n = BASE_LP_CLASS::AddFactor(f);
-    factor_to_index_.insert(std::make_pair(f,n));
-    return n;
+     sat_var_.push_back( lglmaxvar(sat_) );
+     //sat_var_.push_back(sat_.nVars());
+     //std::cout << "number of variables in sat_ = " << sat_var_[sat_var_.size()-1] << "\n";
+     f->GetFactor()->construct_sat_clauses(sat_);
+     INDEX n = BASE_LP_CLASS::AddFactor(f);
+     factor_to_index_.insert(std::make_pair(f,n));
+     return n;
   }
 
    template<typename MESSAGE_CONTAINER_TYPE>
    INDEX AddMessage(MESSAGE_CONTAINER_TYPE* m)
    {
-     const INDEX left_factor_number = factor_to_index_[m->GetLeftFactor()];
-     const INDEX right_factor_number = factor_to_index_[m->GetRightFactor()];
-     auto* left = m->GetLeftFactor()->GetFactor();
-     auto* right = m->GetRightFactor()->GetFactor();
-     m->GetMessageOp().construct_sat_clauses(sat_, *left, *right, sat_var_[left_factor_number], sat_var_[right_factor_number]);
+      const INDEX left_factor_number = factor_to_index_[m->GetLeftFactor()];
+      const INDEX right_factor_number = factor_to_index_[m->GetRightFactor()];
+      auto* left = m->GetLeftFactor()->GetFactor();
+      auto* right = m->GetRightFactor()->GetFactor();
+      m->GetMessageOp().construct_sat_clauses(sat_, *left, *right, sat_var_[left_factor_number], sat_var_[right_factor_number]);
 
-     return BASE_LP_CLASS::AddMessage(m);
+      return BASE_LP_CLASS::AddMessage(m);
    }
 
    static bool solve_sat_problem(LP_type* c, sat_vec<sat_literal> assumptions, sat_th* th)
@@ -561,7 +633,6 @@ public:
        lglfreeze(c->sat_, to_literal(i));
      }
      const int sat_ret = lglsat(c->sat_);
-     //lglmeltall(c->sat_);
      std::cout << "solved sat " << sat_ret << "\n";
 
      const bool feasible = sat_ret == LGL_SATISFIABLE;
@@ -699,9 +770,9 @@ public:
          auto* m = std::get<0>(*it);
          Chirality c = std::get<1>(*it);
          if(std::get<1>(tree_messages_.back()) == Chirality::right) {
-            lb += std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->LowerBound();
-         } else {
             lb += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->LowerBound(); 
+         } else {
+            lb += std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->LowerBound();
          }
       }
       if(std::get<1>(tree_messages_.back()) == Chirality::right) {
@@ -772,10 +843,11 @@ inline void LP::Init()
 
 inline void LP::ComputePass()
 {
-   assert(forwardUpdateOrdering_.size() == omegaForward_.size());
-   assert(forwardUpdateOrdering_.size() == omegaBackward_.size());
-   ComputePass(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omegaForward_.begin());
-   ComputePass(forwardUpdateOrdering_.rbegin(), forwardUpdateOrdering_.rend(), omegaBackward_.begin());
+   const auto omega = get_omega();
+   assert(forwardUpdateOrdering_.size() == omega.forward.size());
+   assert(forwardUpdateOrdering_.size() == omega.backward.size());
+   ComputePass(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin());
+   ComputePass(forwardUpdateOrdering_.rbegin(), forwardUpdateOrdering_.rend(), omega.backward.begin());
 }
 
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
@@ -792,6 +864,7 @@ void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd
 //   bestLowerBound_ = std::max(currentLowerBound_,bestLowerBound_);
 //}
 
+/*
 inline void LP::ComputeWeights(const LPReparametrizationMode m)
 {
    assert(m != LPReparametrizationMode::Undefined);
@@ -807,30 +880,32 @@ inline void LP::ComputeWeights(const LPReparametrizationMode m)
       }
    }
 }
+*/
+
 inline void LP::ComputeAnisotropicWeights()
 {
-   if(repamMode_ != LPReparametrizationMode::Anisotropic) {
-      ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_);
-      ComputeAnisotropicWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackward_);
-      repamMode_ = LPReparametrizationMode::Anisotropic;
+   if(!omega_anisotropic_valid_) {
+      omega_anisotropic_valid_ = true;
+      ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardAnisotropic_);
+      ComputeAnisotropicWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackwardAnisotropic_);
    }
 }
 
 inline void LP::ComputeUniformWeights()
 {
-   if(repamMode_ != LPReparametrizationMode::Uniform) {
-      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_, 0);
-      ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackward_, 0);
-      repamMode_ = LPReparametrizationMode::Uniform;
+   if(!omega_isotropic_valid_) {
+      omega_isotropic_valid_ = true;
+      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropic_, 0);
+      ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackwardIsotropic_, 0);
    };
 }
 
 inline void LP::ComputeDampedUniformWeights()
 {
-   if(repamMode_ != LPReparametrizationMode::DampedUniform) {
-      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForward_, 1);
-      ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackward_, 1);
-      repamMode_ = LPReparametrizationMode::DampedUniform;
+   if(!omega_isotropic_damped_valid_) {
+      omega_isotropic_damped_valid_ = true;
+      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1);
+      ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackwardIsotropicDamped_, 1);
    };
 }
 
@@ -1167,11 +1242,12 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
 
 inline void LP::ComputePassAndPrimal(const INDEX iteration)
 {
-   ComputePassAndPrimal(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omegaForward_.begin(), 2*iteration+1); // timestamp must be > 0, otherwise in the first iteration primal does not get initialized
+   const auto omega = get_omega();
+   ComputePassAndPrimal(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), 2*iteration+1); // timestamp must be > 0, otherwise in the first iteration primal does not get initialized
    const REAL forward_cost = EvaluatePrimal();
    std::cout << "forward cost = " << forward_cost << "\n";
    
-   ComputePassAndPrimal(forwardUpdateOrdering_.rbegin(), forwardUpdateOrdering_.rend(), omegaBackward_.begin(), 2*iteration + 2); 
+   ComputePassAndPrimal(forwardUpdateOrdering_.rbegin(), forwardUpdateOrdering_.rend(), omega.backward.begin(), 2*iteration + 2); 
    const REAL backward_cost = EvaluatePrimal();
    std::cout << "backward cost = " << backward_cost << "\n";
 }

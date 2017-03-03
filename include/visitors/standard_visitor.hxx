@@ -18,28 +18,6 @@ public:
 */
 
 namespace LP_MP {
-   class PositiveRealConstraint : public TCLAP::Constraint<REAL>
-   {
-      public:
-         std::string description() const { return "positive real constraint"; };
-         std::string shortID() const { return "positive real number"; };
-         bool check(const REAL& value) const { return value >= 0.0; };
-   };
-   class OpenUnitIntervalConstraint: public TCLAP::Constraint<REAL>
-   {
-      public:
-         std::string description() const { return "0<x<1 real constraint"; };
-         std::string shortID() const { return "positive real number smaller 1"; };
-         bool check(const REAL& value) const { return value > 0.0 && value < 1.0; };
-   };
-   class PositiveIntegerConstraint : public TCLAP::Constraint<INDEX>
-   {
-      public:
-         std::string description() const { return "strictly positive integer constraint"; };
-         std::string shortID() const { return "strictly positive integer"; };
-         bool check(const INDEX& value) const { return value > 0; };
-   };
-
    // standard visitor class for LP_MP solver, when no custom visitor is given
    // do zrobienia: add xor arguments primalBoundComputationInterval, dualBoundComputationInterval with boundComputationInterval
    // do zrobienia: shall visitor depend on solver?

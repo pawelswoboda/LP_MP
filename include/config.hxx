@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cassert>
 #include <limits>
+#include "tclap/CmdLine.h"
 
 // type definitions for LP_MP
 
@@ -99,6 +100,32 @@ namespace LP_MP {
          return std::numeric_limits<REAL>::infinity();
       }
    }
+
+   // TCLAP constraints
+   class PositiveRealConstraint : public TCLAP::Constraint<REAL>
+   {
+      public:
+         std::string description() const { return "positive real constraint"; };
+         std::string shortID() const { return "positive real number"; };
+         bool check(const REAL& value) const { return value >= 0.0; };
+   };
+   class OpenUnitIntervalConstraint: public TCLAP::Constraint<REAL>
+   {
+      public:
+         std::string description() const { return "0<x<1 real constraint"; };
+         std::string shortID() const { return "positive real number smaller 1"; };
+         bool check(const REAL& value) const { return value > 0.0 && value < 1.0; };
+   };
+   class PositiveIntegerConstraint : public TCLAP::Constraint<INDEX>
+   {
+      public:
+         std::string description() const { return "strictly positive integer constraint"; };
+         std::string shortID() const { return "strictly positive integer"; };
+         bool check(const INDEX& value) const { return value > 0; };
+   };
+   static PositiveIntegerConstraint positiveIntegerConstraint;
+
+
 
 }
 

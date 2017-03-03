@@ -32,6 +32,8 @@ public:
     : no_incoming_edges_(no_incoming_edges),
     no_outgoing_edges_(no_outgoing_edges+can_exit) // the last outgoing edge is the exit one (when exit is possible)
   {
+    assert(no_incoming_edges > 0);
+    assert(no_outgoing_edges > 0);
     assert(can_exit == true); // true for mother machine only
     assert(no_outgoing_edges+can_exit == no_outgoing_edges + 1);
     pot_ = global_real_block_allocator_array[stack_allocator_index].allocate(size());
@@ -279,10 +281,11 @@ private:
 // layout of reparametrization: detection costs, appearance costs, disappearance costs, incoming edge costs, outgoing edge costs
 class multiple_detection_factor {
 public:
-   multiple_detection_factor(const INDEX max_detections, const INDEX no_incoming_edges, const INDEX no_outgoing_edges)
+   multiple_detection_factor(const INDEX max_detections, const INDEX no_incoming_edges, const INDEX no_outgoing_edges, bool divides = false)
       : max_detections_(max_detections),
         no_incoming_edges_(no_incoming_edges),
-        no_outgoing_edges_(no_outgoing_edges) // the last outgoing edge is the exit one (when exit is possible)
+        no_outgoing_edges_(no_outgoing_edges), // the last outgoing edge is the exit one (when exit is possible)
+        divides_(divides)
   {
     pot_ = global_real_block_allocator.allocate(size());
     assert(pot_ != nullptr);
@@ -546,7 +549,7 @@ public:
 private:
   const INDEX max_detections_, no_incoming_edges_, no_outgoing_edges_;
   REAL* pot_;
-  
+  bool divides_; 
 };
 
 // message connecting outgoing edge to incoming edge of detection factors between consecutive timeframes
