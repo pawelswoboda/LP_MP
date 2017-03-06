@@ -976,8 +976,13 @@ MulticutConstructor(SOLVER& pd)
       bool zero_th_iteration = true;
       for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) {
          if(th < eps) {
-            th = 0.0;
-            zero_th_iteration = false;
+            if(tripletsAdded <= 0.01*maxTripletsToAdd) {
+               std::cout << "additional separation with no guaranteed dual increase, i.e. th = 0\n";
+               th = 0.0;
+               zero_th_iteration = false;
+            } else {
+               break;
+            }
          }
          // first update union find datastructure
          for(auto& it : unaryFactors_) {
@@ -1789,7 +1794,7 @@ public:
             return std::get<2>(e);
          }
       }
-      return 0.0; // no constraint found
+      return -std::numeric_limits<REAL>::infinity(); // no constraint found
    }
 
    // returns nodes of odd wheel without center node
@@ -1803,19 +1808,31 @@ public:
 
       const INDEX noCompressedNodes = origToCompressedNode.size();
       const INDEX noBipartiteCompressedNodes = 2*noCompressedNodes;
-      typename BaseConstructor::Graph g(noBipartiteCompressedNodes,2*compressedEdges.size());
-      typename BaseConstructor::BfsData mp(g);
+      std::vector<INDEX> no_outgoing_arcs(2*noCompressedNodes, 0);
+      for(const auto e : compressedEdges) {
+         const INDEX i = std::get<0>(e);
+         const INDEX j = std::get<1>(e);
+         no_outgoing_arcs[i]++;
+         no_outgoing_arcs[noCompressedNodes + i]++;
+         no_outgoing_arcs[j]++;
+         no_outgoing_arcs[noCompressedNodes + j]++;
+      }
+      typename BaseConstructor::Graph2 g(noBipartiteCompressedNodes,4*compressedEdges.size(), no_outgoing_arcs);
+      typename BaseConstructor::BfsData2 mp(g);
       UnionFind uf(noBipartiteCompressedNodes);
       // construct bipartite graph based on triangles
       for(auto& e : compressedEdges) {
          assert(std::get<2>(e) >= minTh);
          const INDEX jc = std::get<0>(e);
          const INDEX  kc = std::get<1>(e);
-         g.AddEdge(jc,noCompressedNodes + kc,0.0);
-         g.AddEdge(noCompressedNodes + jc,kc,0.0);
+         g.add_arc(jc, noCompressedNodes + kc,0.0);
+         g.add_arc(noCompressedNodes + kc, jc,0.0);
+         g.add_arc(noCompressedNodes + jc, kc,0.0);
+         g.add_arc(kc, noCompressedNodes + jc,0.0);
          uf.merge(jc,noCompressedNodes + kc);
          uf.merge(noCompressedNodes + jc,kc);
       }
+      g.sort();
       // now check whether path exists between any given edges on graph
       for(INDEX j=0; j<noCompressedNodes; ++j) { // not nice: this has to be original number of nodes and bipartiteNumberOfNodes
          // find path from node j to node noNodes+j in g
@@ -1845,26 +1862,42 @@ public:
 
       // search for all triangles present in the graph, also in places where no triplet factor has been added
       // Construct adjacency list
-      std::vector<std::vector<INDEX>> adjacencyList(BaseConstructor::noNodes_);
-      for(auto& e : BaseConstructor::unaryFactors_) {
-         const INDEX i = std::get<0>(e)[0];
-         const INDEX j = std::get<0>(e)[1];
+
+
+      std::vector<INDEX> adjacency_list_count(this->noNodes_,0);
+      // first determine size for adjacency_list
+      for(auto& it : this->unaryFactors_) {
+         const INDEX i = std::get<0>(it.first);
+         const INDEX j = std::get<1>(it.first);
+         adjacency_list_count[i]++;
+         adjacency_list_count[j]++; 
+      }
+      two_dim_variable_array<INDEX> adjacency_list(adjacency_list_count);
+      std::fill(adjacency_list_count.begin(), adjacency_list_count.end(), 0);
+      for(auto& it : this->unaryFactors_) {
+         const INDEX i = std::get<0>(it.first);
+         const INDEX j = std::get<1>(it.first);
          assert(i<j);
-         adjacencyList[i].push_back(j);
-         adjacencyList[j].push_back(i);
+         adjacency_list[i][adjacency_list_count[i]] = j;
+         adjacency_list_count[i]++;
+         adjacency_list[j][adjacency_list_count[j]] = i;
+         adjacency_list_count[j]++;
       }
-      // sort it for fast intersection
-      for(INDEX i=0; i<adjacencyList.size(); ++i) {
-         std::sort(adjacencyList[i].begin(), adjacencyList[i].end());
+
+      // Sort the adjacency list, for fast intersections later
+      // do zrobienia: parallelize
+      for(int i=0; i < adjacency_list.size(); i++) {
+         std::sort(adjacency_list[i].begin(), adjacency_list[i].end());
       }
-      
+
       // find maximum threshold where still some cycle can be added for each node
       std::vector<std::tuple<INDEX,REAL>> threshold(this->noNodes_);
+      // do zrobienia: parallelize
       for(INDEX i=0; i<this->noNodes_; ++i) {
          // compute cost difference of all triplets with i as one of its nodes. 
          // sort in descending order.
          // populate union find datastructure successively with them, checking whether opposite nodes in bipartite graph are connected. If so, threshold is found
-         threshold[i] = std::make_tuple(i, ComputeThreshold(i,adjacencyList));
+         threshold[i] = std::make_tuple(i, ComputeThreshold(i,adjacency_list));
       }
 
       //std::cout << "maximal odd wheel threshold = " << std::get<1>(*std::max_element(threshold.begin(), threshold.end(), [](auto a, auto b) { return std::get<1>(a) > std::get<1>(b); })) << "\n\n";
@@ -1877,17 +1910,19 @@ public:
 
       // go over all nodes with large threshold, compute optimum odd wheel and try to add it to lp
       INDEX factorsAdded = 0;
+      // do zrobienia: parallelize
       for(auto it=threshold.begin(); it!=threshold.begin()+n; ++it) {
          const INDEX i = std::get<0>(*it);
          const REAL th = std::get<1>(*it);
-         if(th > 0.0) {
-            //std::cout << "\nodd wheel th = " << th << "\n\n";
-            auto oddWheel = ComputeViolatedOddWheel(i,th, adjacencyList);
+         if(th >= 0.0) {
+            auto oddWheel = ComputeViolatedOddWheel(i,th, adjacency_list);
             assert(oddWheel.size() > 0);
             factorsAdded += EnforceOddWheel(i,oddWheel);
          }
       }
       return factorsAdded;
+
+      /*
 
       assert(false);
       REAL minDualIncrease = 0.0; // for now, remove later
@@ -2102,6 +2137,7 @@ public:
       }
       
       return oddWheelsAdded;
+      */
    }
 
    INDEX Tighten(const INDEX maxCuttingPlanesToAdd)

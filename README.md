@@ -27,7 +27,7 @@ Prerequisites:
 * Clang 3.8
 * HDF5 (for inputs in hdf5 format)
 * Gurobi (for the gurobi interface. Compile libgurobi_c++ with clang)
-* CPlex (for the cplex interface)
+* CPLEX (for the cplex interface)
 * Sqlite3 (for evaluation)
 
 ## Contact

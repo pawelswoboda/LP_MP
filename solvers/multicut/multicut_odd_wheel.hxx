@@ -44,6 +44,7 @@ public:
       return 3e13;
    }
 
+   void init_primal() {}
    template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<std::array<REAL,9>*>(this) ); }
    template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
 private:
