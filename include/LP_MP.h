@@ -353,7 +353,7 @@ public:
    void ComputeUniformWeights();
    void ComputeDampedUniformWeights();
    template<typename FACTOR_ITERATOR>
-   void ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, two_dim_variable_array<REAL>& omega, const REAL leave_weight = 0.001); // do zrobienia: rename to isotropic weights
+   void ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, two_dim_variable_array<REAL>& omega, const REAL leave_weight); // do zrobienia: rename to isotropic weights
 
    REAL LowerBound() const
    {
@@ -903,9 +903,10 @@ inline void LP::ComputeUniformWeights()
 inline void LP::ComputeDampedUniformWeights()
 {
    if(!omega_isotropic_damped_valid_) {
+      std::cout << "compute damped uniform weights\n";
       omega_isotropic_damped_valid_ = true;
-      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1);
-      ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackwardIsotropicDamped_, 1);
+      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1.0);
+      ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackwardIsotropicDamped_, 1.0);
    };
 }
 
@@ -1235,7 +1236,7 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
    omega = two_dim_variable_array<REAL>(omega_size);
    for(INDEX i=0; i<omega.size(); ++i) {
      for(INDEX j=0; j<omega[i].size(); ++j) {
-       omega[i][j] = 1.0/REAL( omega[i].size() );
+       omega[i][j] = 1.0/REAL( omega[i].size() + leave_weight );
      }
    }
 }

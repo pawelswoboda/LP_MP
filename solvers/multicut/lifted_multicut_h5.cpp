@@ -4,12 +4,12 @@
 using namespace LP_MP;
 using FMC = FMC_LIFTED_MULTICUT;
 //using SolverType = ProblemConstructorRoundingSolver<FMC>;
-using SolverType = Solver<FMC>;
+using SolverType = ProblemConstructorRoundingSolver<Solver<FMC,LP,StandardTighteningVisitor>>;
 //using InputFct = MulticutH5Input::ParseLiftedProblem<SolverType>;
 int main(int argc, char* argv[])
 {
-   VisitorSolver<SolverType,StandardTighteningVisitor> solver(argc,argv);
-   solver.ReadProblem(MulticutH5Input::ParseLiftedProblem<Solver<FMC>>);
+   SolverType solver(argc,argv);
+   solver.ReadProblem(MulticutH5Input::ParseLiftedProblem<Solver<FMC,LP,StandardTighteningVisitor>>);
    return solver.Solve();
 }
 
