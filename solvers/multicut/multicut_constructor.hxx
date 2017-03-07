@@ -594,6 +594,8 @@ MulticutConstructor(SOLVER& pd)
       auto* u = new UnaryFactorContainer(cost);
       lp_->AddFactor(u);
       auto it = unaryFactors_.insert(std::make_pair(std::array<INDEX,2>{i1,i2}, u)).first;
+      unaryFactorsVector_.push_back(std::make_pair(std::array<INDEX,2>{i1,i2}, u));
+
       //std::cout << "current edge: (" << i1 << "," << i2 << ")";
       if(it != unaryFactors_.begin()) {
          auto prevIt = it;
@@ -762,61 +764,106 @@ MulticutConstructor(SOLVER& pd)
       //}
    }
 
+template<
+class InputIt1, class InputIt2,
+      class OutputIt, class Compare, class Merge
+      >
+   OutputIt set_intersection_merge
+(
+ InputIt1 first1, InputIt1 last1,
+ InputIt2 first2, InputIt2 last2,
+ OutputIt d_first, Compare comp, Merge merge
+ )
+{
+   while (first1 != last1 && first2 != last2)
+   {
+      if (comp(*first1, *first2))
+         ++first1;
+      else
+      {
+         if (!comp(*first2, *first1))
+            *d_first++ = merge(*first1++, *first2);
+         ++first2;
+      }
+   }
+   return d_first;
+}
+
    // search for violated triplets, e.g. triplets with one negative edge and two positive ones.
    INDEX FindViolatedTriplets(const INDEX max_triplets_to_add)
    {
       std::vector<INDEX> adjacency_list_count(noNodes_,0);
       // first determine size for adjacency_list
-      for(auto& it : unaryFactors_) {
+      for(auto& it : unaryFactorsVector_) {
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
          adjacency_list_count[i]++;
          adjacency_list_count[j]++; 
       }
-      two_dim_variable_array<INDEX> adjacency_list(adjacency_list_count);
+      two_dim_variable_array<std::tuple<INDEX,REAL>> adjacency_list(adjacency_list_count);
       std::fill(adjacency_list_count.begin(), adjacency_list_count.end(), 0);
-      for(auto& it : unaryFactors_) {
+      for(auto& it : unaryFactorsVector_) {
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
+         const REAL cost_ij = *(it.second->GetFactor());
          assert(i<j);
-         adjacency_list[i][adjacency_list_count[i]] = j;
+         adjacency_list[i][adjacency_list_count[i]] = std::make_tuple(j,cost_ij);
          adjacency_list_count[i]++;
-         adjacency_list[j][adjacency_list_count[j]] = i;
+         adjacency_list[j][adjacency_list_count[j]] = std::make_tuple(i,cost_ij);
          adjacency_list_count[j]++;
       }
 
       // Sort the adjacency list, for fast intersections later
+      auto adj_sort = [](const auto a, const auto b) { return std::get<0>(a) < std::get<0>(b); };
+//#pragma omp parallel for schedule(static)
       for(int i=0; i < adjacency_list.size(); i++) {
-         std::sort(adjacency_list[i].begin(), adjacency_list[i].end());
+         std::sort(adjacency_list[i].begin(), adjacency_list[i].end(), adj_sort);
       }
 
       // Iterate over all of the edge intersection sets
       // do zrobienia: parallelize
-      std::vector<INDEX> commonNodes(noNodes_);
+      // we will intersect two adjacency list by head node, but we want to preserve the costs of either edge pointing to head node
+      using intersection_type = std::tuple<INDEX,REAL,REAL>;
+      auto merge = [](const auto a, const auto b) -> intersection_type { 
+         assert(std::get<0>(a) == std::get<0>(b));
+         return std::make_tuple(std::get<0>(a), std::get<1>(a), std::get<1>(b)); 
+      };
+      std::vector<intersection_type> commonNodes(noNodes_);
       std::vector<std::tuple<INDEX,INDEX,INDEX,REAL>> triplet_candidates;
-      for(auto& it : unaryFactors_) {
-         const REAL cost_ij = *(it.second->GetFactor());
-         const INDEX i = std::get<0>(it.first);
-         const INDEX j = std::get<1>(it.first);
+      //for(auto& it : unaryFactorsVector_) {
+//#pragma omp parallel for schedule(static)
+      for(INDEX c=0; c<unaryFactorsVector_.size(); ++c) {
+      //for(auto it=unaryFactorsVector_.begin(); it!=unaryFactorsVector_.end(); ++it) {
+         const REAL cost_ij = *(unaryFactorsVector_[c].second->GetFactor());
+         const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
+         const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
 
          // Now find all neighbors of both i and j to see where the triangles are
          // TEMP TEMP -- fails at i=0, j=1, on i==3.
-         auto intersects_iter_end = set_intersection(adjacency_list[i].begin(), adjacency_list[i].end(), adjacency_list[j].begin(), adjacency_list[j].end(), commonNodes.begin());
+         auto intersects_iter_end = set_intersection_merge(adjacency_list[i].begin(), adjacency_list[i].end(), adjacency_list[j].begin(), adjacency_list[j].end(), commonNodes.begin(), adj_sort, merge);
 
-         for(std::vector<INDEX>::const_iterator n=commonNodes.begin(); n != intersects_iter_end; ++n) {
-            INDEX k = *n;
+         for(auto n=commonNodes.begin(); n != intersects_iter_end; ++n) {
+            const INDEX k = std::get<0>(*n);
 
             // Since a triplet shows up three times as an edge plus
             // a node, we only consider it for the case when i<j<k 
             if(!(j<k))
                continue;
+            const REAL cost_ik = std::get<1>(*n);
+            const REAL cost_jk = std::get<2>(*n);
 
-            std::array<REAL,3> c({cost_ij, get_edge_cost(i,k), get_edge_cost(j,k)});
+            const REAL lb = std::min(0.0, cost_ij) + std::min(0.0, cost_ik) + std::min(0.0, cost_jk);
+            const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ij+cost_jk, cost_ij+cost_ik+cost_jk});
+            assert(lb <= best_labeling+eps);
+            const REAL guaranteed_dual_increase = best_labeling - lb;
+            /*
+            std::array<REAL,3> c({cost_ij, cost_ik, cost_jk});
             const REAL gdi1 = std::min({ -c[0], c[1], c[2] });
             const REAL gdi2 = std::min({ c[0], -c[1], c[2] });
             const REAL gdi3 = std::min({ c[0], c[1], -c[2] });
             const REAL guaranteed_dual_increase = std::max({ gdi1, gdi2, gdi3 });
-            if(guaranteed_dual_increase >= 0.0) {
+            */
+            if(guaranteed_dual_increase > 0.0) {
                triplet_candidates.push_back(std::make_tuple(i,j,k,guaranteed_dual_increase));
             } 
          }
@@ -1494,6 +1541,7 @@ protected:
    // do zrobienia: replace this by unordered_map, provide hash function.
    // possibly dont do this, but use sorting to provide ordering for LP
    std::map<std::array<INDEX,2>, UnaryFactorContainer*> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
+   std::vector<std::pair<std::array<INDEX,2>, UnaryFactorContainer*>> unaryFactorsVector_; // we store a second copy of unary factors for iterating over it fast
    //std::unordered_map<std::array<INDEX,2>, UnaryFactorContainer*, decltype(hash::array2)> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
    // sort triplet factors as follows: Let indices be i=(i1,i2,i3) and j=(j1,j2,j3). Then i<j iff i1+i2+i3 < j1+j2+j3 or for ties sort lexicographically
    struct tripletComp {

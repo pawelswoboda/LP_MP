@@ -426,13 +426,15 @@ namespace MulticutTextInput {
 // HDF5 input as in data of Andres et al.
 namespace MulticutH5Input {
 
-   template<typename SOLVER>
+   template<typename SOLVER, bool GRID_GRAPH=false>
    bool ParseLiftedProblem(const std::string filename, SOLVER& pd)
    {
       auto& mc = pd.template GetProblemConstructor<0>();
       
+      using orig_graph_type = typename std::conditional<GRID_GRAPH, andres::graph::GridGraph<2>, andres::graph::Graph<>>::type;
       //andres::graph::GridGraph<2> originalGraph;
-      andres::graph::Graph<> originalGraph;
+      //andres::graph::Graph<> originalGraph;
+      orig_graph_type originalGraph;
       andres::graph::Graph<> liftedGraph;
       std::vector<REAL> edgeValues;
 

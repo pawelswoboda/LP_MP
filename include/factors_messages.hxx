@@ -122,7 +122,7 @@ struct LeftMessageFuncGetter
    constexpr static decltype(&MSG_CONTAINER::ComputeRightFromLeftPrimal) GetComputePrimalThroughMessageFunc()
    { return &MSG_CONTAINER::ComputeRightFromLeftPrimal; }
 
-   constexpr static Chirality Chirality() { return Chirality::left; }
+   constexpr static Chirality GetChirality() { return Chirality::left; }
    constexpr static bool factor_holds_messages() { return MSG_CONTAINER::left_factor_holds_messages(); }
 };
 
@@ -159,7 +159,7 @@ struct RightMessageFuncGetter
    constexpr static decltype(&MSG_CONTAINER::ComputeLeftFromRightPrimal) GetComputePrimalThroughMessageFunc()
    { return &MSG_CONTAINER::ComputeLeftFromRightPrimal; }
 
-   constexpr static Chirality Chirality() { return Chirality::right; }
+   constexpr static Chirality GetChirality() { return Chirality::right; }
    constexpr static bool factor_holds_messages() { return MSG_CONTAINER::right_factor_holds_messages(); }
 };
 
@@ -217,7 +217,7 @@ struct MessageDispatcher
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetComputePrimalThroughMessageFunc();
       return (t.*staticMemberFunc)();
    }
-   constexpr static Chirality Chirality() { return FuncGetter<MSG_CONTAINER>::Chirality(); }
+   constexpr static Chirality GetChirality() { return FuncGetter<MSG_CONTAINER>::GetChirality(); }
    constexpr static bool factor_holds_messages() { return FuncGetter<MSG_CONTAINER>::factor_holds_messages(); }
 };
 
@@ -287,7 +287,6 @@ public:
       }
    }
    INDEX size() const {
-      //assert(false);
       return ((*this)[0] != nullptr)*1 + ((*this)[1] != nullptr)*1;
       //if((*this)[0] == nullptr) {
       //   (*this)[0] = t; 
@@ -298,62 +297,6 @@ public:
       //} 
 }
    auto end() const -> decltype(this->end()) { return this->begin() + size(); }
-};
-
-template<typename M, Chirality CHIRALITY>
-class VariableSizeMessageContainerIterator {
-public:
-   VariableSizeMessageContainerIterator(M* m) : m_(m) {}
-   VariableSizeMessageContainerIterator operator++() {
-      if(CHIRALITY == Chirality::right) {
-         m_ = m_->next_right_message_container::next_msg();
-      } else {
-         m_ = m_->next_left_message_container::next_msg();
-      }
-      return *this;
-   }
-   M* operator*() const { return m_; } 
-   bool operator==(const VariableSizeMessageContainerIterator& o) const { return m_ == o.m_; }
-   bool operator!=(const VariableSizeMessageContainerIterator& o) const { return m_ != o.m_; }
-private:
-   M* m_;
-};
-
-template<typename M, Chirality CHIRALITY>
-class VariableSizeMessageContainer
-{
-public:
-   VariableSizeMessageContainer() : m_(nullptr), size_(0) {}
-   INDEX size() const { return size_; }
-   void push_back(M* m) { // actually it is push_front
-      if(CHIRALITY == Chirality::right) {
-         m->next_right_message_container::next_msg(m_);
-      } else {
-         m->next_left_message_container::next_msg(m_);
-      }
-      m_ = m;
-      ++size_;
-   }
-   VariableSizeMessageContainerIterator<M,CHIRALITY> begin() const {
-      return VariableSizeMessageContainerIterator<M,CHIRALITY>(m_);
-   }
-   VariableSizeMessageContainerIterator<M,CHIRALITY> end() const {
-      return VariableSizeMessageContainerIterator<M,CHIRALITY>(nullptr);
-   }
-
-private:
-   M* m_;
-   INDEX size_;
-};
-
-// N=0 means variable number of messages, > 0 means compile time fixed number of messages and <0 means at most compile time number of messages
-// see config.hxx for shortcuts
-template<SIGNED_INDEX N, typename MESSAGE_CONTAINER_TYPE, Chirality CHIRALITY>
-struct MessageContainerSelector {
-   using type = 
-      typename std::conditional<(N > 0), FixedSizeMessageContainer<INDEX(N),MESSAGE_CONTAINER_TYPE>,
-      typename std::conditional<(N < 0), UpToFixedSizeMessageContainer<INDEX(-N),MESSAGE_CONTAINER_TYPE>, 
-                                         VariableSizeMessageContainer<MESSAGE_CONTAINER_TYPE,CHIRALITY> >::type >::type;
 };
 
 template<typename MSG_CONTAINER, bool HOLD>
@@ -380,6 +323,63 @@ struct next_right_message_container<MSG_CONTAINER,true> {
    void next_msg(MSG_CONTAINER* m) { next = m; }
    MSG_CONTAINER* next_msg() const { return next; }
    MSG_CONTAINER* next = nullptr;
+};
+
+
+template<typename M, Chirality CHIRALITY>
+class VariableSizeMessageContainer
+{
+public:
+   VariableSizeMessageContainer() : m_(nullptr), size_(0) {}
+   INDEX size() const { return size_; }
+   void push_back(M* m) { // actually it is push_front
+      if(CHIRALITY == Chirality::right) {
+         m->next_right_message_container::next_msg(m_);
+      } else {
+         m->next_left_message_container::next_msg(m_);
+      }
+      m_ = m;
+      ++size_;
+   }
+
+   class iterator {
+      public:
+         iterator(M* m) : m_(m) {}
+         iterator operator++() {
+            if(CHIRALITY == Chirality::right) {
+               m_ = m_->next_right_message_container::next_msg();
+            } else {
+               m_ = m_->next_left_message_container::next_msg();
+            }
+            return *this;
+         }
+         M* operator*() const { return m_; } 
+         bool operator==(const iterator& o) const { return m_ == o.m_; }
+         bool operator!=(const iterator& o) const { return m_ != o.m_; }
+      private:
+         M* m_;
+   };
+
+   iterator begin() const {
+      return iterator(m_);
+   }
+   iterator end() const {
+      return iterator(nullptr);
+   }
+
+private:
+   M* m_;
+   INDEX size_;
+};
+
+// N=0 means variable number of messages, > 0 means compile time fixed number of messages and <0 means at most compile time number of messages
+// see config.hxx for shortcuts
+template<SIGNED_INDEX N, typename MESSAGE_CONTAINER_TYPE, Chirality CHIRALITY>
+struct MessageContainerSelector {
+   using type = 
+      typename std::conditional<(N > 0), FixedSizeMessageContainer<INDEX(N),MESSAGE_CONTAINER_TYPE>,
+      typename std::conditional<(N < 0), UpToFixedSizeMessageContainer<INDEX(-N),MESSAGE_CONTAINER_TYPE>, 
+                                         VariableSizeMessageContainer<MESSAGE_CONTAINER_TYPE,CHIRALITY> >::type >::type;
 };
 
 

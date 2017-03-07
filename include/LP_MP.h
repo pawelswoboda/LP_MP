@@ -903,7 +903,6 @@ inline void LP::ComputeUniformWeights()
 inline void LP::ComputeDampedUniformWeights()
 {
    if(!omega_isotropic_damped_valid_) {
-      std::cout << "compute damped uniform weights\n";
       omega_isotropic_damped_valid_ = true;
       ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1.0);
       ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackwardIsotropicDamped_, 1.0);
