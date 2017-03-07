@@ -441,6 +441,7 @@ struct BfsData2 {
       }
       void Reset() 
       {
+         visit.clear();
 	      flag1 += 2;
 	      flag2 += 2; 
       }
@@ -457,43 +458,38 @@ struct BfsData2 {
       REAL& Cost(const INDEX i) { return d[i].cost; }
       REAL Cost(const INDEX i) const { return d[i].cost; }
 
-      std::vector<INDEX> TracePath(const INDEX i) const 
+      std::tuple<REAL,std::vector<INDEX>> TracePath(const INDEX i1, const INDEX i2, const REAL cost_i1i2) const 
       {
-	      std::vector<INDEX> path({i});
-	      INDEX j=i;
+         REAL c = cost_i1i2;
+	      std::vector<INDEX> path({i1});
+	      INDEX j=i1;
 	      while(Parent(j) != j) {
-		      //minPathCost = std::min(minPathCost);
-		      //logger->info() << j << ",";
+            c = std::min(c, Cost(j) );
 		      j = Parent(j);
 		      path.push_back(j);
 	      }
-         std::reverse(path.begin(),path.end()); // note: we reverse paths once too often. Possibly call this TracePathReverse. Do zrobienia.
-	      return path;
-      }
-      REAL TraceCost(const INDEX i) const
-      {
-         REAL c = std::numeric_limits<REAL>::infinity();
-	      INDEX j=i;
-	      while(Parent(j) != j) {
+         std::reverse(path.begin(),path.end());
+         path.push_back(i2);
+         j=i2;
+         while(Parent(j) != j) {
             c = std::min(c, Cost(j) );
-		      //minPathCost = std::min(minPathCost);
 		      j = Parent(j);
-         } 
-         return c;
-      }
+		      path.push_back(j);
+         }
 
+	      return std::move(std::make_tuple(c,std::move(path)));
+      }
 
       // do bfs with thresholded costs and iteratively lower threshold until enough cycles are found
       // only consider edges that have cost equal or larger than th
       std::tuple<REAL,std::vector<INDEX>> FindPath(const INDEX startNode, const INDEX endNode, const Graph2& g, const REAL th = 0, const INDEX max_length = std::numeric_limits<INDEX>::max()) 
       {
          Reset();
-         std::queue<std::array<INDEX,2>> visit; // node number, distance from start or end // do zrobienia: do not allocate each time, make visit a member
-         visit.push({startNode, 0});
+         visit.push_back({startNode, 0});
          Label1(startNode);
          Parent(startNode) = startNode;
          Cost(startNode) = std::numeric_limits<REAL>::infinity();
-         visit.push({endNode, 0});
+         visit.push_back({endNode, 0});
          Label2(endNode);
          Parent(endNode) = endNode;
          Cost(endNode) = std::numeric_limits<REAL>::infinity();
@@ -501,7 +497,7 @@ struct BfsData2 {
          while(!visit.empty()) {
             const INDEX i = visit.front()[0];
             const INDEX distance = visit.front()[1];
-            visit.pop();
+            visit.pop_front();
 
             if(distance <= max_length) {
 
@@ -510,20 +506,13 @@ struct BfsData2 {
                   auto* head = a->head;
                   const INDEX j = g[head];
                   if(!Labelled(j)) {
-                     visit.push({j, distance+1});
+                     visit.push_back({j, distance+1});
                      Parent(j) = i;
                      Cost(j) = a->cost;
                      Label1(j);
                   } else if(Labelled2(j)) { // shortest path found
                      // trace back path from j to endNode and from i to startNode
-                     // set threshold to be minimum of all encountered ones
-                     REAL min_cost = std::min({a->cost, TraceCost(i), TraceCost(j)});
-                     std::vector<INDEX> startPath = TracePath(i);
-                     
-                     std::vector<INDEX> endPath = TracePath(j);
-                     std::reverse(endPath.begin(), endPath.end());
-                     startPath.insert( startPath.end(), endPath.begin(), endPath.end());
-                     return std::make_tuple(min_cost, startPath);
+                     return std::move(TracePath(i,j, a->cost));
                   }
                }
             } else {
@@ -532,18 +521,13 @@ struct BfsData2 {
                   auto* head = a->head;
                   const INDEX j = g[head];
                   if(!Labelled(j)) {
-                     visit.push({j, distance+1});
+                     visit.push_back({j, distance+1});
                      Parent(j) = i;
                      Cost(j) = a->cost;
                      Label2(j);
                   } else if(Labelled1(j)) { // shortest path found
                      // trace back path from j to endNode and from i to startNode
-                     REAL min_cost = std::min({a->cost, TraceCost(i), TraceCost(j)});
-                     std::vector<INDEX> startPath = TracePath(j);
-                     std::vector<INDEX> endPath = TracePath(i);
-                     std::reverse(endPath.begin(), endPath.end());
-                     startPath.insert( startPath.end(), endPath.begin(), endPath.end());
-                     return std::make_tuple(min_cost, startPath);
+                     return std::move(TracePath(i,j, a->cost));
                   }
                }
             }
@@ -555,6 +539,7 @@ struct BfsData2 {
 
 private:
    std::vector<Item> d;
+   std::deque<std::array<INDEX,2>> visit; // node number, distance from start or end 
    INDEX flag1, flag2;
 };
 
@@ -830,10 +815,10 @@ class InputIt1, class InputIt2,
       };
       std::vector<intersection_type> commonNodes(noNodes_);
       std::vector<std::tuple<INDEX,INDEX,INDEX,REAL>> triplet_candidates;
-      //for(auto& it : unaryFactorsVector_) {
+      //for(auto& it : unaryFactorsVector_) 
 //#pragma omp parallel for schedule(static)
       for(INDEX c=0; c<unaryFactorsVector_.size(); ++c) {
-      //for(auto it=unaryFactorsVector_.begin(); it!=unaryFactorsVector_.end(); ++it) {
+      //for(auto it=unaryFactorsVector_.begin(); it!=unaryFactorsVector_.end(); ++it) 
          const REAL cost_ij = *(unaryFactorsVector_[c].second->GetFactor());
          const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
          const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
@@ -974,7 +959,7 @@ class InputIt1, class InputIt2,
       REAL pos_th = 0.0;
       std::vector<INDEX> number_outgoing_arcs(noNodes_,0); // number of arcs outgoing arcs of each node
       INDEX number_outgoing_arcs_total = 0;
-      for(auto& it : unaryFactors_) {
+      for(auto& it : unaryFactorsVector_) {
          const REAL v = *(it.second->GetFactor());
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
@@ -987,10 +972,10 @@ class InputIt1, class InputIt2,
             negativeEdges.push_back(std::make_tuple(i,j,v));
          }
       }
-      if(negativeEdges.size() == 0 || negativeEdges.size() == unaryFactors_.size()) { return 0; }
+      if(negativeEdges.size() == 0 || negativeEdges.size() == unaryFactorsVector_.size()) { return 0; }
 
       Graph2 posEdgesGraph2(noNodes_, number_outgoing_arcs_total, number_outgoing_arcs); // graph consisting of positive edges
-      for(auto& it : unaryFactors_) {
+      for(auto& it : unaryFactorsVector_) {
          const REAL v = *(it.second->GetFactor());
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
@@ -1021,7 +1006,8 @@ class InputIt1, class InputIt2,
       INDEX tripletsAdded = 0;
       const REAL initial_th = 0.6*std::min(-std::get<2>(negativeEdges[0]), pos_th);
       bool zero_th_iteration = true;
-      for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) {
+      //for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) 
+      for(REAL th=initial_th; th>=eps; th*=0.1) {
          if(th < eps) {
             if(tripletsAdded <= 0.01*maxTripletsToAdd) {
                std::cout << "additional separation with no guaranteed dual increase, i.e. th = 0\n";
@@ -1032,7 +1018,7 @@ class InputIt1, class InputIt2,
             }
          }
          // first update union find datastructure
-         for(auto& it : unaryFactors_) {
+         for(auto& it : unaryFactorsVector_) {
             const REAL v = *(it.second->GetFactor());
             const INDEX i = std::get<0>(it.first);
             const INDEX j = std::get<1>(it.first);
@@ -1055,9 +1041,9 @@ class InputIt1, class InputIt2,
                if(std::get<1>(cycle).size() > 0) {
                   cycles.push_back( std::make_tuple(dualIncrease, std::move(std::get<1>(cycle))) );
                   //tripletsAdded += AddCycle(std::get<1>(cycle));
-                  if(tripletsAdded > maxTripletsToAdd) {
-                     return tripletsAdded;
-                  }
+                  //if(tripletsAdded > maxTripletsToAdd) {
+                  //   return tripletsAdded;
+                  //}
                } else {
                   throw std::runtime_error("No path found although there should be one"); 
                }
@@ -1066,7 +1052,6 @@ class InputIt1, class InputIt2,
          // sort by guaranteed increase in decreasing order
          std::sort(cycles.begin(), cycles.end(), [](const CycleType& i, const CycleType& j) { return std::get<0>(i) > std::get<0>(j); });
          for(auto& cycle : cycles) {
-            const REAL cycleDualIncrease = std::get<0>(cycle);
             if(std::get<1>(cycle).size() > 2) {
                tripletsAdded += AddCycle(std::get<1>(cycle));
                if(tripletsAdded > maxTripletsToAdd) {
@@ -1475,7 +1460,7 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
    {
       //std::cout << "checking primal feasibility for multicut\n";
       UnionFind uf(noNodes_);
-      for(const auto& e : unaryFactors_) {
+      for(const auto& e : unaryFactorsVector_) {
          UnaryFactorContainer* f = e.second; 
          assert(primal[f->GetPrimalOffset()] != unknownState);
          if(primal[f->GetPrimalOffset()] == false) {
@@ -1485,7 +1470,7 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
             uf.merge(i,j);
          }
       }
-      for(const auto& e : unaryFactors_) {
+      for(const auto& e : unaryFactorsVector_) {
          UnaryFactorContainer* f = e.second; 
          if(primal[f->GetPrimalOffset()] == true) {
             const INDEX i = std::get<0>(e.first);
@@ -1541,7 +1526,7 @@ protected:
    // do zrobienia: replace this by unordered_map, provide hash function.
    // possibly dont do this, but use sorting to provide ordering for LP
    std::map<std::array<INDEX,2>, UnaryFactorContainer*> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
-   std::vector<std::pair<std::array<INDEX,2>, UnaryFactorContainer*>> unaryFactorsVector_; // we store a second copy of unary factors for iterating over it fast
+   std::vector<std::pair<std::array<INDEX,2>, UnaryFactorContainer*>> unaryFactorsVector_; // we store a second copy of unary factors for faster iterating
    //std::unordered_map<std::array<INDEX,2>, UnaryFactorContainer*, decltype(hash::array2)> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
    // sort triplet factors as follows: Let indices be i=(i1,i2,i3) and j=(j1,j2,j3). Then i<j iff i1+i2+i3 < j1+j2+j3 or for ties sort lexicographically
    struct tripletComp {
@@ -1914,7 +1899,7 @@ public:
 
       std::vector<INDEX> adjacency_list_count(this->noNodes_,0);
       // first determine size for adjacency_list
-      for(auto& it : this->unaryFactors_) {
+      for(auto& it : this->unaryFactorsVector_) {
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
          adjacency_list_count[i]++;
@@ -1922,7 +1907,7 @@ public:
       }
       two_dim_variable_array<INDEX> adjacency_list(adjacency_list_count);
       std::fill(adjacency_list_count.begin(), adjacency_list_count.end(), 0);
-      for(auto& it : this->unaryFactors_) {
+      for(auto& it : this->unaryFactorsVector_) {
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
          assert(i<j);
