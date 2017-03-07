@@ -534,7 +534,7 @@ struct BfsData2 {
 
             }
          }
-         return std::make_tuple(th,std::vector<INDEX>(0));
+         return std::make_tuple(-std::numeric_limits<REAL>::infinity(),std::vector<INDEX>(0));
       }
 
 private:
@@ -954,7 +954,7 @@ class InputIt1, class InputIt2,
 
    INDEX FindViolatedCycles2(const INDEX maxTripletsToAdd)
    {
-      std::vector<std::tuple<INDEX,INDEX,REAL> > negativeEdges;
+      std::vector<std::tuple<INDEX,INDEX,REAL,bool> > negativeEdges; // endpoints, edge cost, searched positive path with given endpoints?
       // we can speed up compution by skipping path searches for node pairs which lie in different connected components. Connectedness is stored in a union find structure
       REAL pos_th = 0.0;
       std::vector<INDEX> number_outgoing_arcs(noNodes_,0); // number of arcs outgoing arcs of each node
@@ -969,7 +969,7 @@ class InputIt1, class InputIt2,
             number_outgoing_arcs[j]++;
             number_outgoing_arcs_total += 2;
          } else {
-            negativeEdges.push_back(std::make_tuple(i,j,v));
+            negativeEdges.push_back(std::make_tuple(i,j,v,false));
          }
       }
       if(negativeEdges.size() == 0 || negativeEdges.size() == unaryFactorsVector_.size()) { return 0; }
@@ -989,7 +989,7 @@ class InputIt1, class InputIt2,
 
       // do zrobienia: possibly add reparametrization of triplet factors additionally
 
-      std::sort(negativeEdges.begin(), negativeEdges.end(), [](const std::tuple<INDEX,INDEX,REAL>& e1, const std::tuple<INDEX,INDEX,REAL>& e2)->bool {
+      std::sort(negativeEdges.begin(), negativeEdges.end(), [](const auto& e1, const auto& e2)->bool {
             return std::get<2>(e1) < std::get<2>(e2);
             });
 
@@ -1006,8 +1006,7 @@ class InputIt1, class InputIt2,
       INDEX tripletsAdded = 0;
       const REAL initial_th = 0.6*std::min(-std::get<2>(negativeEdges[0]), pos_th);
       bool zero_th_iteration = true;
-      //for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) 
-      for(REAL th=initial_th; th>=eps; th*=0.1) {
+      for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) 
          if(th < eps) {
             if(tripletsAdded <= 0.01*maxTripletsToAdd) {
                std::cout << "additional separation with no guaranteed dual increase, i.e. th = 0\n";
@@ -1032,7 +1031,9 @@ class InputIt1, class InputIt2,
             const INDEX i = std::get<0>(it);
             const INDEX j = std::get<1>(it);
             const REAL v = std::get<2>(it);
+            const bool already_used_for_path_search = std::get<3>(it);
             if(-v <= th) break;
+            if(already_used_for_path_search) break;
             if(uf.connected(i,j)) {
                //auto cycle = mp.FindPath(i,j,posEdgesGraph);
                auto cycle = mp2.FindPath(i,j,posEdgesGraph2, th);
