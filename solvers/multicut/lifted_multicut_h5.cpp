@@ -9,7 +9,7 @@ using SolverType = ProblemConstructorRoundingSolver<Solver<FMC,LP,StandardTighte
 int main(int argc, char* argv[])
 {
    SolverType solver(argc,argv);
-   solver.ReadProblem(MulticutH5Input::ParseLiftedProblem<Solver<FMC,LP,StandardTighteningVisitor>,false>);
+   solver.ReadProblem(MulticutH5Input::ParseLiftedProblem<Solver<FMC,LP,StandardTighteningVisitor>>,false>);
    return solver.Solve();
 }
 

@@ -1193,7 +1193,7 @@ public:
          static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
                f(this)->ReceiveMessageFromRightContainer();
          }).else_([&](auto f) {
-               static_if<CanCallSendMessageToLeftContainer()>([&](auto f2) {
+               static_if<MessageContainerType::CanCallSendMessageToLeftContainer()>([&](auto f2) {
                         f2(this)->SendMessageToLeftContainer(rightFactor_->GetFactor(),1.0);
                }).else_([](auto f3) {
                   assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message

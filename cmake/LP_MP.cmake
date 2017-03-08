@@ -13,15 +13,15 @@ add_definitions(-DIL_STD)
 add_definitions(-ffast-math)
 add_definitions(-march=native)
 
-set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-set(BUILD_SHARED_LIBRARIES OFF)
-set(CMAKE_EXE_LINKER_FLAG "-static")
+#set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+#set(BUILD_SHARED_LIBRARIES OFF)
+#set(CMAKE_EXE_LINKER_FLAG "-static")
 
 # Vc for SIMD
-find_package(Vc 1.2.0 REQUIRED PATHS "${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/Vc_Project/cmake" "${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Vc_Project/cmake")
-include_directories(${Vc_INCLUDE_DIR}) 
-add_definitions(${Vc_DEFINITIONS})
-link_directories(${Vc_LIB_DIR})
+#find_package(Vc 1.2.0 REQUIRED PATHS "${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/Vc_Project/cmake" "${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Vc_Project/cmake")
+#include_directories(${Vc_INCLUDE_DIR}) 
+#add_definitions(${Vc_DEFINITIONS})
+#link_directories(${Vc_LIB_DIR})
 
 # automatically downloaded repositories
 # can this possibly be done in one place only, i.e. in the superbuild?
@@ -33,8 +33,8 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/PEGTL_Proje
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Andres_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Cereal_Project/include")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/TCLAP_Project/include")
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/CryptoMiniSat_Project/include")
-link_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/CryptoMiniSat_Project/lib")
+#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/CryptoMiniSat_Project/include")
+#link_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/CryptoMiniSat_Project/lib")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Lingeling_Project")
 link_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Lingeling_Project")
 
@@ -46,8 +46,8 @@ link_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Lingeling_Proj
 #include_directories(${LEMON_INCLUDE_DIRS})
 #include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project/lemon")
 
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Hana_Project/include")
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/CS2_CPP_Project")
+#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Hana_Project/include")
+#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/CS2_CPP_Project")
 
 # manually downloaded repositories of Kolmogorov's code. How to automate?
 #add_subdirectory(lib/MinCost)
@@ -72,14 +72,9 @@ if(WITH_CPLEX)
    add_definitions(-DWITH_CPLEX)
 endif(WITH_CPLEX)
 
-# LOCALSOLVER
-OPTION(WITH_LOCALSOLVER "Activate LocalSolver-Code" OFF)
-if(WITH_LOCALSOLVER)
-  find_package(LocalSolver)
-endif(WITH_LOCALSOLVER)
-
 # Parallelisation support
 if(PARALLEL_OPTIMIZATION)
+
   add_definitions(-DLP_MP_PARALLEL) 
 
   FIND_PACKAGE(OpenMP REQUIRED)
@@ -89,6 +84,7 @@ if(PARALLEL_OPTIMIZATION)
      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
   endif()
+
 endif(PARALLEL_OPTIMIZATION)
 
 IF(UNIX AND NOT APPLE)
@@ -107,7 +103,4 @@ include_directories(.)
 add_subdirectory(solvers)
 add_subdirectory(lib)
 add_subdirectory(test)
-
-
-message("build solvers")
 
