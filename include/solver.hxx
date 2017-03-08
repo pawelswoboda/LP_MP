@@ -195,9 +195,6 @@ public:
    INDEX Tighten(const INDEX maxConstraints) 
    {
       INDEX noConstraintsAdded = Tighten<0>(maxConstraints);
-      if(noConstraintsAdded > 0) { // tell lp to rebuild omegas etc
-         lp_.Init();
-      }
       return noConstraintsAdded;
    }
    
@@ -212,7 +209,6 @@ public:
 
    int Solve()
    {
-      this->lp_.Init();
       this->Begin();
       LpControl c = visitor_.begin(this->lp_);
       while(!c.end && !c.error) {
@@ -233,7 +229,10 @@ public:
 
 
    // called before first iterations
-   virtual void Begin() {}
+   virtual void Begin() 
+   {
+      lp_.Begin(); 
+   }
 
    // what to do before improving lower bound, e.g. setting reparametrization mode
    virtual void PreIterate(LpControl c) 

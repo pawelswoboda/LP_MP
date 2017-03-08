@@ -58,6 +58,16 @@ public:
    bool connected(INDEX x, INDEX y) {
       return find(x) == find(y);
    }
+
+   INDEX thread_safe_find(INDEX p) const {
+      INDEX root = p;
+      while (root != id[root])
+         root = id[root];
+      return root;
+   }
+   bool thread_safe_connected(INDEX x, INDEX y) const {
+      return thread_safe_find(x) == thread_safe_find(y);
+   }
    // Return the number of disjoint sets.
    INDEX count() {
       return cnt;

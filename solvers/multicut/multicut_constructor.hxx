@@ -15,6 +15,10 @@
 #include <queue>
 #include <list>
 
+#ifdef LP_MP_PARALLEL
+#include <omp.h>
+#endif
+
 #include "andres/graph/graph.hxx"
 #include "andres/graph/grid-graph.hxx"
 #include "andres/graph/multicut/kernighan-lin.hxx"
@@ -98,9 +102,11 @@ public:
 
       void sort()
       {
-         for(auto node : nodes_) {
-            std::sort(node.begin(), node.end(), [](auto& a, auto& b) { return a.cost > b.cost; });
+#pragma omp parallel for schedule(guided)
+         for(INDEX i=0; i<nodes_.size(); ++i) {
+            std::sort(nodes_[i].begin(), nodes_[i].end(), [](auto& a, auto& b) { return a.cost > b.cost; });
          }
+
          for(INDEX i=0; i<nodes_.size()-1; ++i) {
             assert(nodes_[i].last == nodes_[i+1].first);
          }
@@ -800,7 +806,11 @@ class InputIt1, class InputIt2,
 
       // Sort the adjacency list, for fast intersections later
       auto adj_sort = [](const auto a, const auto b) { return std::get<0>(a) < std::get<0>(b); };
-//#pragma omp parallel for schedule(static)
+
+#ifdef LP_MP_PARALLEL
+      omp_set_num_threads(4);
+#endif
+#pragma omp parallel for schedule(guided)
       for(int i=0; i < adjacency_list.size(); i++) {
          std::sort(adjacency_list[i].begin(), adjacency_list[i].end(), adj_sort);
       }
@@ -813,44 +823,50 @@ class InputIt1, class InputIt2,
          assert(std::get<0>(a) == std::get<0>(b));
          return std::make_tuple(std::get<0>(a), std::get<1>(a), std::get<1>(b)); 
       };
-      std::vector<intersection_type> commonNodes(noNodes_);
       std::vector<std::tuple<INDEX,INDEX,INDEX,REAL>> triplet_candidates;
-      //for(auto& it : unaryFactorsVector_) 
-//#pragma omp parallel for schedule(static)
-      for(INDEX c=0; c<unaryFactorsVector_.size(); ++c) {
-      //for(auto it=unaryFactorsVector_.begin(); it!=unaryFactorsVector_.end(); ++it) 
-         const REAL cost_ij = *(unaryFactorsVector_[c].second->GetFactor());
-         const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
-         const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
+#pragma omp parallel
+      {
+         std::vector<intersection_type> commonNodes(noNodes_);
+         std::vector<std::tuple<INDEX,INDEX,INDEX,REAL>> triplet_candidates_per_thread;
+#pragma omp for schedule(guided)
+         for(INDEX c=0; c<unaryFactorsVector_.size(); ++c) {
+            const REAL cost_ij = *(unaryFactorsVector_[c].second->GetFactor());
+            const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
+            const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
 
-         // Now find all neighbors of both i and j to see where the triangles are
-         // TEMP TEMP -- fails at i=0, j=1, on i==3.
-         auto intersects_iter_end = set_intersection_merge(adjacency_list[i].begin(), adjacency_list[i].end(), adjacency_list[j].begin(), adjacency_list[j].end(), commonNodes.begin(), adj_sort, merge);
+            // Now find all neighbors of both i and j to see where the triangles are
+            // TEMP TEMP -- fails at i=0, j=1, on i==3.
+            auto intersects_iter_end = set_intersection_merge(adjacency_list[i].begin(), adjacency_list[i].end(), adjacency_list[j].begin(), adjacency_list[j].end(), commonNodes.begin(), adj_sort, merge);
 
-         for(auto n=commonNodes.begin(); n != intersects_iter_end; ++n) {
-            const INDEX k = std::get<0>(*n);
+            for(auto n=commonNodes.begin(); n != intersects_iter_end; ++n) {
+               const INDEX k = std::get<0>(*n);
 
-            // Since a triplet shows up three times as an edge plus
-            // a node, we only consider it for the case when i<j<k 
-            if(!(j<k))
-               continue;
-            const REAL cost_ik = std::get<1>(*n);
-            const REAL cost_jk = std::get<2>(*n);
+               // Since a triplet shows up three times as an edge plus
+               // a node, we only consider it for the case when i<j<k 
+               if(!(j<k))
+                  continue;
+               const REAL cost_ik = std::get<1>(*n);
+               const REAL cost_jk = std::get<2>(*n);
 
-            const REAL lb = std::min(0.0, cost_ij) + std::min(0.0, cost_ik) + std::min(0.0, cost_jk);
-            const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ij+cost_jk, cost_ij+cost_ik+cost_jk});
-            assert(lb <= best_labeling+eps);
-            const REAL guaranteed_dual_increase = best_labeling - lb;
-            /*
-            std::array<REAL,3> c({cost_ij, cost_ik, cost_jk});
-            const REAL gdi1 = std::min({ -c[0], c[1], c[2] });
-            const REAL gdi2 = std::min({ c[0], -c[1], c[2] });
-            const REAL gdi3 = std::min({ c[0], c[1], -c[2] });
-            const REAL guaranteed_dual_increase = std::max({ gdi1, gdi2, gdi3 });
-            */
-            if(guaranteed_dual_increase > 0.0) {
-               triplet_candidates.push_back(std::make_tuple(i,j,k,guaranteed_dual_increase));
-            } 
+               const REAL lb = std::min(0.0, cost_ij) + std::min(0.0, cost_ik) + std::min(0.0, cost_jk);
+               const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ij+cost_jk, cost_ij+cost_ik+cost_jk});
+               assert(lb <= best_labeling+eps);
+               const REAL guaranteed_dual_increase = best_labeling - lb;
+               /*
+                  std::array<REAL,3> c({cost_ij, cost_ik, cost_jk});
+                  const REAL gdi1 = std::min({ -c[0], c[1], c[2] });
+                  const REAL gdi2 = std::min({ c[0], -c[1], c[2] });
+                  const REAL gdi3 = std::min({ c[0], c[1], -c[2] });
+                  const REAL guaranteed_dual_increase = std::max({ gdi1, gdi2, gdi3 });
+                  */
+               if(guaranteed_dual_increase > 0.0) {
+                  triplet_candidates_per_thread.push_back(std::make_tuple(i,j,k,guaranteed_dual_increase));
+               } 
+            }
+         }
+#pragma omp critical
+         {
+            triplet_candidates.insert(triplet_candidates.end(), triplet_candidates_per_thread.begin(), triplet_candidates_per_thread.end()); 
          }
       }
       std::sort(triplet_candidates.begin(), triplet_candidates.end(), [](auto& a, auto& b) { return std::get<3>(a) > std::get<3>(b); });
@@ -1000,13 +1016,12 @@ class InputIt1, class InputIt2,
 
       //MostViolatedPathData mp(posEdgesGraph);
       //BfsData mp(posEdgesGraph);
-      BfsData2 mp2(posEdgesGraph2);
 
       UnionFind uf(noNodes_);
       INDEX tripletsAdded = 0;
       const REAL initial_th = 0.6*std::min(-std::get<2>(negativeEdges[0]), pos_th);
       bool zero_th_iteration = true;
-      for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) 
+      for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) {
          if(th < eps) {
             if(tripletsAdded <= 0.01*maxTripletsToAdd) {
                std::cout << "additional separation with no guaranteed dual increase, i.e. th = 0\n";
@@ -1027,34 +1042,44 @@ class InputIt1, class InputIt2,
          }
          using CycleType = std::tuple<REAL, std::vector<INDEX>>;
          std::vector<CycleType > cycles;
-         for(auto& it : negativeEdges) {
-            const INDEX i = std::get<0>(it);
-            const INDEX j = std::get<1>(it);
-            const REAL v = std::get<2>(it);
-            const bool already_used_for_path_search = std::get<3>(it);
-            if(-v <= th) break;
-            if(already_used_for_path_search) break;
-            if(uf.connected(i,j)) {
-               //auto cycle = mp.FindPath(i,j,posEdgesGraph);
-               auto cycle = mp2.FindPath(i,j,posEdgesGraph2, th);
-               const REAL dualIncrease = std::min(-v, std::get<0>(cycle));
-               assert(std::get<1>(cycle).size() > 0);
-               if(std::get<1>(cycle).size() > 0) {
-                  cycles.push_back( std::make_tuple(dualIncrease, std::move(std::get<1>(cycle))) );
-                  //tripletsAdded += AddCycle(std::get<1>(cycle));
-                  //if(tripletsAdded > maxTripletsToAdd) {
-                  //   return tripletsAdded;
-                  //}
-               } else {
-                  throw std::runtime_error("No path found although there should be one"); 
+#pragma omp parallel 
+         {
+            std::vector<CycleType > cycles_local;
+            BfsData2 mp2(posEdgesGraph2);
+#pragma for schedule(guided)
+            for(INDEX c=0; c<negativeEdges.size(); ++c) {
+               const INDEX i = std::get<0>(negativeEdges[c]);
+               const INDEX j = std::get<1>(negativeEdges[c]);
+               const REAL v = std::get<2>(negativeEdges[c]);
+               const bool already_used_for_path_search = std::get<3>(negativeEdges[c]);
+               //if(-v <= th) break;
+               //if(already_used_for_path_search) continue;
+               if(-v > th && !already_used_for_path_search && uf.thread_safe_connected(i,j)) {
+                  //auto cycle = mp.FindPath(i,j,posEdgesGraph);
+                  auto cycle = mp2.FindPath(i,j,posEdgesGraph2, th);
+                  const REAL dualIncrease = std::min(-v, std::get<0>(cycle));
+                  assert(std::get<1>(cycle).size() > 0);
+                  if(std::get<1>(cycle).size() > 0) {
+                     cycles_local.push_back( std::make_tuple(dualIncrease, std::move(std::get<1>(cycle))) );
+                     //tripletsAdded += AddCycle(std::get<1>(cycle));
+                     //if(tripletsAdded > maxTripletsToAdd) {
+                     //   return tripletsAdded;
+                     //}
+                  } else {
+                     throw std::runtime_error("No path found although there should be one"); 
+                  }
                }
+            }
+#pragma omp critical
+            {
+               cycles.insert(cycles.end(), cycles_local.begin(), cycles_local.end());
             }
          }
          // sort by guaranteed increase in decreasing order
          std::sort(cycles.begin(), cycles.end(), [](const CycleType& i, const CycleType& j) { return std::get<0>(i) > std::get<0>(j); });
          for(auto& cycle : cycles) {
             if(std::get<1>(cycle).size() > 2) {
-               tripletsAdded += AddCycle(std::get<1>(cycle));
+               tripletsAdded += AddCycle(std::move(std::get<1>(cycle)));
                if(tripletsAdded > maxTripletsToAdd) {
                   return tripletsAdded;
                }

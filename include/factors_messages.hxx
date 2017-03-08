@@ -334,9 +334,9 @@ public:
    INDEX size() const { return size_; }
    void push_back(M* m) { // actually it is push_front
       if(CHIRALITY == Chirality::right) {
-         m->next_right_message_container::next_msg(m_);
+         static_cast<typename M::next_right_message_container_type*>(m)->next_msg(m_);
       } else {
-         m->next_left_message_container::next_msg(m_);
+         static_cast<typename M::next_left_message_container_type*>(m)->next_msg(m_);
       }
       m_ = m;
       ++size_;
@@ -347,9 +347,11 @@ public:
          iterator(M* m) : m_(m) {}
          iterator operator++() {
             if(CHIRALITY == Chirality::right) {
-               m_ = m_->next_right_message_container::next_msg();
+               //m_ = m_->next_right_message_container::next_msg();
+               m_ = static_cast<typename M::next_right_message_container_type*>(m_)->next_msg();
             } else {
-               m_ = m_->next_left_message_container::next_msg();
+               //m_ = m_->next_left_message_container::next_msg();
+               m_ = static_cast<typename M::next_left_message_container_type*>(m_)->next_msg();
             }
             return *this;
          }
@@ -404,6 +406,8 @@ public:
 
    using MessageContainerType = MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, FACTOR_MESSAGE_TRAIT, MESSAGE_NO>;
    using MessageType = MESSAGE_TYPE;
+   using next_left_message_container_type = next_left_message_container<MessageContainerType,NO_OF_LEFT_FACTORS == 0>;
+   using next_right_message_container_type = next_right_message_container<MessageContainerType,NO_OF_RIGHT_FACTORS == 0>;
    //typedef typename MessageStorageSelector<MESSAGE_SIZE,true>::type MessageStorageType; // do zrobienia: true is just for now. In general, message need not hold actual message, except when some factor is reparametrized implicitly
 
    // structures used in FactorContainer to hold pointers to messages
@@ -1178,7 +1182,7 @@ public:
          static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
                f(this)->ReceiveMessageFromLeftContainer();
          }).else_([&](auto f) {
-               static_if<CanCallSendMessageToRightContainer()>([&](auto f2) {
+               static_if<MessageContainerType::CanCallSendMessageToRightContainer()>([&](auto f2) {
                         f2(this)->SendMessageToRightContainer(leftFactor_->GetFactor(),1.0);
                }).else_([](auto f3) {
                   assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
@@ -1225,7 +1229,7 @@ public:
                   f(this)->ComputeRightFromLeftPrimal(); 
 
          }).else_([&](auto f) {
-            static_if<CanComputeLeftFromRightPrimal()>([&](auto f2) {
+            static_if<MessageContainerType::CanComputeLeftFromRightPrimal()>([&](auto f2) {
                   f2(this)->ComputeLeftFromRightPrimal();
             }).else_([&](auto) {
                assert(false);
@@ -1253,7 +1257,7 @@ public:
                   f(this)->ComputeLeftFromRightPrimal(); 
 
          }).else_([&](auto f) {
-            static_if<CanComputeRightFromLeftPrimal()>([&](auto f2) {
+            static_if<MessageContainerType::CanComputeRightFromLeftPrimal()>([&](auto f2) {
                   f2(this)->ComputeRightFromLeftPrimal();
             }).else_([&](auto) {
                assert(false);
@@ -1353,7 +1357,7 @@ public:
 
    template<typename MESSAGE_DISPATCHER_TYPE, typename MESSAGE_TYPE> 
    void AddMessage(MESSAGE_TYPE* m) { 
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       static_assert( n < meta::size<MESSAGE_DISPATCHER_TYPELIST>(), "message dispatcher not supported");
       static_assert( n < std::tuple_size<decltype(msg_)>(), "message dispatcher not supported");
       //INDEX status;
@@ -1377,7 +1381,7 @@ public:
       //INDEX status;
       //std::cout << "return message for " << abi::__cxa_demangle(typeid(MESSAGE_DISPATCHER_TYPE).name(),0,0,&status) << "\n";
       // current number of MESSAGE_DISPATCHER_TYPE
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       REAL msg_val = 0.0;
       for(auto it=std::get<n>(msg_).begin(); it!=std::get<n>(msg_).end(); ++it) {
          msg_val += MESSAGE_DISPATCHER_TYPE::GetMessage(*(*it),i);
@@ -1524,7 +1528,7 @@ public:
    {
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this](auto l) {
             static_if<l.CanComputePrimalThroughMessage()>([&](auto f) {
-                  constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+                  constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
                   for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it) {
                      f(l.ComputePrimalThroughMessage)(*(*it));
                   }
@@ -1538,12 +1542,12 @@ public:
       // note: currently all messages are received, even if not needed. Change this again.
       auto omegaIt = omega.begin();
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&omegaIt](auto l) {
-            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+            constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
             static_if<l.CanCallReceiveMessage()>([&](auto f) {
                   
                   for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
                      //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
-                     f(l.ReceiveMessage)(*(*it));
+                     f(l).ReceiveMessage(*(*it));
                      //}
                   }
 
@@ -1557,7 +1561,7 @@ public:
    void ReceiveRestrictedMessages() 
    {
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this](auto l) {
-            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+            constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
             static_if<l.CanCallReceiveRestrictedMessage()>([&](auto f) {
                   for(auto it=std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it) {
                      f(l.ReceiveRestrictedMessage)(*(*it)); 
@@ -1566,13 +1570,13 @@ public:
       });
    }
 
+   struct can_receive_restricted_message {
+      template<typename MESSAGE_DISPATCHER_TYPE>
+         using invoke = typename std::is_same<std::integral_constant<bool,MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage()>, std::integral_constant<bool,true> >::type;
+   };
    constexpr static bool CanReceiveRestrictedMessages() 
    {
-      struct can_receive {
-         template<typename MESSAGE_DISPATCHER_TYPE>
-            using invoke = typename std::is_same<std::integral_constant<bool,MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage()>, std::integral_constant<bool,true> >::type;
-      };
-      return meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_receive>{};
+      return meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_receive_restricted_message>{};
    }
 
    // methods used by MessageIterator
@@ -1580,7 +1584,7 @@ public:
    {
       INDEX noMessages = 0;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&noMessages](auto l) {
-            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+            constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
             noMessages += std::get<n>(msg_).size();
             } );
       return noMessages;
@@ -1590,12 +1594,12 @@ public:
    {
       INDEX no_calls = 0;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_calls](auto l) {
-            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
-            if(CanCallSendMessages(l)) {
+            constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+            if(FactorContainerType::CanCallSendMessages(l)) {
                if(std::get<n>(msg_).size() > 0) {
                   ++no_calls;
                }
-            } else if(CanCallSendMessage(l)) {
+            } else if(FactorContainerType::CanCallSendMessage(l)) {
                no_calls += std::get<n>(msg_).size();
             }
             } );
@@ -1606,17 +1610,17 @@ public:
    void CallSendMessages(FactorType& factor, ITERATOR omegaIt) 
    {
      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
-         constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+         constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
          // check whether the message supports batch updates. If so, call batch update.
          // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
-         static_if<CanCallSendMessages(l)>([&](auto f) {
+         static_if<FactorContainerType::CanCallSendMessages(l)>([&](auto f) {
              const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
              if(omega_sum > 0.0) { 
                l.SendMessages(factor, std::get<n>(msg_), omegaIt);
              }
              omegaIt += std::get<n>(msg_).size();
              }).else_([&](auto f) {
-               static_if<CanCallSendMessage(l)>([&](auto f) {
+               static_if<FactorContainerType::CanCallSendMessage(decltype(l){})>([&](auto f) {
                    for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
                      if(*omegaIt != 0.0) {
                        l.SendMessage(&factor, *(*it), *omegaIt); 
@@ -1656,7 +1660,7 @@ public:
    template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
    MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX msgNo) const 
    {
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       if(msgNo < std::get<n>(msg_).size()) {
          auto it = std::get<n>(msg_).begin();
          for(INDEX i=0; i<msgNo; ++i) { ++it; }
@@ -1679,7 +1683,7 @@ public:
    template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
    FactorTypeAdapter* GetConnectedFactor(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX cur_msg_idx) const // to get the current message_type
    {
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       const INDEX no_msgs = std::get<n>(msg_).size();
       if(cur_msg_idx < no_msgs) {
          //auto msg = std::get<n>(msg_)[cur_msg_idx];
@@ -1701,12 +1705,12 @@ public:
       return f;
    }
 
+   struct can_receive_message {
+      template<typename MESSAGE_DISPATCHER_TYPE>
+         using invoke = typename std::is_same<std::integral_constant<bool,MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage()>, std::integral_constant<bool,true> >::type;
+   };
    constexpr static bool CanReceiveMessages() 
    {
-      struct can_receive_message {
-         template<typename MESSAGE_DISPATCHER_TYPE>
-            using invoke = typename std::is_same<std::integral_constant<bool,MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage()>, std::integral_constant<bool,true> >::type;
-      };
       return meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_receive_message>{};
    }
 
@@ -1714,7 +1718,7 @@ public:
    {
       bool can_receive = false;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&can_receive](auto l) {
-         constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+         constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
          if(l.CanCallReceiveMessage() && std::get<n>(msg_).size() > 0) {
             can_receive = true;
          }
@@ -1734,16 +1738,16 @@ public:
       return MESSAGE_DISPATCHER_TYPE::CanCallSendMessage();
    }
 
+   struct can_send_message {
+      template<typename MESSAGE_DISPATCHER_TYPE>
+         using invoke = typename std::is_same<std::integral_constant<bool,CanCallSendMessage(MESSAGE_DISPATCHER_TYPE{})>, std::integral_constant<bool,true> >::type;
+   };
+   struct can_send_messages {
+      template<typename MESSAGE_DISPATCHER_TYPE>
+         using invoke = typename std::is_same<std::integral_constant<bool,CanCallSendMessages(MESSAGE_DISPATCHER_TYPE{})>, std::integral_constant<bool,true> >::type;
+   };
    constexpr static bool CanSendMessages() 
    {
-      struct can_send_message {
-         template<typename MESSAGE_DISPATCHER_TYPE>
-            using invoke = typename std::is_same<std::integral_constant<bool,CanCallSendMessage(MESSAGE_DISPATCHER_TYPE{})>, std::integral_constant<bool,true> >::type;
-      };
-      struct can_send_messages {
-         template<typename MESSAGE_DISPATCHER_TYPE>
-            using invoke = typename std::is_same<std::integral_constant<bool,CanCallSendMessages(MESSAGE_DISPATCHER_TYPE{})>, std::integral_constant<bool,true> >::type;
-      };
       return meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_send_message>{} || meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_send_messages>{};
    }
 
@@ -1752,8 +1756,8 @@ public:
    {
       bool calls_send = false;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
-            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
-            if(CanCallSendMessage(l) || CanCallSendMessages(l)) {
+            constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+            if(FactorContainerType::CanCallSendMessage(l) || FactorContainerType::CanCallSendMessages(l)) {
                if(std::get<n>(msg_).size()>0) {
                   calls_send = true;
                }
@@ -1771,7 +1775,7 @@ public:
    template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
    bool CanSendMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX cur_msg_idx) const // to get the current MESSAGE_TYPE
    {
-      constexpr INDEX n = FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       const INDEX no_msgs = std::get<n>(msg_).size();
       if(cur_msg_idx < no_msgs) {
          if( CanCallSendMessage(MESSAGE_DISPATCHER_TYPE{}) || CanCallSendMessages(MESSAGE_DISPATCHER_TYPE{}) ) {
@@ -1794,7 +1798,7 @@ public:
    {
       bool calls_receive_restricted = false;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
-            constexpr INDEX n = FindMessageDispatcherTypeIndex<decltype(l)>();
+            constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
             if(l.CanCallReceiveRestrictedMessage() && std::get<n>(msg_).size() > 0) {
                calls_receive_restricted = true;
             }
@@ -1905,7 +1909,7 @@ public:
 
      constexpr bool left = MESSAGE_TYPE::leftFactorNumber == FACTOR_NO;
      using dispatcher_type = typename meta::if_c<left, MessageDispatcher<MESSAGE_TYPE, LeftMessageFuncGetter> , MessageDispatcher<MESSAGE_TYPE, RightMessageFuncGetter>>;
-     return  FindMessageDispatcherTypeIndex<dispatcher_type>();
+     return  FactorContainerType::FindMessageDispatcherTypeIndex<dispatcher_type>();
 
      //if(MESSAGE_TYPE::leftFactorNumber == FACTOR_NO) {
      //   return FindMessageDispatcherTypeIndex<MessageDispatcher<MESSAGE_TYPE, LeftMessageFuncGetter>>();

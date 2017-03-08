@@ -109,7 +109,7 @@ struct FMC_LIFTED_MULTICUT {
          >;
 
    using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,3>;
-   using LiftedMulticutConstructor = LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
+   using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 
 
