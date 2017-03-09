@@ -579,6 +579,17 @@ public:
       static_assert(std::is_same<typename TripletFactorContainer::FactorType, MulticutTripletFactor>::value,"");
       //static_assert(std::is_same<typename MessageContainer::MessageType, MulticutUnaryTripletMessage<MessageSending::SRMP>>::value,"");
    }
+
+   void End() 
+   {
+      // wait for the primal rounding to finish.
+      std::cout << "wait for primal computation to end\n";
+      if(primal_handle_.valid()) {
+         auto labeling = primal_handle_.get();
+         write_labeling_into_factors(labeling);
+      }
+   }
+
    void AddToConstant(const REAL delta) { constant_factor_->GetFactor()->AddToOffset(delta); }
 
    virtual UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost) // declared virtual so that derived class notices when unary factor is added
@@ -1545,6 +1556,41 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
       return labeling;
    }
 
+   void write_labeling_into_factors(const std::vector<char>& labeling) {
+      assert(labeling.size() <= unaryFactorsVector_.size());
+      for(INDEX c=0; c<labeling.size(); ++c) {
+         auto* f = unaryFactorsVector_[c].second;
+         f->GetFactor()->set_primal(labeling[c]);
+         f->ComputePrimalThroughMessages();
+      }
+
+      // possibly, additional edges have been added because of tightening. infer labeling of those from union find datastructure
+      if(labeling.size() < unaryFactorsVector_.size()) {
+         UnionFind uf(noNodes_);
+         for(INDEX c=0; c<labeling.size(); ++c) {
+            UnaryFactorContainer* f = unaryFactorsVector_[c].second; 
+            if(f->GetFactor()->get_primal() == false) {
+               // connect components 
+               const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
+               const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
+               uf.merge(i,j);
+            }
+         }
+         std::cout << "built union find structure, propagate information now\n";
+         for(INDEX c=labeling.size(); c<unaryFactorsVector_.size(); ++c) {
+            UnaryFactorContainer* f = unaryFactorsVector_[c].second; 
+            const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
+            const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
+            if(uf.connected(i,j)) {
+               f->GetFactor()->set_primal(false);
+            } else {
+               f->GetFactor()->set_primal(true);
+            }
+            f->ComputePrimalThroughMessages();
+         }
+      }
+   }
+
    // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
    void ComputePrimal()
    {
@@ -1562,42 +1608,10 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
 
          std::cout << "collect multicut rounding result\n";
          auto labeling = primal_handle_.get();
-         assert(labeling.size() <= unaryFactorsVector_.size());
-         for(INDEX c=0; c<labeling.size(); ++c) {
-            auto* f = unaryFactorsVector_[c].second;
-            f->GetFactor()->set_primal(labeling[c]);
-            f->ComputePrimalThroughMessages();
-         }
-         std::cout << "put in previous edges. now infer new ones\n";
+         write_labeling_into_factors(labeling);
 
-         // possibly, additional edges have been added because of tightening. infer labeling of those from union find datastructure
-         if(labeling.size() < unaryFactorsVector_.size()) {
-            UnionFind uf(noNodes_);
-            for(INDEX c=0; c<labeling.size(); ++c) {
-               UnaryFactorContainer* f = unaryFactorsVector_[c].second; 
-               if(f->GetFactor()->get_primal() == false) {
-                  // connect components 
-                  const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
-                  const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
-                  uf.merge(i,j);
-               }
-            }
-            std::cout << "built union find structure, propagate information now\n";
-            for(INDEX c=labeling.size(); c<unaryFactorsVector_.size(); ++c) {
-               UnaryFactorContainer* f = unaryFactorsVector_[c].second; 
-               const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
-               const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
-               if(uf.connected(i,j)) {
-                  f->GetFactor()->set_primal(false);
-               } else {
-                  f->GetFactor()->set_primal(true);
-               }
-               f->ComputePrimalThroughMessages();
-            }
-         } 
-
-      std::cout << "restart primal rounding\n";
-      round();
+         std::cout << "restart primal rounding\n";
+         round();
 
      } else {
        std::cout << "multicut rounding is currently running.\n";

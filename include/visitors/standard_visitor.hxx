@@ -192,6 +192,7 @@ namespace LP_MP {
       void end(const REAL lower_bound, const REAL upper_bound)
       {
          auto endTime = std::chrono::steady_clock::now();
+         std::cout << "final lower bound = " << lower_bound << ", upper bound = " << upper_bound << "\n";
          std::cout << "Optimization took " <<  std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations.\n";
       }
       

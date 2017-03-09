@@ -258,7 +258,23 @@ public:
    } 
 
    // called after last iteration
-   virtual void End() {}
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasEnd,End);
+   template<typename PROBLEM_CONSTRUCTOR>
+   constexpr static bool
+   CanCallEnd()
+   {
+      return HasEnd<PROBLEM_CONSTRUCTOR, void>();
+   }
+
+   virtual void End() 
+   {
+      for_each_tuple(this->problemConstructor_, [this](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<CanCallEnd<pc_type>()>([&](auto f) {
+                  f(l).End();
+                  });
+            }); 
+   }
 
    // register evaluated primal solution
    void RegisterPrimal(const REAL cost)
@@ -353,17 +369,8 @@ public:
       return HasCheckPrimalConsistency<PROBLEM_CONSTRUCTOR, bool>();
    }
    
-   void ComputePrimal()
+   void RegisterRounding()
    {
-      // compute the primal in parallel.
-      // for this, first we have to wait until the rounding procedure has read off everything from the LP model before optimizing further
-      for_each_tuple(this->problemConstructor_, [this](auto& l) {
-            using pc_type = typename std::remove_reference<decltype(l)>::type;
-            static_if<CanComputePrimal<pc_type>()>([&](auto f) {
-                  f(l).ComputePrimal();
-            });
-      });
-
       bool feasible = true;
       for_each_tuple(this->problemConstructor_, [this,&feasible](auto& l) {
             using pc_type = typename std::remove_reference<decltype(l)>::type;
@@ -383,6 +390,19 @@ public:
          const REAL primal_cost = this->lp_.EvaluatePrimal();
          this->RegisterPrimal(primal_cost);
       }
+
+   }
+   void ComputePrimal()
+   {
+      // compute the primal in parallel.
+      // for this, first we have to wait until the rounding procedure has read off everything from the LP model before optimizing further
+      for_each_tuple(this->problemConstructor_, [this](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<CanComputePrimal<pc_type>()>([&](auto f) {
+                  f(l).ComputePrimal();
+            });
+      });
+      RegisterRounding();
    }
 
    virtual void PostIterate(LpControl c)
@@ -392,6 +412,12 @@ public:
          ComputePrimal();
       }
       SOLVER::PostIterate(c);
+   }
+
+   virtual void End()
+   {
+      SOLVER::End(); // first let problem constructors end (done in Solver)
+      RegisterRounding();
    }
    
 };

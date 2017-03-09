@@ -262,7 +262,7 @@ public:
    {
       const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - BaseVisitor::GetBeginTime()).count();
       const INDEX curIter = BaseVisitor::GetIter();
-      iterationStatistics_.push_back({curIter+1,timeElapsed,lowerBound,upperBound}); // additional fake iteration, e.g. for post-processing
+      iterationStatistics_.push_back({curIter+1,timeElapsed,lowerBound,upperBound}); // additional fake iteration, e.g. for post-processing, collecting primal rounding by external rounding routines etc.
 
       std::cout << "write bounds to database\n";
       WriteBounds(iterationStatistics_);
