@@ -35,6 +35,7 @@ namespace LP_MP {
 template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO, INDEX CONSTANT_FACTOR_NO>
 class MulticutConstructor {
 public:
+   using MulticutConstructorType = MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_NO, CONSTANT_FACTOR_NO>;
    using FMC = FACTOR_MESSAGE_CONNECTION;
 
    using UnaryFactorContainer = meta::at_c<typename FMC::FactorList, UNARY_FACTOR_NO>;
@@ -551,8 +552,8 @@ private:
 
 
 public:
-template<typename SOLVER>
-MulticutConstructor(SOLVER& pd) 
+   template<typename SOLVER>
+   MulticutConstructor(SOLVER& pd) 
    : lp_(&pd.GetLP()),
       //pd_(pd),
    //unaryFactors_(100,hash::array2),
@@ -563,6 +564,15 @@ MulticutConstructor(SOLVER& pd)
       constant_factor_ = new ConstantFactorContainer(0.0);
       pd.GetLP().AddFactor(constant_factor_);
    }
+   MulticutConstructor(const MulticutConstructorType& o)
+   : unaryFactors_(o.unaryFactors_),
+   unaryFactorsVector_(o.unaryFactorsVector_),
+   tripletFactors_(o.tripletFactors_),
+   noNodes_(o.noNodes_),
+   constant_factor_(o.constant_factor_), 
+   lp_(o.lp_) 
+   {}
+
    ~MulticutConstructor()
    {
       static_assert(std::is_same<typename UnaryFactorContainer::FactorType, MulticutUnaryFactor>::value,"");
@@ -1512,41 +1522,94 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
       return true;
    }
 
-   void ComputePrimal() const
+   void round()
    {
-      // do zrobienia: templatize for correct graph type
-      // do zrobienia: put original graph into multicut constructor and let it be constant, i.e. not reallocate it every time for primal computation. Problem: When adding additional edges, we may not add them to the lifted multicut solver, as extra edges must not participate in cut inequalities
-
-      // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
       std::cout << "compute multicut primal with GAEC + KLj\n";
-      std::cout << "no edges = " << unaryFactors_.size() << "\n";
-      const INDEX noNodes = noNodes_;
-      andres::graph::Graph<> graph(noNodes);
+      andres::graph::Graph<> graph(noNodes_);
       std::vector<REAL> edgeValues;
-      edgeValues.reserve(unaryFactors_.size());
+      edgeValues.reserve(unaryFactorsVector_.size());
 
-      for(const auto& e : unaryFactors_) {
+      for(const auto& e : unaryFactorsVector_) {
          graph.insertEdge(e.first[0], e.first[1]);
          edgeValues.push_back(*(e.second->GetFactor()));
       }
 
-      std::vector<char> labeling(unaryFactors_.size(),0);
-      andres::graph::multicut::greedyAdditiveEdgeContraction(graph,edgeValues,labeling);
-      andres::graph::multicut::kernighanLin(graph,edgeValues,labeling,labeling);
+      primal_handle_ = std::async(std::launch::async, gaec_klj, std::move(graph), std::move(edgeValues));
+   }
 
-      // now write back primal solution and evaluate cost. 
-      INDEX i=0; // the index in labeling
-      for(const auto& e : unaryFactors_) {
-         auto* f = e.second;
-         f->GetFactor()->set_primal(labeling[i]);
-         f->ComputePrimalThroughMessages();
-         ++i;
+   static std::vector<char> gaec_klj(andres::graph::Graph<> g, std::vector<REAL> edge_values)
+   {
+      std::vector<char> labeling(g.numberOfEdges(), 0);
+      andres::graph::multicut::greedyAdditiveEdgeContraction(g, edge_values, labeling);
+      andres::graph::multicut::kernighanLin(g, edge_values, labeling, labeling);
+      return labeling;
+   }
+
+   // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
+   void ComputePrimal()
+   {
+      if(!primal_handle_.valid()) { 
+         round();
+         return;
       }
+
+      const auto primal_state = primal_handle_.wait_for(std::chrono::seconds(0));
+
+      if(primal_state == std::future_status::deferred) {
+         assert(false); // this should not happen, we launch immediately!
+         throw std::runtime_error("asynchronuous primal multicut rounding was deferred, but this should not happen");
+      } else if(primal_state == std::future_status::ready) {
+
+         std::cout << "collect multicut rounding result\n";
+         auto labeling = primal_handle_.get();
+         assert(labeling.size() <= unaryFactorsVector_.size());
+         for(INDEX c=0; c<labeling.size(); ++c) {
+            auto* f = unaryFactorsVector_[c].second;
+            f->GetFactor()->set_primal(labeling[c]);
+            f->ComputePrimalThroughMessages();
+         }
+         std::cout << "put in previous edges. now infer new ones\n";
+
+         // possibly, additional edges have been added because of tightening. infer labeling of those from union find datastructure
+         if(labeling.size() < unaryFactorsVector_.size()) {
+            UnionFind uf(noNodes_);
+            for(INDEX c=0; c<labeling.size(); ++c) {
+               UnaryFactorContainer* f = unaryFactorsVector_[c].second; 
+               if(f->GetFactor()->get_primal() == false) {
+                  // connect components 
+                  const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
+                  const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
+                  uf.merge(i,j);
+               }
+            }
+            std::cout << "built union find structure, propagate information now\n";
+            for(INDEX c=labeling.size(); c<unaryFactorsVector_.size(); ++c) {
+               UnaryFactorContainer* f = unaryFactorsVector_[c].second; 
+               const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
+               const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
+               if(uf.connected(i,j)) {
+                  f->GetFactor()->set_primal(false);
+               } else {
+                  f->GetFactor()->set_primal(true);
+               }
+               f->ComputePrimalThroughMessages();
+            }
+         } 
+
+      std::cout << "restart primal rounding\n";
+      round();
+
+     } else {
+       std::cout << "multicut rounding is currently running.\n";
+     }
    }
 
 
 
 protected:
+
+   decltype(std::async(std::launch::async, gaec_klj, andres::graph::Graph<>(0), std::vector<REAL>{})) primal_handle_;
+
    //GlobalFactorContainer* globalFactor_;
    // do zrobienia: replace this by unordered_map, provide hash function.
    // possibly dont do this, but use sorting to provide ordering for LP

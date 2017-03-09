@@ -261,15 +261,12 @@ public:
    virtual void End() {}
 
    // register evaluated primal solution
-   void RegisterPrimal(PrimalSolutionStorage& p, const REAL cost)
+   void RegisterPrimal(const REAL cost)
    {
-      std::cout << "RegisterPrimal not implemented\n";
-      //assert(false);
-      //if(cost < bestPrimalCost_) {
-      //   // assume solution is feasible
-      //   bestPrimalCost_ = cost;
-      //   std::swap(bestPrimal_, p);
-      //}
+      if(cost < bestPrimalCost_) {
+         // assume solution is feasible
+         bestPrimalCost_ = cost;
+      }
    }
 
    // evaluate and register primal solution
@@ -358,6 +355,8 @@ public:
    
    void ComputePrimal()
    {
+      // compute the primal in parallel.
+      // for this, first we have to wait until the rounding procedure has read off everything from the LP model before optimizing further
       for_each_tuple(this->problemConstructor_, [this](auto& l) {
             using pc_type = typename std::remove_reference<decltype(l)>::type;
             static_if<CanComputePrimal<pc_type>()>([&](auto f) {
@@ -379,10 +378,10 @@ public:
       if(feasible) {
          feasible = this->lp_.CheckPrimalConsistency();
       }
-      std::cout << "primal is feasible:" << feasible << "\n";
 
       if(feasible) {
          const REAL primal_cost = this->lp_.EvaluatePrimal();
+         this->RegisterPrimal(primal_cost);
       }
    }
 
@@ -391,7 +390,6 @@ public:
       if(c.computePrimal) {
          // do zrobienia: possibly run this in own thread similar to lp solver
          ComputePrimal();
-         //this->RegisterPrimal(primal_);
       }
       SOLVER::PostIterate(c);
    }

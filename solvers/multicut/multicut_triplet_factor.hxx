@@ -81,6 +81,14 @@ public:
          return std::numeric_limits<REAL>::infinity();
       }
 
+
+      //REAL cost = 
+      //   (*this)[0]*((1-primal_[0])*primal_[1]*primal_[2]) +
+      //   (*this)[1]*(primal_[0]*(1-primal_[1])*primal_[2]) +
+      //   (*this)[2]*(primal_[0]*primal_[1]*(1-primal_[2])) +
+      //   (*this)[3]*(primal_[1]*primal_[2]*primal_[3]) ;
+      //return cost;
+
       /*
       for(INDEX i=0; i<PrimalSize(); ++i) {
          assert(primal[i] != unknownState);
