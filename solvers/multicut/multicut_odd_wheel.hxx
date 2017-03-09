@@ -374,9 +374,9 @@ public:
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
    void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r) const
    {
-      r.set_primal()[p_[0]] = l.get_primal()[0];
-      r.set_primal()[p_[1]] = l.get_primal()[1];
-      r.set_primal()[p_[2]] = l.get_primal()[2];
+      r.set_primal()[0] = l.get_primal()[p_[0]];
+      r.set_primal()[1] = l.get_primal()[p_[1]];
+      r.set_primal()[2] = l.get_primal()[p_[2]];
    }
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>

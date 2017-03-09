@@ -65,12 +65,21 @@ public:
       const auto sum = std::count(primal_.begin(), primal_.end(), true);
       if(sum == 1) { return std::numeric_limits<REAL>::infinity(); }
       assert(std::count(primal_.begin(), primal_.end(), true) != 1);
-      REAL cost = 
-         (*this)[0]*((1-primal_[0])*primal_[1]*primal_[2]) +
-         (*this)[1]*(primal_[0]*(1-primal_[1])*primal_[2]) +
-         (*this)[2]*(primal_[0]*primal_[1]*(1-primal_[2])) +
-         (*this)[3]*(primal_[1]*primal_[2]*primal_[3]) ;
-      return cost;
+
+      if(!primal_[0] && primal_[1] && primal_[2]) {
+         return (*this)[0];
+      } else if(primal_[0] && !primal_[1] && primal_[2]) {
+         return (*this)[1];
+      } else if(primal_[0] && primal_[1] && !primal_[2]) {
+         return (*this)[2];
+      } else if(primal_[0] && primal_[1] && primal_[2]) {
+         return (*this)[3];
+      } else if(!primal_[0] && !primal_[1] && !primal_[2]) {
+         return 0.0;
+      } else {
+         assert(false);
+         return std::numeric_limits<REAL>::infinity();
+      }
 
       /*
       for(INDEX i=0; i<PrimalSize(); ++i) {
