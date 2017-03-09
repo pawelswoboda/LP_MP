@@ -62,6 +62,8 @@ public:
 
    REAL EvaluatePrimal() const
    {
+      const auto sum = std::count(primal_.begin(), primal_.end(), true);
+      if(sum == 1) { return std::numeric_limits<REAL>::infinity(); }
       assert(std::count(primal_.begin(), primal_.end(), true) != 1);
       REAL cost = 
          (*this)[0]*((1-primal_[0])*primal_[1]*primal_[2]) +
@@ -106,6 +108,9 @@ public:
    void init_primal() {}
    template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<std::array<REAL,4>*>(this) ); }
    template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+
+   auto& set_primal() { return primal_; }
+   auto get_primal() const { return primal_; }
 private:
    std::array<bool,3> primal_;
 };
@@ -197,35 +202,15 @@ public:
    }
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element leftPrimal, const LEFT_FACTOR& l, typename PrimalSolutionStorage::Element rightPrimal, const RIGHT_FACTOR& r) const
+   void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r) const
    {
-      if(leftPrimal[0] == true) {
-         rightPrimal[i_] = false;
-         rightPrimal[4] = false;
-      } else {
-         assert(leftPrimal[0] == false);
-         rightPrimal[(i_+1)%3] = false;
-         rightPrimal[(i_+2)%3] = false;
-         rightPrimal[3] = false;
-      }
-      return;
+      r.set_primal()[i_] = l.get_primal();
    }
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, const LEFT_FACTOR& l, typename PrimalSolutionStorage::Element rightPrimal, const RIGHT_FACTOR& r) const
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
    {
-      return true;
-      assert(leftPrimal[0] != unknownState);
-      if(leftPrimal[0] == false) {
-         if(!(rightPrimal[i_] == true || rightPrimal[4] == true)) {
-            return false;
-         }
-      } else {
-         if(!(rightPrimal[(i_+1)%3] == true || rightPrimal[(i_+2)%3] == true || rightPrimal[3] == true)) {
-            return false;
-         }
-      }
-      return true;
+      return l.get_primal() == r.get_primal()[i_];
    }
 
    /*

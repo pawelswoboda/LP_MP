@@ -10,6 +10,7 @@
 #include "LP_MP.h"
 #include "function_existence.hxx"
 #include "template_utilities.hxx"
+#include "static_if.hxx"
 #include "tclap/CmdLine.h"
 #include "lp_interface/lp_interface.h"
 
@@ -264,13 +265,11 @@ public:
    {
       std::cout << "RegisterPrimal not implemented\n";
       //assert(false);
-      /*
-      if(cost < bestPrimalCost_) {
-         // assume solution is feasible
-         bestPrimalCost_ = cost;
-         std::swap(bestPrimal_, p);
-      }
-      */
+      //if(cost < bestPrimalCost_) {
+      //   // assume solution is feasible
+      //   bestPrimalCost_ = cost;
+      //   std::swap(bestPrimal_, p);
+      //}
    }
 
    // evaluate and register primal solution
@@ -278,16 +277,14 @@ public:
    {
       std::cout << "RegisterPrimal not implemented\n";
       //assert(false);
-      /*
-      const REAL cost = lp_.EvaluatePrimal(p.begin());
-      if(cost < bestPrimalCost_) {
-         // check constraints
-         if(CheckPrimalConsistency(p.begin())) {
-            bestPrimalCost_ = cost;
-            std::swap(bestPrimal_, p); // note: the best primal need not be admissible for the current lp, i.e. after tightening, the lp has changed, while best primal possibly has steyed the same.
-         }
-      }
-      */
+      //const REAL cost = lp_.EvaluatePrimal(p.begin());
+      //if(cost < bestPrimalCost_) {
+      //   // check constraints
+      //   if(CheckPrimalConsistency(p.begin())) {
+      //      bestPrimalCost_ = cost;
+      //      std::swap(bestPrimal_, p); // note: the best primal need not be admissible for the current lp, i.e. after tightening, the lp has changed, while best primal possibly has steyed the same.
+      //   }
+      //}
    }
 
    REAL lower_bound() const { return lowerBound_; }
@@ -344,51 +341,61 @@ public:
    using SOLVER::SOLVER;
 
    LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputePrimal,ComputePrimal);
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanComputePrimal()
    {
-      // do zrobienia: this is not nice. CanComputePrimal should only be called with valid PROBLEM_CONSTRUCTOR_NO
-      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= SOLVER::ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
-      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
-      else return HasComputePrimal<meta::at_c<typename SOLVER::ProblemDecompositionList,n>, void, PrimalSolutionStorage::Element>();
-      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
+      return HasComputePrimal<PROBLEM_CONSTRUCTOR, void>();
    }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= SOLVER::ProblemDecompositionList::size()>::type
-   ComputePrimal(PrimalSolutionStorage::Element primal) { return; }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < SOLVER::ProblemDecompositionList::size() && !CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   ComputePrimal(PrimalSolutionStorage::Element primal)
+
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency,CheckPrimalConsistency);
+   template<typename PROBLEM_CONSTRUCTOR>
+   constexpr static bool
+   CanCheckPrimalConsistency()
    {
-      return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
+      return HasCheckPrimalConsistency<PROBLEM_CONSTRUCTOR, bool>();
    }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < SOLVER::ProblemDecompositionList::size() && CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   ComputePrimal(PrimalSolutionStorage::Element primal)
+   
+   void ComputePrimal()
    {
-      std::cout << "ComputePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
-      std::get<PROBLEM_CONSTRUCTOR_NO>(this->problemConstructor_).ComputePrimal(primal);
-      return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
-   }
-   void ComputePrimal(PrimalSolutionStorage::Element primal)
-   {
-      ComputePrimal<0>(primal);
+      for_each_tuple(this->problemConstructor_, [this](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<CanComputePrimal<pc_type>()>([&](auto f) {
+                  f(l).ComputePrimal();
+            });
+      });
+
+      bool feasible = true;
+      for_each_tuple(this->problemConstructor_, [this,&feasible](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<CanCheckPrimalConsistency<pc_type>()>([&](auto f) {
+                  const bool feasible_pc = f(l).CheckPrimalConsistency();
+                  if(!feasible_pc) {
+                     feasible = false;
+                  }
+            });
+      });
+
+      if(feasible) {
+         feasible = this->lp_.CheckPrimalConsistency();
+      }
+      std::cout << "primal is feasible:" << feasible << "\n";
+
+      if(feasible) {
+         const REAL primal_cost = this->lp_.EvaluatePrimal();
+      }
    }
 
    virtual void PostIterate(LpControl c)
    {
       if(c.computePrimal) {
-         this->lp_.InitializePrimalVector(primal_); // do zrobienia: this is not nice: reallocation might occur
          // do zrobienia: possibly run this in own thread similar to lp solver
-         ComputePrimal(primal_.begin());
-         this->RegisterPrimal(primal_);
+         ComputePrimal();
+         //this->RegisterPrimal(primal_);
       }
       SOLVER::PostIterate(c);
    }
    
-private:
-   PrimalSolutionStorage primal_;
 };
 
 

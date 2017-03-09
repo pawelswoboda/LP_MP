@@ -916,15 +916,15 @@ int main()
       {"--minDualImprovementInterval"}, {"50"},
       {"--lowerBoundComputationInterval"}, {"10"},
       {"--primalComputationInterval"}, {"100"},
-      {"--standardReparametrization"}, {"uniform"},
-      {"--roundingReparametrization"}, {"uniform"},
+      {"--standardReparametrization"}, {"anisotropic"},
+      {"--roundingReparametrization"}, {"damped_uniform"},
       {"--overwriteDbRecord"}, // do zrobienia: possibly deactivate this. Then we do not overwrite
       {"--databaseFile"}, {"multicut.db"},
       {"--tighten"},
-      {"--tightenReparametrization"}, {"uniform"},
+      {"--tightenReparametrization"}, {"damped_uniform"},
       {"--tightenIteration"}, {"1"},
-      {"--tightenInterval"}, {"5"},
-      {"--tightenConstraintsPercentage"}, {"0.1"}
+      {"--tightenInterval"}, {"10"},
+      {"--tightenConstraintsPercentage"}, {"0.01"}
    };
 
    { // for the overview paper
@@ -940,31 +940,31 @@ int main()
    {
       using FMC = FMC_MULTICUT_ODD_CYCLE;
       using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
-      using SolverType = ProblemConstructorRoundingSolver<FMC>;
-      static auto Input = MulticutOpenGmInput::ParseProblem<FMC>;
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-C");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-C");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-C");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-C");
-      RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,modularity_clustering_dataset,options,"modularity clustering","MPMC-C");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,image_seg_dataset,options,"image-seg","MPMC-C");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,CREMI_small_dataset,options,"CREMI-small","MPMC-C");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,CREMI_large_dataset,options,"CREMI-large","MPMC-C");
+      using SolverType = ProblemConstructorRoundingSolver<Solver<FMC,LP,VisitorType>>;
+      static auto Input = MulticutOpenGmInput::ParseProblem<Solver<FMC,LP,VisitorType>>;
+      RunSolver<FMC,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-C");
+      RunSolver<FMC,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-C");
+      RunSolver<FMC,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-C");
+      RunSolver<FMC,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-C");
+      RunSolver<FMC,SolverType>(Input,modularity_clustering_dataset,options,"modularity clustering","MPMC-C");
+      RunSolver<FMC,SolverType>(Input,image_seg_dataset,options,"image-seg","MPMC-C");
+      RunSolver<FMC,SolverType>(Input,CREMI_small_dataset,options,"CREMI-small","MPMC-C");
+      RunSolver<FMC,SolverType>(Input,CREMI_large_dataset,options,"CREMI-large","MPMC-C");
    }
 
    {
       using FMC = FMC_MULTICUT_ODD_CYCLE_ODD_WHEEL;
       using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
-      using SolverType = ProblemConstructorRoundingSolver<FMC>;
-      static auto Input = MulticutOpenGmInput::ParseProblem<FMC>;
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-COW");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-COW");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-COW");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-COW");
-      RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,modularity_clustering_dataset,options,"modularity clustering","MPMC-COW");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,image_seg_dataset,options,"image-seg","MPMC-COW");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,CREMI_small_dataset,options,"CREMI-small","MPMC-COW");
-      //RunSolver<FMC,VisitorSolver<SolverType,VisitorType>>(Input,CREMI_large_dataset,options,"CREMI-large","MPMC-COW");
+      using SolverType = ProblemConstructorRoundingSolver<Solver<FMC,LP,VisitorType>>;
+      static auto Input = MulticutOpenGmInput::ParseProblem<Solver<FMC,LP,VisitorType>>;
+      RunSolver<FMC,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-COW");
+      RunSolver<FMC,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-COW");
+      RunSolver<FMC,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-COW");
+      RunSolver<FMC,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-COW");
+      RunSolver<FMC,SolverType>(Input,modularity_clustering_dataset,options,"modularity clustering","MPMC-COW");
+      RunSolver<FMC,SolverType>(Input,image_seg_dataset,options,"image-seg","MPMC-COW");
+      RunSolver<FMC,SolverType>(Input,CREMI_small_dataset,options,"CREMI-small","MPMC-COW");
+      RunSolver<FMC,SolverType>(Input,CREMI_large_dataset,options,"CREMI-large","MPMC-COW");
    }
    return 0;
 }

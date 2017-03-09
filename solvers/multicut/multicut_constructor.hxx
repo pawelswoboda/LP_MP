@@ -1482,14 +1482,13 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
       return tripletsAdded;
    }
 
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) const
+   bool CheckPrimalConsistency() const
    {
-      //std::cout << "checking primal feasibility for multicut\n";
+      std::cout << "checking primal feasibility for multicut ... ";
       UnionFind uf(noNodes_);
       for(const auto& e : unaryFactorsVector_) {
          UnaryFactorContainer* f = e.second; 
-         assert(primal[f->GetPrimalOffset()] != unknownState);
-         if(primal[f->GetPrimalOffset()] == false) {
+         if(f->GetFactor()->get_primal() == false) {
             // connect components 
             const INDEX i = std::get<0>(e.first);
             const INDEX j = std::get<1>(e.first);
@@ -1498,7 +1497,7 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
       }
       for(const auto& e : unaryFactorsVector_) {
          UnaryFactorContainer* f = e.second; 
-         if(primal[f->GetPrimalOffset()] == true) {
+         if(f->GetFactor()->get_primal() == true) {
             const INDEX i = std::get<0>(e.first);
             const INDEX j = std::get<1>(e.first);
             // there must not be a path from i1 to i2 consisting of edges with primal value false only
@@ -1513,13 +1512,14 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
       return true;
    }
 
-/*
    void ComputePrimal() const
    {
       // do zrobienia: templatize for correct graph type
       // do zrobienia: put original graph into multicut constructor and let it be constant, i.e. not reallocate it every time for primal computation. Problem: When adding additional edges, we may not add them to the lifted multicut solver, as extra edges must not participate in cut inequalities
 
       // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
+      std::cout << "compute multicut primal with GAEC + KLj\n";
+      std::cout << "no edges = " << unaryFactors_.size() << "\n";
       const INDEX noNodes = noNodes_;
       andres::graph::Graph<> graph(noNodes);
       std::vector<REAL> edgeValues;
@@ -1537,13 +1537,12 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
       // now write back primal solution and evaluate cost. 
       INDEX i=0; // the index in labeling
       for(const auto& e : unaryFactors_) {
-         const auto* f = e.second;
-         assert(false);
-         //f->SetAndPropagatePrimal(primal, labeling.begin()+i);
+         auto* f = e.second;
+         f->GetFactor()->set_primal(labeling[i]);
+         f->ComputePrimalThroughMessages();
          ++i;
       }
    }
-   */
 
 
 
@@ -2202,10 +2201,9 @@ public:
    INDEX Tighten(const INDEX maxCuttingPlanesToAdd)
    {
       const INDEX tripletsAdded = BaseConstructor::Tighten(maxCuttingPlanesToAdd);
-      if(tripletsAdded > 0) {
+      if(tripletsAdded > 0.1*maxCuttingPlanesToAdd) {
          return tripletsAdded;
       } else {
-         // possibly require the odd wheels to have larger impact relative to violated cycles. This ensures that odd wheels are only added late in the optimziation, when no good violated cycles are present any more
          const INDEX oddWheelsAdded = FindOddWheels(maxCuttingPlanesToAdd);
          std::cout << "Added " << oddWheelsAdded << " factors for odd wheel constraints\n";
          return oddWheelsAdded;

@@ -40,13 +40,51 @@ public:
    }
    REAL EvaluatePrimal() const
    {
-      assert(false);
-      return 3e13;
+      const auto sum = std::count(primal_.begin(), primal_.begin()+3, true);
+      if(sum == 1) { 
+         return std::numeric_limits<REAL>::infinity();
+      }
+
+      if(!primal_[3]) {
+         if(!primal_[0] && primal_[1] && primal_[2]) {
+            return (*this)[0];
+         } else if(primal_[0] && !primal_[1] && primal_[2]) {
+            return (*this)[1];
+         } else if(primal_[0] && primal_[1] && !primal_[2]) {
+            return (*this)[2];
+         } else if(primal_[0] && primal_[1] && primal_[2]) {
+            return (*this)[3];
+         } else if(!primal_[0] && !primal_[1] && !primal_[2]) {
+            return 0.0;
+         } else {
+            assert(false);
+            return std::numeric_limits<REAL>::infinity();
+         }
+      } else {
+         if(!primal_[0] && primal_[1] && primal_[2]) {
+            return (*this)[4];
+         } else if(primal_[0] && !primal_[1] && primal_[2]) {
+            return (*this)[5];
+         } else if(primal_[0] && primal_[1] && !primal_[2]) {
+            return (*this)[6];
+         } else if(primal_[0] && primal_[1] && primal_[2]) {
+            return (*this)[7];
+         } else if(!primal_[0] && !primal_[1] && !primal_[2]) {
+            return (*this)[8];
+         } else {
+            assert(false);
+            return std::numeric_limits<REAL>::infinity();
+         }
+      }
    }
 
    void init_primal() {}
    template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<std::array<REAL,9>*>(this) ); }
    template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+
+   auto get_primal() const { return primal_; }
+   auto& set_primal() { return primal_; }
+
 private:
    std::array<bool,4> primal_;
 };
@@ -217,22 +255,23 @@ public:
       }
       */
    }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r) const
+   {
+      r.set_primal()[tripletPlusSpokeEdge_] = l.get_primal()[tripletEdge_[0]];
+      r.set_primal()[3] = l.get_primal()[tripletEdge_[1]];
+   }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
+   {
+      return true;
+   }
+
 private:
    INDEX tripletPlusSpokeEdge_; // the triplet edge that tripletPlusSpoke has in common, the other being the spoke edge
    std::array<INDEX,2> tripletEdge_; // the two edges triplet has in common
-
-   // a message is parametrized as follows: in the triplet, two edges are affected. One that is connected to a triplet edge in the TripletSpoke factor, and one that is connected to the spoke
-   // Let i_ be the edge that is not affected in the triplet
-   // for the TripletFactor
-   // do zrobienia: let i_ and s_ come from a permutation
-   //Permutation<3> p_; // permutation of triplet edges of tripletPlusSpoke to triplet edges.
-   //unsigned char i_; // shared edge in triplet factor which links to the triplet edge in TripletPlusSpokeFactor
-   //unsigned char s_; // shared edge in triplet factor which links to the spoke edge in TripletPlusSpokeFactor
-   //unsigned char j_; // edge in triplet of spoke that !is! shared
-   //const INDEX i_ : 2; // shared edge in triplet factor which links to the triplet edge in TripletPlusSpokeFactor
-   //const INDEX s_ : 2; // shared edge in triplet factor which links to the spoke edge in TripletPlusSpokeFactor
-   //const INDEX j_ : 2; // edge in triplet of spoke that !is! shared
-   // do zrobienia: check if not using bitfields is faster due to easier execution.
 };
 
 // message between triplet and TripletPlusSpoke, when TripletPlusSpoke completely covers the triplet
@@ -331,6 +370,21 @@ public:
       repam[msg_dim] += msg;
       repam[msg_dim + 4] += msg;
    }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r) const
+   {
+      r.set_primal()[p_[0]] = l.get_primal()[0];
+      r.set_primal()[p_[1]] = l.get_primal()[1];
+      r.set_primal()[p_[2]] = l.get_primal()[2];
+   }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
+   {
+      return true;
+   }
+
 private:
    // the triplet in the TripletPlusSpokeFactor can have edges arranged in arbitrary order. p_ permutes those
    //Permutation<3> p_;

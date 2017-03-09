@@ -13,7 +13,7 @@ endfunction(DOWNLOAD_AND_UNZIP)
 
 if(BUILD_MULTICUT_EVALUATION)
    add_executable(multicut multicut.cpp ${headers} ${sources})
-   target_link_libraries(multicut Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
+   target_link_libraries(multicut m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
 
    message("Download multicut datasets")
    set(MC_DIRECTORY "multicut_datasets")
@@ -28,7 +28,7 @@ endif()
 
 if(BUILD_GRAPH_MATCHING_EVALUATION)
    add_executable(graph_matching graph_matching.cpp ${headers} ${sources})
-   target_link_libraries(graph_matching Vc m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
+   target_link_libraries(graph_matching m stdc++ pthread sqlite3 ${HDF5_LIBRARIES})
 
    message("Download graph matching datasets")
    set(GM_DIRECTORY "graph_matching_datasets")
@@ -39,7 +39,7 @@ endif()
 
 if(BUILD_DISCRETE_TOMOGRAPHY_EVALUATION)
    add_executable(discrete_tomography_eval discrete_tomography_eval.cpp ${headers} ${sources})
-   target_link_libraries(discrete_tomography_eval Vc m stdc++ pthread pq pqxx ${HDF5_LIBRARIES})# ${GUROBI_LIBRARIES})
+   target_link_libraries(discrete_tomography_eval m stdc++ pthread pq pqxx ${HDF5_LIBRARIES})# ${GUROBI_LIBRARIES})
 
    #target_compile_definitions(discrete_tomography_eval PUBLIC -DUSE_GUROBI)
    #target_include_directories(discrete_tomography_eval PUBLIC ${GUROBI_INCLUDE_DIR})

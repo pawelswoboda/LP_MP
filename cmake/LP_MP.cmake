@@ -9,7 +9,7 @@ set(LP_MP_VERSION_MINOR 1)
 add_compile_options(-std=c++14)
 
 # compiler options
-add_definitions(-DIL_STD)
+#add_definitions(-DIL_STD) #legacy setting for CPLEX?
 add_definitions(-ffast-math)
 add_definitions(-march=native)
 
@@ -56,7 +56,8 @@ link_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Lingeling_Proj
 # HDF5 for reading OpenGM and Andres models
 # set (HDF5_USE_STATIC_LIBRARIES ON)
 find_package(HDF5 1.8.15 REQUIRED)
-INCLUDE_DIRECTORIES (${HDF5_INCLUDE_DIR})
+include_directories (${HDF5_INCLUDE_DIR})
+add_definitions(${HDF5_DEFINITIONS})
 message(STATUS ${HDF5_LIBRARIES})
 message(STATUS ${HDF5_INCLUDE_DIR})
 

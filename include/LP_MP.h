@@ -23,6 +23,7 @@
 #include <thread>
 #include <future>
 #include "memory_allocator.hxx"
+#include "cereal/archives/binary.hpp"
 #include "sat_interface.hxx"
 #include "tclap/CmdLine.h"
 
@@ -377,9 +378,19 @@ public:
    void InitializePrimalVector(PrimalSolutionStorage& p) { InitializePrimalVector(f_.begin(), f_.end(), p); }
    template<typename FACTOR_ITERATOR>
       void InitializePrimalVector(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PrimalSolutionStorage& v);
+   bool CheckPrimalConsistency() const
+   {
+      return CheckPrimalConsistency(f_.begin(), f_.end());
+   }
    template<typename FACTOR_ITERATOR>
       bool CheckPrimalConsistency(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt) const;
 
+   template<typename FACTOR_ITERATOR>
+   REAL EvaluatePrimal(cereal::BinaryInputArchive& primal, FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end) // read in primal solution from primal archive and evaluate cost
+   {
+      assert(std::distance(factor_begin, factor_end) == f_.size());
+
+   }
    REAL EvaluatePrimal() {
       return EvaluatePrimal(f_.begin(), f_.end());
    }
@@ -858,36 +869,15 @@ void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd
    }
 }
 
-//inline void LP::ComputeLowerBound()
-//{
-//   currentLowerBound_ = LowerBound();
-//   bestLowerBound_ = std::max(currentLowerBound_,bestLowerBound_);
-//}
-
-/*
-inline void LP::ComputeWeights(const LPReparametrizationMode m)
-{
-   assert(m != LPReparametrizationMode::Undefined);
-   if(repamMode_ != m) {
-      if(m == LPReparametrizationMode::Anisotropic) {
-         ComputeAnisotropicWeights();
-      } else if(m == LPReparametrizationMode::Uniform) {
-         ComputeUniformWeights();
-      } else if(m == LPReparametrizationMode::DampedUniform) {
-         ComputeDampedUniformWeights();
-      } else {
-         throw std::runtime_error("unknown repam mode");
-      }
-   }
-}
-*/
-
 inline void LP::ComputeAnisotropicWeights()
 {
    if(!omega_anisotropic_valid_) {
       omega_anisotropic_valid_ = true;
-      ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_sorted_.begin(), f_sorted_.end(), omegaForwardAnisotropic_);
+      auto forward = std::async(std::launch::async, [&](){  
+            ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_sorted_.begin(), f_sorted_.end(), omegaForwardAnisotropic_);
+      });
       ComputeAnisotropicWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), f_sorted_.rbegin(), f_sorted_.rend(), omegaBackwardAnisotropic_);
+      forward.wait();
    }
 }
 
@@ -895,8 +885,11 @@ inline void LP::ComputeUniformWeights()
 {
    if(!omega_isotropic_valid_) {
       omega_isotropic_valid_ = true;
-      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropic_, 0);
+      auto forward = std::async(std::launch::async, [&](){  
+            ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropic_, 0);
+      });
       ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackwardIsotropic_, 0);
+      forward.wait();
    };
 }
 
@@ -904,8 +897,11 @@ inline void LP::ComputeDampedUniformWeights()
 {
    if(!omega_isotropic_damped_valid_) {
       omega_isotropic_damped_valid_ = true;
-      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1.0);
+      auto forward = std::async(std::launch::async, [&](){  
+            ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1.0);
+      });
       ComputeUniformWeights(backwardOrdering_.rbegin(), backwardOrdering_.rend(), omegaBackwardIsotropicDamped_, 1.0);
+      forward.wait();
    };
 }
 

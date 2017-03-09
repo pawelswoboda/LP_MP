@@ -47,6 +47,8 @@ public:
    template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar(pot_); }
    template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
 
+   void set_primal(const bool p) { primal_ = p; }
+   bool get_primal() const { return primal_; }
 private:
    REAL pot_;
    bool primal_;
