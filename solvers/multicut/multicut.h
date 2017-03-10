@@ -432,8 +432,6 @@ namespace MulticutH5Input {
       auto& mc = pd.template GetProblemConstructor<0>();
       
       using orig_graph_type = typename std::conditional<GRID_GRAPH, andres::graph::GridGraph<2>, andres::graph::Graph<>>::type;
-      //andres::graph::GridGraph<2> originalGraph;
-      //andres::graph::Graph<> originalGraph;
       orig_graph_type originalGraph;
       andres::graph::Graph<> liftedGraph;
       std::vector<REAL> edgeValues;
@@ -447,9 +445,8 @@ namespace MulticutH5Input {
       andres::graph::hdf5::closeFile(fileHandle);
 
       // transform to energy cost
-      {
-         std::transform(edgeValues.begin(), edgeValues.end(), edgeValues.begin(), andres::NegativeLogProbabilityRatio<REAL,REAL>());
-      }
+      std::transform(edgeValues.begin(), edgeValues.end(), edgeValues.begin(), andres::NegativeLogProbabilityRatio<REAL,REAL>());
+      assert(edgeValues.size() == liftedGraph.numberOfEdges());
 
       for(std::size_t e=0; e<liftedGraph.numberOfEdges(); ++e) {
          auto i = liftedGraph.vertexOfEdge(e,0);

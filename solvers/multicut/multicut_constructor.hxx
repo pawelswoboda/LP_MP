@@ -2630,9 +2630,9 @@ public:
    }
 
    // check if all lifted edges are primally consistent by asserting that a path of zero values exists in the ground graph whenever lifted edge is zero
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) const
+   bool CheckPrimalConsistency() const
    {
-      const bool multicutConsistent = MULTICUT_CONSTRUCTOR::CheckPrimalConsistency(primal);
+      const bool multicutConsistent = MULTICUT_CONSTRUCTOR::CheckPrimalConsistency();
       if(!multicutConsistent) {
          return false;
       }
@@ -2640,19 +2640,22 @@ public:
       //collect connectivity information with union find w.r.t. base edges
       UnionFind uf(MULTICUT_CONSTRUCTOR::noNodes_);
       for(const auto& e : baseEdges_) {
-         if(primal[e.f->GetPrimalOffset()] == false) {
+         if(e.f->GetFactor()->get_primal() == false) {
             uf.merge(e.i,e.j);
          }
       }
       for(const auto& e : liftedEdges_) {
-        if(primal[e.f->GetPrimalOffset()] == false) {
-           if(!uf.connected(e.i,e.j)) {
+         if(e.f->GetFactor()->get_primal() == false) {
+            if(!uf.connected(e.i,e.j)) {
               return false;
            }
         }
       }
       return true;
    }
+
+   void ComputePrimal()
+   {}
 
    /* primals are different now!
    void ComputePrimal(PrimalSolutionStorage::Element primal) const

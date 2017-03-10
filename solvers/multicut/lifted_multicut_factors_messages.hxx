@@ -71,6 +71,7 @@ public:
 
    REAL EvaluatePrimal() const
    {
+      return std::numeric_limits<REAL>::infinity();
       INDEX noCutEdgesOne = 0;
       REAL x = 0.0;
       for(INDEX i=0; i<noCutEdges_; ++i) {
