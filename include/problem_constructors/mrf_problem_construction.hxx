@@ -27,7 +27,8 @@ public:
    using RightMessageType = typename RightMessageContainer::MessageType;
 
 
-   MRFProblemConstructor(Solver<FMC>& solver) : lp_(&solver.GetLP()) {}
+   template<typename SOLVER>
+   MRFProblemConstructor(SOLVER& solver) : lp_(&solver.GetLP()) {}
 
    virtual void ConstructUnaryFactor(UnaryFactorType& u, const std::vector<REAL>& cost) = 0;
    virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const std::vector<REAL>& cost, const INDEX leftDim, const INDEX rightDim) = 0;
@@ -139,7 +140,8 @@ public:
    }
 
 
-   void Construct(Solver<FMC>& pd) 
+   template<typename SOLVER>
+   void Construct(SOLVER& pd) 
    {
       std::cout << "Construct MRF problem with " << unaryFactor_.size() << " unary factors and " << pairwiseFactor_.size() << " pairwise factors\n";
 
@@ -156,16 +158,8 @@ public:
    }
 
    template<typename STREAM>
-   void WritePrimal(STREAM& s, PrimalSolutionStorage& primal) const 
+   void WritePrimal(STREAM& s) const 
    {
-      // hack for accuracy for rebuttal in cvpr. Motor, car, hotel and house correct match are identities. Compute accuracies based on that
-      INDEX no_correct_matches = 0;
-      for(INDEX i=0; i<unaryFactor_.size(); ++i) {
-         if(unaryFactor_[i]->GetFactor()->primal() == i) {
-            ++no_correct_matches;
-         }
-      }
-      const REAL accuracy = REAL(no_correct_matches) / REAL(unaryFactor_.size());
       if(unaryFactor_.size() > 0) {
         for(INDEX i=0; i<unaryFactor_.size()-1; ++i) {
            s << unaryFactor_[i]->GetFactor()->primal() << ", ";
@@ -324,7 +318,8 @@ class AssignmentGmConstructor : public MRF_PROBLEM_CONSTRUCTOR
 public:
    using PairwiseFactorType = typename MRF_PROBLEM_CONSTRUCTOR::PairwiseFactorType;
 
-   AssignmentGmConstructor(Solver<typename MRF_PROBLEM_CONSTRUCTOR::FMC>& pd) : MRF_PROBLEM_CONSTRUCTOR(pd) {}
+   template<typename SOLVER>
+   AssignmentGmConstructor(SOLVER& pd) : MRF_PROBLEM_CONSTRUCTOR(pd) {}
 
    void SetGraph(const std::vector<std::vector<INDEX>> graph) { graph_ = graph; }
 
@@ -405,7 +400,8 @@ protected:
    using PairwiseTripletMessage23Container = typename meta::at_c<typename FMC::MessageList, PAIRWISE_TRIPLET_MESSAGE23_NO>::MessageContainerType;
 
 public:
-   TighteningMRFProblemConstructor(Solver<FMC>& pd)
+   template<typename SOLVER>
+   TighteningMRFProblemConstructor(SOLVER& pd)
       : MRF_PROBLEM_CONSTRUCTOR(pd)
    {}
 
@@ -771,8 +767,8 @@ namespace UaiMrfInput {
       }
 
 
-   template<typename FMC, INDEX PROBLEM_CONSTRUCTOR_NO>
-   bool ParseString(const std::string& instance, Solver<FMC>& s)
+   template<typename SOLVER, INDEX PROBLEM_CONSTRUCTOR_NO>
+   bool ParseString(const std::string& instance, SOLVER& s)
    {
       std::cout << "parsing string\n";
       MrfInput input;
@@ -784,8 +780,8 @@ namespace UaiMrfInput {
       return read_suc;
    }
 
-   template<typename FMC, INDEX PROBLEM_CONSTRUCTOR_NO>
-   bool ParseProblem(const std::string& filename, Solver<FMC>& s)
+   template<typename SOLVER, INDEX PROBLEM_CONSTRUCTOR_NO>
+   bool ParseProblem(const std::string& filename, SOLVER& s)
    {
       std::cout << "parsing " << filename << "\n";
       pegtl::file_parser problem(filename);
@@ -801,8 +797,8 @@ namespace UaiMrfInput {
 
 // for graphical models in opengm's hdf5 format and with explicit function tables, function-id-16000
 namespace HDF5Input {
-   template<typename FMC>
-   bool ParseProblem(const std::string filename, Solver<FMC>& s)
+   template<typename SOLVER>
+   bool ParseProblem(const std::string filename, SOLVER& s)
    {
       auto& mrf = s.template GetProblemConstructor<0>();
       return ParseGM(filename, mrf);

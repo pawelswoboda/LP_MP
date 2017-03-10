@@ -1,7 +1,7 @@
 #ifndef LP_MP_MIN_COST_FLOW_FACTOR_CS2_HXX
 #define LP_MP_MIN_COST_FLOW_FACTOR_CS2_HXX
 
-#include "mcmf.hxx"
+//#include "mcmf.hxx"
 #include "lib/MinCost/MinCost.h"
 #include "config.hxx"
 

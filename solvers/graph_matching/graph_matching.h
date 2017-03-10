@@ -671,9 +671,10 @@ namespace TorresaniEtAlInput {
       }
    }
 
-   template<typename FMC>
-   void construct_mp(Solver<FMC>& s, GraphMatchingInput& gm_input)
+   template<typename SOLVER>
+   void construct_mp(SOLVER& s, GraphMatchingInput& gm_input)
    {
+      using FMC = typename SOLVER::FMC;
       constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
 
       auto& mrf_left = s.template GetProblemConstructor<0>();
@@ -722,9 +723,10 @@ namespace TorresaniEtAlInput {
    }
 
    // add mcf factor, but assume graphical model has already been built.
-   template<typename FMC>
-   void construct_mcf(Solver<FMC>& s, GraphMatchingInput& gm_input)
+   template<typename SOLVER>
+   void construct_mcf(SOLVER& s, GraphMatchingInput& gm_input)
    {
+      using FMC = typename SOLVER::FMC;
       // build assignment problem
       const INDEX no_left_nodes = std::accumulate(gm_input.assignment_.begin(), gm_input.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.left_node_); }) + 1;
       const INDEX no_right_nodes = std::accumulate(gm_input.assignment_.begin(), gm_input.assignment_.end(), 0, [](INDEX no, auto a) { return std::max(no, a.right_node_); }) + 1;
@@ -811,7 +813,7 @@ namespace TorresaniEtAlInput {
 
    /*
    template<typename FMC>
-   void construct_mcf(Solver<FMC>& s, GraphMatchingInput& gm_input)
+   void construct_mcf(SOLVER& s, GraphMatchingInput& gm_input)
    {
       constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
 
@@ -928,9 +930,10 @@ namespace TorresaniEtAlInput {
    }
 */
 
-   template<typename FMC>
-   void construct_gm(Solver<FMC>& s, GraphMatchingInput& gm_input)
+   template<typename SOLVER>
+   void construct_gm(SOLVER& s, GraphMatchingInput& gm_input)
    {
+      using FMC = typename SOLVER::FMC;
       constexpr PairwiseConstruction pc = FmcConstruction(FMC{});
 
       auto& mrf_left = s.template GetProblemConstructor<0>();
@@ -987,16 +990,16 @@ namespace TorresaniEtAlInput {
       return std::move(gmInput);
    }
 
-   template<typename FMC>
-   bool ParseProblemGM(const std::string& filename, Solver<FMC>& s)
+   template<typename SOLVER>
+   bool ParseProblemGM(const std::string& filename, SOLVER& s)
    {
       auto input = ParseFile(filename);
       construct_gm( s, input );
       return true;
    }
 
-   template<typename FMC>
-   bool ParseProblemMP(const std::string& filename, Solver<FMC>& s)
+   template<typename SOLVER>
+   bool ParseProblemMP(const std::string& filename, SOLVER& s)
    {
       auto input = ParseFile(filename);
       construct_gm( s, input );
@@ -1004,8 +1007,8 @@ namespace TorresaniEtAlInput {
       return true;
    }
 
-   template<typename FMC>
-   bool ParseProblemMCF(const std::string& filename, Solver<FMC>& s)
+   template<typename SOLVER>
+   bool ParseProblemMCF(const std::string& filename, SOLVER& s)
    {
       auto input = ParseFile(filename);
       construct_gm( s, input );
@@ -1014,8 +1017,8 @@ namespace TorresaniEtAlInput {
       return true;
    }
 
-   template<typename FMC>
-   bool ParseProblemHungarian(const std::string& filename, Solver<FMC>& s)
+   template<typename SOLVER>
+   bool ParseProblemHungarian(const std::string& filename, SOLVER& s)
    {
       auto input = ParseFile(filename);
       construct_gm( s, input );
@@ -1114,9 +1117,10 @@ namespace UaiGraphMatchingInput {
       return std::move(m_inv);
    }
 
-   template<typename FMC>
-   bool ParseProblemGM(const std::string& filename, Solver<FMC>& s)
+   template<typename SOLVER>
+   bool ParseProblemGM(const std::string& filename, SOLVER& s)
    {
+      using FMC = typename SOLVER::FMC;
       static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left, "in uai format only left construction makes sense"); 
       auto i = ParseFile(filename);
       auto& mrf = s.template GetProblemConstructor<0>();
@@ -1171,9 +1175,10 @@ namespace UaiGraphMatchingInput {
       return true;
    }
 
-   template<typename FMC>
-   void construct_mp(Solver<FMC>& s, const input& i)
+   template<typename SOLVER>
+   void construct_mp(SOLVER& s, const input& i)
    {
+      using FMC = typename SOLVER::FMC;
       auto& mrf_left = s.template GetProblemConstructor<0>();
       auto& mrf_input = std::get<0>(i);
       UaiMrfInput::build_mrf(mrf_left, mrf_input);
@@ -1196,9 +1201,10 @@ namespace UaiGraphMatchingInput {
       std::cout << "Constructed gm with " << mrf_left.GetNumberOfVariables() << " unary factors and " << mrf_left.GetNumberOfPairwiseFactors() << " pairwise factors\n";
    }
 
-   template<typename FMC>
-   void construct_mcf(Solver<FMC>& s, const input& i)
+   template<typename SOLVER>
+   void construct_mcf(SOLVER& s, const input& i)
    {
+      using FMC = typename SOLVER::FMC;
       auto& mrf_left = s.template GetProblemConstructor<0>();
       const auto& mrf_input = std::get<0>(i);
       UaiMrfInput::build_mrf(mrf_left, mrf_input);
@@ -1285,19 +1291,21 @@ namespace UaiGraphMatchingInput {
       }
    }
 
-   template<typename FMC>
-   bool ParseProblemMP(const std::string& filename, Solver<FMC>& s)
+   template<typename SOLVER>
+   bool ParseProblemMP(const std::string& filename, SOLVER& s)
    {
       // do zrobienia: FMC must be left type -> static_assert this
+      using FMC = typename SOLVER::FMC;
       static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left, "in uai format only left construction makes sense"); 
       const auto input = ParseFile(filename);
       construct_mp(s, input);
       return true;
    }
 
-   template<typename FMC>
-   bool ParseProblemMCF(const std::string& filename, Solver<FMC>& s)
+   template<typename SOLVER>
+   bool ParseProblemMCF(const std::string& filename, SOLVER& s)
    {
+      using FMC = typename SOLVER::FMC;
       static_assert(FmcConstruction(FMC{}) == PairwiseConstruction::Left, "in uai format only left construction makes sense"); 
       const auto input = ParseFile(filename);
       construct_mcf(s, input);

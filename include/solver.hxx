@@ -20,7 +20,7 @@ namespace LP_MP {
 // binds together problem constructors and solver and organizes input/output
 // base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
 
-template<typename FMC, typename LP_TYPE, typename VISITOR>
+template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR>
 class Solver {
    // initialize a tuple uniformly
    //template <class T, class LIST>
@@ -29,9 +29,9 @@ class Solver {
       std::tuple<ARGS...> tupleMaker(meta::list<ARGS...>, T& t) { return std::make_tuple(ARGS(t)...); }
 
 public:
+   using FMC = FACTOR_MESSAGE_CONNECTION;
    using SolverType = Solver<FMC,LP_TYPE,VISITOR>;
    using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
-   using FactorMessageConnection = FMC;
 
    Solver(int argc, char** argv)
      : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
@@ -84,124 +84,90 @@ public:
    }
 
    LP_MP_FUNCTION_EXISTENCE_CLASS(HasWritePrimal,WritePrimal);
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   template<typename PC>
    constexpr static bool
    CanWritePrimal()
    {
-      // do zrobienia: this is not nice. CanTighten should only be called with valid PROBLEM_CONSTRUCTOR_NO
-      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
-      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
-      else return HasWritePrimal<meta::at_c<ProblemDecompositionList,n>, void, std::ofstream, PrimalSolutionStorage>();
-      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size()>::type
-   WritePrimal(std::ofstream& s) {}
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanWritePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   WritePrimal(std::ofstream& s)
-   {
-      return WritePrimal<PROBLEM_CONSTRUCTOR_NO+1>(s);
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanWritePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   WritePrimal(std::ofstream& s) 
-   {
-      std::cout << "WritePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
-      std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).WritePrimal(s,bestPrimal_);
+      return HasWritePrimal<PC, void, std::ofstream>();
    }
 
    void WritePrimal()
    {
       if(outputFileArg_.isSet()) {
          std::ofstream output_file;
-         output_file.open(outputFile_, std::ofstream::out | std::ofstream::app);
+         output_file.open(outputFile_, std::ofstream::out);
          if(!output_file.is_open()) {
             throw std::runtime_error("could not open file " + outputFile_);
          }
-         WritePrimal<0>(output_file);
+
+         for_each_tuple(this->problemConstructor_, [&output_file,this](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<CanWritePrimal<pc_type>()>([&](auto f) {
+                  f(l).WritePrimal(output_file);
+            });
+         }); 
       }
    }
 
 
    // invoke the corresponding functions of problem constructors
    LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency,CheckPrimalConsistency);
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanCheckPrimalConsistency()
    {
-      // do zrobienia: this is not nice. CanTighten should only be called with valid PROBLEM_CONSTRUCTOR_NO
-      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
-      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
-      else return HasCheckPrimalConsistency<meta::at_c<ProblemDecompositionList,n>, bool, PrimalSolutionStorage::Element>();
-      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
+      return HasCheckPrimalConsistency<PROBLEM_CONSTRUCTOR, bool>();
    }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size(),INDEX>::type
-   CheckPrimalConsistency(PrimalSolutionStorage::Element primal) 
+   
+   bool CheckPrimalConsistency()
    {
-      return true; 
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanCheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   CheckPrimalConsistency(PrimalSolutionStorage::Element primal)
-   {
-      return CheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO+1>(primal);
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanCheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   CheckPrimalConsistency(PrimalSolutionStorage::Element primal)
-   {
-      if(std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).CheckPrimalConsistency(primal)) {
-         return CheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO+1>(primal);
-      } else { 
-         return false;
+      bool feasible = true;
+      for_each_tuple(this->problemConstructor_, [this,&feasible](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<CanCheckPrimalConsistency<pc_type>()>([&](auto f) {
+                  if(feasible) {
+                     const bool feasible_pc = f(l).CheckPrimalConsistency();
+                     if(!feasible_pc) {
+                        feasible = false;
+                     }
+                  }
+            });
+      });
+
+      if(feasible) {
+         feasible = this->lp_.CheckPrimalConsistency();
       }
-   }
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) 
-   {
-      return CheckPrimalConsistency<0>(primal);
+
+      return feasible;
    }
 
 
    LP_MP_FUNCTION_EXISTENCE_CLASS(HasTighten,Tighten);
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanTighten()
    {
-      // do zrobienia: this is not nice. CanTighten should only be called with valid PROBLEM_CONSTRUCTOR_NO
-      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
-      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
-      else return HasTighten<meta::at_c<ProblemDecompositionList,n>, INDEX, INDEX>();
-      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
+      return HasTighten<PROBLEM_CONSTRUCTOR, INDEX, INDEX>();
    }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size(),INDEX>::type
-   Tighten(const INDEX maxConstraints) { return 0; }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   Tighten(const INDEX maxConstraints)
-   {
-      return Tighten<PROBLEM_CONSTRUCTOR_NO+1>(maxConstraints);
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   Tighten(const INDEX maxConstraints) 
-   {
-      std::cout << "Tighten for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
-      const INDEX noCuttingPlaneAdded = std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).Tighten(maxConstraints);
-      return noCuttingPlaneAdded + Tighten<PROBLEM_CONSTRUCTOR_NO+1>(maxConstraints);
-   }
-   // maxConstraints gives maximum number of constraints to add
+
+   // maxConstraints gives maximum number of constraints to add for each problem constructor
    INDEX Tighten(const INDEX maxConstraints) 
    {
-      INDEX noConstraintsAdded = Tighten<0>(maxConstraints);
-      return noConstraintsAdded;
+      INDEX constraints_added = 0;
+      for_each_tuple(this->problemConstructor_, [this,maxConstraints,&constraints_added](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<CanTighten<pc_type>()>([&](auto f) {
+                  constraints_added += f(l).Tighten(maxConstraints);
+            });
+       });
+
+      return constraints_added;
    }
    
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    meta::at_c<ProblemDecompositionList, PROBLEM_CONSTRUCTOR_NO>& GetProblemConstructor() 
    {
+
       return std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_);
    }
 
@@ -272,8 +238,8 @@ public:
             using pc_type = typename std::remove_reference<decltype(l)>::type;
             static_if<CanCallEnd<pc_type>()>([&](auto f) {
                   f(l).End();
-                  });
-            }); 
+            });
+      }); 
    }
 
    // register evaluated primal solution
@@ -361,30 +327,9 @@ public:
       return HasComputePrimal<PROBLEM_CONSTRUCTOR, void>();
    }
 
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency,CheckPrimalConsistency);
-   template<typename PROBLEM_CONSTRUCTOR>
-   constexpr static bool
-   CanCheckPrimalConsistency()
-   {
-      return HasCheckPrimalConsistency<PROBLEM_CONSTRUCTOR, bool>();
-   }
-   
    void RegisterRounding()
    {
-      bool feasible = true;
-      for_each_tuple(this->problemConstructor_, [this,&feasible](auto& l) {
-            using pc_type = typename std::remove_reference<decltype(l)>::type;
-            static_if<CanCheckPrimalConsistency<pc_type>()>([&](auto f) {
-                  const bool feasible_pc = f(l).CheckPrimalConsistency();
-                  if(!feasible_pc) {
-                     feasible = false;
-                  }
-            });
-      });
-
-      if(feasible) {
-         feasible = this->lp_.CheckPrimalConsistency();
-      }
+      const bool feasible = this->CheckPrimalConsistency();
 
       if(feasible) {
          const REAL primal_cost = this->lp_.EvaluatePrimal();
@@ -628,7 +573,7 @@ private:
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   VisitorSolver<Solver<FMC>,VISITOR> solver(argc,argv); \
+   Solver<FMC,LP,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }
@@ -637,7 +582,7 @@ int main(int argc, char* argv[]) \
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   VisitorSolver<MpRoundingSolver<FMC>,VISITOR> solver(argc,argv); \
+   MpRoundingSolver<FMC,LP,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }
@@ -647,7 +592,7 @@ int main(int argc, char* argv[]) \
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   VisitorSolver<SOLVER,VISITOR> solver(argc,argv); \
+   MpRoundingSolver<FMC,LP,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }

@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS Instances (
 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
 dataset_id INT,
 name TEXT NOT NULL,
+ground_truth TEXT,
 FOREIGN KEY(dataset_id) REFERENCES Datasets(id),
 UNIQUE(dataset_id, name) 
 );
@@ -61,6 +62,15 @@ upperBound DOUBLE PRECISION,
 FOREIGN KEY(instance_id) REFERENCES Instances(id)
 FOREIGN KEY(solver_id) REFERENCES Solvers(id)
 UNIQUE(instance_id, solver_id, iteration) 
+);
+
+CREATE TABLE IF NOT EXISTS Solutions (
+instance_id INTEGER NOT NULL,
+solver_id INTEGER NOT NULL,
+solution TEXT NOT NULL,
+FOREIGN_KEY(instance_id) REFERENCES Instances(id)
+FOREIGN_KEY(solver_id) REFERENCES Solvers(id)
+UNIQUE(instance_id, solver_id)
 );
 
 CREATE INDEX IF NOT EXISTS IterationsIndex ON Iterations(instance_id,solver_id,lowerBound,upperBound,runtime);
