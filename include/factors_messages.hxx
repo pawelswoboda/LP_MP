@@ -1530,7 +1530,7 @@ public:
             static_if<l.CanComputePrimalThroughMessage()>([&](auto f) {
                   constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
                   for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it) {
-                     f(l.ComputePrimalThroughMessage)(*(*it));
+                     f(l).ComputePrimalThroughMessage(*(*it));
                   }
             });
       });

@@ -102,7 +102,7 @@ public:
 
          for_each_tuple(this->problemConstructor_, [&output_file,this](auto& l) {
             using pc_type = typename std::remove_reference<decltype(l)>::type;
-            static_if<CanWritePrimal<pc_type>()>([&](auto f) {
+            static_if<SolverType::CanWritePrimal<pc_type>()>([&](auto f) {
                   f(l).WritePrimal(output_file);
             });
          }); 
@@ -124,7 +124,7 @@ public:
       bool feasible = true;
       for_each_tuple(this->problemConstructor_, [this,&feasible](auto& l) {
             using pc_type = typename std::remove_reference<decltype(l)>::type;
-            static_if<CanCheckPrimalConsistency<pc_type>()>([&](auto f) {
+            static_if<SolverType::CanCheckPrimalConsistency<pc_type>()>([&](auto f) {
                   if(feasible) {
                      const bool feasible_pc = f(l).CheckPrimalConsistency();
                      if(!feasible_pc) {
@@ -156,7 +156,7 @@ public:
       INDEX constraints_added = 0;
       for_each_tuple(this->problemConstructor_, [this,maxConstraints,&constraints_added](auto& l) {
             using pc_type = typename std::remove_reference<decltype(l)>::type;
-            static_if<CanTighten<pc_type>()>([&](auto f) {
+            static_if<SolverType::CanTighten<pc_type>()>([&](auto f) {
                   constraints_added += f(l).Tighten(maxConstraints);
             });
        });
@@ -236,7 +236,7 @@ public:
    {
       for_each_tuple(this->problemConstructor_, [this](auto& l) {
             using pc_type = typename std::remove_reference<decltype(l)>::type;
-            static_if<CanCallEnd<pc_type>()>([&](auto f) {
+            static_if<SolverType::CanCallEnd<pc_type>()>([&](auto f) {
                   f(l).End();
             });
       }); 
@@ -343,7 +343,7 @@ public:
       // for this, first we have to wait until the rounding procedure has read off everything from the LP model before optimizing further
       for_each_tuple(this->problemConstructor_, [this](auto& l) {
             using pc_type = typename std::remove_reference<decltype(l)>::type;
-            static_if<CanComputePrimal<pc_type>()>([&](auto f) {
+            static_if<ProblemConstructorRoundingSolver<SOLVER>::CanComputePrimal<pc_type>()>([&](auto f) {
                   f(l).ComputePrimal();
             });
       });
