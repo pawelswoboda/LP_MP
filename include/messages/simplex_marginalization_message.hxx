@@ -48,8 +48,8 @@ namespace LP_MP {
         ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
         {
            // we assume that only r.right_primal was assigned, r.left_primal not
-           assert(r.left_primal_ == i1_);
-           if(r.right_primal_ < i2_) {
+           //assert(r.left_primal_ == i1_);
+           if(r.right_primal_ < i2_ && r.left_primal_ >= i1_) {
               vector<REAL> msgs(i1_);
               for(INDEX x1=0; x1<i1_; ++x1) {
                  msgs[x1] = r(x1,r.right_primal_);
@@ -99,7 +99,7 @@ namespace LP_MP {
     ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
        assert(l.primal() < i1_);
-       assert(r.left_primal_ == i1_);
+       //assert(r.left_primal_ == i1_);
        r.left_primal_ = l.primal();
     }
 
@@ -189,8 +189,8 @@ namespace LP_MP {
         typename std::enable_if<ENABLE,void>::type
         ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
         {
-           assert(r.right_primal_ == i1_);
-           if(r.left_primal_ < i2_) {
+           //assert(r.right_primal_ == i1_);
+           if(r.left_primal_ < i1_ && r.right_primal_ >= i2_) {
               vector<REAL> msgs(i2_);
               for(INDEX x2=0; x2<i2_; ++x2) {
                  msgs[x2] = r(r.left_primal_,x2);
@@ -240,7 +240,7 @@ namespace LP_MP {
     ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
        assert(l.primal() < i2_);
-       assert(r.right_primal_ == i2_);
+       //assert(r.right_primal_ == i2_);
        r.right_primal_ = l.primal();
     }
 

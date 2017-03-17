@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <cstring>
+#include <mutex>
 #include "config.hxx"
 #include "spinlock.hxx"
 

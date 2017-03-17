@@ -776,12 +776,14 @@ public:
         f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
         rightFactor_->PropagatePrimal();
         rightFactor_->ComputePrimalThroughMessages();
-      }).else_([&](auto f) {
-        const bool changed = f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-        if(changed) {
-          rightFactor_->PropagatePrimal();
-          rightFactor_->ComputePrimalThroughMessages();
-        }
+      }).else_([&](auto) {
+         static_if<CanComputeRightFromLeftPrimalWithReturn()>([&](auto f) {
+               const bool changed = f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+               if(changed) {
+                  rightFactor_->PropagatePrimal();
+                  rightFactor_->ComputePrimalThroughMessages();
+               }
+         });
       });
    }
 
@@ -792,12 +794,14 @@ public:
         f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
         leftFactor_->PropagatePrimal();
         leftFactor_->ComputePrimalThroughMessages();
-      }).else_([&](auto f) {
-        const bool changed = f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-        if(changed) {
-          leftFactor_->PropagatePrimal();
-          leftFactor_->ComputePrimalThroughMessages();
-        }
+      }).else_([&](auto ) {
+         static_if<CanComputeLeftFromRightPrimalWithReturn()>([&](auto f) {
+               const bool changed = f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+               if(changed) {
+                  leftFactor_->PropagatePrimal();
+                  leftFactor_->ComputePrimalThroughMessages();
+               }
+         });
       });
    }
 

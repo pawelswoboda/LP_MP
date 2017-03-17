@@ -403,7 +403,25 @@ public:
    }
    void ComputePass();
 
-   void ComputePassAndPrimal(const INDEX iteration);
+   void ComputeForwardPassAndPrimal(const INDEX iteration)
+   {
+      const auto omega = get_omega();
+      ComputePassAndPrimal(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), 2*iteration+1); // timestamp must be > 0, otherwise in the first iteration primal does not get initialized
+      const REAL forward_cost = EvaluatePrimal();
+      std::cout << "forward cost = " << forward_cost << "\n";
+   }
+   void ComputeBackwardPassAndPrimal(const INDEX iteration)
+   {
+      const auto omega = get_omega();
+      ComputePassAndPrimal(forwardUpdateOrdering_.rbegin(), forwardUpdateOrdering_.rend(), omega.backward.begin(), 2*iteration + 2); 
+      const REAL backward_cost = EvaluatePrimal();
+      std::cout << "backward cost = " << backward_cost << "\n";
+   }
+   void ComputePassAndPrimal(const INDEX iteration)
+   {
+      ComputeForwardPassAndPrimal(iteration);
+      ComputeBackwardPassAndPrimal(iteration);
+   }
 
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
    void ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, const INDEX iteration);
@@ -1278,18 +1296,6 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
        omega[i][j] = 1.0/REAL( omega_size[i] + leave_weight );
      }
    }
-}
-
-inline void LP::ComputePassAndPrimal(const INDEX iteration)
-{
-   const auto omega = get_omega();
-   ComputePassAndPrimal(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), 2*iteration+1); // timestamp must be > 0, otherwise in the first iteration primal does not get initialized
-   const REAL forward_cost = EvaluatePrimal();
-   std::cout << "forward cost = " << forward_cost << "\n";
-   
-   ComputePassAndPrimal(forwardUpdateOrdering_.rbegin(), forwardUpdateOrdering_.rend(), omega.backward.begin(), 2*iteration + 2); 
-   const REAL backward_cost = EvaluatePrimal();
-   std::cout << "backward cost = " << backward_cost << "\n";
 }
 
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>

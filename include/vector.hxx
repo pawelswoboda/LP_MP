@@ -87,7 +87,9 @@ public:
      std::fill(begin_,end_,value);
   }
   ~vector() {
-     global_real_block_allocator_array[stack_allocator_index].deallocate(begin_,1);
+     if(begin_ != nullptr) {
+        global_real_block_allocator_array[stack_allocator_index].deallocate(begin_,1);
+     }
   }
    vector(const vector& o)  {
       begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(o.size());
@@ -95,6 +97,12 @@ public:
       assert(begin_ != nullptr);
       auto it = begin_;
       for(auto o_it = o.begin(); o_it!=o.end(); ++it, ++o_it) { *it = *o_it; }
+   }
+   vector(vector&& o) {
+      begin_ = o.begin_;
+      end_ = o.end_;
+      o.begin_ = nullptr;
+      o.end_ = nullptr;
    }
    template<typename E>
    void operator=(const vector_expression<T,E>& o) {
@@ -172,9 +180,14 @@ public:
       assert(d1 > 0 && d2 > 0);
       std::fill(this->begin(), this->end(), val);
    }
-   //matrix(const matrix& o) vector(o) {
-   //   assert(o.dim2_ == dim2_);
-   //}
+   matrix(const matrix& o) 
+      : vec_(o.vector_),
+      dim2_(o.dim2_) 
+   {}
+   matrix(matrix&& o) 
+      : vec_(std::move(o.vec_)),
+      dim2_(o.dim2_) 
+   {}
    void operator=(const matrix<T>& o) {
       assert(this->size() == o.size() && o.dim2_ == dim2_);
       for(INDEX i=0; i<o.size(); ++i) { 
@@ -211,7 +224,14 @@ public:
    tensor3(const INDEX d1, const INDEX d2, const INDEX d3, const T val) : tensor3<T>(d1,d2,d3) {
       std::fill(this->begin(), this->end(), val);
    }
-   tensor3(const tensor3<T>& o) = default;
+   tensor3(const tensor3<T>& o) : vector<T>(o) {
+      dim2_ = o.dim2_;
+      dim3_ = o.dim3_; 
+   }
+   tensor3(tensor3&& o) : vector<T>(std::move(o)) {
+      dim2_ = o.dim2_;
+      dim3_ = o.dim3_;
+   }
    void operator=(const tensor3<T>& o) {
       assert(this->size() == o.size() && o.dim2_ == dim2_ && o.dim3_ == dim3_);
       for(INDEX i=0; i<o.size(); ++i) { 

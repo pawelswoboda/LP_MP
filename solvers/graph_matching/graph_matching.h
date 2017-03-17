@@ -38,6 +38,16 @@ using namespace LP_MP;
 
 enum class PairwiseConstruction {Left,Right,BothSides}; // Indicates whether pairwise potentials should be built on {left|right|both} side(s) of assignment graph.
 
+// disable write primal in constructor, for right side mrf constructor
+template<typename BASE>
+class disable_write_constructor : public BASE
+{
+   public:
+   using BASE::BASE;
+   template<typename STREAM>
+   void WritePrimal(STREAM& s) const 
+   {} 
+};
 
 // graph matching with assignment via message passing
 template<PairwiseConstruction PAIRWISE_CONSTRUCTION = PairwiseConstruction::Left>
@@ -52,7 +62,7 @@ struct FMC_MP {
    typedef FactorContainer<UnarySimplexFactor, FMC_MP_PARAM, 0, true > UnaryFactor; // set to true if labeling by unaries is desired
    typedef FactorContainer<PairwiseSimplexFactor, FMC_MP_PARAM, 1, false > PairwiseFactor;
 
-   constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::left : Chirality::right;
+   constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::right : Chirality::left;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction>;
    typedef MessageContainer<EqualityMessageType, 0, 0, variableMessageNumber, variableMessageNumber, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
    typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeftContainer;
@@ -63,7 +73,7 @@ struct FMC_MP {
 
    using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>>;
    using mrfLeft = mrf;
-   using mrfRight = mrf;
+   using mrfRight = disable_write_constructor<mrf>;
    using ProblemDecompositionList = meta::list<mrfLeft, mrfRight>;
 };
 
@@ -80,7 +90,7 @@ struct FMC_MP_T {
    typedef FactorContainer<UnarySimplexFactor, FMC_MP_PARAM, 0, true > UnaryFactor; // set to true if labeling by unaries is desired
    typedef FactorContainer<PairwiseSimplexFactor, FMC_MP_PARAM, 1, false > PairwiseFactor;
 
-   constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::left : Chirality::right;
+   constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::right : Chirality::left;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction>;
    typedef MessageContainer<EqualityMessageType, 0, 0, variableMessageNumber, variableMessageNumber, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
    typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeftContainer;
@@ -104,7 +114,7 @@ struct FMC_MP_T {
    using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>>;
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,2,3,4,5>;
    using mrfLeft = tighteningMrf;
-   using mrfRight = tighteningMrf;
+   using mrfRight = disable_write_constructor<tighteningMrf>;
    using ProblemDecompositionList = meta::list<mrfLeft, mrfRight>;
 };
 
@@ -156,7 +166,7 @@ struct FMC_MCF {
    //using mrf = StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>;
    using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>>;
    using mrfLeft = mrf;
-   using mrfRight = mrf;
+   using mrfRight = disable_write_constructor<mrf>;
    //using ProblemDecompositionList = meta::list<assignment,mrfLeft,mrfRight>;
    using ProblemDecompositionList = meta::list<mrfLeft,mrfRight>;
 };
@@ -210,7 +220,7 @@ struct FMC_MCF_T {
    using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_MCF_PARAM,1,2,0,1>>;
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,3,4,5>;
    using mrfLeft = tighteningMrf;
-   using mrfRight = tighteningMrf;
+   using mrfRight = disable_write_constructor<tighteningMrf>;
    using ProblemDecompositionList = meta::list<mrfLeft,mrfRight>; 
 };
 
@@ -317,7 +327,7 @@ struct FMC_HUNGARIAN_BP {
 
    using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_HUNGARIAN_BP,1,2,0,1>>;
    using mrfLeft = mrf;
-   using mrfRight = mrf;
+   using mrfRight = disable_write_constructor<mrf>;
    using ProblemDecompositionList = meta::list<mrfLeft,mrfRight>;
 };
 
@@ -367,7 +377,7 @@ struct FMC_HUNGARIAN_BP_T {
    using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_HUNGARIAN_BP_T,1,2,0,1>>;
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,3,3,4,5>;
    using mrfLeft = tighteningMrf;
-   using mrfRight = tighteningMrf;
+   using mrfRight = disable_write_constructor<tighteningMrf>;
    using ProblemDecompositionList = meta::list<mrfLeft,mrfRight>;
 };
 

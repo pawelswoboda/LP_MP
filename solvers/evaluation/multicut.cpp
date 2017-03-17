@@ -70,16 +70,16 @@ std::vector<std::string> modularity_clustering_dataset = {
 
 std::string CREMI_small_prefix = "../../../solvers/multicut/small_problems/";
 std::vector<std::string> CREMI_small_dataset = {
-   {CREMI_small_prefix + "gm_small_1.gm"},
-   {CREMI_small_prefix + "gm_small_2.gm"},
-   {CREMI_small_prefix + "gm_small_3.gm"}
+   {CREMI_small_prefix + "gm_small_1.gm"}
+   ,{CREMI_small_prefix + "gm_small_2.gm"}
+   ,{CREMI_small_prefix + "gm_small_3.gm"}
 };
 
 std::string CREMI_large_prefix = "../../../solvers/multicut/large_problems/";
 std::vector<std::string> CREMI_large_dataset = {
-   {CREMI_large_prefix + "gm_large_1.gm"},
-   {CREMI_large_prefix + "gm_large_2.gm"},
-   {CREMI_large_prefix + "gm_large_3.gm"}
+   {CREMI_large_prefix + "gm_large_1.gm"}
+   ,{CREMI_large_prefix + "gm_large_2.gm"}
+   ,{CREMI_large_prefix + "gm_large_3.gm"}
 };
 
 std::string correlation_clustering_prefix = "../../../solvers/multicut/correlation-clustering/";
@@ -803,7 +803,7 @@ std::vector<std::string> correlation_clustering_dataset = {
 
 std::string image_seg_prefix = "../../../solvers/multicut/image-seg/";
 std::vector<std::string> image_seg_dataset = {
-   {image_seg_prefix + "101085.bmp.h5"},
+   //{image_seg_prefix + "101085.bmp.h5"},
    {image_seg_prefix + "101087.bmp.h5"},
    {image_seg_prefix + "102061.bmp.h5"},
    {image_seg_prefix + "103070.bmp.h5"},
@@ -910,9 +910,9 @@ int main()
 {
    // emulate command line options
    std::vector<std::string> options = {
-      {"--maxIter"}, {"3000"},
+      {"--maxIter"}, {"50000"},
       {"--timeout"}, {"3600"}, // one hour
-      {"--minDualImprovement"}, {"0.01"},
+//      {"--minDualImprovement"}, {"0.00001"},
       {"--minDualImprovementInterval"}, {"50"},
       {"--lowerBoundComputationInterval"}, {"10"},
       {"--primalComputationInterval"}, {"100"},
@@ -942,14 +942,14 @@ int main()
       using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
       using SolverType = ProblemConstructorRoundingSolver<Solver<FMC,LP,VisitorType>>;
       static auto Input = MulticutOpenGmInput::ParseProblem<Solver<FMC,LP,VisitorType>>;
-      RunSolver<FMC,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-C");
-      RunSolver<FMC,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-C");
-      RunSolver<FMC,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-C");
-      RunSolver<FMC,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-C");
-      RunSolver<FMC,SolverType>(Input,modularity_clustering_dataset,options,"modularity clustering","MPMC-C");
-      RunSolver<FMC,SolverType>(Input,image_seg_dataset,options,"image-seg","MPMC-C");
-      RunSolver<FMC,SolverType>(Input,CREMI_small_dataset,options,"CREMI-small","MPMC-C");
-      RunSolver<FMC,SolverType>(Input,CREMI_large_dataset,options,"CREMI-large","MPMC-C");
+      //RunSolver<FMC,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-C");
+      //RunSolver<FMC,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-C");
+      //RunSolver<FMC,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-C");
+      //RunSolver<FMC,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-C");
+      //RunSolver<FMC,SolverType>(Input,modularity_clustering_dataset,options,"modularity clustering","MPMC-C");
+      //RunSolver<FMC,SolverType>(Input,image_seg_dataset,options,"image-seg","MPMC-C");
+      //RunSolver<FMC,SolverType>(Input,CREMI_small_dataset,options,"CREMI-small","MPMC-C");
+      //RunSolver<FMC,SolverType>(Input,CREMI_large_dataset,options,"CREMI-large","MPMC-C");
    }
 
    {
@@ -957,14 +957,14 @@ int main()
       using VisitorType = SqliteVisitor<StandardTighteningVisitor>;
       using SolverType = ProblemConstructorRoundingSolver<Solver<FMC,LP,VisitorType>>;
       static auto Input = MulticutOpenGmInput::ParseProblem<Solver<FMC,LP,VisitorType>>;
-      RunSolver<FMC,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-COW");
-      RunSolver<FMC,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-COW");
-      RunSolver<FMC,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-COW");
-      RunSolver<FMC,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-COW");
-      RunSolver<FMC,SolverType>(Input,modularity_clustering_dataset,options,"modularity clustering","MPMC-COW");
-      RunSolver<FMC,SolverType>(Input,image_seg_dataset,options,"image-seg","MPMC-COW");
+      //RunSolver<FMC,SolverType>(Input,knott_150_dataset,options,"knott-3d-150","MPMC-COW");
+      //RunSolver<FMC,SolverType>(Input,knott_300_dataset,options,"knott-3d-300","MPMC-COW");
+      //RunSolver<FMC,SolverType>(Input,knott_450_dataset,options,"knott-3d-450","MPMC-COW");
+      //RunSolver<FMC,SolverType>(Input,knott_550_dataset,options,"knott-3d-550","MPMC-COW");
+      //RunSolver<FMC,SolverType>(Input,modularity_clustering_dataset,options,"modularity clustering","MPMC-COW");
+      //RunSolver<FMC,SolverType>(Input,image_seg_dataset,options,"image-seg","MPMC-COW");
       RunSolver<FMC,SolverType>(Input,CREMI_small_dataset,options,"CREMI-small","MPMC-COW");
-      RunSolver<FMC,SolverType>(Input,CREMI_large_dataset,options,"CREMI-large","MPMC-COW");
+      //RunSolver<FMC,SolverType>(Input,CREMI_large_dataset,options,"CREMI-large","MPMC-COW");
    }
    return 0;
 }

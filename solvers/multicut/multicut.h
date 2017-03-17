@@ -236,6 +236,7 @@ namespace MulticutOpenGmInput {
          const INDEX two = factor[5*i+2];
          const INDEX i1 = factor[5*i+3];
          const INDEX i2 = factor[5*i+4];
+         assert(i1<i2);
          edges.push_back(std::make_tuple(i1,i2,0.0));
       }
 
@@ -252,14 +253,24 @@ namespace MulticutOpenGmInput {
          //std::get<2>(edges[i]) = edgeCosts[2*i] - edgeCosts[2*i+1];
       }
       // note: theoretically, this could be much more complicated, if some factors are shared etc. Then this simple approach above will not work.
+      
+      // fourth, sort the edges by edges. There may be multiple edges (e.g. image-seg dataset). Merge such edges
+      std::sort(edges.begin(), edges.end(), [](auto a, auto b) { return std::get<0>(a) == std::get<0>(b) ? std::get<1>(a) < std::get<1>(b) : std::get<0>(a) < std::get<0>(b); });
+
 
       for(INDEX i=0; i<edges.size(); ++i) {
          INDEX i1 = std::get<0>(edges[i]); 
          INDEX i2 = std::get<1>(edges[i]); 
+         REAL cost = std::get<2>(edges[i]);
+
+         while( i+1 < edges.size() && std::get<0>(edges[i+1]) == i1 && std::get<1>(edges[i+1]) == i2) {
+            cost += std::get<2>(edges[i+1]);
+            ++i;
+         }
          if(i1 > i2) {
+            assert(false);
             std::swap(i1,i2);
          }
-         const REAL cost = std::get<2>(edges[i]);
          //std::cout << "add edge (" << i1 << "," << i2 << ") with cost " << cost << "\n";
          mc.AddUnaryFactor(i1, i2, cost);
       }

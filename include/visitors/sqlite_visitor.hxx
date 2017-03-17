@@ -59,8 +59,8 @@ iteration INTEGER NOT NULL,
 runtime INT,
 lowerBound DOUBLE PRECISION,
 upperBound DOUBLE PRECISION,
-FOREIGN KEY(instance_id) REFERENCES Instances(id)
-FOREIGN KEY(solver_id) REFERENCES Solvers(id)
+FOREIGN KEY(instance_id) REFERENCES Instances(id),
+FOREIGN KEY(solver_id) REFERENCES Solvers(id),
 UNIQUE(instance_id, solver_id, iteration) 
 );
 
@@ -68,8 +68,8 @@ CREATE TABLE IF NOT EXISTS Solutions (
 instance_id INTEGER NOT NULL,
 solver_id INTEGER NOT NULL,
 solution TEXT NOT NULL,
-FOREIGN_KEY(instance_id) REFERENCES Instances(id)
-FOREIGN_KEY(solver_id) REFERENCES Solvers(id)
+FOREIGN KEY(instance_id) REFERENCES Instances(id),
+FOREIGN KEY(solver_id) REFERENCES Solvers(id),
 UNIQUE(instance_id, solver_id)
 );
 
@@ -278,6 +278,28 @@ public:
       WriteBounds(iterationStatistics_);
    }
 
+   void solution(const std::string& sol)
+   {
+      std::cout << "solution visitor function called, write solution to database\n"; 
+
+      int rc = sqlite3_exec(database_,"BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+      assert(rc == SQLITE_OK);
+      const std::string rmIterStmt = "DELETE FROM Solutions WHERE solver_id = " + std::to_string(solver_id_) + " AND instance_id = " + std::to_string(instance_id_) + "\n";
+      rc = sqlite3_exec(database_, rmIterStmt.c_str(), nullptr, nullptr, nullptr);
+      assert(rc == 0);
+      const std::string stmt = "INSERT INTO Solutions (solver_id, instance_id, solution) VALUES ('" + std::to_string(solver_id_) + "', '" + std::to_string(instance_id_) + "', '" + sol + "');";
+      rc = sqlite3_exec(database_, stmt.c_str(), nullptr, nullptr, nullptr);
+      if(rc != SQLITE_OK) {
+         sqlite3_exec(database_,"ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+         throw std::runtime_error("Could not insert solution: " + stmt);
+      }
+      assert(rc == 0);
+      if(sqlite3_exec(database_,"END TRANSACTION;", nullptr, nullptr, nullptr) != SQLITE_OK) {
+         throw std::runtime_error(std::string("Could not commit transaction: ") + sqlite3_errmsg(database_) );
+      }
+      assert(rc == SQLITE_OK); 
+   }
+
    void WriteBounds(const std::vector<IterationStatistics>& iterStats)
    {
       // connection to database is open and we have a corresponding id in ProblemSolverTable
@@ -324,6 +346,9 @@ private:
    int solver_id_;
    int dataset_id_;
    int instance_id_;
+
+   REAL best_upper_bound = std::numeric_limits<REAL>::infinity();
+   std::string best_solution;
 };
 
 } // end namespace LP_MP

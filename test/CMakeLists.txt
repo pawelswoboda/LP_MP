@@ -5,12 +5,13 @@ if(BUILD_TESTS)
       #simplex_marginalization.cpp
       #min_cost_flow.cpp
       #min_conv.cpp
-      shortest_path.cpp
+      #shortest_path.cpp
+      cycle_inequalities.cpp
       )
    enable_testing()
 
    add_executable(test_main test_main.cpp ${headers} ${sources})
-   target_link_libraries(test_main Vc m stdc++ pthread ${GUROBI_LIBRARIES} ${CPLEX_LIBRARIES} ${HDF5_LIBRARIES}) # do zrobienia: include GUROBI in general?
+   target_link_libraries(test_main m stdc++ pthread ${GUROBI_LIBRARIES} ${CPLEX_LIBRARIES} ${HDF5_LIBRARIES}) # do zrobienia: include GUROBI in general?
 
    target_sources(test_main PUBLIC ${BASE_TEST_FILES})
 

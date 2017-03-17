@@ -265,10 +265,11 @@ namespace LP_MP {
             posRealConstraint_(),
             tightenMinDualImprovementArg_("","tightenMinDualImprovement","minimum dual improvement after which to start tightening",false,std::numeric_limits<REAL>::infinity(),"positive real", cmd),
             tightenMinDualImprovementIntervalArg_("","tightenMinDualImprovementInterval","the interval between which at least minimum dual improvement may not occur for tightening",false,std::numeric_limits<INDEX>::max(), "positive integer", cmd),
-            // do zrobienia: remove minDualIncrease and minDualDecreaseFactor
-            tightenMinDualIncreaseArg_("","tightenMinDualIncrease","obsolete: minimum increase which additional constraint must guarantee",false,0.0,&posRealConstraint_, cmd),
             unitIntervalConstraint_(),
-            tightenMinDualDecreaseFactorArg_("","tightenMinDualDecreaseFactor","obsolete: factor by which to decrease minimum dual increase during tightening",false,0.5,&unitIntervalConstraint_, cmd)
+            tightenSlopeArg_("","tightenSlope","when slope of dual improvement becomes ${percentage} smaller than initial dual improvement slope, tighten", false, 1.0, &unitIntervalConstraint_, cmd)
+            // do zrobienia: remove minDualIncrease and minDualDecreaseFactor
+            //tightenMinDualIncreaseArg_("","tightenMinDualIncrease","obsolete: minimum increase which additional constraint must guarantee",false,0.0,&posRealConstraint_, cmd),
+            //tightenMinDualDecreaseFactorArg_("","tightenMinDualDecreaseFactor","obsolete: factor by which to decrease minimum dual increase during tightening",false,0.5,&unitIntervalConstraint_, cmd)
       {
          //cmd.xorAdd(tightenConstraintsMaxArg_,tightenConstraintsPercentageArg_); // do zrobienia: this means that exactly one must be chosen. We want at most one to be chosen
       }
@@ -293,8 +294,6 @@ namespace LP_MP {
             }
             tightenMinDualImprovement_ = tightenMinDualImprovementArg_.getValue();
             tightenMinDualImprovementInterval_ = tightenMinDualImprovementIntervalArg_.getValue();
-            tightenMinDualIncrease_ = tightenMinDualIncreaseArg_.getValue();
-            tightenMinDualDecreaseFactor_ = tightenMinDualDecreaseFactorArg_.getValue();
          } catch (TCLAP::ArgException &e) {
             std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
             exit(1);
@@ -318,10 +317,18 @@ namespace LP_MP {
          auto ret = BaseVisitorType::visit(c, lowerBound, primalBound);
 
          if(tighten_) {
-            if((this->GetIter() >= tightenIteration_ && this->GetIter() >= lastTightenIteration_ + tightenInterval_) ||
-                  (tightenMinDualIncreaseArg_.isSet() && this->prevLowerBound_ >= lowerBound - tightenMinDualIncrease_)) {
+            iteration_after_tightening_++;
+            const REAL cur_slope = std::max(lowerBound - prev_lower_bound_,0.0);
+            if(iteration_after_tightening_ == 2) {
+               tighten_slope_ = cur_slope;
+            }
+            if((this->GetIter() >= tightenIteration_ && 
+                     (this->GetIter() >= lastTightenIteration_ + tightenInterval_ || 
+                      (tightenSlopeArg_.isSet() && cur_slope < tightenSlopeArg_.getValue()*tighten_slope_)))) {
                std::cout << "Time to tighten\n";
                ret = SetTighten(ret);
+               iteration_after_tightening_ = 0;
+               tighten_slope_ = -std::numeric_limits<REAL>::infinity();
             } else if(this->GetIter() < tightenIteration_) {
                // check whether too small dual improvement necessitates tightening
                if(c.computeLowerBound && this->GetIter() > tightenMinDualImprovementInterval_ + lastTightenIteration_ && tightenMinDualImprovementArg_.isSet()) {
@@ -331,10 +338,13 @@ namespace LP_MP {
                      std::cout << "cur lower bound = " << lowerBound << " prev lower bound = " << prevLowerBound << "\n";
                      std::cout << "Dual improvement smaller than " << tightenMinDualImprovement_ << " after " << tightenMinDualImprovementInterval_ << " iterations, tighten\n";
                      ret = SetTighten(ret);
+                     iteration_after_tightening_ = 0;
+                     tighten_slope_ = -std::numeric_limits<REAL>::infinity();
                  }
               }
            }
          }
+         prev_lower_bound_ = lowerBound;
          return ret;
       }
       /*
@@ -359,9 +369,12 @@ namespace LP_MP {
       PositiveIntegerConstraint posIntegerlConstraint_;
       TCLAP::ValueArg<REAL> tightenMinDualImprovementArg_;
       TCLAP::ValueArg<INDEX> tightenMinDualImprovementIntervalArg_;
-      TCLAP::ValueArg<REAL> tightenMinDualIncreaseArg_; // only include constraints which guarantee increase larger than specified value
       OpenUnitIntervalConstraint unitIntervalConstraint_;
-      TCLAP::ValueArg<REAL> tightenMinDualDecreaseFactorArg_; 
+
+      REAL prev_lower_bound_;
+      TCLAP::ValueArg<REAL> tightenSlopeArg_;
+      REAL tighten_slope_ = -std::numeric_limits<REAL>::infinity(); 
+      INDEX iteration_after_tightening_ = 2; // this way tighten_slope will not be recomputed
 
       bool tighten_;
       LPReparametrizationMode tightenReparametrization_;

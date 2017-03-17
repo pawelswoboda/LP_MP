@@ -62,6 +62,13 @@ public:
      }
      InitializeFromArray(o);
    }
+   two_dim_variable_array(two_dim_variable_array<T>&& o)
+   {
+      dim1_ = o.dim1_;
+      p_ = o.p_;
+      o.dim1_ = 0;
+      o.p_ = nullptr;
+   }
    ~two_dim_variable_array()
    {
       if(p_ != nullptr) {

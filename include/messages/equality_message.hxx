@@ -25,7 +25,6 @@ public:
    template<typename REPAM_ARRAY, typename MSG>
    void MakeFactorUniform(const REPAM_ARRAY& repamPot, MSG& msg, const INDEX var_idx, const REAL omega = 1.0)
    {
-      assert(msg.size() == 1);
       assert(var_idx < repamPot.size());
 
       // possibly do it differently: search for two second smallest entries and then select first or second one depending upon whether it is rightVar_ or not. Faster?
@@ -53,24 +52,28 @@ public:
       MakeFactorUniform(leftPot, msg, leftVar_);
    }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2>
-   void ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, typename PrimalSolutionStorage::Element rightPrimal)
+   template<typename RIGHT_FACTOR, typename G1>
+   void ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G1& msg)
    {
-      if(rightPrimal[rightVar_] == false) {
-         msg[0] -= -std::numeric_limits<REAL>::infinity();
-      } else if(rightPrimal[rightVar_] == true) {
-         msg[0] -= std::numeric_limits<REAL>::infinity();
+      if(r.primal() == rightVar_) {
+         msg[0] -= -std::numeric_limits<REAL>::infinity(); 
+      } else if(r.primal() < r.size()) {
+         msg[0] -= std::numeric_limits<REAL>::infinity(); 
+      } else {
+         MakeFactorUniform(r, msg, rightVar_);
       }
    }
 
-   template<typename LEFT_FACTOR, typename G1, typename G2>
-   void ReceiveRestrictedMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg, typename PrimalSolutionStorage::Element leftPrimal)
+   template<typename LEFT_FACTOR, typename G1>
+   void ReceiveRestrictedMessageFromLeft(const LEFT_FACTOR& l, G1& msg)
    { 
-      if(leftPrimal[leftVar_] == false) {
-         msg[0] -= -std::numeric_limits<REAL>::infinity();
-      } else if(leftPrimal[leftVar_] == true) {
-         msg[0] -= std::numeric_limits<REAL>::infinity();
-      }
+      if(l.primal() == leftVar_) {
+         msg[0] -= -std::numeric_limits<REAL>::infinity(); 
+      } else if(l.primal() < l.size()) {
+         msg[0] -= std::numeric_limits<REAL>::infinity(); 
+      } else {
+         MakeFactorUniform(l, msg, leftVar_);
+      } 
    }
 
    // send all messages of the same type at once
@@ -180,31 +183,49 @@ public:
       lp->addLinearEquality(lhs,rhs);
    }
 
-   template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = C == Chirality::right, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   typename std::enable_if<PROPAGATE_PRIMAL_TO_LEFT_TMP,void>::type
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool
+   ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
+   {
+      if(r.primal() == rightVar_) { 
+         const bool ret = (l.primal() != leftVar_);
+         l.primal() = leftVar_;
+         return ret;
+      }
+      return false;
+   }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool
+   ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+   {
+      if(l.primal() == leftVar_) { 
+         const bool ret = (r.primal() != rightVar_);
+         r.primal() = rightVar_;
+         return ret;
+      } 
+      return false;
+   }
+
+   /*
+   template<Chirality C_tmp = C, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   typename std::enable_if<C_tmp == Chirality::left,void>::type
    ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
    {
       if(r.primal() == rightVar_) { 
          l.primal() = leftVar_;
-      //} else if(right[rightVar_] == false) {
-      //   left[leftVar_] = false;
       }
    }
 
-   template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = C == Chirality::left, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   typename std::enable_if<PROPAGATE_PRIMAL_TO_RIGHT_TMP,void>::type
+   template<Chirality C_tmp = C, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   typename std::enable_if<C_tmp == Chirality::right,void>::type
    ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
    {
-      if(r.primal() >= r.size() ) { // this is only valid for graph matching, where the last label means non-assignment
-         r.primal() = r.size()-1;
-      }
       if(l.primal() == leftVar_) { 
          r.primal() = rightVar_;
       } 
-         // do zrobienia: it would be nice to set all other entries to false
-      //} else if(left[leftVar_] == false) {
-      //   right[rightVar_] = false;
    }
+   */
   
    // here it is checked whether labeling on left side and labeling on right side fulfill the constraints of the message
    // note: If we build an LP-model, this could be checked automatically!

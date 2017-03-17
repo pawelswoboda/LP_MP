@@ -85,7 +85,11 @@ public:
             nodes_[i].last = nodes_[i].first;
          }
       }
-      Graph2(Graph2& o) = delete;
+      Graph2(const Graph2& o) = delete;
+      //{
+      //   assert(false);
+      //}
+      Graph2(Graph2&& o) = default;
 
       INDEX size() const { return nodes_.size(); }
       void add_arc(INDEX i, INDEX j, REAL cost) {
@@ -653,6 +657,15 @@ public:
    {
       assert(i1 < i2 && i2 < i3);
       assert(!HasTripletFactor(i1,i2,i3));
+      if(!HasUnaryFactor(i1,i2)) {
+         AddUnaryFactor(i1,i2,0.0);
+      }
+      if(!HasUnaryFactor(i1,i3)) {
+         AddUnaryFactor(i1,i3,0.0);
+      }
+      if(!HasUnaryFactor(i2,i3)) {
+         AddUnaryFactor(i2,i3,0.0);
+      }
       assert(HasUnaryFactor(i1,i2) && HasUnaryFactor(i1,i3) && HasUnaryFactor(i2,i3));
       auto* t = new TripletFactorContainer();
       lp_->AddFactor(t);
@@ -759,28 +772,13 @@ public:
          std::cout << "Added " << tripletsAdded << " triplet(s) out of " <<  maxCuttingPlanesToAdd << " in total\n";
       }
       return tripletsAdded;
-      //if(tripletsAdded == 0) {
-      //   const INDEX tripletsAdded_old = FindNegativeCycles(1e-8, maxCuttingPlanesToAdd);
-      //   std::cout << "Added " << tripletsAdded_old << " triplet(s) out of " <<  maxCuttingPlanesToAdd << " by old method,error\n";
-      //   return tripletsAdded_old + tripletsAdded;
-      //}
-      //const INDEX tripletsAdded = FindNegativeCycles(minDualIncrease,maxCuttingPlanesToAdd);
-      //const REAL th = FindNegativeCycleThreshold(maxCuttingPlanesToAdd);
-      //if(th >= 0.0) { // otherwise no constraint can be added
-      //   const INDEX tripletsAdded = FindNegativeCycles(th,maxCuttingPlanesToAdd);
-      //   std::cout << "Added " << tripletsAdded << " triplet(s) out of " <<  maxCuttingPlanesToAdd << "\n";
-      //   return tripletsAdded;
-      //} else {
-      //   std::cout << "could not find any violated cycle\n";
-      //   return 0;
-      //}
    }
 
 template<
 class InputIt1, class InputIt2,
       class OutputIt, class Compare, class Merge
       >
-   OutputIt set_intersection_merge
+   static OutputIt set_intersection_merge
 (
  InputIt1 first1, InputIt1 last1,
  InputIt2 first2, InputIt2 last2,
@@ -800,6 +798,230 @@ class InputIt1, class InputIt2,
    }
    return d_first;
 }
+
+   struct triplet_candidate {
+      triplet_candidate(const INDEX i1, const INDEX i2, const INDEX i3, const REAL c)
+         : cost(c)
+      {
+         i[0] = std::min({i1,i2,i3});
+         i[1] = std::max(std::min(i1,i2), std::min(std::max(i1,i2),i3));
+         i[2] = std::max({i1,i2,i3}); 
+         assert(i[0] < i[1] && i[1] < i[2]);
+      }
+
+      std::array<INDEX,3> i;
+      REAL cost;
+
+      bool operator<(const triplet_candidate& o) { return cost > o.cost; } // we want to sort from highest to lowest dual increase value
+   };
+
+   struct adjacency_list_elem {
+      INDEX head;
+      REAL cost;
+   };
+   static bool adjacency_list_elem_compare(const adjacency_list_elem a, const adjacency_list_elem b)
+   {
+      return a.head < b.head;
+   }
+   using adjacency_list_type = two_dim_variable_array<adjacency_list_elem>;
+   adjacency_list_type compute_adjacency_list() const
+   {
+      std::vector<INDEX> adjacency_list_count(noNodes_,0);
+      // first determine size for adjacency_list
+      for(auto& it : unaryFactorsVector_) {
+         const INDEX i = std::get<0>(it.first);
+         const INDEX j = std::get<1>(it.first);
+         adjacency_list_count[i]++;
+         adjacency_list_count[j]++; 
+      }
+      two_dim_variable_array<adjacency_list_elem> adjacency_list(adjacency_list_count);
+      std::fill(adjacency_list_count.begin(), adjacency_list_count.end(), 0);
+      for(auto& it : unaryFactorsVector_) {
+         const INDEX i = std::get<0>(it.first);
+         const INDEX j = std::get<1>(it.first);
+         const REAL cost_ij = *(it.second->GetFactor());
+         assert(i<j);
+         adjacency_list[i][adjacency_list_count[i]] = {j, cost_ij};//std::make_tuple(j,cost_ij);
+         adjacency_list_count[i]++;
+         adjacency_list[j][adjacency_list_count[j]] = {i, cost_ij};//std::make_tuple(i,cost_ij);
+         adjacency_list_count[j]++;
+      }
+
+      // Sort the adjacency list, for fast intersections later
+      //auto adj_sort = [](const auto a, const auto b) { return std::get<0>(a) < std::get<0>(b); };
+      for(int i=0; i < adjacency_list.size(); i++) {
+         std::sort(adjacency_list[i].begin(), adjacency_list[i].end(), adjacency_list_elem_compare);
+      }
+
+      return std::move(adjacency_list);
+   }
+
+   struct edge { 
+      std::array<INDEX,2> node;
+      REAL cost; 
+   }; 
+
+   std::vector<edge> copy_edges() const
+   {
+      std::vector<edge> edges;
+      edges.resize(unaryFactorsVector_.size());
+      for(INDEX c=0; c<unaryFactorsVector_.size(); ++c) {
+         const REAL cost_ij = *(unaryFactorsVector_[c].second->GetFactor());
+         const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
+         const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
+
+         edges[i] = {{i,j},cost_ij}; 
+      }
+      return std::move(edges);
+   }
+
+   static std::vector<triplet_candidate> find_triplet_candidates(const adjacency_list_type adjacency_list, const std::vector<edge> edges)
+   {
+      // Iterate over all of the edge intersection sets
+      // do zrobienia: parallelize
+      // we will intersect two adjacency list by head node, but we want to preserve the costs of either edge pointing to head node
+      using intersection_type = std::tuple<INDEX,REAL,REAL>;
+      auto merge = [](const auto a, const auto b) -> intersection_type { 
+         //assert(std::get<0>(a) == std::get<0>(b));
+         assert(a.head == b.head);
+         return std::make_tuple(a.head, a.cost, b.cost);
+         //return std::make_tuple(std::get<0>(a), std::get<1>(a), std::get<1>(b)); 
+      };
+      std::vector<triplet_candidate> triplet_candidates;
+#pragma omp parallel
+      {
+         std::vector<intersection_type> commonNodes(adjacency_list.size());
+         std::vector<triplet_candidate> triplet_candidates_per_thread;
+#pragma omp for schedule(guided)
+         for(INDEX c=0; c<edges.size(); ++c) {
+            const REAL cost_ij = edges[c].cost;
+            const INDEX i = edges[c].node[0];
+            const INDEX j = edges[c].node[1];
+
+            // Now find all neighbors of both i and j to see where the triangles are
+            // TEMP TEMP -- fails at i=0, j=1, on i==3.
+            auto intersects_iter_end = set_intersection_merge(adjacency_list[i].begin(), adjacency_list[i].end(), adjacency_list[j].begin(), adjacency_list[j].end(), commonNodes.begin(), adjacency_list_elem_compare, merge);
+
+            for(auto n=commonNodes.begin(); n != intersects_iter_end; ++n) {
+               const INDEX k = std::get<0>(*n);
+
+               // Since a triplet shows up three times as an edge plus
+               // a node, we only consider it for the case when i<j<k 
+               if(!(j<k))
+                  continue;
+               const REAL cost_ik = std::get<1>(*n);
+               const REAL cost_jk = std::get<2>(*n);
+
+               const REAL lb = std::min(0.0, cost_ij) + std::min(0.0, cost_ik) + std::min(0.0, cost_jk);
+               const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ij+cost_jk, cost_ij+cost_ik+cost_jk});
+               assert(lb <= best_labeling+eps);
+               const REAL guaranteed_dual_increase = best_labeling - lb;
+               /*
+                  std::array<REAL,3> c({cost_ij, cost_ik, cost_jk});
+                  const REAL gdi1 = std::min({ -c[0], c[1], c[2] });
+                  const REAL gdi2 = std::min({ c[0], -c[1], c[2] });
+                  const REAL gdi3 = std::min({ c[0], c[1], -c[2] });
+                  const REAL guaranteed_dual_increase = std::max({ gdi1, gdi2, gdi3 });
+                  */
+               if(guaranteed_dual_increase > 0.0) {
+                  triplet_candidates_per_thread.push_back(triplet_candidate(i,j,k,guaranteed_dual_increase));
+               } 
+            }
+         }
+#pragma omp critical
+         {
+            triplet_candidates.insert(triplet_candidates.end(), triplet_candidates_per_thread.begin(), triplet_candidates_per_thread.end()); 
+         }
+      }
+      std::sort(triplet_candidates.begin(), triplet_candidates.end(), [](auto& a, auto& b) { return a.cost > b.cost; });
+
+      return std::move(triplet_candidates);
+   }
+
+   // search concurrently for triplets to add via direct triplet search and violated cycles search. Check on each invocation whether either search has terminated. If yes, collect resulst, combine and add.
+   // If search has terminated for either separation procedure, restart it.
+   INDEX Tighten2(const INDEX max_triplets_to_add)
+   {
+      std::vector<triplet_candidate> find_triplet_candidates_result;
+      std::vector<triplet_candidate> find_violated_cycles_result;
+
+      if(!find_triplets_handle_.valid()) {
+         auto adj_list = compute_adjacency_list();
+         auto edges = copy_edges();
+         find_triplets_handle_ = std::async(std::launch::async, find_triplet_candidates, std::move(adj_list), std::move(edges));
+      }
+
+      const auto find_triplets_state = find_triplets_handle_.wait_for(std::chrono::seconds(0));
+
+      if(find_triplets_state == std::future_status::deferred) {
+         assert(false); // this should not happen, we launch immediately!
+         throw std::runtime_error("asynchronuous triplet search for multicut was deferred, but this should not happen");
+      } else if(find_triplets_state == std::future_status::ready) {
+
+         std::cout << "searching for triplets done\n";
+         find_triplet_candidates_result = find_triplets_handle_.get();
+
+         std::cout << "restart triplet search\n";
+         auto adj_list = compute_adjacency_list();
+         auto edges = copy_edges();
+         find_triplets_handle_ = std::async(std::launch::async, find_triplet_candidates, std::move(adj_list), std::move(edges));
+
+      } else {
+         std::cout << "triplet search for multicut is currently running.\n";
+      }
+
+      if(!find_cycles_handle_.valid()) {
+         auto cycle_search_data = prepare_violated_cycle_search();
+         find_cycles_handle_ = std::async(std::launch::async, find_violated_cycle_candidates, std::move(std::get<0>(cycle_search_data)), std::move(std::get<1>(cycle_search_data)), std::get<2>(cycle_search_data));
+      }
+
+      const auto find_cycles_state = find_cycles_handle_.wait_for(std::chrono::seconds(0));
+
+      if(find_cycles_state == std::future_status::deferred) {
+         assert(false); // this should not happen, we launch immediately!
+         throw std::runtime_error("asynchronuous cycle search for multicut was deferred, but this should not happen");
+      } else if(find_cycles_state == std::future_status::ready) {
+
+         std::cout << "searched for cycles done\n";
+         find_violated_cycles_result = find_cycles_handle_.get();
+
+         std::cout << "restart cycles search\n";
+         auto cycle_search_data = prepare_violated_cycle_search();
+         find_cycles_handle_ = std::async(std::launch::async, find_violated_cycle_candidates, std::move(std::get<0>(cycle_search_data)), std::move(std::get<1>(cycle_search_data)), std::get<2>(cycle_search_data));
+
+      } else {
+         std::cout << "cycle search for multicut is currently running.\n";
+      }
+
+      // merge triplets
+      std::vector<triplet_candidate> triplet_candidates;
+      if(find_triplet_candidates_result.size() > 0 && find_violated_cycles_result.size() > 0) {
+         triplet_candidates.reserve( find_triplet_candidates_result.size() + find_violated_cycles_result.size() );
+         std::merge(
+               find_triplet_candidates_result.begin(), find_triplet_candidates_result.end(), 
+               find_violated_cycles_result.begin(), find_violated_cycles_result.end(),
+               std::back_inserter(triplet_candidates));
+      } else if(find_triplet_candidates_result.size() > 0) {
+         triplet_candidates = std::move(find_triplet_candidates_result);
+      } else if(find_violated_cycles_result.size() > 0) {
+         triplet_candidates = std::move(find_violated_cycles_result);
+      }
+
+      INDEX triplets_added = 0;
+      for(const auto& triplet_candidate : triplet_candidates) {
+         const INDEX i = triplet_candidate.i[0];
+         const INDEX j = triplet_candidate.i[1];
+         const INDEX k = triplet_candidate.i[2];
+         if(!HasTripletFactor(i,j,k)) {
+            AddTripletFactor(i,j,k);
+            triplets_added++;
+            if(triplets_added > max_triplets_to_add) {
+               break;
+            } 
+         }
+      }
+      return triplets_added;
+   }
 
    // search for violated triplets, e.g. triplets with one negative edge and two positive ones.
    INDEX FindViolatedTriplets(const INDEX max_triplets_to_add)
@@ -829,7 +1051,7 @@ class InputIt1, class InputIt2,
       auto adj_sort = [](const auto a, const auto b) { return std::get<0>(a) < std::get<0>(b); };
 
 #ifdef LP_MP_PARALLEL
-      omp_set_num_threads(4);
+      //omp_set_num_threads(4);
 #endif
 #pragma omp parallel for schedule(guided)
       for(int i=0; i < adjacency_list.size(); i++) {
@@ -909,89 +1131,15 @@ class InputIt1, class InputIt2,
       return triplets_added;
    }
 
-   INDEX FindViolated4Cycles(const INDEX max_triplets_to_add)
+   
+   struct negative_edge {
+      std::array<INDEX,2> node;
+      REAL cost;
+      bool visited; 
+   };
+   std::tuple< std::vector<negative_edge>, Graph2, REAL > prepare_violated_cycle_search() const
    {
-      // other approach: explicitly construct graph, where edges are pairs of edges in the original graph. Then iterate over all parallel edges
-
-      // first generate all simple paths of length 2. Record them in a structure indexed by end points.
-      //std::unordered_multimap<std::array<INDEX,2>, INDEX, decltype(hash::array2)> two_paths(unaryFactors_.size(), hash::array2);
-      //std::multimap<std::array<INDEX,2>, INDEX> two_paths;
-      std::map<std::array<INDEX,2>, std::vector<INDEX>> two_paths; // possibly use two_paths_positive and two_paths_mixed to get two_paths with all positive edge and two_paths with positive and negative edge
-      // build adjacency list
-      std::vector<std::vector<int> > adjacency_list(noNodes_);
-
-      // Construct adjacency list for the graph
-      for(auto& it : unaryFactors_) {
-         const INDEX i = std::get<0>(it.first);
-         const INDEX j = std::get<1>(it.first);
-         assert(i<j);
-         adjacency_list[i].push_back(j);
-         adjacency_list[j].push_back(i);
-      }
-
-      for(INDEX i=0; i<adjacency_list.size(); ++i) {
-         for(INDEX j_idx=0; j_idx<adjacency_list[i].size(); ++j_idx) {
-            const INDEX j=adjacency_list[i][j_idx];
-            for(INDEX k_idx=j_idx+1; k_idx<adjacency_list[i].size(); ++k_idx) {
-               const INDEX k = adjacency_list[i][k_idx];
-               const REAL cost_ij = get_edge_cost(std::min(i,j), std::max(i,j));
-               const REAL cost_ik = get_edge_cost(std::min(i,k), std::max(i,k));
-               if(!(cost_ij < 0.0 && cost_ik < 0.0)) {
-                  auto it = two_paths.find({std::min(j,k), std::max(j,k)});
-                  if(it != two_paths.end()) {
-                     (it->second).push_back(i);
-                  } else {
-                     two_paths.insert(std::make_pair(std::array<INDEX,2>{std::min(j,k), std::max(j,k)}, std::vector<INDEX>(i)));
-                  } 
-                  //two_paths.insert(std::make_pair(std::array<INDEX,2>{std::min(j,k), std::max(j,k)}, i)); 
-               }
-            }
-         } 
-      }
-
-      for(const auto& end_points : two_paths) {
-         const INDEX i = end_points.first[0];
-         const INDEX j = end_points.first[1];
-         const auto &mid_points = end_points.second;
-         for(INDEX k1_idx=0; k1_idx<mid_points.size(); ++k1_idx) {
-            const INDEX k1 = mid_points[k1_idx];
-            for(INDEX k2_idx=k1_idx+1; k2_idx<mid_points.size(); ++k2_idx) {
-               const INDEX k2 = mid_points[k2_idx];
-               assert(k1 != k2);
-               // check whether there is exactly one negative entry in 4-cycle
-               const REAL cost_ik1 = get_edge_cost(std::min(i,k1), std::max(i,k1));
-               const REAL cost_ik2 = get_edge_cost(std::min(i,k2), std::max(i,k2));
-               const REAL cost_jk1 = get_edge_cost(std::min(j,k1), std::max(j,k1));
-               const REAL cost_jk2 = get_edge_cost(std::min(j,k2), std::max(j,k2));
-
-
-            }
-         }
-      }
-      // Then for each two fixed end points, enumearte all pairs of distinct mid points. This gives all four cycles.
-      //for (auto it=two_paths.begin(); it!=two_paths.end(); ) {
-      //   const INDEX i = *(it->first)[0];
-      //   const INDEX j = *(it->first)[1];
-      //   auto equal_it = two_paths.equal_range(it->first);
-      //   for(; equal_it.first!=equal_it.second; ++equal_it.first) {
-      //      //const INDEX i = *(equal_it.first);
-      //      for(auto sec_it=std::next(equal_it.first); sec_it!=equal_it.second; ++sec_it) {
-      //         //const INDEX j = *(sec_it);
-      //
-      //          } 
-      //     }
-
-      //   /* Now, go skip to the first entry with a new key. */
-      //   auto cur = it;
-      //   while(it!=two_paths.end() && it->first == cur->first) ++it;
-      //}
-      std::cout << two_paths.size() << "\n";
-      return 0;
-   }
-
-   INDEX FindViolatedCycles2(const INDEX maxTripletsToAdd)
-   {
-      std::vector<std::tuple<INDEX,INDEX,REAL,bool> > negativeEdges; // endpoints, edge cost, searched positive path with given endpoints?
+      std::vector<negative_edge> negative_edges; // endpoints, edge cost, searched positive path with given endpoints?
       // we can speed up compution by skipping path searches for node pairs which lie in different connected components. Connectedness is stored in a union find structure
       REAL pos_th = 0.0;
       std::vector<INDEX> number_outgoing_arcs(noNodes_,0); // number of arcs outgoing arcs of each node
@@ -1006,10 +1154,121 @@ class InputIt1, class InputIt2,
             number_outgoing_arcs[j]++;
             number_outgoing_arcs_total += 2;
          } else {
-            negativeEdges.push_back(std::make_tuple(i,j,v,false));
+            negative_edges.push_back({{i,j},v,false});
          }
       }
-      if(negativeEdges.size() == 0 || negativeEdges.size() == unaryFactorsVector_.size()) { return 0; }
+      if(negative_edges.size() == 0 || negative_edges.size() == unaryFactorsVector_.size()) { throw std::runtime_error("no negative edge found, handle this case better!"); }
+
+      Graph2 posEdgesGraph2(noNodes_, number_outgoing_arcs_total, number_outgoing_arcs); // graph consisting of positive edges
+      for(auto& it : unaryFactorsVector_) {
+         const REAL v = *(it.second->GetFactor());
+         const INDEX i = std::get<0>(it.first);
+         const INDEX j = std::get<1>(it.first);
+         assert(i<j);
+         if(v >= 0.0) {
+            posEdgesGraph2.add_arc(i,j,v);
+            posEdgesGraph2.add_arc(j,i,v);
+         }
+      }
+      posEdgesGraph2.sort();
+
+      std::sort(negative_edges.begin(), negative_edges.end(), [](const auto& e1, const auto& e2)->bool {
+            return e1.cost < e2.cost;
+            });
+
+      return std::move(std::make_tuple(std::move(negative_edges), std::move(posEdgesGraph2), pos_th)); 
+   }
+
+   static void triangulate(const REAL cycle_val, const std::vector<INDEX>& cycle, std::vector<triplet_candidate>& tc)
+   {
+      assert(cycle.size() >= 3);
+      auto min_node = std::min_element(cycle.begin(), cycle.end());
+      for(auto it=cycle.begin(); it<min_node-2; ++it) {
+         tc.push_back(triplet_candidate(*it,*(it+1),*min_node,cycle_val));
+      }
+      for(auto it=min_node+1; it<cycle.end()-2; ++it) {
+         tc.push_back(triplet_candidate(*it,*(it+1),*min_node,cycle_val));
+      }
+      if(min_node != cycle.begin() && min_node != cycle.end()-1) { // when min_node is somewhere in the middle.
+         tc.push_back(triplet_candidate(*cycle.begin(), *cycle.rbegin(), *min_node,cycle_val));
+      }
+   } 
+
+   static std::vector<triplet_candidate> find_violated_cycle_candidates(const std::vector<negative_edge> negative_edges, const Graph2 pos_edges_graph, const REAL largest_positive_edge_cost)
+   {
+      // search for every negative edge for most negative path from end point to starting point. Do zrobienia: do this in parallel
+      // the cost of the path is the minimum of the costs of its edges.
+
+      UnionFind uf(pos_edges_graph.size());
+      std::vector<triplet_candidate> triplet_candidates;
+      const REAL initial_th = 0.6*std::min((negative_edges[0].cost), largest_positive_edge_cost);
+      bool zero_th_iteration = true;
+      for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) {
+         if(th < eps) {
+            std::cout << "additional separation with no guaranteed dual increase, i.e. th = 0\n";
+            th = 0.0;
+            zero_th_iteration = false;
+         }
+         // first update union find datastructure
+         for(INDEX i=0; i<pos_edges_graph.size(); ++i) {
+            for(auto it=pos_edges_graph[i].begin(); it!=pos_edges_graph[i].end(); ++it) {
+               const INDEX j = pos_edges_graph[it->head];
+               const REAL cost = it->cost;
+               if(cost >= th) {
+                  uf.merge(i,j);   
+               }
+            }
+         }
+         using CycleType = std::tuple<REAL, std::vector<INDEX>>;
+         std::vector<CycleType > cycles;
+         BfsData2 mp2(pos_edges_graph);
+         for(INDEX c=0; c<negative_edges.size(); ++c) {
+            const INDEX i = negative_edges[c].node[0];
+            const INDEX j = negative_edges[c].node[1];
+            const REAL v = negative_edges[c].cost;
+            const bool already_used_for_path_search = negative_edges[c].visited;
+            //if(-v <= th) break;
+            //if(already_used_for_path_search) continue;
+            if(-v > th && !already_used_for_path_search && uf.thread_safe_connected(i,j)) {
+               auto cycle = mp2.FindPath(i,j,pos_edges_graph, th);
+               const REAL dual_increase = std::min(-v, std::get<0>(cycle));
+               assert(std::get<1>(cycle).size() > 0);
+               if(std::get<1>(cycle).size() > 0) {
+                  triangulate(dual_increase, std::get<1>(cycle), triplet_candidates);
+               } else {
+                  throw std::runtime_error("No path found although there should be one"); 
+               }
+            }
+         }
+      }
+      
+      std::sort(triplet_candidates.begin(), triplet_candidates.end());
+
+      return std::move(triplet_candidates); 
+   }
+ 
+
+   INDEX FindViolatedCycles2(const INDEX maxTripletsToAdd)
+   {
+      std::vector<std::tuple<INDEX,INDEX,REAL,bool> > negative_edges; // endpoints, edge cost, searched positive path with given endpoints?
+      // we can speed up compution by skipping path searches for node pairs which lie in different connected components. Connectedness is stored in a union find structure
+      REAL pos_th = 0.0;
+      std::vector<INDEX> number_outgoing_arcs(noNodes_,0); // number of arcs outgoing arcs of each node
+      INDEX number_outgoing_arcs_total = 0;
+      for(auto& it : unaryFactorsVector_) {
+         const REAL v = *(it.second->GetFactor());
+         const INDEX i = std::get<0>(it.first);
+         const INDEX j = std::get<1>(it.first);
+         if(v >= 0.0) {
+            pos_th = std::max(pos_th, v);
+            number_outgoing_arcs[i]++;
+            number_outgoing_arcs[j]++;
+            number_outgoing_arcs_total += 2;
+         } else {
+            negative_edges.push_back(std::make_tuple(i,j,v,false));
+         }
+      }
+      if(negative_edges.size() == 0 || negative_edges.size() == unaryFactorsVector_.size()) { return 0; }
 
       Graph2 posEdgesGraph2(noNodes_, number_outgoing_arcs_total, number_outgoing_arcs); // graph consisting of positive edges
       for(auto& it : unaryFactorsVector_) {
@@ -1026,7 +1285,7 @@ class InputIt1, class InputIt2,
 
       // do zrobienia: possibly add reparametrization of triplet factors additionally
 
-      std::sort(negativeEdges.begin(), negativeEdges.end(), [](const auto& e1, const auto& e2)->bool {
+      std::sort(negative_edges.begin(), negative_edges.end(), [](const auto& e1, const auto& e2)->bool {
             return std::get<2>(e1) < std::get<2>(e2);
             });
 
@@ -1040,7 +1299,7 @@ class InputIt1, class InputIt2,
 
       UnionFind uf(noNodes_);
       INDEX tripletsAdded = 0;
-      const REAL initial_th = 0.6*std::min(-std::get<2>(negativeEdges[0]), pos_th);
+      const REAL initial_th = 0.6*std::min(-std::get<2>(negative_edges[0]), pos_th);
       bool zero_th_iteration = true;
       for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) {
          if(th < eps) {
@@ -1068,11 +1327,11 @@ class InputIt1, class InputIt2,
             std::vector<CycleType > cycles_local;
             BfsData2 mp2(posEdgesGraph2);
 #pragma for schedule(guided)
-            for(INDEX c=0; c<negativeEdges.size(); ++c) {
-               const INDEX i = std::get<0>(negativeEdges[c]);
-               const INDEX j = std::get<1>(negativeEdges[c]);
-               const REAL v = std::get<2>(negativeEdges[c]);
-               const bool already_used_for_path_search = std::get<3>(negativeEdges[c]);
+            for(INDEX c=0; c<negative_edges.size(); ++c) {
+               const INDEX i = std::get<0>(negative_edges[c]);
+               const INDEX j = std::get<1>(negative_edges[c]);
+               const REAL v = std::get<2>(negative_edges[c]);
+               const bool already_used_for_path_search = std::get<3>(negative_edges[c]);
                //if(-v <= th) break;
                //if(already_used_for_path_search) continue;
                if(-v > th && !already_used_for_path_search && uf.thread_safe_connected(i,j)) {
@@ -1410,7 +1669,7 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
    INDEX FindNegativeCycles(const REAL minDualIncrease, const INDEX maxTripletsToAdd)
    {
       //assert(minDualIncrease > 0.0);
-      std::vector<std::tuple<INDEX,INDEX,REAL> > negativeEdges;
+      std::vector<std::tuple<INDEX,INDEX,REAL> > negative_edges;
       // we can speed up compution by skipping path searches for node pairs which lie in different connected components. Connectedness is stored in a union find structure
       UnionFind uf(noNodes_);
       std::vector<INDEX> number_outgoing_arcs(noNodes_,0); // number of arcs outgoing arcs of each node
@@ -1447,12 +1706,12 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
          if(v < -minDualIncrease && uf.connected(i,j)) {
-            negativeEdges.push_back(std::make_tuple(i,j,v));
+            negative_edges.push_back(std::make_tuple(i,j,v));
          }
       }
       // do zrobienia: possibly add reparametrization of triplet factors additionally
 
-      std::sort(negativeEdges.begin(), negativeEdges.end(), [](const std::tuple<INDEX,INDEX,REAL>& e1, const std::tuple<INDEX,INDEX,REAL>& e2)->bool {
+      std::sort(negative_edges.begin(), negative_edges.end(), [](const std::tuple<INDEX,INDEX,REAL>& e1, const std::tuple<INDEX,INDEX,REAL>& e2)->bool {
             return std::get<2>(e1) < std::get<2>(e2);
             });
 
@@ -1469,7 +1728,7 @@ REAL FindNegativeCycleThreshold(const INDEX maxTripletsToAdd)
       INDEX tripletsAdded = 0;
       using CycleType = std::tuple<REAL, std::vector<INDEX>>;
       std::vector<CycleType > cycles;
-      for(auto& it : negativeEdges) {
+      for(auto& it : negative_edges) {
          const INDEX i = std::get<0>(it);
          const INDEX j = std::get<1>(it);
          const REAL v = std::get<2>(it);
@@ -1646,6 +1905,10 @@ protected:
    ConstantFactorContainer* constant_factor_;
 
    LP* lp_;
+
+   // handles to threads executing separation routines
+   decltype(std::async(std::launch::async, find_triplet_candidates, adjacency_list_type{}, std::vector<edge>{})) find_triplets_handle_;
+   decltype(std::async(std::launch::async, find_violated_cycle_candidates, std::vector<negative_edge>{}, Graph2(0,0,std::vector<INDEX>{}), 0.0)) find_cycles_handle_;
 };
 
 

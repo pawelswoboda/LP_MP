@@ -6,6 +6,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <fstream>
+#include <sstream>
 
 #include "LP_MP.h"
 #include "function_existence.hxx"
@@ -86,10 +87,16 @@ public:
    LP_MP_FUNCTION_EXISTENCE_CLASS(HasWritePrimal,WritePrimal);
    template<typename PC>
    constexpr static bool
-   CanWritePrimal()
+   CanWritePrimalIntoFile()
    {
       return HasWritePrimal<PC, void, std::ofstream>();
    }
+   template<typename PC>
+   constexpr static bool
+   CanWritePrimalIntoString()
+   {
+      return HasWritePrimal<PC, void, std::stringstream>();
+   } 
 
    void WritePrimal()
    {
@@ -102,13 +109,27 @@ public:
 
          for_each_tuple(this->problemConstructor_, [&output_file,this](auto& l) {
             using pc_type = typename std::remove_reference<decltype(l)>::type;
-            static_if<SolverType::CanWritePrimal<pc_type>()>([&](auto f) {
+            static_if<SolverType::CanWritePrimalIntoFile<pc_type>()>([&](auto f) {
                   f(l).WritePrimal(output_file);
             });
          }); 
       }
    }
 
+   std::string write_primal_into_string()
+   {
+      std::stringstream ss;
+
+      for_each_tuple(this->problemConstructor_, [&ss,this](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<SolverType::CanWritePrimalIntoString<pc_type>()>([&](auto f) {
+                  f(l).WritePrimal(ss);
+            });
+      }); 
+
+      std::string sol = ss.str();
+      return std::move(sol);
+   }
 
    // invoke the corresponding functions of problem constructors
    LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency,CheckPrimalConsistency);
@@ -173,7 +194,15 @@ public:
 
    LP_TYPE& GetLP() { return lp_; }
    
+   LP_MP_FUNCTION_EXISTENCE_CLASS(has_solution,solution);
+   constexpr static bool
+   visitor_has_solution()
+   {
+      return has_solution<VISITOR, void, std::string>();
+   }
+   
 
+   
    int Solve()
    {
       this->Begin();
@@ -189,6 +218,9 @@ public:
          this->End();
          // possibly primal has been computed in end. Call visitor again
          visitor_.end(this->lowerBound_, this->bestPrimalCost_);
+         static_if<visitor_has_solution()>([this](auto f) {
+               f(this)->visitor_.solution(this->solution_);
+         });
          this->WritePrimal();
       }
       return c.error;
@@ -248,6 +280,7 @@ public:
       if(cost < bestPrimalCost_) {
          // assume solution is feasible
          bestPrimalCost_ = cost;
+         solution_ = write_primal_into_string();
       }
    }
 
@@ -283,7 +316,7 @@ protected:
    REAL lowerBound_;
    // while Solver does not know how to compute primal, derived solvers do know. After computing a primal, they are expected to register their primals with the base solver
    REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
-   PrimalSolutionStorage bestPrimal_; // these vectors are stored in the order of forwardOrdering_
+   std::string solution_;
 
    VISITOR visitor_;
 };
@@ -298,9 +331,10 @@ public:
   virtual void Iterate(LpControl c)
   {
     if(c.computePrimal) {
-      Solver<FMC,LP_TYPE,VISITOR>::lp_.ComputePassAndPrimal(iter);
-      //this->RegisterPrimal(forwardPrimal_);
-      //this->RegisterPrimal(backwardPrimal_);
+      Solver<FMC,LP_TYPE,VISITOR>::lp_.ComputeForwardPassAndPrimal(iter);
+      this->RegisterPrimal( this->lp_.EvaluatePrimal() );
+      Solver<FMC,LP_TYPE,VISITOR>::lp_.ComputeBackwardPassAndPrimal(iter);
+      this->RegisterPrimal( this->lp_.EvaluatePrimal() );
     } else {
       Solver<FMC,LP_TYPE,VISITOR>::Iterate(c);
     }

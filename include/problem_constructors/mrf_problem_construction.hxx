@@ -161,8 +161,8 @@ public:
    void WritePrimal(STREAM& s) const 
    {
       if(unaryFactor_.size() > 0) {
-        for(INDEX i=0; i<unaryFactor_.size()-1; ++i) {
-           s << unaryFactor_[i]->GetFactor()->primal() << ", ";
+         for(INDEX i=0; i<unaryFactor_.size()-1; ++i) {
+            s << unaryFactor_[i]->GetFactor()->primal() << ", ";
          }
          auto* f = unaryFactor_.back();
          s << f->GetFactor()->primal() << "\n";
@@ -270,7 +270,7 @@ public:
       }
    }
 
-   void ConstructPairwiseFactor(PairwiseFactorType& p, const std::vector<REAL>& cost, const INDEX i1, const INDEX i2) 
+   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const std::vector<REAL>& cost, const INDEX i1, const INDEX i2) 
    { 
       const INDEX dim1 = this->GetNumberOfLabels(i1);
       const INDEX dim2 = this->GetNumberOfLabels(i2);
@@ -327,6 +327,8 @@ public:
    { 
       assert(i1 < graph_.size()+1 && i2 < graph_.size()+1);
       assert(i1 < i2);
+
+      std::cout << "-----kwaskwaskwas-----\n";
 
       const INDEX dim1 = this->GetNumberOfLabels(i1);
       const INDEX dim2 = this->GetNumberOfLabels(i2);
@@ -459,7 +461,7 @@ public:
       const INDEX tripletVar1 = std::get<0>(tripletIndices_[tripletFactorId]);
       const INDEX tripletVar2 = std::get<1>(tripletIndices_[tripletFactorId]);
       const INDEX tripletVar3 = std::get<2>(tripletIndices_[tripletFactorId]);
-      assert(tripletVar1 < tripletVar2 && tripletVar2 << tripletVar3);
+      assert(tripletVar1 < tripletVar2 && tripletVar2 < tripletVar3);
       const INDEX tripletDim1 = this->GetNumberOfLabels(tripletVar1);
       const INDEX tripletDim2 = this->GetNumberOfLabels(tripletVar2);
       const INDEX tripletDim3 = this->GetNumberOfLabels(tripletVar3);
@@ -492,15 +494,17 @@ public:
    {
       assert(var1 < var2 && var2 < var3 && var3 < this->GetNumberOfVariables());
       if(tripletMap_.find(std::make_tuple(var1,var2,var3)) == tripletMap_.end()) {
-         std::cout << "Add tightening triplet, do zrobienia: add infinity on diagonals for matching problem\n";
          // first check whether necessary pairwise factors are present. If not, add them.
          if(this->pairwiseMap_.find(std::make_tuple(var1,var2)) == this->pairwiseMap_.end()) {
+            std::cout << "!!!!!!!!!!!! add empty pairwise factor !!!!!!!!!!!\n";
             AddEmptyPairwiseFactor(var1,var2);
          }
          if(this->pairwiseMap_.find(std::make_tuple(var1,var3)) == this->pairwiseMap_.end()) {
+            std::cout << "!!!!!!!!!!!! add empty pairwise factor !!!!!!!!!!!\n";
             AddEmptyPairwiseFactor(var1,var3);
          }
          if(this->pairwiseMap_.find(std::make_tuple(var2,var3)) == this->pairwiseMap_.end()) {
+            std::cout << "!!!!!!!!!!!! add empty pairwise factor !!!!!!!!!!!\n";
             AddEmptyPairwiseFactor(var2,var3);
          }
 
@@ -512,49 +516,55 @@ public:
       }
    }
 
+   INDEX add_triplets(const std::vector<triplet_candidate>& tc, const INDEX max_triplets_to_add)
+   {
+      INDEX no_triplets_added = 0;
+      for(auto t : tc) {
+         if(AddTighteningTriplet(t.i, t.j, t.k)) {
+            ++no_triplets_added;
+            if(no_triplets_added >= max_triplets_to_add) {
+               break;
+            }
+         }
+      }
+      return no_triplets_added; 
+   }
+
    INDEX Tighten(const INDEX noTripletsToAdd)
    {
       assert(noTripletsToAdd > 0);
       std::cout << "Tighten mrf with cycle inequalities, no triplets to add = " << noTripletsToAdd << "\n";
-      // do zrobienia: templatize addTriplet function to avoid this declaration
-      //std::function<void(const SIGNED_INDEX,const SIGNED_INDEX, const SIGNED_INDEX, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>, const std::vector<SIGNED_INDEX>)> addTriplet = &MrfConstructorType::AddTighteningTriplet;
-
-      std::map<std::vector<int>, bool > tripletSet;
-      Cycle<decltype(*this)> cycle(*this);
-
-      std::cout << this->GetNumberOfVariables() << "\n";
-      std::cout << this->GetNumberOfPairwiseFactors() << "\n";
-      std::cout << this << "\n";
 
       auto fp = [this](const INDEX v1, const INDEX v2, const INDEX v3) { return this->AddTighteningTriplet(v1,v2,v3); }; // do zrobienia: do not give this via template, as Cycle already has gm_ object.
-      INDEX noTripletsAdded = cycle.TightenTriplet(fp, noTripletsToAdd, eps, tripletSet);
-      std::cout << "Added " << noTripletsAdded << " < " << noTripletsToAdd << " triplets by triplet searching\n";
-      //std::cout << "return already\n";
-      //return noTripletsAdded;
-      if(noTripletsAdded < noTripletsToAdd) {
-         std::vector<int> projection_imap;
-         std::vector<std::vector<int> > partition_imap;
-         std::vector<std::list<int> > cycle_set;
-         const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, projection_imap, partition_imap, cycle_set, 1);
-         std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (k projection graph)\n";
-         noTripletsAdded += noTripletsAddedByCycle;
 
-         // does not work currently
-         /*
-         if(noTripletsAdded < noTripletsToAdd) {
-            const INDEX noTripletsAddedByCycle = cycle.TightenCycle(fp, noTripletsToAdd - noTripletsAdded, projection_imap, partition_imap, cycle_set, 2);
-            std::cout << "Added " << noTripletsAddedByCycle << " triplets by cycle searching (full projection graph)\n";
-            noTripletsAdded += noTripletsAddedByCycle;
+      triplet_search<typename std::remove_reference<decltype(*this)>::type> triplets(*this);
+      std::cout << "search for triplets\n";
+      auto triplet_candidates = triplets.search();
+      std::cout << "done\n";
+      INDEX no_triplets_added = add_triplets(triplet_candidates, noTripletsToAdd);
+      std::cout << "added " << no_triplets_added << " by triplet search\n";
+      if(no_triplets_added < noTripletsToAdd) {
+         std::cout << "----------------- do cycle search with k-projection graph---------------\n";
+         k_projection_graph_search<typename std::remove_reference<decltype(*this)>::type> cycle_search(*this);
+         auto triplet_candidates = cycle_search.search();
+         std::cout << "... done\n";
+         const INDEX no_triplet_k_projection_graph = add_triplets(triplet_candidates, noTripletsToAdd-no_triplets_added);
+         std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in k-projection graph\n";
+         no_triplets_added += no_triplet_k_projection_graph;
+
+         // search in expanded projection graph
+         if(no_triplets_added < noTripletsToAdd) {
+            std::cout << "----------------- do cycle search with expanded projection graph---------------\n";
+            expanded_projection_graph_search<typename std::remove_reference<decltype(*this)>::type> cycle_search(*this);
+            auto triplet_candidates = cycle_search.search();
+            std::cout << "... done\n";
+            const INDEX no_triplet_k_projection_graph = add_triplets(triplet_candidates, noTripletsToAdd-no_triplets_added);
+            std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in expanded projection graph\n";
+            no_triplets_added += no_triplet_k_projection_graph;
          }
-         */
-
-         std::cout << this->GetNumberOfVariables() << "\n";
-         std::cout << this->GetNumberOfPairwiseFactors() << "\n";
-         std::cout << this->GetNumberOfTripletFactors() << "\n";
-         std::cout << this << "\n";
       }
 
-      return noTripletsAdded;
+      return no_triplets_added;
    }
 
 
