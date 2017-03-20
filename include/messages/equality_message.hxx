@@ -203,7 +203,7 @@ public:
          const bool ret = (r.primal() != rightVar_);
          r.primal() = rightVar_;
          return ret;
-      } 
+      }
       return false;
    }
 

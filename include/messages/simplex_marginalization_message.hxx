@@ -55,6 +55,8 @@ namespace LP_MP {
                  msgs[x1] = r(x1,r.right_primal_);
               }
               msg -= msgs;
+           } else {
+              MinimizeRight(r,msg);
            }
         }
 
@@ -196,6 +198,8 @@ namespace LP_MP {
                  msgs[x2] = r(r.left_primal_,x2);
               }
               msg -= msgs;
+           } else {
+              MinimizeRight(r,msg);
            }
         }
 
@@ -327,7 +331,8 @@ namespace LP_MP {
         typename std::enable_if<ENABLE,void>::type
         ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
         {
-          assert(false);
+           throw std::runtime_error("rounding on pairwise factors is not ucrrently supported");
+           assert(false);
         }
 
     // reparametrize left potential for i-th entry of msg
@@ -376,7 +381,8 @@ namespace LP_MP {
     */
 
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    typename std::enable_if<ENABLE,void>::type
+    //typename std::enable_if<ENABLE,void>::type
+    void
     ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
       assert(r.dim1() == i1_ && r.dim2() == i2_ && r.dim3() == i3_);
@@ -469,7 +475,8 @@ namespace LP_MP {
         typename std::enable_if<ENABLE,void>::type
         ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
         {
-          assert(false);
+           throw std::runtime_error("rounding on pairwise factors is not ucrrently supported");
+           assert(false);
         }
 
     // reparametrize left potential for i-th entry of msg
@@ -523,7 +530,8 @@ namespace LP_MP {
     */
 
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    typename std::enable_if<ENABLE,void>::type
+    //typename std::enable_if<ENABLE,void>::type
+    void
     ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
       assert(r.dim1() == i1_ && r.dim2() == i2_ && r.dim3() == i3_);
@@ -611,7 +619,8 @@ namespace LP_MP {
         typename std::enable_if<ENABLE,void>::type
         ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
         {
-          assert(false);
+           throw std::runtime_error("rounding on pairwise factors is not ucrrently supported");
+           assert(false);
         }
 
     // reparametrize left potential for i-th entry of msg
@@ -665,7 +674,8 @@ namespace LP_MP {
     */
 
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    typename std::enable_if<ENABLE,void>::type
+    //typename std::enable_if<ENABLE,void>::type
+    void
     ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
       assert(r.dim1() == i1_ && r.dim2() == i2_ && r.dim3() == i3_);

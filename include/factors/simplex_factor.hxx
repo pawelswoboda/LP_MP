@@ -82,6 +82,7 @@ public:
 
    REAL EvaluatePrimal() const
    {
+      assert(false);
          return std::numeric_limits<REAL>::infinity();
    }
 
@@ -345,7 +346,7 @@ public:
    REAL EvaluatePrimal() const
    {
       assert(primal_[0] < dim1_ && primal_[1] < dim2_ && primal_[2] < dim3_);
-      return msg12(primal_[0], primal_[1]) + msg13(primal_[0], primal_[2]) + msg23(primal_[1], primal_[2]);
+      return (*this)(primal_[0], primal_[1], primal_[2]);
    }
 
    REAL operator()(const INDEX x1, const INDEX x2, const INDEX x3) const {

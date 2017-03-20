@@ -478,7 +478,7 @@ private:
    template<typename PAIRWISE_REPAM> 
    std::pair<std::vector<bool>,std::vector<bool>> compute_partitions(const PAIRWISE_REPAM& f)
    {
-      if(f.dim1() <= 3 && f.dim2() <= 4) {
+      if(f.dim1() <= 3 && f.dim2() <= 3) {
          return std::make_pair(std::vector<bool>{}, std::vector<bool>{});
       }
       std::vector<std::tuple<INDEX,INDEX,REAL>> sorted_factor(f.dim1()*f.dim2());
@@ -496,14 +496,14 @@ private:
          const INDEX x2 = std::get<1>(x);
          const REAL cost = std::get<2>(x);
 
-         if(!uf.connected(x1,x2)) {
+         if(!uf.connected(x1, f.dim1() + x2)) {
             // check if merging c1 and c2 would result in one partition
-            if(uf.count() >= 2) {
-               uf.merge(x1,x2);
+            if(uf.count() > 2) {
+               uf.merge(x1, f.dim1() + x2);
             } else {
                assert(uf.count() == 2);
                const INDEX c1 = uf.find(x1);
-               const INDEX c2 = uf.find(x2);
+               const INDEX c2 = uf.find(f.dim1() + x2);
                // record labels of partition c1
                for(INDEX y1=0; y1<f.dim1(); ++y1) {
                   if(uf.find(y1) == c1) {
@@ -513,24 +513,15 @@ private:
                   }
                }
                for(INDEX y2=0; y2<f.dim2(); ++y2) {
-                  if(uf.find(y2) == c1) {
+                  if(uf.find(f.dim1() + y2) == c1) {
                      part_j[y2] = true; 
                   } else {
-                     part_j[y2] = true; 
+                     part_j[y2] = false; 
                   }
                }
                break;
             }
          }
-      }
-      // if partition consists of a singleton on any side, do not add it
-      const INDEX sum_1 = std::count(part_i.begin(), part_i.end(), true);
-      if(sum_1 == 1 || sum_1 == f.dim1()-1) {
-         assert(false); 
-      }
-      const INDEX sum_2 = std::count(part_j.begin(), part_j.end(), true);
-      if(sum_2 == 1 || sum_2 == f.dim2()-1) {
-         assert(false);
       }
       // normalize partitions
       if(part_i[0] == false) {
@@ -538,6 +529,15 @@ private:
       }
       if(part_j[0] == false) {
          part_j.flip();
+      }
+      // if partition consists of a singleton on any side, do not add it
+      const INDEX sum_1 = std::count(part_i.begin(), part_i.end(), true);
+      if(sum_1 == 1 || sum_1 == f.dim1()-1) {
+         part_i.clear();
+      }
+      const INDEX sum_2 = std::count(part_j.begin(), part_j.end(), true);
+      if(sum_2 == 1 || sum_2 == f.dim2()-1) {
+         part_j.clear();
       }
       if(f.dim1() <= 3) {
          part_i.clear();
@@ -559,11 +559,11 @@ private:
          const size_t j=std::get<1>(vars);
          assert(i<j);
          const auto part_ij = compute_partitions(factor);
-         const std::vector<bool>& part_i = std::get<0>(part_ij);
+         const auto& part_i = std::get<0>(part_ij);
          if(part_i.size() > 0) {
             partitions[i].push_back(std::move(part_i));
          }
-         auto part_j = std::move(std::get<1>(part_ij));
+         const auto& part_j = std::get<1>(part_ij);
          if(part_j.size() > 0) {
             partitions[j].push_back(std::move(part_j));
          }
@@ -582,8 +582,8 @@ private:
    {
       // same dimension if part_i[x1] and x2
       assert(f.dim1() == part_i.size());
-      REAL min_same_part = -std::numeric_limits<REAL>::infinity();
-      REAL min_different_part = -std::numeric_limits<REAL>::infinity();
+      REAL min_same_part = std::numeric_limits<REAL>::infinity();
+      REAL min_different_part = std::numeric_limits<REAL>::infinity();
       for(INDEX x1=0; x1<f.dim1(); ++x1) {
          if(part_i[x1]) {
             min_same_part = std::min(min_same_part, f(x1,x2)); 
@@ -608,8 +608,8 @@ private:
    REAL compute_projection_weight_singleton_1(const PAIRWISE_REPAM& f, const INDEX x1, const std::vector<bool>& part_j, const V& column_minima)
    {
       assert(f.dim2() == part_j.size());
-      REAL min_same_part = -std::numeric_limits<REAL>::infinity();
-      REAL min_different_part = -std::numeric_limits<REAL>::infinity();
+      REAL min_same_part = std::numeric_limits<REAL>::infinity();
+      REAL min_different_part = std::numeric_limits<REAL>::infinity();
       for(INDEX x2=0; x2<f.dim2(); ++x2) {
          if(part_j[x2]) {
             min_same_part = std::min(min_same_part, f(x1,x2)); 
@@ -635,8 +635,8 @@ private:
    {
       assert(f.dim1() == part_i.size());
       assert(f.dim2() == part_j.size());
-      REAL min_same_part = -std::numeric_limits<REAL>::infinity();
-      REAL min_different_part = -std::numeric_limits<REAL>::infinity();
+      REAL min_same_part = std::numeric_limits<REAL>::infinity();
+      REAL min_different_part = std::numeric_limits<REAL>::infinity();
       
       for(INDEX x1=0; x1<f.dim1(); ++x1) {
          for(INDEX x2=0; x2<f.dim2(); ++x2) {
@@ -644,7 +644,7 @@ private:
             if(part_i[x1] == part_j[x2]) {
                min_same_part = std::min(min_same_part, val_xij);
             } else {
-               min_different_part = std::min(min_same_part, val_xij); 
+               min_different_part = std::min(min_different_part, val_xij); 
             }
          }
       }
@@ -751,6 +751,28 @@ private:
             }
          }
       }
+
+
+      this->proj_graph_ = Graph(2*proj_graph_nodes, 4*this->projection_edges_.size(), no_outgoing_arcs);
+      for(const auto edge : this->projection_edges_) {
+         const INDEX n = std::get<0>(edge);
+         const INDEX m = std::get<1>(edge);
+         const REAL s = std::get<2>(edge);
+         if(s < 0) {
+            this->proj_graph_.add_arc(2*n,2*m,-s);
+            this->proj_graph_.add_arc(2*m,2*n,-s);
+            this->proj_graph_.add_arc(2*n+1,2*m+1,-s);
+            this->proj_graph_.add_arc(2*m+1,2*n+1,-s); 
+         } else {
+            this->proj_graph_.add_arc(2*n,2*m+1,s);
+            this->proj_graph_.add_arc(2*m+1,2*n,s);
+            this->proj_graph_.add_arc(2*n+1,2*m,s);
+            this->proj_graph_.add_arc(2*m,2*n+1,s); 
+         }
+      }
+
+      this->proj_graph_.sort();
+
    }
 };
 } // end namespace LP_MP

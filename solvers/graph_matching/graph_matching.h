@@ -111,10 +111,11 @@ struct FMC_MP_T {
       PairwiseTriplet23MessageContainer 
          >;
 
-   using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>>;
-   using tighteningMrf = TighteningMRFProblemConstructor<mrf,2,3,4,5>;
-   using mrfLeft = tighteningMrf;
-   using mrfRight = disable_write_constructor<tighteningMrf>;
+   using mrf = StandardMrfConstructor<FMC_MP_PARAM,0,1,1,2>;
+   using assignment_mrf = AssignmentGmConstructor<mrf>;
+   using tightening_mrf = TighteningMRFProblemConstructor<assignment_mrf,2,3,4,5>;
+   using mrfLeft = tightening_mrf;
+   using mrfRight = disable_write_constructor<assignment_mrf>;
    using ProblemDecompositionList = meta::list<mrfLeft, mrfRight>;
 };
 

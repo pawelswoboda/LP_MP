@@ -543,6 +543,7 @@ public:
       std::cout << "done\n";
       INDEX no_triplets_added = add_triplets(triplet_candidates, noTripletsToAdd);
       std::cout << "added " << no_triplets_added << " by triplet search\n";
+
       if(no_triplets_added < noTripletsToAdd) {
          std::cout << "----------------- do cycle search with k-projection graph---------------\n";
          k_projection_graph_search<typename std::remove_reference<decltype(*this)>::type> cycle_search(*this);
