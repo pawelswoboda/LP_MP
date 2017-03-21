@@ -31,7 +31,7 @@ public:
    MRFProblemConstructor(SOLVER& solver) : lp_(&solver.GetLP()) {}
 
    virtual void ConstructUnaryFactor(UnaryFactorType& u, const std::vector<REAL>& cost) = 0;
-   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const std::vector<REAL>& cost, const INDEX leftDim, const INDEX rightDim) = 0;
+   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const matrix<REAL>& cost, const INDEX leftDim, const INDEX rightDim) = 0;
    virtual RightMessageType ConstructRightUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
    virtual LeftMessageType ConstructLeftUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
 
@@ -68,7 +68,7 @@ public:
       }
       unaryFactor_[node_number] = u;
    }
-   PairwiseFactorContainer* AddPairwiseFactor(INDEX var1, INDEX var2, const std::vector<REAL>& cost)
+   PairwiseFactorContainer* AddPairwiseFactor(INDEX var1, INDEX var2, const matrix<REAL>& cost)
    { 
       //if(var1 > var2) std::swap(var1,var2);
       assert(var1<var2);
@@ -270,13 +270,13 @@ public:
       }
    }
 
-   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const std::vector<REAL>& cost, const INDEX i1, const INDEX i2) 
+   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const matrix<REAL>& cost, const INDEX i1, const INDEX i2) 
    { 
       const INDEX dim1 = this->GetNumberOfLabels(i1);
       const INDEX dim2 = this->GetNumberOfLabels(i2);
       for(INDEX x1=0; x1<dim1; ++x1) {
          for(INDEX x2=0; x2<dim2; ++x2) {
-            p(x1,x2) = cost[x2*dim1 + x1];
+            p(x1,x2) = cost[x1*dim2 + x2];
          }
       }
    }
@@ -323,7 +323,7 @@ public:
 
    void SetGraph(const std::vector<std::vector<INDEX>> graph) { graph_ = graph; }
 
-   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const std::vector<REAL>& cost, const INDEX i1, const INDEX i2) 
+   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const matrix<REAL>& cost, const INDEX i1, const INDEX i2) 
    { 
       assert(i1 < graph_.size()+1 && i2 < graph_.size()+1);
       assert(i1 < i2);
@@ -332,28 +332,31 @@ public:
 
       const INDEX dim1 = this->GetNumberOfLabels(i1);
       const INDEX dim2 = this->GetNumberOfLabels(i2);
+      assert(dim1 == p.dim1() && dim2 == p.dim2());
+      assert(dim1 == cost.dim1() && dim2 == cost.dim2());
       for(INDEX x1=0; x1<dim1; ++x1) {
          for(INDEX x2=0; x2<dim2; ++x2) {
-            p(x1,x2) = cost[x2*dim1 + x1];
+            p(x1,x2) = cost(x1,x2);
          }
       }
 
       if(i1 < graph_.size() && i2 < graph_.size()) {
          // put infinities on diagonal
-         std::vector<REAL> cost_inf = cost;
          assert(this->GetNumberOfLabels(i1) == graph_[i1].size() + 1);
          assert(this->GetNumberOfLabels(i2) == graph_[i2].size() + 1);
          for(INDEX x1=0; x1<this->GetNumberOfLabels(i1)-1; ++x1) { // last label is non-assignment
             for(INDEX x2=0; x2<this->GetNumberOfLabels(i2)-1; ++x2) { // last label is non-assignment
-               if(graph_[i1][x1] == graph_[x2][i2]) {
+               if(graph_[i1][x1] == graph_[i2][x2]) {
                   p(x1,x2) = std::numeric_limits<REAL>::infinity();
                }
             }
          }
       }
    }
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) const
+
+   bool CheckPrimalConsistency() const // this function should not be needed, as gm model and mp model for graph matching have equality messages and mcf and hungarian have mcf factor which takes care of primal feasibility. Only enable in debug build
    {
+      std::cout << "check assignment\n";
       INDEX no_labels = 0;
       for(auto&v : graph_) {
          for(auto l : v) {
@@ -361,22 +364,20 @@ public:
          }
       }
       ++no_labels;
-      std::vector<INDEX> labels_taken(no_labels,0);
-      for(INDEX i=0; i<graph_.size(); ++i) {
-         auto* u = this->GetUnaryFactor(i);
-         const INDEX primal_offset = u->GetPrimalOffset();
-         for(INDEX l=0; l<graph_[i].size(); ++l) {
-            if(primal[primal_offset + l] == 1) {
-               labels_taken[graph_[i][l]]++;
+
+      std::vector<bool> labels_taken(no_labels,false);
+      for(INDEX i=0; i<this->unaryFactor_.size(); ++i) {
+         const INDEX state = this->unaryFactor_[i]->GetFactor()->primal(); 
+         if(state < graph_[i].size()) {
+            const INDEX label = graph_[i][state];
+            if(labels_taken[label]) { 
+               std::cout << "var " << i << ", state " << state << ", label " << label << " conflict\n";
+               return false; 
             }
+            labels_taken[ label ] = true;
          }
       }
-      for(auto l : labels_taken) {
-         if(l > 1) {
-            std::cout << "assignment not feasible\n";
-            return false;
-         }
-      }
+
       return true;
    }
 
@@ -447,9 +448,6 @@ public:
    {
       using PairwiseTripletMessageType = typename PAIRWISE_TRIPLET_MESSAGE_CONTAINER::MessageType;
 
-      //using PairwiseLoopType = typename PairwiseTripletMessageType::LeftLoopType;
-      //using TripletLoopType = typename PairwiseTripletMessageType::RightLoopType;
-
       typename MRFPC::PairwiseFactorContainer* const p = this->pairwiseFactor_[pairwiseFactorId];
       const INDEX pairwiseVar1 = std::get<0>(this->pairwiseIndices_[pairwiseFactorId]);
       const INDEX pairwiseVar2 = std::get<1>(this->pairwiseIndices_[pairwiseFactorId]);
@@ -467,17 +465,10 @@ public:
       const INDEX tripletDim3 = this->GetNumberOfLabels(tripletVar3);
          
       assert(pairwiseDim1*pairwiseDim2 == p->size());
-      assert(tripletDim1*tripletDim2*tripletDim3 == t->size());
-
-      //PairwiseLoopType pairwiseLoop( pairwiseDim1*pairwiseDim2 );
-
-      //std::array<INDEX,3> tripletDim = {{tripletDim1, tripletDim2, tripletDim3}};
-      //TripletLoopType tripletLoop( tripletDim );
 
       using MessageType = typename PAIRWISE_TRIPLET_MESSAGE_CONTAINER::MessageType;
       MessageType m = MessageType(tripletDim1, tripletDim2, tripletDim3);
       PAIRWISE_TRIPLET_MESSAGE_CONTAINER* mc = new PAIRWISE_TRIPLET_MESSAGE_CONTAINER(m, p, t);
-      tripletMessage_.push_back( mc );
       this->lp_->AddMessage(mc);
    }
    INDEX GetNumberOfTripletFactors() const { return tripletFactor_.size(); }
@@ -485,8 +476,7 @@ public:
    void AddEmptyPairwiseFactor(const INDEX var1, const INDEX var2)
    {
       assert(this->pairwiseMap_.find(std::make_tuple(var1,var2)) == this->pairwiseMap_.end()); 
-      const INDEX dim = this->GetNumberOfLabels(var1) * this->GetNumberOfLabels(var2);
-      this->AddPairwiseFactor(var1,var2,std::vector<REAL>(dim,0));
+      this->AddPairwiseFactor(var1, var2, matrix<REAL>(this->GetNumberOfLabels(var1), this->GetNumberOfLabels(var2), 0));
    }
 
    // do zrobienia: use references for pi
@@ -572,7 +562,6 @@ public:
 protected:
    std::vector<TripletFactorContainer*> tripletFactor_;
    std::vector<std::tuple<INDEX,INDEX,INDEX>> tripletIndices_;
-   std::vector<MessageTypeAdapter*> tripletMessage_;
    std::map<std::tuple<INDEX,INDEX,INDEX>, INDEX> tripletMap_; // given two sorted indices, return factorId belonging to that index.
 };
 

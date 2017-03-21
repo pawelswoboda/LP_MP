@@ -97,9 +97,9 @@ struct FMC_MP_T {
    typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRightContainer;
 
    typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_MP_PARAM, 2 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 3> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 4> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 5> PairwiseTriplet23MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage<0,1,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 3> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage<0,2,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 4> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage<1,2,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 5> PairwiseTriplet23MessageContainer;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor>;
    using MessageList = meta::list< 
@@ -272,9 +272,9 @@ struct FMC_GM_T {
 
    // tightening
    typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_GM_PARAM, 2 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage<0,1,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage<0,2,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
+   typedef MessageContainer<PairwiseTripletMessage<1,2,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
    //typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
    //typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
    //typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
@@ -581,16 +581,12 @@ namespace TorresaniEtAlInput {
 
       // initialize empty pairwise cost with infinity on diagonal
       if(q.find(std::make_pair(node1,node2)) == q.end()) {
-         std::vector<REAL> cost(leftDim * rightDim, 0.0);
+         matrix<REAL> cost(leftDim, rightDim, 0.0);
          
          for(INDEX i1=0; i1<graph[node1].size(); ++i1) {
             for(INDEX i2=0; i2<graph[node2].size(); ++i2) {
                if(graph[node1][i1] == graph[node2][i2]) {
-                  assert(i1 + i2*leftDim < cost.size());
-                  cost[i1 + i2*leftDim] = std::numeric_limits<REAL>::infinity();
-                  // transposed version
-                  //assert(i1*rightDim + i2 < cost.size());
-                  //cost[i1*rightDim + i2] = std::numeric_limits<REAL>::infinity();
+                  //cost(i1, i2) = std::numeric_limits<REAL>::infinity();
                }
             }
          }
@@ -599,18 +595,18 @@ namespace TorresaniEtAlInput {
 
       // now add specific cost
       assert(q.find(std::make_pair(node1,node2)) != q.end());
-      std::vector<REAL>& costVec = (*q.find(std::make_pair(node1,node2))).second;
+      matrix<REAL>& costVec = (*q.find(std::make_pair(node1,node2))).second;
       // do zrobienia: correct, or transpose?
-      assert(costVec[index1 + index2*leftDim] == 0.0);
-      costVec[index1 + index2*leftDim] = cost;
+      assert(costVec(index1, index2) == 0.0);
+      costVec(index1, index2) = cost;
       // transposed version
       //assert(costVec[index1*rightDim + index2] == 0.0);
       //costVec[index1*rightDim + index2] = cost;
    }
 
-   std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> BuildLeftPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight)
+   std::map<std::pair<INDEX,INDEX>, matrix<REAL>> BuildLeftPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight)
    {
-      std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> q;
+      std::map<std::pair<INDEX,INDEX>, matrix<REAL>> q;
       for(auto i : gmInput.pairwise_potentials) {
          const INDEX leftNode1 = std::get<0>(i);
          const INDEX leftNode2 = std::get<1>(i);
@@ -627,9 +623,9 @@ namespace TorresaniEtAlInput {
       }
       return q;
    }
-   std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> BuildRightPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight)
+   std::map<std::pair<INDEX,INDEX>, matrix<REAL>> BuildRightPairwisePotentials(const GraphMatchingInput& gmInput, const REAL weight)
    {
-      std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> q;
+      std::map<std::pair<INDEX,INDEX>, matrix<REAL>> q;
       for(auto i : gmInput.pairwise_potentials) {
          const INDEX leftNode1 = std::get<0>(i);
          const INDEX leftNode2 = std::get<1>(i);
@@ -658,7 +654,7 @@ namespace TorresaniEtAlInput {
 
       // construct pairwise potentials of mrfs
       if(pairwise_weight > 0) {
-         std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> leftQuadraticPot = BuildLeftPairwisePotentials(gmInput, pairwise_weight);
+         std::map<std::pair<INDEX,INDEX>, matrix<REAL>> leftQuadraticPot = BuildLeftPairwisePotentials(gmInput, pairwise_weight);
          for(auto& q : leftQuadraticPot) {
             auto p = left_mrf.AddPairwiseFactor(q.first.first, q.first.second, q.second);
          }
@@ -675,7 +671,7 @@ namespace TorresaniEtAlInput {
 
       // construct pairwise potentials of mrfs
       if(pairwise_weight > 0) {
-         std::map<std::pair<INDEX,INDEX>, std::vector<REAL>> rightQuadraticPot = BuildRightPairwisePotentials(gmInput, pairwise_weight);
+         std::map<std::pair<INDEX,INDEX>, matrix<REAL>> rightQuadraticPot = BuildRightPairwisePotentials(gmInput, pairwise_weight);
          for(auto& q : rightQuadraticPot) {
             auto p = right_mrf.AddPairwiseFactor(q.first.first, q.first.second, q.second);
          }
@@ -709,6 +705,19 @@ namespace TorresaniEtAlInput {
       }
       */
 
+      auto left_graph = gm_input.leftGraph_;
+      std::vector<INDEX> right_label_counter(mrf_right.GetNumberOfVariables(), 0);
+      for(INDEX i=0; i<mrf_left.GetNumberOfVariables(); ++i) {
+         auto* l = mrf_left.GetUnaryFactor(i);
+         for(INDEX xi=0; xi<mrf_left.GetNumberOfLabels(i)-1; ++xi) {
+            const INDEX state = left_graph[i][xi];
+            auto* r = mrf_right.GetUnaryFactor(state);
+            auto* m = new typename FMC::AssignmentConstraintMessage( typename FMC::EqualityMessageType(xi, right_label_counter[state]), l, r);
+            s.GetLP().AddMessage(m);
+            right_label_counter[state]++;
+         }
+      }
+      /*
       std::vector<INDEX> left_label_count(mrf_left.GetNumberOfVariables(),0);
       std::vector<INDEX> right_label_count(mrf_right.GetNumberOfVariables(),0);
       for(auto& a : gm_input.assignment_) {
@@ -719,8 +728,8 @@ namespace TorresaniEtAlInput {
          const INDEX right_label = right_label_count[a.right_node_];
          auto* m = new typename FMC::AssignmentConstraintMessage( typename FMC::EqualityMessageType(left_label, right_label), l, r);
          s.GetLP().AddMessage(m);
-         ++left_label_count[a.left_node_];
-         ++right_label_count[a.right_node_];
+         left_label_count[a.left_node_]++;
+         right_label_count[a.right_node_]++;
       }
       for(INDEX i=0; i<mrf_left.GetNumberOfVariables(); ++i) {
          assert(mrf_left.GetNumberOfLabels(i) == left_label_count[i]+1);
@@ -728,6 +737,7 @@ namespace TorresaniEtAlInput {
       for(INDEX i=0; i<mrf_right.GetNumberOfVariables(); ++i) {
          assert(mrf_right.GetNumberOfLabels(i) == right_label_count[i]+1);
       }
+      */
       
       mrf_left.Construct(s);
       mrf_right.Construct(s);
@@ -1142,7 +1152,7 @@ namespace UaiGraphMatchingInput {
 
       auto& m = std::get<1>(i);
       auto constraints = invert_matching(m);
-      std::map<std::tuple<INDEX,INDEX>, std::vector<REAL>> pairwisePot;
+      std::map<std::tuple<INDEX,INDEX>, matrix<REAL>> pairwisePot;
       for(INDEX c=0; c<constraints.size(); ++c) {
          for(INDEX c1=0; c1<constraints[c].size(); ++c1) {
             for(INDEX c2=0; c2<c1; ++c2) {
@@ -1160,15 +1170,12 @@ namespace UaiGraphMatchingInput {
                assert(label2 < mrf_input.cardinality_[var2]);
 
                if(!mrf.HasPairwiseFactor(var1,var2)) {
-                  const INDEX potentialSize = mrf_input.cardinality_[var1] * mrf_input.cardinality_[var2];
                   if(pairwisePot.find(std::make_tuple(var1,var2)) == pairwisePot.end()) {
-                     pairwisePot.insert( std::make_pair(std::make_pair(var1,var2), std::vector<REAL>(potentialSize, 0.0)) );
+                     pairwisePot.insert( std::make_pair(std::make_pair(var1,var2), matrix<REAL>(mrf_input.cardinality_[var1], mrf_input.cardinality_[var2], 0.0)) );
                   } 
                   auto it = pairwisePot.find(std::make_pair(var1,var2));
                   assert(it != pairwisePot.end());
-                  assert(it->second.size() == potentialSize);
-                  assert(label1 + label2*mrf_input.cardinality_[var1] < it->second.size());
-                  it->second.operator[](label1 + label2*mrf_input.cardinality_[var1]) = 3e11;
+                  it->second.operator()(label1, label2) = std::numeric_limits<REAL>::infinity();
                } else {
                   const INDEX factorId = mrf.GetPairwiseFactorId(var1,var2);
                   const REAL val = mrf.GetPairwiseValue(factorId,label1,label2);
@@ -1180,7 +1187,7 @@ namespace UaiGraphMatchingInput {
       for(auto it = pairwisePot.cbegin(); it!=pairwisePot.cend(); ++it) {
          const INDEX var1 = std::get<0>(it->first);
          const INDEX var2 = std::get<1>(it->first);
-         const std::vector<REAL> pot = it->second;
+         const matrix<REAL> pot = it->second;
          mrf.AddPairwiseFactor(var1,var2,pot);
       }
       return true;

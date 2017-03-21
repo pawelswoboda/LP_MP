@@ -511,7 +511,6 @@ public:
        msg_op_.ReceiveMessageFromRight(*rightFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::right>*>(this) ); 
    }
 
-   // do zrobienia: must use one additional argument for primal storage
    constexpr static bool
    CanCallReceiveRestrictedMessageFromRightContainer()
    { 
@@ -1053,9 +1052,9 @@ public:
 
       OneSideMsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
       {
-         if(CHIRALITY == Chirality::right) { // message is computed by right factor
+         if(CHIRALITY == Chirality::right) { // message is received by right factor
             msg_->RepamRight(+x, dim_);
-         } else if (CHIRALITY == Chirality::left) { // message is computed by left factor
+         } else if (CHIRALITY == Chirality::left) { // message is received by left factor
             msg_->RepamLeft(+x, dim_);
          } else {
             assert(false);
@@ -1067,9 +1066,9 @@ public:
       {
          assert(false);
          if(CHIRALITY == Chirality::right) {
-            msg_->RepamRight(+x, dim_);
+            msg_->RepamRight(-x, dim_);
          } else if(CHIRALITY == Chirality::left) {
-            msg_->RepamLeft(+x, dim_);
+            msg_->RepamLeft(-x, dim_);
          } else {
             assert(false);
          }
@@ -1508,7 +1507,7 @@ public:
       } 
 
       ReceiveMessages(omega);
-      MaximizePotentialAndComputePrimal();
+      MaximizePotential();
       SendMessages(omega);
    }
 

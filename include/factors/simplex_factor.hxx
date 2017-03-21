@@ -232,13 +232,15 @@ public:
 
    void init_primal() 
    {
-      left_primal_ = dim1();
-      right_primal_ = dim2();
+      primal_[0] = dim1();
+      primal_[1] = dim2();
    }
    REAL EvaluatePrimal() const { 
-      assert(left_primal_ < dim1());
-      assert(right_primal_ < dim2());
-      return (*this)(left_primal_, right_primal_); 
+      assert(primal_[0] < dim1());
+      assert(primal_[1] < dim2());
+      const REAL val = (*this)(primal_[0], primal_[1]); 
+      //assert(val < std::numeric_limits<REAL>::infinity());
+      return val;
    }
    void MaximizePotentialAndComputePrimal() 
    {
@@ -247,14 +249,14 @@ public:
          for(INDEX x2=0; x2<dim2(); ++x2) {
             if(min_val >= (*this)(x1,x2)) {
                min_val = (*this)(x1,x2);
-               left_primal_ = x1;
-               right_primal_ = x2;
+               primal_[0] = x1;
+               primal_[1] = x2;
             }
          }
       }
    }
 
-   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( left_primal_, right_primal_ ); }
+   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_[0], primal_[1] ); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( cereal::binary_data( pairwise_, sizeof(REAL)*(size()+dim1()+dim2()) ) ); }
 
    /*
@@ -264,7 +266,7 @@ public:
       for(INDEX x1=0; x1<dim1(); ++x1) {
          for(INDEX x2=0; x2<dim2(); ++x2) {
             primal_bits[i] = false;
-            if(left_primal_ == x1 && right_primal_ == x2) {
+            if(primal_[0] == x1 && primal_[1] == x2) {
                primal_bits[i] = true;
             }
             ++i;
@@ -278,8 +280,8 @@ public:
       for(INDEX x1=0; x1<dim1(); ++x1) {
          for(INDEX x2=0; x2<dim2(); ++x2) {
             if(primal_bits[i] == true) {
-               left_primal_ = x1;
-               right_primal_ = x2;
+               primal_[0] = x1;
+               primal_[1] = x2;
             }
             ++i;
          } 
@@ -287,7 +289,8 @@ public:
    }
    */
 
-   INDEX left_primal_, right_primal_; // not so nice: make getters and setters!
+   //INDEX primal_[0], primal_[1]; // not so nice: make getters and setters!
+   std::array<INDEX,2> primal_;
 private:
    // those three pointers should lie contiguously in memory.
    REAL* pairwise_;
@@ -346,19 +349,23 @@ public:
    REAL EvaluatePrimal() const
    {
       assert(primal_[0] < dim1_ && primal_[1] < dim2_ && primal_[2] < dim3_);
-      return (*this)(primal_[0], primal_[1], primal_[2]);
+      const REAL val = (*this)(primal_[0], primal_[1], primal_[2]);
+      //assert(val < std::numeric_limits<REAL>::infinity());
+      return val;
    }
 
    REAL operator()(const INDEX x1, const INDEX x2, const INDEX x3) const {
       return msg12(x1,x2) + msg13(x1,x3) + msg23(x2,x3);
    }
 
+   /*
    REAL operator[](const INDEX x) const {
       const INDEX x1 = x / (dim2_*dim3_);
       const INDEX x2 = ( x % (dim2_*dim3_) ) / dim3_;
       const INDEX x3 = x % dim3_;
       return msg12(x1,x2) + msg13(x1,x3) + msg23(x2,x3);
    }
+   */
 
    REAL min_marginal12(const INDEX x1, const INDEX x2) const {
       REAL marg = (*this)(x1,x2,0);
@@ -369,11 +376,13 @@ public:
    }
    template<typename MSG>
    void min_marginal12(MSG& msg) const {
-      for(INDEX x1=0; x1<dim1_; ++x1) {
-         for(INDEX x2=0; x2<dim2_; ++x2) {
-            msg(x1,x2) = std::numeric_limits<REAL>::infinity();
-         }
-      }
+      assert(msg.dim1() == dim1_);
+      assert(msg.dim2() == dim2_);
+      //for(INDEX x1=0; x1<dim1_; ++x1) {
+      //   for(INDEX x2=0; x2<dim2_; ++x2) {
+      //      msg(x1,x2) = std::numeric_limits<REAL>::infinity();
+      //   }
+      //}
       for(INDEX x1=0; x1<dim1_; ++x1) {
          for(INDEX x2=0; x2<dim2_; ++x2) {
             msg(x1,x2) = min_marginal12(x1,x2);
@@ -383,6 +392,8 @@ public:
 
    template<typename MSG>
    void min_marginal13(MSG& msg) const {
+      assert(msg.dim1() == dim1_);
+      assert(msg.dim2() == dim3_);
       for(INDEX x1=0; x1<dim1_; ++x1) {
          for(INDEX x3=0; x3<dim3_; ++x3) {
             msg(x1,x3) = std::numeric_limits<REAL>::infinity();
@@ -398,6 +409,8 @@ public:
    }
    template<typename MSG>
    void min_marginal23(MSG& msg) const {
+      assert(msg.dim1() == dim2_);
+      assert(msg.dim2() == dim3_);
       for(INDEX x2=0; x2<dim2_; ++x2) {
          for(INDEX x3=0; x3<dim3_; ++x3) {
             msg(x2,x3) = std::numeric_limits<REAL>::infinity();
@@ -441,7 +454,7 @@ public:
 
    std::array<INDEX,3> primal_;
 protected:
-   const INDEX dim1_, dim2_, dim3_;
+   const INDEX dim1_, dim2_, dim3_; // do zrobienia: possibly use 32 bit, for primal as well
    REAL *msg12_, *msg13_, *msg23_;
 };
 

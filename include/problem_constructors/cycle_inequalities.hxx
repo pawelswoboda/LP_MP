@@ -88,8 +88,10 @@ public:
 
         const REAL bound = boundCycle - boundIndep; 
         assert(bound >=  - eps);
-        triplet_candidate t(i,j,k, bound);
-        triplet_candidates.push_back(t);
+        if(bound >= eps) {
+           triplet_candidate t(i,j,k, bound);
+           triplet_candidates.push_back(t);
+        }
      }
   }
 
@@ -299,9 +301,9 @@ k_projection_graph_search<MRF_CONSTRUCTOR>::create_k_projection_graph()
         continue;
 
      const auto& factor_ij = *this->gm_.GetPairwiseFactor(i,j)->GetFactor(); // better retrieve by factor id
-     const auto min_xij_not_xj = row_minima(factor_ij);
-     const auto min_xij_not_xi = column_minima(factor_ij);
-     const auto min_xij_not_xi_xj = principal_minima(factor_ij, min_xij_not_xi);
+     const auto row_min = row_minima(factor_ij);
+     const auto col_min = column_minima(factor_ij);
+     const auto principal_min = principal_minima(factor_ij, col_min);
 
      // For each of their states
      assert(i<j);
@@ -314,12 +316,12 @@ k_projection_graph_search<MRF_CONSTRUCTOR>::create_k_projection_graph()
            //std::vector<int> inds; inds.push_back(xi); inds.push_back(xj);
            const REAL val_xij = factor_ij(xi,xj);
 
-           const REAL val_not_xi = min_xij_not_xi(xi,0) == val_xij ? min_xij_not_xi(xi,1) : min_xij_not_xi(xi,0);
-           const REAL val_not_xj = min_xij_not_xj(xj,0) == val_xij ? min_xij_not_xj(xj,1) : min_xij_not_xj(xj,0);
+           const REAL val_not_xi = row_min(xi,0) == val_xij ? row_min(xi,1) : row_min(xi,0);
+           const REAL val_not_xj = col_min(xj,0) == val_xij ? col_min(xj,1) : col_min(xj,0);
 
            // val_s < 0 means same projection < different projection, > 0 the opposite
            // Hence we search for a cycle with an odd number of entries > 0      
-           const REAL cost_projection_same = std::min(val_xij, min_xij_not_xi_xj(xi,xj));
+           const REAL cost_projection_same = std::min(val_xij, principal_min(xi,xj));
            const REAL cost_projection_different = std::min(val_not_xi, val_not_xj);
            const REAL val_s = cost_projection_same - cost_projection_different;
 
@@ -551,7 +553,7 @@ private:
 
    std::vector<std::vector<std::vector<bool>>> compute_partitions()
    {
-      std::vector<std::vector<std::vector<bool>>> partitions(this->gm_.GetNumberOfVariables());;
+      std::vector<std::vector<std::vector<bool>>> partitions(this->gm_.GetNumberOfVariables());
       for(size_t factorId=0; factorId<this->gm_.GetNumberOfPairwiseFactors(); factorId++) {
          auto vars = this->gm_.GetPairwiseVariables(factorId);
          const auto& factor = *this->gm_.GetPairwiseFactor(factorId)->GetFactor();
@@ -574,6 +576,7 @@ private:
          std::sort(p.begin(), p.end());
          p.erase( unique( p.begin(), p.end() ), p.end() );
       }
+
       return std::move(partitions);
    }
 
@@ -620,7 +623,7 @@ private:
 
       for(INDEX x2=0; x2<f.dim2(); ++x2) {
          const REAL val_xij = f(x1,x2);
-         const REAL column_min = column_minima(x1,0) == val_xij ? column_minima(x1,1) : column_minima(x1,0);
+         const REAL column_min = column_minima(x2,0) == val_xij ? column_minima(x2,1) : column_minima(x2,0);
          if(part_j[x2]) {
             min_different_part = std::min(min_different_part, column_min);
          } else {
@@ -696,9 +699,10 @@ private:
 
          // For each of their singleton states efficiently compute edge weights
          const auto& factor_ij = *this->gm_.GetPairwiseFactor(i,j)->GetFactor(); // better retrieve by factor id
-         const auto min_xij_not_xj = this->row_minima(factor_ij);
-         const auto min_xij_not_xi = this->column_minima(factor_ij);
-         const auto min_xij_not_xi_xj = this->principal_minima(factor_ij, min_xij_not_xi);
+
+         const auto row_min = this->row_minima(factor_ij);
+         const auto col_min = this->column_minima(factor_ij);
+         const auto principal_min = this->principal_minima(factor_ij, col_min);
 
          assert(i<j);
          for(int xi=0; xi < factor_ij.dim1(); xi++) {
@@ -710,12 +714,12 @@ private:
                //std::vector<int> inds; inds.push_back(xi); inds.push_back(xj);
                const REAL val_xij = factor_ij(xi,xj);
 
-               const REAL val_not_xi = min_xij_not_xi(xi,0) == val_xij ? min_xij_not_xi(xi,1) : min_xij_not_xi(xi,0);
-               const REAL val_not_xj = min_xij_not_xj(xj,0) == val_xij ? min_xij_not_xj(xj,1) : min_xij_not_xj(xj,0);
+               const REAL val_not_xi = row_min(xi,0) == val_xij ? row_min(xi,1) : row_min(xi,0);
+               const REAL val_not_xj = col_min(xj,0) == val_xij ? col_min(xj,1) : col_min(xj,0);
 
                // val_s < 0 means same projection < different projection, > 0 the opposite
                // Hence we search for a cycle with an odd number of entries > 0      
-               const REAL cost_projection_same = std::min(val_xij, min_xij_not_xi_xj(xi,xj));
+               const REAL cost_projection_same = std::min(val_xij, principal_min(xi,xj));
                const REAL cost_projection_different = std::min(val_not_xi, val_not_xj);
                const REAL val_s = cost_projection_same - cost_projection_different;
 
@@ -728,7 +732,7 @@ private:
             const INDEX m = this->proj_graph_offsets_[i] + x1;
             for(INDEX p2=0; p2<partitions[j].size(); ++p2) {
                const INDEX n = this->proj_graph_offsets_[j] + this->gm_.GetNumberOfLabels(j) + p2;
-               const REAL val_s = compute_projection_weight_singleton_1(factor_ij, x1, partitions[j][p2],  min_xij_not_xi);
+               const REAL val_s = compute_projection_weight_singleton_1(factor_ij, x1, partitions[j][p2], col_min);
                add_to_projection_edges(n,m,val_s);
             }
          }
@@ -736,7 +740,7 @@ private:
             const INDEX m = this->proj_graph_offsets_[j] + x2;
             for(INDEX p1=0; p1<partitions[i].size(); ++p1) {
                const INDEX n = this->proj_graph_offsets_[i] + this->gm_.GetNumberOfLabels(i) + p1;
-               const REAL val_s = compute_projection_weight_singleton_2(factor_ij, partitions[i][p1], x2, min_xij_not_xj);
+               const REAL val_s = compute_projection_weight_singleton_2(factor_ij, partitions[i][p1], x2, row_min);
                add_to_projection_edges(n,m,val_s);
             }
          }
@@ -746,7 +750,7 @@ private:
             const INDEX n = this->proj_graph_offsets_[i] + this->gm_.GetNumberOfLabels(i) + p1;
             for(INDEX p2=0; p2<partitions[j].size(); ++p2) {
                const INDEX m = this->proj_graph_offsets_[j] + this->gm_.GetNumberOfLabels(j) + p2;
-               const REAL val_s = compute_projection_weight_on_partitions(factor_ij, partitions[i][p1], partitions[i][p2]);
+               const REAL val_s = compute_projection_weight_on_partitions(factor_ij, partitions[i][p1], partitions[j][p2]);
                add_to_projection_edges(n,m,val_s);
             }
          }

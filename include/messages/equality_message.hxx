@@ -190,6 +190,7 @@ public:
       if(r.primal() == rightVar_) { 
          const bool ret = (l.primal() != leftVar_);
          l.primal() = leftVar_;
+         assert(l.primal() == leftVar_);
          return ret;
       }
       return false;
@@ -202,33 +203,13 @@ public:
       if(l.primal() == leftVar_) { 
          const bool ret = (r.primal() != rightVar_);
          r.primal() = rightVar_;
+         assert(r.primal() == rightVar_);
          return ret;
       }
       return false;
    }
 
-   /*
-   template<Chirality C_tmp = C, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   typename std::enable_if<C_tmp == Chirality::left,void>::type
-   ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
-   {
-      if(r.primal() == rightVar_) { 
-         l.primal() = leftVar_;
-      }
-   }
-
-   template<Chirality C_tmp = C, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   typename std::enable_if<C_tmp == Chirality::right,void>::type
-   ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
-   {
-      if(l.primal() == leftVar_) { 
-         r.primal() = rightVar_;
-      } 
-   }
-   */
-  
    // here it is checked whether labeling on left side and labeling on right side fulfill the constraints of the message
-   // note: If we build an LP-model, this could be checked automatically!
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
    bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
    {
@@ -246,6 +227,7 @@ public:
 
 private:
    //do zrobienia: possibly SHORT_INDEX or some 16 bit index (i.e. short unsigned int)
+   // certainly 32 bits will be enough.
    const INDEX leftVar_, rightVar_; // variables affected 
 };
 

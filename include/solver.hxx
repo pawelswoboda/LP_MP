@@ -277,6 +277,7 @@ public:
    // register evaluated primal solution
    void RegisterPrimal(const REAL cost)
    {
+      assert(false);
       if(cost < bestPrimalCost_) {
          // assume solution is feasible
          bestPrimalCost_ = cost;
@@ -285,18 +286,17 @@ public:
    }
 
    // evaluate and register primal solution
-   void RegisterPrimal(PrimalSolutionStorage& p)
+   void RegisterPrimal()
    {
-      std::cout << "RegisterPrimal not implemented\n";
-      //assert(false);
-      //const REAL cost = lp_.EvaluatePrimal(p.begin());
-      //if(cost < bestPrimalCost_) {
-      //   // check constraints
-      //   if(CheckPrimalConsistency(p.begin())) {
-      //      bestPrimalCost_ = cost;
-      //      std::swap(bestPrimal_, p); // note: the best primal need not be admissible for the current lp, i.e. after tightening, the lp has changed, while best primal possibly has steyed the same.
-      //   }
-      //}
+      const REAL cost = lp_.EvaluatePrimal();
+      if(cost < bestPrimalCost_) {
+         // assume solution is feasible
+         const bool feasible = CheckPrimalConsistency();
+         if(feasible) {
+            bestPrimalCost_ = cost;
+            solution_ = write_primal_into_string();
+         }
+      }
    }
 
    REAL lower_bound() const { return lowerBound_; }
@@ -332,9 +332,9 @@ public:
   {
     if(c.computePrimal) {
       Solver<FMC,LP_TYPE,VISITOR>::lp_.ComputeForwardPassAndPrimal(iter);
-      this->RegisterPrimal( this->lp_.EvaluatePrimal() );
+      this->RegisterPrimal();
       Solver<FMC,LP_TYPE,VISITOR>::lp_.ComputeBackwardPassAndPrimal(iter);
-      this->RegisterPrimal( this->lp_.EvaluatePrimal() );
+      this->RegisterPrimal();
     } else {
       Solver<FMC,LP_TYPE,VISITOR>::Iterate(c);
     }
@@ -361,16 +361,6 @@ public:
       return HasComputePrimal<PROBLEM_CONSTRUCTOR, void>();
    }
 
-   void RegisterRounding()
-   {
-      const bool feasible = this->CheckPrimalConsistency();
-
-      if(feasible) {
-         const REAL primal_cost = this->lp_.EvaluatePrimal();
-         this->RegisterPrimal(primal_cost);
-      }
-
-   }
    void ComputePrimal()
    {
       // compute the primal in parallel.
@@ -381,7 +371,7 @@ public:
                   f(l).ComputePrimal();
             });
       });
-      RegisterRounding();
+      this->RegisterPrimal();
    }
 
    virtual void PostIterate(LpControl c)
@@ -396,7 +386,7 @@ public:
    virtual void End()
    {
       SOLVER::End(); // first let problem constructors end (done in Solver)
-      RegisterRounding();
+      this->RegisterPrimal();
    }
    
 };

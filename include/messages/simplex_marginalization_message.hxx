@@ -48,15 +48,13 @@ namespace LP_MP {
         ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
         {
            // we assume that only r.right_primal was assigned, r.left_primal not
-           //assert(r.left_primal_ == i1_);
-           if(r.right_primal_ < i2_ && r.left_primal_ >= i1_) {
+           //assert(r.primal_[0] == i1_);
+           if(r.primal_[1] < i2_ && r.primal_[0] >= i1_) {
               vector<REAL> msgs(i1_);
               for(INDEX x1=0; x1<i1_; ++x1) {
-                 msgs[x1] = r(x1,r.right_primal_);
+                 msgs[x1] = r(x1,r.primal_[1]);
               }
               msg -= msgs;
-           } else {
-              MinimizeRight(r,msg);
            }
         }
 
@@ -101,8 +99,8 @@ namespace LP_MP {
     ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
        assert(l.primal() < i1_);
-       //assert(r.left_primal_ == i1_);
-       r.left_primal_ = l.primal();
+       //assert(r.primal_[0] == i1_);
+       r.primal_[0] = l.primal();
     }
 
 
@@ -191,15 +189,13 @@ namespace LP_MP {
         typename std::enable_if<ENABLE,void>::type
         ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
         {
-           //assert(r.right_primal_ == i1_);
-           if(r.left_primal_ < i1_ && r.right_primal_ >= i2_) {
+           //assert(r.primal_[1] == i1_);
+           if(r.primal_[0] < i1_ && r.primal_[1] >= i2_) {
               vector<REAL> msgs(i2_);
               for(INDEX x2=0; x2<i2_; ++x2) {
-                 msgs[x2] = r(r.left_primal_,x2);
+                 msgs[x2] = r(r.primal_[0],x2);
               }
               msg -= msgs;
-           } else {
-              MinimizeRight(r,msg);
            }
         }
 
@@ -244,8 +240,8 @@ namespace LP_MP {
     ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
        assert(l.primal() < i2_);
-       //assert(r.right_primal_ == i2_);
-       r.right_primal_ = l.primal();
+       //assert(r.primal_[1] == i2_);
+       r.primal_[1] = l.primal();
     }
 
 
@@ -295,17 +291,177 @@ namespace LP_MP {
     const INDEX i1_,i2_; // do zrobienia: these values are not needed, as they can be obtained from the factors whenever they are used
   };
 
-  // specialized messages for pairwise/triplet marginalization
-  template<MessageSendingType TYPE,  bool PROPAGATE_PRIMAL_TO_LEFT = false, bool PROPAGATE_PRIMAL_TO_RIGHT = false> 
-  class PairwiseTripletMessage12 {
-    public:
-      PairwiseTripletMessage12(const INDEX i1, const INDEX i2, const INDEX i3) : i1_(i1), i2_(i2), i3_(i3) {} // the pairwise factor size
+  template<INDEX I1, INDEX I2, MessageSendingType MESSAGE_SENDING_TYPE>
+  class PairwiseTripletMessage {
+     public:
+      PairwiseTripletMessage() {} 
+      PairwiseTripletMessage(const INDEX, const INDEX, const INDEX) {} 
+      ~PairwiseTripletMessage() {
+         static_assert(I1 < I2 && I2 < 3,""); 
+      } 
+
       // standard functions which take all possible arguments, to be replaced with minimal ones
-      template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>
+      template<typename RIGHT_FACTOR, typename G2, bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::SRMP>
         typename std::enable_if<ENABLE,void>::type
         ReceiveMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
         {
           MinimizeRight(r,msg); 
+        }
+      template<typename LEFT_FACTOR, typename G2, bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::MPLP>
+        typename std::enable_if<ENABLE,void>::type 
+        ReceiveMessageFromLeft(const LEFT_FACTOR& l, G2& msg) 
+        { 
+          MaximizeLeft(l,msg); 
+        }
+      template<typename LEFT_FACTOR, typename G3, bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::SRMP>
+        typename std::enable_if<ENABLE,void>::type
+        SendMessageToRight(const LEFT_FACTOR& l, G3& msg, const REAL omega)
+        { 
+          MaximizeLeft(l,msg,omega); 
+        }
+      template<typename RIGHT_FACTOR, typename G3, bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::MPLP>
+        typename std::enable_if<ENABLE,void>::type
+        SendMessageToLeft(const RIGHT_FACTOR& r, G3& msg, const REAL omega) 
+        { 
+          MinimizeRight(r,msg,omega); 
+        }
+
+      // for primal computation as in TRW-S, we need to compute restricted messages as well
+      template<typename RIGHT_FACTOR, typename G2, bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::SRMP>
+        typename std::enable_if<ENABLE,void>::type
+        ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
+        {
+           throw std::runtime_error("rounding on pairwise factors is not ucrrently supported");
+           assert(false);
+        }
+
+      template<typename A1, typename A2>
+      void RepamLeft(A1& l, const A2& msgs)
+      {
+         // do zrobienia: possibly use counter
+         for(INDEX x1=0; x1<l.dim1(); ++x1) {
+            for(INDEX x2=0; x2<l.dim2(); ++x2) {
+               l(x1,x2) += normalize( msgs(x1,x2) );
+            }
+         }
+      }
+      template<typename A1, typename A2>
+      void RepamRight(A1& r, const A2& msgs)
+      {
+         // do zrobienia: possibly use counter
+         if(I1 == 0 && I2 == 1) {
+            for(INDEX x1=0; x1<r.dim1(); ++x1) {
+               for(INDEX x2=0; x2<r.dim2(); ++x2) {
+                  r.msg12(x1,x2) += normalize( msgs(x1,x2) );
+               }
+            }
+         } else
+         if(I1 == 0 && I2 == 2) {
+            for(INDEX x1=0; x1<r.dim1(); ++x1) {
+               for(INDEX x2=0; x2<r.dim3(); ++x2) {
+                  r.msg13(x1,x2) += normalize( msgs(x1,x2) );
+               }
+            }
+         } else
+         if(I1 == 1 && I2 == 2) {
+            for(INDEX x1=0; x1<r.dim2(); ++x1) {
+               for(INDEX x2=0; x2<r.dim3(); ++x2) {
+                  r.msg23(x1,x2) += normalize( msgs(x1,x2) );
+               }
+            }
+         } else {
+            assert(false);
+         }
+      }
+
+      template<bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+         //typename std::enable_if<ENABLE,void>::type
+         void
+         ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+         {
+            if(I1 == 0 && I2 == 1) {
+
+               if(l.primal_[0] < l.dim1()) {
+                  r.primal_[0] = l.primal_[0];
+               }
+               if(l.primal_[1] < l.dim2()) {
+                  r.primal_[1] = l.primal_[1];
+               }
+
+            } else
+            if(I1 == 0 && I2 == 2) {
+
+               if(l.primal_[0] < l.dim1()) {
+                  r.primal_[0] = l.primal_[0];
+               }
+               if(l.primal_[1] < l.dim2()) {
+                  r.primal_[2] = l.primal_[1];
+               }
+
+            } else
+            if(I1 == 1 && I2 == 2) {
+
+               if(l.primal_[0] < l.dim1()) {
+                  r.primal_[1] = l.primal_[0];
+               }
+               if(l.primal_[1] < l.dim2()) {
+                  r.primal_[2] = l.primal_[1];
+               }
+
+
+            } else {
+               assert(false);
+            }
+         }
+
+  private:
+    template<typename LEFT_FACTOR, typename G2>
+    void MaximizeLeft(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
+    {
+       msg -= omega*l;
+    }
+    template<typename RIGHT_FACTOR, typename G2>
+    void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
+    {
+       if(I1 == 0 && I2 == 1) {
+
+          matrix<REAL> msgs(r.dim1(), r.dim2(), std::numeric_limits<REAL>::infinity());
+          r.min_marginal12(msgs);
+          msg -= omega*msgs;
+
+       } else
+       if(I1 == 0 && I2 == 2) {
+
+          matrix<REAL> msgs(r.dim1(), r.dim3(), std::numeric_limits<REAL>::infinity());
+          r.min_marginal13(msgs);
+          msg -= omega*msgs; 
+
+       } else
+       if(I1 == 1 && I2 == 2) {
+
+          matrix<REAL> msgs(r.dim2(), r.dim3(), std::numeric_limits<REAL>::infinity());
+          r.min_marginal23(msgs);
+          msg -= omega*msgs; 
+
+       } else {
+          assert(false);
+       }
+    }
+
+  };
+
+
+// specialized messages for pairwise/triplet marginalization
+template<MessageSendingType TYPE,  bool PROPAGATE_PRIMAL_TO_LEFT = false, bool PROPAGATE_PRIMAL_TO_RIGHT = false> 
+class PairwiseTripletMessage12 {
+   public:
+      PairwiseTripletMessage12(const INDEX i1, const INDEX i2, const INDEX i3) : i1_(i1), i2_(i2), i3_(i3) {} // the pairwise factor size
+      // standard functions which take all possible arguments, to be replaced with minimal ones
+      template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>
+         typename std::enable_if<ENABLE,void>::type
+         ReceiveMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
+         {
+            MinimizeRight(r,msg); 
         }
       template<typename LEFT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::MPLP>
         typename std::enable_if<ENABLE,void>::type 
@@ -387,11 +543,11 @@ namespace LP_MP {
     {
       assert(r.dim1() == i1_ && r.dim2() == i2_ && r.dim3() == i3_);
       assert(l.size() == i1_*i2_);
-      if(l.left_primal_ < i1_) {
-         r.primal_[0] = l.left_primal_;
+      if(l.primal_[0] < i1_) {
+         r.primal_[0] = l.primal_[0];
       }
-      if(l.right_primal_ < i2_) {
-         r.primal_[1] = l.right_primal_;
+      if(l.primal_[1] < i2_) {
+         r.primal_[1] = l.primal_[1];
       }
     }
 
@@ -536,11 +692,11 @@ namespace LP_MP {
     {
       assert(r.dim1() == i1_ && r.dim2() == i2_ && r.dim3() == i3_);
       assert(l.size() == i1_*i3_);
-      if(l.left_primal_ < i1_) {
-         r.primal_[0] = l.left_primal_;
+      if(l.primal_[0] < i1_) {
+         r.primal_[0] = l.primal_[0];
       }
-      if(l.right_primal_ < i3_) {
-         r.primal_[2] = l.right_primal_;
+      if(l.primal_[1] < i3_) {
+         r.primal_[2] = l.primal_[1];
       }
     }
 
@@ -680,11 +836,11 @@ namespace LP_MP {
     {
       assert(r.dim1() == i1_ && r.dim2() == i2_ && r.dim3() == i3_);
       assert(l.size() == i2_*i3_);
-      if(l.left_primal_ < i2_) {
-         r.primal_[1] = l.left_primal_;
+      if(l.primal_[0] < i2_) {
+         r.primal_[1] = l.primal_[0];
       }
-      if(l.right_primal_ < i3_) {
-         r.primal_[2] = l.right_primal_;
+      if(l.primal_[1] < i3_) {
+         r.primal_[2] = l.primal_[1];
       }
     }
 
