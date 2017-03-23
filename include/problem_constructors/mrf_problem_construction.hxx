@@ -276,7 +276,7 @@ public:
       const INDEX dim2 = this->GetNumberOfLabels(i2);
       for(INDEX x1=0; x1<dim1; ++x1) {
          for(INDEX x2=0; x2<dim2; ++x2) {
-            p(x1,x2) = cost[x1*dim2 + x2];
+            p.cost(x1,x2) = cost(x1,x2);
          }
       }
    }
@@ -328,15 +328,13 @@ public:
       assert(i1 < graph_.size()+1 && i2 < graph_.size()+1);
       assert(i1 < i2);
 
-      std::cout << "-----kwaskwaskwas-----\n";
-
       const INDEX dim1 = this->GetNumberOfLabels(i1);
       const INDEX dim2 = this->GetNumberOfLabels(i2);
       assert(dim1 == p.dim1() && dim2 == p.dim2());
       assert(dim1 == cost.dim1() && dim2 == cost.dim2());
       for(INDEX x1=0; x1<dim1; ++x1) {
          for(INDEX x2=0; x2<dim2; ++x2) {
-            p(x1,x2) = cost(x1,x2);
+            p.cost(x1,x2) = cost(x1,x2);
          }
       }
 
@@ -347,7 +345,7 @@ public:
          for(INDEX x1=0; x1<this->GetNumberOfLabels(i1)-1; ++x1) { // last label is non-assignment
             for(INDEX x2=0; x2<this->GetNumberOfLabels(i2)-1; ++x2) { // last label is non-assignment
                if(graph_[i1][x1] == graph_[i2][x2]) {
-                  p(x1,x2) = std::numeric_limits<REAL>::infinity();
+                  p.cost(x1,x2) = std::numeric_limits<REAL>::infinity();
                }
             }
          }
@@ -486,15 +484,12 @@ public:
       if(tripletMap_.find(std::make_tuple(var1,var2,var3)) == tripletMap_.end()) {
          // first check whether necessary pairwise factors are present. If not, add them.
          if(this->pairwiseMap_.find(std::make_tuple(var1,var2)) == this->pairwiseMap_.end()) {
-            std::cout << "!!!!!!!!!!!! add empty pairwise factor !!!!!!!!!!!\n";
             AddEmptyPairwiseFactor(var1,var2);
          }
          if(this->pairwiseMap_.find(std::make_tuple(var1,var3)) == this->pairwiseMap_.end()) {
-            std::cout << "!!!!!!!!!!!! add empty pairwise factor !!!!!!!!!!!\n";
             AddEmptyPairwiseFactor(var1,var3);
          }
          if(this->pairwiseMap_.find(std::make_tuple(var2,var3)) == this->pairwiseMap_.end()) {
-            std::cout << "!!!!!!!!!!!! add empty pairwise factor !!!!!!!!!!!\n";
             AddEmptyPairwiseFactor(var2,var3);
          }
 
@@ -506,7 +501,7 @@ public:
       }
    }
 
-   INDEX add_triplets(const std::vector<triplet_candidate>& tc, const INDEX max_triplets_to_add)
+   INDEX add_triplets(const std::vector<triplet_candidate>& tc, const INDEX max_triplets_to_add = std::numeric_limits<INDEX>::max())
    {
       INDEX no_triplets_added = 0;
       for(auto t : tc) {
@@ -534,20 +529,20 @@ public:
       INDEX no_triplets_added = add_triplets(triplet_candidates, noTripletsToAdd);
       std::cout << "added " << no_triplets_added << " by triplet search\n";
 
-      if(no_triplets_added < noTripletsToAdd) {
+      if(no_triplets_added < 0.2*noTripletsToAdd) {
          std::cout << "----------------- do cycle search with k-projection graph---------------\n";
-         k_projection_graph_search<typename std::remove_reference<decltype(*this)>::type> cycle_search(*this);
-         auto triplet_candidates = cycle_search.search();
+         k_ary_cycle_inequalities_search<typename std::remove_reference<decltype(*this)>::type, false> cycle_search(*this);
+         triplet_candidates = cycle_search.search();
          std::cout << "... done\n";
          const INDEX no_triplet_k_projection_graph = add_triplets(triplet_candidates, noTripletsToAdd-no_triplets_added);
          std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in k-projection graph\n";
          no_triplets_added += no_triplet_k_projection_graph;
 
          // search in expanded projection graph
-         if(no_triplets_added < noTripletsToAdd) {
+         if(no_triplets_added < 0.2*noTripletsToAdd) {
             std::cout << "----------------- do cycle search with expanded projection graph---------------\n";
-            expanded_projection_graph_search<typename std::remove_reference<decltype(*this)>::type> cycle_search(*this);
-            auto triplet_candidates = cycle_search.search();
+            k_ary_cycle_inequalities_search<typename std::remove_reference<decltype(*this)>::type, true> cycle_search(*this);
+            triplet_candidates = cycle_search.search();
             std::cout << "... done\n";
             const INDEX no_triplet_k_projection_graph = add_triplets(triplet_candidates, noTripletsToAdd-no_triplets_added);
             std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in expanded projection graph\n";
@@ -604,8 +599,9 @@ namespace UaiMrfInput {
    struct clique_scope_line : pegtl::seq< opt_whitespace, new_clique_scope, pegtl::plus< opt_whitespace, clique_scope >, opt_whitespace, pegtl::eol > {};
    struct clique_scopes_end
    {
-      template< pegtl::apply_mode A, pegtl::rewind_mode M, template< typename ... > class Action, template< typename ... > class Control, typename Input >
-         static bool match( Input & in, MrfInput& input )
+      //template< pegtl::apply_mode A, pegtl::rewind_mode M, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+      template< pegtl::apply_mode A, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+         static bool match( Input &, MrfInput& input )
          {
             return input.number_of_cliques_ == input.clique_scopes_.size();
          }
@@ -617,16 +613,18 @@ namespace UaiMrfInput {
    struct function_table_entry : pegtl::seq< real_number > {};
    struct function_tables_end
    {
-      template< pegtl::apply_mode A, pegtl::rewind_mode M, template< typename ... > class Action, template< typename ... > class Control, typename Input >
-         static bool match( Input & in, MrfInput& input )
+      //template< pegtl::apply_mode A, pegtl::rewind_mode M, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+      template< pegtl::apply_mode A, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+         static bool match( Input &, MrfInput& input )
          {
             return input.number_of_cliques_ == input.function_tables_.size();
          }
    };
    struct function_table_end
    {
-      template< pegtl::apply_mode A, pegtl::rewind_mode M, template< typename ... > class Action, template< typename ... > class Control, typename Input >
-         static bool match( Input & in, MrfInput& input )
+      //template< pegtl::apply_mode A, pegtl::rewind_mode M, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+      template< pegtl::apply_mode A, template< typename ... > class Action, template< typename ... > class Control, typename Input >
+         static bool match( Input &, MrfInput& input )
          {
             auto& table = input.function_tables_.back();
             if(table.back() + 1 == table.size()) {
@@ -683,7 +681,7 @@ namespace UaiMrfInput {
 
    template<> struct action< new_clique_scope > {
       template<typename Input>
-      static void apply(const Input & in, MrfInput& input)
+      static void apply(const Input &, MrfInput& input)
       {
          input.clique_scopes_.push_back(std::vector<INDEX>(0));
       }
@@ -772,7 +770,8 @@ namespace UaiMrfInput {
    {
       std::cout << "parsing string\n";
       MrfInput input;
-      bool read_suc = pegtl::parse_string<grammar, action>(instance,"",input);
+      //bool read_suc = pegtl::parse_string<grammar, action>(instance,"",input);
+      bool read_suc = pegtl::parse<grammar, action>(instance,"",input);
       if(read_suc) {
          auto& mrf_constructor = s.template GetProblemConstructor<PROBLEM_CONSTRUCTOR_NO>();
          build_mrf(mrf_constructor, input);

@@ -45,7 +45,7 @@ class disable_write_constructor : public BASE
    public:
    using BASE::BASE;
    template<typename STREAM>
-   void WritePrimal(STREAM& s) const 
+   void WritePrimal(STREAM&) const 
    {} 
 };
 
@@ -1051,6 +1051,7 @@ namespace TorresaniEtAlInput {
 } // end TorresaniEtAlInput
 
 // the UAI mrf format followed by custom constraints describing an underlying assignment problem.
+/*
 namespace UaiGraphMatchingInput {
 
    // first use uai input of mrf constructor, afterwards continue with special constraints section
@@ -1220,20 +1221,20 @@ namespace UaiGraphMatchingInput {
    }
 
    template<typename SOLVER>
-   void construct_mcf(SOLVER& s, const input& i)
+   void construct_mcf(SOLVER& s, const input& in)
    {
       using FMC = typename SOLVER::FMC;
       auto& mrf_left = s.template GetProblemConstructor<0>();
-      const auto& mrf_input = std::get<0>(i);
+      const auto& mrf_input = std::get<0>(in);
       UaiMrfInput::build_mrf(mrf_left, mrf_input);
 
       // build assignment problem
       // We have two types of nodes: matching nodes and slack nodes, the latter taking care whenever a label says slack. Because CS2 orders edges, we must insert slack nodes after the matching nodes, when the need arises. Hence we may have to shift matchign node numbers after constructing slack nodes and inserting them between the matching nodes.
-      const auto& matching = std::get<1>(i);
+      const auto& matching = std::get<1>(in);
       for(const auto& m : matching) {
          // do zrobienia: this should not be done when assert is not called
          std::vector<INDEX> m_filtered;
-         std::copy_if(m.begin(), m.end(), std::back_inserter(m_filtered), [](auto i) { return i != std::numeric_limits<INDEX>::max(); });
+         std::copy_if(m.begin(), m.end(), std::back_inserter(m_filtered), [](auto x) { return x != std::numeric_limits<INDEX>::max(); });
          assert(std::is_sorted( m_filtered.begin(), m_filtered.end()));
       }
       const INDEX no_left_nodes = mrf_left.GetNumberOfVariables();
@@ -1330,6 +1331,7 @@ namespace UaiGraphMatchingInput {
       return true;
    }
 }
+*/
 
 
 

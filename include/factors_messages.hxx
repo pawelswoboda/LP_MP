@@ -51,38 +51,38 @@ namespace LP_MP {
 namespace FunctionExistence {
 
 // Macros to construct help functions for checking existence of member functions of classes
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveMessageFromRight,ReceiveMessageFromRight);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveMessageFromLeft, ReceiveMessageFromLeft);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveMessageFromRight,ReceiveMessageFromRight)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveMessageFromLeft, ReceiveMessageFromLeft)
    
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromRight,ReceiveRestrictedMessageFromRight);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromLeft, ReceiveRestrictedMessageFromLeft);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromRight,ReceiveRestrictedMessageFromRight)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromLeft, ReceiveRestrictedMessageFromLeft)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessageToRight,SendMessageToRight);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessageToLeft, SendMessageToLeft);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessageToRight,SendMessageToRight)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessageToLeft, SendMessageToLeft)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessagesToRight,SendMessagesToRight);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessagesToLeft, SendMessagesToLeft);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessagesToRight,SendMessagesToRight)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessagesToLeft, SendMessagesToLeft)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasRepamRight, RepamRight);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasRepamLeft, RepamLeft);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasRepamRight, RepamRight)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasRepamLeft, RepamLeft)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeLeftFromRightPrimal, ComputeLeftFromRightPrimal);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeRightFromLeftPrimal, ComputeRightFromLeftPrimal); 
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeLeftFromRightPrimal, ComputeLeftFromRightPrimal)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeRightFromLeftPrimal, ComputeRightFromLeftPrimal)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency, CheckPrimalConsistency); 
-LP_MP_FUNCTION_EXISTENCE_CLASS(has_reduce_sat, reduce_sat);
-LP_MP_FUNCTION_EXISTENCE_CLASS(has_convert_primal, convert_primal);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency, CheckPrimalConsistency)
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_reduce_sat, reduce_sat)
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_convert_primal, convert_primal)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasPrimalSize,PrimalSize);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotentialAndComputePrimal, MaximizePotentialAndComputePrimal);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasPrimalSize,PrimalSize)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotentialAndComputePrimal, MaximizePotentialAndComputePrimal)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables);
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasReduceLp, ReduceLp);
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables)
+LP_MP_FUNCTION_EXISTENCE_CLASS(HasReduceLp, ReduceLp)
 
-LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(IsAssignable, operator[]);
+LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(IsAssignable, operator[])
 }
 
 // function getters for statically dispatching ReceiveMessage and SendMessage to left and right side correctly, used in FactorContainer
@@ -455,7 +455,7 @@ public:
    {
       leftFactor_->template AddMessage<MessageDispatcher<MessageContainerType, LeftMessageFuncGetter>, MessageContainerType>(this);
       rightFactor_->template AddMessage<MessageDispatcher<MessageContainerType, RightMessageFuncGetter>, MessageContainerType>(this);
-      int status;
+      //int status;
       //std::cout << "msg holding type = " << abi::__cxa_demangle(typeid(*this).name(),0,0,&status) << "\n";
       //std::cout << FunctionExistence::IsAssignable<RightFactorContainer,REAL,INDEX>() << "\n";
       //std::cout << "msg holding type = " << abi::__cxa_demangle(typeid(msg_op_).name(),0,0,&status) << "\n";
@@ -633,6 +633,7 @@ public:
    template<typename IT>
    struct omega_iterator_with_lock {
      omega_iterator_with_lock(IT it, std::vector<bool>::iterator lock_it) : it_(it), lock_it_(lock_it) {}
+     omega_iterator_with_lock(const omega_iterator_with_lock& o) : it_(o.it_), lock_it_(o.lock_it_) {}
      omega_iterator_with_lock& operator++() {
        ++it_;
        ++lock_it_;
@@ -641,6 +642,13 @@ public:
          ++lock_it_;
        }
        return *this;
+     }
+     omega_iterator_with_lock operator+(const INDEX s) {
+        omega_iterator_with_lock o(*this);
+        for(INDEX i=0; i<s; ++i) {
+           ++o;
+        }
+        return o;
      }
      auto operator*() const { return *it_; }
      bool operator==(const omega_iterator_with_lock<IT>& o) const { return it_ == o.it_; }
@@ -696,7 +704,7 @@ public:
       constexpr INDEX msg_array_number = LeftFactorContainer::template FindMessageDispatcherTypeIndex<MessageDispatcher<MessageContainerType,LeftMessageFuncGetter>>();
       using msg_container_type = meta::at_c<typename LeftFactorContainer::msg_container_type_list, msg_array_number>;
       using MSG_ARRAY_ITERATOR = decltype(std::declval<msg_container_type>().begin());
-      return FunctionExistence::HasSendMessagesToLeft<MessageType, void, LeftFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, typename std::vector<REAL>::iterator>();
+      return FunctionExistence::HasSendMessagesToRight<MessageType, void, LeftFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, typename std::vector<REAL>::iterator>();
    }
 
    template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
@@ -776,7 +784,7 @@ public:
         rightFactor_->PropagatePrimal();
         rightFactor_->ComputePrimalThroughMessages();
       }).else_([&](auto) {
-         static_if<CanComputeRightFromLeftPrimalWithReturn()>([&](auto f) {
+         static_if<MessageContainerType::CanComputeRightFromLeftPrimalWithReturn()>([&](auto f) {
                const bool changed = f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
                if(changed) {
                   rightFactor_->PropagatePrimal();
@@ -794,7 +802,7 @@ public:
         leftFactor_->PropagatePrimal();
         leftFactor_->ComputePrimalThroughMessages();
       }).else_([&](auto ) {
-         static_if<CanComputeLeftFromRightPrimalWithReturn()>([&](auto f) {
+         static_if<MessageContainerType::CanComputeLeftFromRightPrimalWithReturn()>([&](auto f) {
                const bool changed = f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
                if(changed) {
                   leftFactor_->PropagatePrimal();
@@ -817,8 +825,8 @@ public:
       bool ret;
       static_if<CanCheckPrimalConsistency()>([&](auto f) {
             ret = f(msg_op_).CheckPrimalConsistency(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-      }).else_([&](auto f) {
-               ret = true;
+      }).else_([&](auto) {
+            ret = true;
       });
       return ret;
    }
@@ -1024,7 +1032,6 @@ public:
 
       template<typename ARRAY>
       MessageContainerType& operator-=(const ARRAY& diff) {
-        MinusVec<ARRAY> minus_diff(diff);
         // note: order of below operations is important: When the message is e.g. just the potential, we must reparametrize the other side first!
         if(CHIRALITY == Chirality::right) {
           RepamLeft(diff);
@@ -1093,7 +1100,6 @@ public:
 
       template<typename ARRAY>
       MessageContainerType& operator-=(const ARRAY& diff) {
-        MinusVec<ARRAY> minus_diff(diff);
         if(CHIRALITY == Chirality::right) {
           RepamRight(diff);
         } else if(CHIRALITY == Chirality::left) {
@@ -1116,8 +1122,6 @@ public:
    template<typename ARRAY>
    MessageContainerType& operator-=(const ARRAY& diff) {
       assert(false); // update to left right -+
-      MinusVec<ARRAY> minus_diff(diff);
-      assert(minus_diff.size() == this->size());
       RepamLeft(-diff);
       RepamRight(-diff);
       return *this;
@@ -1126,10 +1130,8 @@ public:
    template<typename ARRAY>
    MessageContainerType& operator+=(const ARRAY& diff) {
       assert(false); // update to left right -+
-      PlusVec<ARRAY> plus_diff(diff); // used to wrap Vc::Memory, otherwise not needed // do zrobienia: change this with better vector architecture
-      assert(plus_diff.size() == this->size()); // or entriesCount
-      RepamLeft(plus_diff);
-      RepamRight(plus_diff);
+      RepamLeft(diff);
+      RepamRight(diff);
       return *this;
    }
 
@@ -1169,10 +1171,9 @@ public:
    
    virtual void CreateConstraints(LpInterfaceAdapter* l) final
    {
-      // do zrobienia: use static_if
       static_if<CanCreateConstraints()>([&](auto f) {
             f(msg_op_).CreateConstraints(l,leftFactor_->GetFactor(),rightFactor_->GetFactor());
-      }).else_([&](auto f) {
+      }).else_([&](auto) {
          throw std::runtime_error("create constraints not implemented by message");
       });
    }
@@ -1184,10 +1185,10 @@ public:
          leftFactor_->GetFactor()->init_primal();
          static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
                f(this)->ReceiveMessageFromLeftContainer();
-         }).else_([&](auto f) {
-               static_if<MessageContainerType::CanCallSendMessageToRightContainer()>([&](auto f2) {
-                        f2(this)->SendMessageToRightContainer(leftFactor_->GetFactor(),1.0);
-               }).else_([](auto f3) {
+         }).else_([&](auto) {
+               static_if<MessageContainerType::CanCallSendMessageToRightContainer()>([&](auto f) {
+                        f(this)->SendMessageToRightContainer(leftFactor_->GetFactor(),1.0);
+               }).else_([](auto) {
                   assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
                });
          });
@@ -1195,10 +1196,10 @@ public:
          rightFactor_->GetFactor()->init_primal();
          static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
                f(this)->ReceiveMessageFromRightContainer();
-         }).else_([&](auto f) {
-               static_if<MessageContainerType::CanCallSendMessageToLeftContainer()>([&](auto f2) {
-                        f2(this)->SendMessageToLeftContainer(rightFactor_->GetFactor(),1.0);
-               }).else_([](auto f3) {
+         }).else_([&](auto) {
+               static_if<MessageContainerType::CanCallSendMessageToLeftContainer()>([&](auto f) {
+                        f(this)->SendMessageToLeftContainer(rightFactor_->GetFactor(),1.0);
+               }).else_([](auto) {
                   assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
                });
          });
@@ -1231,9 +1232,9 @@ public:
                   // propagate back to upper
                   f(this)->ComputeRightFromLeftPrimal(); 
 
-         }).else_([&](auto f) {
-            static_if<MessageContainerType::CanComputeLeftFromRightPrimal()>([&](auto f2) {
-                  f2(this)->ComputeLeftFromRightPrimal();
+         }).else_([&](auto) {
+            static_if<MessageContainerType::CanComputeLeftFromRightPrimal()>([&](auto f) {
+                  f(this)->ComputeLeftFromRightPrimal();
             }).else_([&](auto) {
                assert(false);
             });
@@ -1259,9 +1260,9 @@ public:
                   // propagate back to upper
                   f(this)->ComputeLeftFromRightPrimal(); 
 
-         }).else_([&](auto f) {
-            static_if<MessageContainerType::CanComputeRightFromLeftPrimal()>([&](auto f2) {
-                  f2(this)->ComputeRightFromLeftPrimal();
+         }).else_([&](auto) {
+            static_if<MessageContainerType::CanComputeRightFromLeftPrimal()>([&](auto f) {
+                  f(this)->ComputeRightFromLeftPrimal();
             }).else_([&](auto) {
                assert(false);
             });
@@ -1378,9 +1379,9 @@ public:
       return GetMessageSum(MESSAGE_DISPATCHER_TYPELIST{},i);
    }
    template<typename... MESSAGE_DISPATCHER_TYPES_REST>
-   const REAL GetMessageSum(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX i) const { return 0.0; }
+   REAL GetMessageSum(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX i) const { return 0.0; }
    template<typename MESSAGE_DISPATCHER_TYPE, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   const REAL GetMessageSum(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX i) const {
+   REAL GetMessageSum(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX i) const {
       //INDEX status;
       //std::cout << "return message for " << abi::__cxa_demangle(typeid(MESSAGE_DISPATCHER_TYPE).name(),0,0,&status) << "\n";
       // current number of MESSAGE_DISPATCHER_TYPE
@@ -1567,7 +1568,7 @@ public:
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
             static_if<l.CanCallReceiveRestrictedMessage()>([&](auto f) {
                   for(auto it=std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it) {
-                     f(l.ReceiveRestrictedMessage)(*(*it)); 
+                     f(l).ReceiveRestrictedMessage(*(*it)); 
                   }
             });
       });
@@ -1583,7 +1584,7 @@ public:
    }
 
    // methods used by MessageIterator
-   const INDEX GetNoMessages() const final
+   INDEX GetNoMessages() const final
    {
       INDEX noMessages = 0;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&noMessages](auto l) {
@@ -1613,20 +1614,21 @@ public:
    void CallSendMessages(FactorType& factor, ITERATOR omegaIt) 
    {
      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
-         constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
          // check whether the message supports batch updates. If so, call batch update.
          // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
          static_if<FactorContainerType::CanCallSendMessages(l)>([&](auto f) {
+             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
              const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
              if(omega_sum > 0.0) { 
-               l.SendMessages(factor, std::get<n>(msg_), omegaIt);
+               f(l).SendMessages(factor, std::get<n>(msg_), omegaIt);
              }
              omegaIt += std::get<n>(msg_).size();
-             }).else_([&](auto f) {
+             }).else_([&](auto) {
                static_if<FactorContainerType::CanCallSendMessage(decltype(l){})>([&](auto f) {
+                   constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
                    for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
                      if(*omegaIt != 0.0) {
-                       l.SendMessage(&factor, *(*it), *omegaIt); 
+                       f(l).SendMessage(&factor, *(*it), *omegaIt); 
                      }
                    }
                });
@@ -1644,7 +1646,6 @@ public:
         CallSendMessages(factor_, omega.begin());
       } else if( no_calls > 1 ) {
          // make a copy of the current reparametrization. The new messages are computed on it. Messages are updated implicitly and hence possibly the new reparametrization is automatically adjusted, which would interfere with message updates
-         auto omegaIt = omega.begin();
          FactorType tmp_factor(factor_);
 
          CallSendMessages(tmp_factor, omega.begin());
@@ -1654,14 +1655,14 @@ public:
    } 
 
    template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX msgNo) const 
+   MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX) const 
    {
       assert(false);
       throw std::runtime_error("index out of bound");
       return nullptr;
    }
    template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX msgNo) const 
+   MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX msgNo) const 
    {
       constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       if(msgNo < std::get<n>(msg_).size()) {
@@ -1679,12 +1680,12 @@ public:
    }
 
    template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   FactorTypeAdapter* GetConnectedFactor(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX cur_msg_idx) const 
+   FactorTypeAdapter* GetConnectedFactor(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX) const 
    {
       throw std::runtime_error("message index out of bound");
    }
    template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   FactorTypeAdapter* GetConnectedFactor(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX cur_msg_idx) const // to get the current message_type
+   FactorTypeAdapter* GetConnectedFactor(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX cur_msg_idx) const // to get the current message_type
    {
       constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       const INDEX no_msgs = std::get<n>(msg_).size();
@@ -1731,12 +1732,12 @@ public:
 
 
    template<typename MESSAGE_DISPATCHER_TYPE>
-   constexpr static bool CanCallSendMessages(MESSAGE_DISPATCHER_TYPE t) 
+   constexpr static bool CanCallSendMessages(MESSAGE_DISPATCHER_TYPE) 
    {
       return MESSAGE_DISPATCHER_TYPE::CanCallSendMessages();
    }
    template<typename MESSAGE_DISPATCHER_TYPE>
-   constexpr static bool CanCallSendMessage(MESSAGE_DISPATCHER_TYPE t) 
+   constexpr static bool CanCallSendMessage(MESSAGE_DISPATCHER_TYPE) 
    {
       return MESSAGE_DISPATCHER_TYPE::CanCallSendMessage();
    }
@@ -1771,12 +1772,12 @@ public:
 
 
    template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   bool CanSendMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX cur_msg_idx) const 
+   bool CanSendMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX) const 
    {
       throw std::runtime_error("message index out of bound");
    }
    template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   bool CanSendMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...> t, const INDEX cur_msg_idx) const // to get the current MESSAGE_TYPE
+   bool CanSendMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX cur_msg_idx) const // to get the current MESSAGE_TYPE
    {
       constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       const INDEX no_msgs = std::get<n>(msg_).size();
@@ -2077,7 +2078,7 @@ public:
    {
       static_if<CanCreateConstraints()>([&](auto f) {
             f(factor_).CreateConstraints(l);
-      }).else_([&](auto f) {
+      }).else_([&](auto) {
          throw std::runtime_error("create constraints not implemented by factor");
       });
    }

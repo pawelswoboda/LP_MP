@@ -50,7 +50,9 @@ public:
    };
 
    REAL LowerBound() const {
-      return *std::min_element(this->begin(), this->end());
+      const REAL lb = *std::min_element(this->begin(), this->end());
+      assert(!std::isnan(lb) && std::isfinite(lb));
+      return lb;
    }
 
    // if there is exactly one unknownIndex (rest false), make it true
@@ -118,7 +120,11 @@ public:
    UnarySimplexFactor(const std::vector<REAL>& cost) : vector<REAL>(cost.begin(), cost.end()) {}
    UnarySimplexFactor(const INDEX n) : vector<REAL>(n, 0.0) {}
 
-   REAL LowerBound() const { return *std::min_element(this->begin(), this->end()); }
+   REAL LowerBound() const { 
+      const REAL lb = *std::min_element(this->begin(), this->end()); 
+      assert(std::isfinite(lb));
+      return lb;
+   }
 
    REAL EvaluatePrimal() const { assert(primal_ < size()); return (*this)[primal_]; }
    void MaximizePotentialAndComputePrimal() 
@@ -206,7 +212,7 @@ public:
       assert(x1 < dim1_ && x2 < dim2_);
       return pairwise_[x1*dim2_ + x2] + left_msg_[x1] + right_msg_[x2];
    }
-   REAL& operator()(const INDEX x1, const INDEX x2) {
+   REAL& cost(const INDEX x1, const INDEX x2) {
       assert(x1 < dim1_ && x2 < dim2_);
       return pairwise_[x1*dim2_ + x2];
    }
@@ -217,6 +223,7 @@ public:
             lb = std::min(lb, (*this)(x1,x2));
          }
       }
+      assert(std::isfinite(lb));
       return lb;
    }
 
@@ -335,15 +342,16 @@ public:
    }
 
    REAL LowerBound() const {
-      REAL val = std::numeric_limits<REAL>::infinity();
+      REAL lb = std::numeric_limits<REAL>::infinity();
       for(INDEX x1=0; x1<dim1_; ++x1) {
          for(INDEX x2=0; x2<dim2_; ++x2) {
             for(INDEX x3=0; x3<dim3_; ++x3) {
-               val = std::min(val, (*this)(x1,x2,x3));
+               lb = std::min(lb, (*this)(x1,x2,x3));
             }
          }
       }
-      return val;
+      assert(std::isfinite(lb));
+      return lb;
    }
 
    REAL EvaluatePrimal() const

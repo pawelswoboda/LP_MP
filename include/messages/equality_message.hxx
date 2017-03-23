@@ -113,8 +113,8 @@ public:
          min_val_covered = std::min(min_val_covered, repam[var_idx]);
       }
 
-      REAL min_val = std::numeric_limits<REAL>::max();
-      REAL second_min_val = std::numeric_limits<REAL>::max();
+      REAL min_val = std::numeric_limits<REAL>::infinity();
+      REAL second_min_val = std::numeric_limits<REAL>::infinity();
       for(INDEX i=0; i<repam.size(); ++i) {
          const REAL cur_val = repam[i];
          //std::cout << "cur_val = " << cur_val << "\n";
@@ -125,7 +125,7 @@ public:
             second_min_val = cur_val;
          }
       }
-      assert(std::make_pair(min_val, second_min_val) == SmallestValues<REAL>(repam));
+      //assert(std::make_pair(min_val, second_min_val) == SmallestValues<REAL>(repam));
 
       REAL new_val;  // this value will be taken by the new reparametrized entries
       if(min_val < min_val_covered) { new_val = min_val; }
@@ -146,17 +146,17 @@ public:
    }
 
    // do zrobienia: enable again
-   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR, bool ENABLE=COMPUTE_MESSAGES>
+   template<typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR, bool ENABLE=COMPUTE_MESSAGES>
    static typename std::enable_if<ENABLE,void>::type
-   SendMessagesToLeft(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& rightRepam, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
+   SendMessagesToLeft(const RIGHT_REPAM& rightRepam, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
    {
       auto var_access_op = [](const EqualityMessage& msg) -> INDEX { return msg.rightVar_; };
       MakeFactorUniformParallel(var_access_op, msg_begin, msg_end, rightRepam, omegaIt);
    }
 
-   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename LEFT_REPAM, typename ITERATOR, bool ENABLE=COMPUTE_MESSAGES>
+   template<typename MSG_ARRAY, typename LEFT_REPAM, typename ITERATOR, bool ENABLE=COMPUTE_MESSAGES>
    static typename std::enable_if<ENABLE,void>::type
-   SendMessagesToRight(const LEFT_FACTOR& leftFactor, const LEFT_REPAM& leftRepam, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
+   SendMessagesToRight(const LEFT_REPAM& leftRepam, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
    {
       auto var_access_op = [](const EqualityMessage& msg) -> INDEX { return msg.leftVar_; };
       MakeFactorUniformParallel(var_access_op, msg_begin, msg_end, leftRepam, omegaIt);
@@ -166,11 +166,13 @@ public:
    void RepamLeft(G& leftRepamPot, const REAL msg, const INDEX dim) { 
       assert(dim == 0); 
       leftRepamPot[leftVar_] += msg; 
+      assert(!std::isnan(leftRepamPot[leftVar_]));
    }
    template<typename G>
    void RepamRight(G& rightRepamPot, const REAL msg, const INDEX dim) { 
       assert(dim == 0); 
       rightRepamPot[rightVar_] += msg; 
+      assert(!std::isnan(rightRepamPot[rightVar_]));
    }
 
    template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>

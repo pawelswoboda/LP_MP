@@ -10,8 +10,11 @@ add_compile_options(-std=c++14)
 
 # compiler options
 #add_definitions(-DIL_STD) #legacy setting for CPLEX?
-add_definitions(-ffast-math)
-add_definitions(-march=native)
+#add_definitions(-ffast-math) // infinity handling is not correct with -ffast-math anymore
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+   add_definitions(-ffast-math -fno-finite-math-only)
+   add_definitions(-march=native)
+endif()
 
 #set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 #set(BUILD_SHARED_LIBRARIES OFF)

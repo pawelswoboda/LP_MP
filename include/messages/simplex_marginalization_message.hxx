@@ -4,7 +4,6 @@
 #include "LP_MP.h"
 #include "factors_messages.hxx"
 #include "vector.hxx"
-#include "message_loops.hxx"
 #include "memory_allocator.hxx"
 #include <cmath>
 #include "config.hxx"
@@ -69,6 +68,7 @@ namespace LP_MP {
        } else {
           r[msg_dim] += msg;
        }
+       assert(!std::isnan(r[msg_dim]));
     }
     template<typename A1, typename A2>
     void RepamRight(A1& r, const A2& msgs)
@@ -80,6 +80,7 @@ namespace LP_MP {
            } else {
               r.left(x1) += msgs[x1];
            }
+           assert(!std::isnan(r.left(x1)));
        }
     }
     template<typename G>
@@ -91,6 +92,7 @@ namespace LP_MP {
        } else {
           r.left(dim) += msg;
        }
+       assert(!std::isnan(r.left(dim)));
     }
 
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
@@ -210,17 +212,19 @@ namespace LP_MP {
        } else {
           l[msg_dim] += msg;
        }
+       assert(!std::isnan(l[msg_dim]));
     }
     template<typename A1, typename A2>
     void RepamRight(A1& r, const A2& msgs)
     {
       for(INDEX x2=0; x2<i2_; ++x2) {
-       assert(!std::isnan(msgs[x2]));
+         assert(!std::isnan(msgs[x2]));
          if(SUPPORT_INFINITY) {
             r.right(x2) += normalize( msgs[x2] );
          } else {
             r.right(x2) += msgs[x2];
          }
+         assert(!std::isnan(r.right(x2)));
       }
     }
     template<typename G>
@@ -232,6 +236,7 @@ namespace LP_MP {
        } else {
           r.right(dim) += msg;
        }
+       assert(!std::isnan(r.right(dim)));
     }
 
     template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
@@ -341,7 +346,8 @@ namespace LP_MP {
          // do zrobienia: possibly use counter
          for(INDEX x1=0; x1<l.dim1(); ++x1) {
             for(INDEX x2=0; x2<l.dim2(); ++x2) {
-               l(x1,x2) += normalize( msgs(x1,x2) );
+               l.cost(x1,x2) += normalize( msgs(x1,x2) );
+               assert(!std::isnan(l(x1,x2)));
             }
          }
       }
@@ -352,21 +358,27 @@ namespace LP_MP {
          if(I1 == 0 && I2 == 1) {
             for(INDEX x1=0; x1<r.dim1(); ++x1) {
                for(INDEX x2=0; x2<r.dim2(); ++x2) {
+                  assert(!std::isnan(msgs(x1,x2)));
                   r.msg12(x1,x2) += normalize( msgs(x1,x2) );
+                  assert(!std::isnan(r.msg12(x1,x2)));
                }
             }
          } else
          if(I1 == 0 && I2 == 2) {
             for(INDEX x1=0; x1<r.dim1(); ++x1) {
                for(INDEX x2=0; x2<r.dim3(); ++x2) {
+                  assert(!std::isnan(msgs(x1,x2)));
                   r.msg13(x1,x2) += normalize( msgs(x1,x2) );
+                  assert(!std::isnan(r.msg13(x1,x2)));
                }
             }
          } else
          if(I1 == 1 && I2 == 2) {
             for(INDEX x1=0; x1<r.dim2(); ++x1) {
                for(INDEX x2=0; x2<r.dim3(); ++x2) {
+                  assert(!std::isnan(msgs(x1,x2)));
                   r.msg23(x1,x2) += normalize( msgs(x1,x2) );
+                  assert(!std::isnan(r.msg23(x1,x2)));
                }
             }
          } else {
@@ -512,7 +524,8 @@ class PairwiseTripletMessage12 {
       // do zrobienia: possibly use counter
        for(INDEX x1=0; x1<i1_; ++x1) {
           for(INDEX x2=0; x2<i2_; ++x2) {
-             l(x1,x2) += normalize( msgs(x1,x2) );
+             l.cost(x1,x2) += normalize( msgs(x1,x2) );
+             assert(!std::isnan(l(x1,x2)));
           }
        }
     }
@@ -655,7 +668,7 @@ class PairwiseTripletMessage12 {
        // do zrobienia: possibly use counter
        for(INDEX x1=0; x1<i1_; ++x1) {
           for(INDEX x3=0; x3<i3_; ++x3) {
-             repamPot(x1,x3) += normalize( msgs(x1,x3) );
+             repamPot.cost(x1,x3) += normalize( msgs(x1,x3) );
           }
        }
     }
@@ -799,7 +812,7 @@ class PairwiseTripletMessage12 {
       // do zrobienia: possibly use counter
        for(INDEX x2=0; x2<i2_; ++x2) {
           for(INDEX x3 = 0; x3<i3_; ++x3) {
-             repamPot(x2,x3) += normalize( msgs(x2,x3) );
+             repamPot.cost(x2,x3) += normalize( msgs(x2,x3) );
           }
        }
     }

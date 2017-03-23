@@ -322,8 +322,8 @@ struct scaled_vector : public vector_expression<T,scaled_vector<T,E>> {
    INDEX dim2() const { return a_.dim2(); }
    INDEX dim3() const { return a_.dim3(); }
    private:
-   const E& a_;
    const T omega_;
+   const E& a_;
 };
 
 

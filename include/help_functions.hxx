@@ -118,33 +118,16 @@ std::tuple<size_t,size_t,size_t> MinThreeIndices(const std::vector<T>& v)
 }
 
 template<class T, class A>
-std::pair<size_t,size_t> MinIndices(const A& v)
-{
-   assert(v.size() > 1);
-   T min_val = std::numeric_limits<T>::max();
-   size_t min_index, second_min_index;
-   T second_min_val = std::numeric_limits<T>::max();
-   for(size_t i=0; i<v.size(); i++) {
-      if(v[i] <= min_val) {
-         min_val = v[i];
-         min_index = i;
-      }
-   }
-   for(size_t i=0; i<v.size(); i++) {
-      if(v[i] < second_min_val && i != min_index) {
-         second_min_val = v[i];
-         second_min_index = i;
-      }
-   }
-   assert(min_index != second_min_index);
-   return std::pair<T,T>(min_index, second_min_index);
-}
-
-template<class T, class A>
 std::pair<T,T> SmallestValues(const A& v)
 {
-   std::pair<size_t,size_t> min_indices = MinIndices<T>(v);
-   return std::pair<T,T>(v[min_indices.first], v[min_indices.second]);
+   assert(v.size() > 1);
+   T min_val = std::numeric_limits<T>::infinity();
+   T second_min_val = std::numeric_limits<T>::infinity();
+   for(INDEX i=0; i<v.size(); ++i) {
+      
+      assert(false); 
+   }
+   return std::make_pair(min_val, second_min_val);
 }
 
 

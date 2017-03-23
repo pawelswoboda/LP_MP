@@ -81,7 +81,7 @@ public:
    {
       //ArrayAccessObject(T** p) : p_(p) {}
       ArrayAccessObject(T* begin, T* end) : begin_(begin), end_(end) { assert(begin <= end); }
-      const T operator[](const INDEX i) const { return begin_[i]; } // possibly do not implement this function but return reference, for copying elements may be costly for sizeof(T) big. Look up std::vector
+      T operator[](const INDEX i) const { return begin_[i]; } // possibly do not implement this function but return reference, for copying elements may be costly for sizeof(T) big. Look up std::vector
       T& operator[](const INDEX i) { return begin_[i]; }
       INDEX size() const {  return (end_ - begin_); }
       T* begin() { return begin_; }
@@ -96,11 +96,11 @@ public:
       assert(i<dim1_);
       return ArrayAccessObject( p_[i], p_[i+1] ); 
    }
-   const ArrayAccessObject operator[](const INDEX i) const {
+   ArrayAccessObject operator[](const INDEX i) const {
       assert(i<dim1_);
       return ArrayAccessObject( p_[i], p_[i+1] ); 
    }
-   const INDEX size() const { return dim1_; }
+   INDEX size() const { return dim1_; }
 
    struct iterator {
      void operator++() { ++x_; }

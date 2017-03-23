@@ -56,7 +56,7 @@ public:
    virtual INDEX PrimalSize() const = 0;
    MessageIterator begin(); 
    MessageIterator end();
-   virtual const INDEX GetNoMessages() const = 0;
+   virtual INDEX GetNoMessages() const = 0;
    virtual MessageTypeAdapter* GetMessage(const INDEX n) const = 0;
    virtual FactorTypeAdapter* GetConnectedFactor(const INDEX i) const = 0;
    virtual bool CanSendMessage(const INDEX i) const = 0;
@@ -131,7 +131,7 @@ private:
 };
 
 inline MessageIterator FactorTypeAdapter::begin() { return MessageIterator(this,0); }
-inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, GetNoMessages()); };
+inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, GetNoMessages()); }
 
 
 class LP {
@@ -371,6 +371,7 @@ public:
       for(auto fIt=f_.begin(); fIt!=f_.end(); fIt++) {
          lb += (*fIt)->LowerBound();
          assert( (*fIt)->LowerBound() > -10000000.0);
+         assert(std::isfinite(lb));
       }
       return lb;
    }
@@ -434,9 +435,6 @@ public:
    }
 
    const PrimalSolutionStorage& GetBestPrimal() const;
-   //REAL BestPrimalBound() const { return std::min(bestForwardPrimalCost_, bestBackwardPrimalCost_); }
-   //REAL BestLowerBound() const { return bestLowerBound_; }
-   //REAL CurrentLowerBound() const { return currentLowerBound_; }
    template<typename FACTOR_ITERATOR>
       void WritePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, std::ofstream& fs) const;
       void WritePrimal(const INDEX factorIndexBegin, const INDEX factorIndexEnd, std::ofstream& fs) const;
@@ -809,6 +807,7 @@ public:
       for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
          auto* m = std::get<0>(*it);
          Chirality c = std::get<1>(*it);
+         assert(false); // why is m and c not used?
          if(std::get<1>(tree_messages_.back()) == Chirality::right) {
             lb += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->LowerBound(); 
          } else {

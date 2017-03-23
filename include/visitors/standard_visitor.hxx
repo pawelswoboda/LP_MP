@@ -371,7 +371,7 @@ namespace LP_MP {
       TCLAP::ValueArg<INDEX> tightenMinDualImprovementIntervalArg_;
       OpenUnitIntervalConstraint unitIntervalConstraint_;
 
-      REAL prev_lower_bound_;
+      REAL prev_lower_bound_ = -std::numeric_limits<REAL>::infinity();
       TCLAP::ValueArg<REAL> tightenSlopeArg_;
       REAL tighten_slope_ = -std::numeric_limits<REAL>::infinity(); 
       INDEX iteration_after_tightening_ = 2; // this way tighten_slope will not be recomputed

@@ -84,7 +84,7 @@ public:
       return success;
    }
 
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasWritePrimal,WritePrimal);
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasWritePrimal,WritePrimal)
    template<typename PC>
    constexpr static bool
    CanWritePrimalIntoFile()
@@ -132,7 +132,7 @@ public:
    }
 
    // invoke the corresponding functions of problem constructors
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency,CheckPrimalConsistency);
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency,CheckPrimalConsistency)
    template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanCheckPrimalConsistency()
@@ -163,7 +163,7 @@ public:
    }
 
 
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasTighten,Tighten);
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasTighten,Tighten)
    template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanTighten()
@@ -194,7 +194,7 @@ public:
 
    LP_TYPE& GetLP() { return lp_; }
    
-   LP_MP_FUNCTION_EXISTENCE_CLASS(has_solution,solution);
+   LP_MP_FUNCTION_EXISTENCE_CLASS(has_solution,solution)
    constexpr static bool
    visitor_has_solution()
    {
@@ -249,6 +249,8 @@ public:
    {
       if(c.computeLowerBound) {
          lowerBound_ = lp_.LowerBound();
+         std::cout << "tmp: lower bound = " << lowerBound_ << " ... " << std::isfinite(lowerBound_) << "\n";
+         assert(std::isfinite(lowerBound_));
       }
       if(c.tighten) {
          Tighten(c.tightenConstraints);
@@ -256,7 +258,7 @@ public:
    } 
 
    // called after last iteration
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasEnd,End);
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasEnd,End)
    template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanCallEnd()
@@ -353,7 +355,7 @@ class ProblemConstructorRoundingSolver : public SOLVER
 public:
    using SOLVER::SOLVER;
 
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputePrimal,ComputePrimal);
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputePrimal,ComputePrimal)
    template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanComputePrimal()

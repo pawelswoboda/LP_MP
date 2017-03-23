@@ -100,7 +100,7 @@ list(APPEND DEPENDENCIES PEGTL_Project)
 ExternalProject_Add(
    PEGTL_Project
    GIT_REPOSITORY "https://github.com/ColinH/PEGTL.git"
-   GIT_TAG "master"
+   GIT_TAG "1.3.1"
    INSTALL_COMMAND ""
    BUILD_COMMAND ""
    CONFIGURE_COMMAND ""
