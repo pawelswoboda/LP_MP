@@ -10,9 +10,8 @@ add_compile_options(-std=c++14)
 
 # compiler options
 #add_definitions(-DIL_STD) #legacy setting for CPLEX?
-#add_definitions(-ffast-math) // infinity handling is not correct with -ffast-math anymore
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-   add_definitions(-ffast-math -fno-finite-math-only)
+   #add_definitions(-ffast-math -fno-finite-math-only) # adding only -ffast-math will result in infinity and nan not being checked (but e.g. graph matching and discrete tomography have infinite costs)
    add_definitions(-march=native)
 endif()
 

@@ -249,7 +249,6 @@ public:
    {
       if(c.computeLowerBound) {
          lowerBound_ = lp_.LowerBound();
-         std::cout << "tmp: lower bound = " << lowerBound_ << " ... " << std::isfinite(lowerBound_) << "\n";
          assert(std::isfinite(lowerBound_));
       }
       if(c.tighten) {
