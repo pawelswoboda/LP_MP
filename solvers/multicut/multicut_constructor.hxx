@@ -33,7 +33,9 @@ namespace LP_MP {
 
 // hash function for maps used in constructors. Do zrobienia: define hash functions used somewhere globally in config.hxx
 
-template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO, INDEX CONSTANT_FACTOR_NO>
+enum class cut_type { multicut, maxcut };
+
+template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO, INDEX CONSTANT_FACTOR_NO, cut_type CUT_TYPE = cut_type::multicut>
 class MulticutConstructor {
 public:
    using MulticutConstructorType = MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_NO, CONSTANT_FACTOR_NO>;
@@ -42,7 +44,6 @@ public:
    using UnaryFactorContainer = meta::at_c<typename FMC::FactorList, UNARY_FACTOR_NO>;
    using TripletFactorContainer = meta::at_c<typename FMC::FactorList, TRIPLET_FACTOR_NO>;
    using ConstantFactorContainer = meta::at_c<typename FMC::FactorList, CONSTANT_FACTOR_NO>;
-   //using GlobalFactorContainer = meta::at_c<typename FMC::FactorList, GLOBAL_FACTOR_NO>;
    using UnaryTripletMessageContainer = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_NO>::MessageContainerType;
    using UnaryTripletMessageType = typename UnaryTripletMessageContainer::MessageType;
 
@@ -50,7 +51,6 @@ public:
    template<typename SOLVER>
    MulticutConstructor(SOLVER& pd) 
    : lp_(&pd.GetLP()),
-      //pd_(pd),
    //unaryFactors_(100,hash::array2),
    tripletFactors_(100,hash::array3)
    {
@@ -60,12 +60,12 @@ public:
       pd.GetLP().AddFactor(constant_factor_);
    }
    MulticutConstructor(const MulticutConstructorType& o)
-   : unaryFactors_(o.unaryFactors_),
-   unaryFactorsVector_(o.unaryFactorsVector_),
-   tripletFactors_(o.tripletFactors_),
-   noNodes_(o.noNodes_),
-   constant_factor_(o.constant_factor_), 
-   lp_(o.lp_) 
+      : unaryFactors_(o.unaryFactors_),
+      unaryFactorsVector_(o.unaryFactorsVector_),
+      tripletFactors_(o.tripletFactors_),
+      noNodes_(o.noNodes_),
+      constant_factor_(o.constant_factor_), 
+      lp_(o.lp_) 
    {}
 
    ~MulticutConstructor()
@@ -89,12 +89,6 @@ public:
 
    virtual UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost) // declared virtual so that derived class notices when unary factor is added
    {
-      //if(globalFactor_ == nullptr) {
-         //globalFactor_ = new GlobalFactorContainer(MulticutGlobalFactor(), 1); // we have one element currently
-      //   lp_->AddFactor(globalFactor_);
-      //} else {
-      //   globalFactor_->ResizeRepam(unaryFactors_.size()+1);
-      //}
       assert(i1 < i2);
       assert(!HasUnaryFactor(i1,i2));
       
@@ -257,36 +251,38 @@ public:
       std::cout << "Added " << tripletsAdded << " triplet(s) out of " <<  maxCuttingPlanesToAdd << " by searching for triplets\n"; 
       if(tripletsAdded < 0.6*maxCuttingPlanesToAdd) {
          std::cout << "Additionally search via shortest paths for violated constraints\n";
-         tripletsAdded += FindViolatedCycles(maxCuttingPlanesToAdd - tripletsAdded);
+         if(CUT_TYPE == cut_type::multicut) {
+            tripletsAdded += find_violated_cycles_multicut(maxCuttingPlanesToAdd - tripletsAdded);
+         } else if(CUT_TYPE == cut_type::maxcut) {
+            tripletsAdded += find_violated_cycles_maxcut(maxCuttingPlanesToAdd - tripletsAdded);
+         }
          std::cout << "Added " << tripletsAdded << " triplet(s) out of " <<  maxCuttingPlanesToAdd << " in total\n";
       }
       return tripletsAdded;
    }
 
-template<
-class InputIt1, class InputIt2,
-      class OutputIt, class Compare, class Merge
-      >
+   template<
+   class InputIt1, class InputIt2, class OutputIt, class Compare, class Merge >
    static OutputIt set_intersection_merge
-(
- InputIt1 first1, InputIt1 last1,
- InputIt2 first2, InputIt2 last2,
- OutputIt d_first, Compare comp, Merge merge
- )
-{
-   while (first1 != last1 && first2 != last2)
+   (
+    InputIt1 first1, InputIt1 last1,
+    InputIt2 first2, InputIt2 last2,
+    OutputIt d_first, Compare comp, Merge merge
+   )
    {
-      if (comp(*first1, *first2))
-         ++first1;
-      else
+      while (first1 != last1 && first2 != last2)
       {
-         if (!comp(*first2, *first1))
-            *d_first++ = merge(*first1++, *first2);
-         ++first2;
+         if (comp(*first1, *first2))
+            ++first1;
+         else
+         {
+            if (!comp(*first2, *first1))
+               *d_first++ = merge(*first1++, *first2);
+            ++first2;
+         }
       }
+      return d_first;
    }
-   return d_first;
-}
 
 
    // search for violated triplets, e.g. triplets with one negative edge and two positive ones.
@@ -354,20 +350,30 @@ class InputIt1, class InputIt2,
                const REAL cost_ik = std::get<1>(*n);
                const REAL cost_jk = std::get<2>(*n);
 
-               const REAL lb = std::min(0.0, cost_ij) + std::min(0.0, cost_ik) + std::min(0.0, cost_jk);
-               const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ij+cost_jk, cost_ij+cost_ik+cost_jk});
-               assert(lb <= best_labeling+eps);
-               const REAL guaranteed_dual_increase = best_labeling - lb;
-               /*
-                  std::array<REAL,3> c({cost_ij, cost_ik, cost_jk});
-                  const REAL gdi1 = std::min({ -c[0], c[1], c[2] });
-                  const REAL gdi2 = std::min({ c[0], -c[1], c[2] });
-                  const REAL gdi3 = std::min({ c[0], c[1], -c[2] });
-                  const REAL guaranteed_dual_increase = std::max({ gdi1, gdi2, gdi3 });
-                  */
-               if(guaranteed_dual_increase > 0.0) {
-                  triplet_candidates_per_thread.push_back(std::make_tuple(i,j,k,guaranteed_dual_increase));
-               } 
+               if(CUT_TYPE == cut_type::multicut) {
+                  const REAL lb = std::min(0.0, cost_ij) + std::min(0.0, cost_ik) + std::min(0.0, cost_jk);
+                  const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ij+cost_jk, cost_ij+cost_ik+cost_jk});
+                  assert(lb <= best_labeling+eps);
+                  const REAL guaranteed_dual_increase = best_labeling - lb;
+                  /*
+                     std::array<REAL,3> c({cost_ij, cost_ik, cost_jk});
+                     const REAL gdi1 = std::min({ -c[0], c[1], c[2] });
+                     const REAL gdi2 = std::min({ c[0], -c[1], c[2] });
+                     const REAL gdi3 = std::min({ c[0], c[1], -c[2] });
+                     const REAL guaranteed_dual_increase = std::max({ gdi1, gdi2, gdi3 });
+                     */
+                  if(guaranteed_dual_increase > 0.0) {
+                     triplet_candidates_per_thread.push_back(std::make_tuple(i,j,k,guaranteed_dual_increase));
+                  } 
+               } else if(CUT_TYPE == cut_type::maxcut) {
+                  const REAL lb = std::min(0.0, cost_ij) + std::min(0.0, cost_ik) + std::min(0.0, cost_jk);
+                  const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ij+cost_jk});
+                  assert(lb <= best_labeling+eps);
+                  const REAL guaranteed_dual_increase = best_labeling - lb;
+                  if(guaranteed_dual_increase > 0.0) {
+                     triplet_candidates_per_thread.push_back(std::make_tuple(i,j,k,guaranteed_dual_increase));
+                  } 
+               }
             }
          }
 #pragma omp critical
@@ -394,8 +400,136 @@ class InputIt1, class InputIt2,
       return triplets_added;
    }
 
+   INDEX find_violated_cycles_maxcut(const INDEX max_triplets_to_add)
+   {
+      assert(false);
+      // build doubled graph for separation. We search for a path with an odd number of negative ( = cut) edges. 
+      // Hence negative values are between two components, while positive ones are inside each component.
+      std::vector<std::tuple<INDEX,INDEX,REAL>> edges;
+      edges.reserve(unaryFactorsVector_.size());
+      std::vector<INDEX> number_outgoing_arcs(2*noNodes_,0); // number of arcs outgoing arcs of each node
+      INDEX number_arcs_total = 0;
+      for(auto& it : unaryFactorsVector_) {
+         const REAL v = *(it.second->GetFactor());
+         const INDEX i = std::get<0>(it.first);
+         const INDEX j = std::get<1>(it.first);
+         if(v != 0.0) {
+            number_outgoing_arcs[2*i]++;
+            number_outgoing_arcs[2*i+1]++;
+            number_outgoing_arcs[2*j]++;
+            number_outgoing_arcs[2*j+1]++;
+            edges.push_back(std::make_tuple(i,j,v));
+         }
+         number_arcs_total += 4;
+      }
 
-   INDEX FindViolatedCycles(const INDEX maxTripletsToAdd)
+      Graph g(noNodes_, number_arcs_total, number_outgoing_arcs); // graph consisting of positive edges
+      for(const auto& it : edges) {
+         const INDEX i = std::get<0>(it);
+         const INDEX j = std::get<1>(it);
+         const REAL v = std::get<2>(it);
+         assert(i<j);
+         if(v > 0.0) {
+            g.add_edge(2*i,2*j,v);
+            g.add_edge(2*i+1,2*j+1,v);
+         } else if(v < 0.0) {
+            g.add_edge(2*i,2*j+1,-v);
+            g.add_edge(2*i+1,2*j,-v);
+         }
+      }
+      g.sort();
+
+      std::sort(edges.begin(), edges.end(), [](auto& a, auto& b) { return std::abs(std::get<2>(a)) > std::abs(std::get<2>(b)); }); 
+
+      UnionFind uf(2*noNodes_);
+      auto merge_edges = [&uf](const INDEX i, const INDEX j, const REAL v) {
+         assert(v != 0.0);
+         if(v > 0.0) {
+            uf.merge(2*i,2*j);
+            uf.merge(2*i+1,2*j+1);
+         } else if(v < 0.0) {
+            uf.merge(2*i,2*j+1);
+            uf.merge(2*i+1,2*j); 
+         }
+      };
+
+      INDEX tripletsAdded = 0;
+
+      INDEX e=0;
+      REAL initial_th;
+      for(; e<edges.size(); ++e) {
+         const INDEX i = std::get<0>(edges[e]);
+         const INDEX j = std::get<1>(edges[e]);
+         const REAL v = std::get<2>(edges[e]);
+         merge_edges(i,j,v);
+         if(uf.connected(2*i,2*i+1) || uf.connected(2*j, 2*j+1)) {
+            initial_th = std::abs(v);
+            break;
+         } 
+      }
+
+      bool zero_th_iteration = true;
+      std::vector<bool> already_searched(noNodes_, false);
+      for(REAL th=0.5*initial_th; th>=eps || zero_th_iteration; th*=0.1) {
+         if(th < eps) {
+            if(tripletsAdded <= 0.01*max_triplets_to_add) {
+               std::cout << "additional separation with no guaranteed dual increase, i.e. th = 0\n";
+               th = 0.0;
+               zero_th_iteration = false;
+            } else {
+               break;
+            }
+         }
+         // first update union find datastructure
+         for(;e<edges.size(); ++e) {
+            const INDEX i = std::get<0>(edges[e]);
+            const INDEX j = std::get<1>(edges[e]);
+            const REAL v = std::get<2>(edges[e]);
+            if(std::abs(v) >= th) {
+               merge_edges(i,j,v); 
+            }
+         }
+         using CycleType = std::tuple<REAL, std::vector<INDEX>>;
+         std::vector<CycleType > cycles;
+#pragma omp parallel 
+         {
+            std::vector<CycleType > cycles_local;
+            BfsData mp2(g);
+#pragma for schedule(guided)
+            for(INDEX i=0; i<noNodes_; ++i) {
+               if(!already_searched[i] && uf.thread_safe_connected(2*i, 2*i+1)) {
+                  already_searched[i] = true;
+                  auto cycle = mp2.FindPath(2*i, 2*i+1, g, th);
+                  const REAL dualIncrease = std::get<0>(cycle);
+                  assert(std::get<1>(cycle).size() > 0);
+                  if(std::get<1>(cycle).size() > 0) {
+                     cycles_local.push_back( std::make_tuple(dualIncrease, std::move(std::get<1>(cycle))) );
+                  } else {
+                     throw std::runtime_error("No path found although there should be one"); 
+                  } 
+               } 
+            }
+#pragma omp critical
+            {
+               cycles.insert(cycles.end(), cycles_local.begin(), cycles_local.end());
+            }
+         }
+         // sort by guaranteed increase in decreasing order
+         std::sort(cycles.begin(), cycles.end(), [](const CycleType& i, const CycleType& j) { return std::get<0>(i) > std::get<0>(j); });
+         for(auto& cycle : cycles) {
+            if(std::get<1>(cycle).size() > 2) {
+               tripletsAdded += AddCycle(std::move(std::get<1>(cycle)));
+               if(tripletsAdded > max_triplets_to_add) {
+                  return tripletsAdded;
+               }
+            }
+         }
+      }
+
+      return tripletsAdded;
+   }
+
+   INDEX find_violated_cycles_multicut(const INDEX maxTripletsToAdd)
    {
       std::vector<std::tuple<INDEX,INDEX,REAL,bool> > negative_edges; // endpoints, edge cost, searched positive path with given endpoints?
       // we can speed up compution by skipping path searches for node pairs which lie in different connected components. Connectedness is stored in a union find structure
@@ -540,32 +674,38 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
 
    bool CheckPrimalConsistency() const
    {
-      std::cout << "checking primal feasibility for multicut ... ";
-      UnionFind uf(noNodes_);
-      for(const auto& e : unaryFactorsVector_) {
-         UnaryFactorContainer* f = e.second; 
-         if(f->GetFactor()->get_primal() == false) {
-            // connect components 
-            const INDEX i = std::get<0>(e.first);
-            const INDEX j = std::get<1>(e.first);
-            uf.merge(i,j);
-         }
-      }
-      for(const auto& e : unaryFactorsVector_) {
-         UnaryFactorContainer* f = e.second; 
-         if(f->GetFactor()->get_primal() == true) {
-            const INDEX i = std::get<0>(e.first);
-            const INDEX j = std::get<1>(e.first);
-            // there must not be a path from i1 to i2 consisting of edges with primal value false only
-            if(uf.connected(i,j)) {
-               std::cout << "solution infeasible: (" << i << "," << j << ") = true, yet there exists a path with false values only\n";
-               return false;
+      if(CUT_TYPE == cut_type::multicut) {
+         std::cout << "checking primal feasibility for multicut ... ";
+         UnionFind uf(noNodes_);
+         for(const auto& e : unaryFactorsVector_) {
+            UnaryFactorContainer* f = e.second; 
+            if(f->GetFactor()->get_primal() == false) {
+               // connect components 
+               const INDEX i = std::get<0>(e.first);
+               const INDEX j = std::get<1>(e.first);
+               uf.merge(i,j);
             }
          }
-      }
+         for(const auto& e : unaryFactorsVector_) {
+            UnaryFactorContainer* f = e.second; 
+            if(f->GetFactor()->get_primal() == true) {
+               const INDEX i = std::get<0>(e.first);
+               const INDEX j = std::get<1>(e.first);
+               // there must not be a path from i1 to i2 consisting of edges with primal value false only
+               if(uf.connected(i,j)) {
+                  std::cout << "solution infeasible: (" << i << "," << j << ") = true, yet there exists a path with false values only\n";
+                  return false;
+               }
+            }
+         }
 
-      std::cout << "solution feasible\n";
-      return true;
+         std::cout << "solution feasible\n";
+         return true;
+      } else if(CUT_TYPE == cut_type::maxcut) {
+         return false;
+      } else {
+         throw std::runtime_error("");
+      }
    }
 
    void round()
@@ -629,31 +769,35 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
    // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
    void ComputePrimal()
    {
-      if(!primal_handle_.valid()) { 
-         round();
-         return;
-      }
+      if(CUT_TYPE == cut_type::multicut) {
+         if(!primal_handle_.valid()) { 
+            round();
+            return;
+         }
 
-      const auto primal_state = primal_handle_.wait_for(std::chrono::seconds(0));
+         const auto primal_state = primal_handle_.wait_for(std::chrono::seconds(0));
 
-      if(primal_state == std::future_status::deferred) {
-         assert(false); // this should not happen, we launch immediately!
-         throw std::runtime_error("asynchronuous primal multicut rounding was deferred, but this should not happen");
-      } else if(primal_state == std::future_status::ready) {
+         if(primal_state == std::future_status::deferred) {
+            assert(false); // this should not happen, we launch immediately!
+            throw std::runtime_error("asynchronuous primal multicut rounding was deferred, but this should not happen");
+         } else if(primal_state == std::future_status::ready) {
 
-         std::cout << "collect multicut rounding result\n";
-         auto labeling = primal_handle_.get();
-         write_labeling_into_factors(labeling);
+            std::cout << "collect multicut rounding result\n";
+            auto labeling = primal_handle_.get();
+            write_labeling_into_factors(labeling);
 
-         std::cout << "restart primal rounding\n";
-         round();
+            std::cout << "restart primal rounding\n";
+            round();
 
-     } else {
-       std::cout << "multicut rounding is currently running.\n";
-     }
+         } else {
+            std::cout << "multicut rounding is currently running.\n";
+         }
+      } else if(CUT_TYPE == cut_type::maxcut) {
+         assert(false);
+      } else {
+         throw std::runtime_error("");
+      } 
    }
-
-
 
 protected:
 

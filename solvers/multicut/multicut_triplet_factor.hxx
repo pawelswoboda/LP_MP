@@ -156,7 +156,7 @@ public:
    void
    ReceiveMessageFromRight(const RIGHT_FACTOR& r, G2& msg) const
    {
-      msg[0] -= std::min(std::min(r[(i_+1)%3], r[(i_+2)%3]), r[3]) - std::min(r[i_],0.0);
+      msg[0] -= std::min({r[(i_+1)%3], r[(i_+2)%3], r[3]}) - std::min(r[i_],0.0);
    }
 
    template<typename RIGHT_FACTOR, typename G2, MessageSendingType MST_TMP = MST>

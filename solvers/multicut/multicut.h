@@ -25,8 +25,6 @@
 #include <iostream>
 #include <vector>
 
-//#include "boost/hana.hpp"
-
 namespace LP_MP {
 
 //namespace hana = boost::hana;

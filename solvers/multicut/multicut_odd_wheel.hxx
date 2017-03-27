@@ -178,8 +178,8 @@ public:
       assert(r.size() == 9);
       const REAL x = std::min(r[tripletPlusSpokeEdge_],0.0); // this entry and label 0000 is not covered by the message, hence it has to be substracted
       msg[0] -= std::min(r[tripletPlusSpokeEdge_+4],r[8]) - x;
-      msg[1] -= std::min(r[3],std::min(r[(tripletPlusSpokeEdge_+1)%3],r[(tripletPlusSpokeEdge_+2)%3])) - x;
-      msg[2] -= std::min(std::min(r[((tripletPlusSpokeEdge_+1)%3) + 4],r[((tripletPlusSpokeEdge_+2)%3) + 4]),r[7]) - x;
+      msg[1] -= std::min({r[3],r[(tripletPlusSpokeEdge_+1)%3],r[(tripletPlusSpokeEdge_+2)%3]}) - x;
+      msg[2] -= std::min({r[((tripletPlusSpokeEdge_+1)%3) + 4],r[((tripletPlusSpokeEdge_+2)%3) + 4],r[7]}) - x;
       //const REAL x = std::min(rightPot[j_],0.0); // this entry and label 0000 is not covered by the message, hence it has to be substracted
       //msg[0] -= std::min(rightPot[j_+4],rightPot[8]) - x;
       //msg[1] -= std::min(rightPot[3],std::min(rightPot[(j_+1)%3],rightPot[(j_+2)%3])) - x;

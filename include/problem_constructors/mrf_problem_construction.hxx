@@ -552,7 +552,7 @@ public:
 
       std::cout << "no triplets found, now search for triplets with guaranteed increase also smaller than " << eps << "\n";
        
-      assert(eps >= std::numeric_limits<REAL>::epsilon);
+      assert(eps >= std::numeric_limits<REAL>::epsilon());
 
       if(no_triplets_added == 0) {
          triplet_search<typename std::remove_reference<decltype(*this)>::type> triplets(*this, std::numeric_limits<REAL>::epsilon());

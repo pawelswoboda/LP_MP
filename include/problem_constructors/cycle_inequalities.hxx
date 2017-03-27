@@ -284,6 +284,10 @@ k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::find_cycles(const IN
      }
    };
 
+   assert(std::is_sorted(projection_edges_.begin(), projection_edges_.end(),
+            [](const auto& a, const auto& b) { return std::abs(std::get<2>(a)) > std::abs(std::get<2>(b)); })
+         );
+
    for(; e<projection_edges_.size(); ++e) {
       const INDEX i = std::get<0>(projection_edges_[e]);
       const INDEX j = std::get<1>(projection_edges_[e]);
@@ -744,7 +748,9 @@ k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::construct_projection
 
       proj_graph_.sort();
 
-      std::sort(projection_edges_.begin(), projection_edges_.end(), [](auto a, auto b) { return std::get<2>(a) > std::get<2>(b); }); 
+      //assert(false); // should sorting be done on absolute value?
+      //std::sort(projection_edges_.begin(), projection_edges_.end(), [](auto a, auto b) { return std::get<2>(a) > std::get<2>(b); }); 
+      std::sort(projection_edges_.begin(), projection_edges_.end(), [](auto a, auto b) { return std::abs(std::get<2>(a)) > std::abs(std::get<2>(b)); }); 
    }
 } // end namespace LP_MP
 
