@@ -57,11 +57,13 @@ link_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Lingeling_Proj
 
 # HDF5 for reading OpenGM and Andres models
 # set (HDF5_USE_STATIC_LIBRARIES ON)
-find_package(HDF5 1.8.15 REQUIRED)
-include_directories (${HDF5_INCLUDE_DIR})
-add_definitions(${HDF5_DEFINITIONS})
-message(STATUS ${HDF5_LIBRARIES})
-message(STATUS ${HDF5_INCLUDE_DIR})
+if(BUILD_MULTICUT OR BUILD_MULTICUT_EVALUATION OR BUILD_GRAPHICAL_MODEL)
+   find_package(HDF5 1.8.15 REQUIRED)
+   include_directories (${HDF5_INCLUDE_DIR})
+   add_definitions(${HDF5_DEFINITIONS})
+   message(STATUS ${HDF5_LIBRARIES})
+   message(STATUS ${HDF5_INCLUDE_DIR})
+endif()
 
 # GUROBI
 if(WITH_GUROBI)

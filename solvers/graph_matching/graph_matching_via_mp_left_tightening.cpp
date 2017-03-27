@@ -6,24 +6,72 @@
 
 #include <iostream>
 #include <array>
+#include <type_traits>
 #include <utility>
 
-template<int M, int N>
-struct compile_time_matrix
-{
-   constexpr int operator()(int m, int n) const { return p_[m*N + n]; }
-   int p_[M*N];
+template<size_t... LABELS>
+struct labeling {
+
+   template<size_t LABEL_NO, size_t LABEL, size_t... LABELS_REST>
+   constexpr 
+   typename std::enable_if<LABEL_NO == 0,size_t>::type get_label()
+   {
+      return LABEL;
+   }
+
+   template<size_t LABEL_NO, size_t LABEL, size_t... LABELS_REST>
+   constexpr 
+   typename std::enable_if<(LABEL_NO > 0),size_t>::type get_label()
+   {
+      return get_label<LABEL_NO-1, LABELS_REST...>();
+   }
+
+   template<size_t LABEL_NO>
+   constexpr size_t label()
+   { 
+      static_assert(LABEL_NO < sizeof...(LABELS), "label number must be smaller than number of labels");
+      return get_label<LABEL_NO, LABELS...>();
+   } 
 };
 
-constexpr compile_time_matrix<3,1> kwas {{0,0,0}};
-// make int sequence out of array
-constexpr auto make_integer_sequence(const compile_time_matrix<3,1> a)
+template<typename... LABELINGS> // all labels must be instances of labeling
+struct labelings
 {
-   return std::integer_sequence<int, a(0,0), a(1,0), a(2,0)>{};
-}
+   template<size_t LABELING_NO, size_t LABEL_NO, typename LABELING, typename... LABELINGS_REST>
+   constexpr 
+   typename std::enable_if<LABELING_NO == 0,size_t>::type get_label()
+   {
+      return LABELING{}.template label<LABEL_NO>();
+   }
+
+   template<size_t LABELING_NO, size_t LABEL_NO, typename LABELING, typename... LABELINGS_REST>
+   constexpr 
+   typename std::enable_if<(LABELING_NO > 0),size_t>::type get_label()
+   {
+      return get_label<LABELING_NO-1, LABEL_NO, LABELINGS_REST...>();
+   }
+
+   template<size_t LABELING_NO, size_t LABEL_NO>
+   constexpr size_t label()
+   {
+      static_assert(LABELING_NO < sizeof...(LABELINGS), "labeling number must be smaller than number of labelings");
+      return get_label<LABELING_NO,LABEL_NO,LABELINGS...>();
+   }
+};
+
+
 
 int main()
 {
-   std::cout << make_integer_sequence(kwas) << "\n";
+   using l = labelings<
+      labeling<0,1,1,1,0>,
+      labeling<1,0,0,1,1>,
+      labeling<0,0,0,0,1>
+         >;
+
+
+   std::cout << l{}.label<0,0>() << "," << l{}.label<0,1>() << "," << l{}.label<0,2>() << "," << l{}.label<0,3>() << "," << l{}.label<0,4>() << "\n";
+   std::cout << l{}.label<1,0>() << "," << l{}.label<1,1>() << "," << l{}.label<1,2>() << "," << l{}.label<1,3>() << "," << l{}.label<1,4>() << "\n";
+   std::cout << l{}.label<2,0>() << "," << l{}.label<2,1>() << "," << l{}.label<2,2>() << "," << l{}.label<2,3>() << "," << l{}.label<2,4>() << "\n";
    return 0;
 }
