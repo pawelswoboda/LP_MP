@@ -18,5 +18,9 @@ if(BUILD_CELL_TRACKING)
   add_subdirectory(cell_tracking)
 endif()
 
+if(BUILD_MORAL_LINEAGE_TRACING)
+  add_subdirectory(moral_lineage_tracing)
+endif()
+
 add_subdirectory(evaluation)
 
