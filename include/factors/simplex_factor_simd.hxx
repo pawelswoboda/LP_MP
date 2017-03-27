@@ -11,8 +11,7 @@ namespace LP_MP {
 // expects Vc::Memory as reparametrization
 // the polytope {x >= 0 : x_1 + ... + x_n = 1 }
 // do zrobienia: possibly better derive from FactorStorage<STORE_FACTOR>
-template<bool STORE_FACTOR>
-class SimplexFactorSIMD
+class SimplexFactorSIMD : public Vc::Memory<REAL>
 {
 public:
    SimplexFactorSIMD(const std::vector<REAL>& cost, const std::vector<INDEX>& varCapacity, INDEX sum)

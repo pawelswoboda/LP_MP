@@ -7,6 +7,7 @@
 #include "multicut_unary_factor.hxx"
 #include "multicut_triplet_factor.hxx"
 #include "multicut_odd_wheel.hxx"
+#include "factors/constant_factor.hxx"
 #include "lifted_multicut_factors_messages.hxx"
 #include "multicut_constructor.hxx"
 
@@ -24,11 +25,9 @@
 #include <iostream>
 #include <vector>
 
-#include "boost/hana.hpp"
-
 namespace LP_MP {
 
-namespace hana = boost::hana;
+//namespace hana = boost::hana;
 
 // do zrobienia: possibly rename unary to edge factor
 
@@ -37,15 +36,16 @@ struct FMC_MULTICUT {
    constexpr static const char* name = "Multicut with cycle constraints";
    //constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
-   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_MULTICUT, 0, true> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<MulticutUnaryFactor, FMC_MULTICUT, 0, true> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
+   using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_MULTICUT, 2>;
 
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
 
-   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer>;
+   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, ConstantFactorContainer>;
    using MessageList = meta::list<MulticutUnaryTripletMessageContainer>;
 
-   using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0>;
+   using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0,2>;
    using ProblemDecompositionList = meta::list<multicut>;
 };
 
@@ -54,18 +54,20 @@ template<MessageSendingType MESSAGE_SENDING>
 struct FMC_ODD_WHEEL_MULTICUT {
    constexpr static const char* name = "Multicut with cycle and odd wheel constraints";
 
-   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<MulticutTripletPlusSpokeFactor, FixedSizeExplicitRepamStorage<MulticutTripletPlusSpokeFactor::size()>::type, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeFactorContainer;
+   typedef FactorContainer<MulticutUnaryFactor, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<MulticutTripletPlusSpokeFactor, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeFactorContainer;
+   using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_ODD_WHEEL_MULTICUT, 3>;
       
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 2, variableMessageNumber, variableMessageNumber, MulticutTripletPlusSpokeMessage::size(), FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletPlusSpokeMessageContainer;
-   typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 2, variableMessageNumber, 1, MulticutTripletPlusSpokeCoverMessage::size(), FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeCoverMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 2, variableMessageNumber, variableMessageNumber, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletPlusSpokeMessageContainer;
+   typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeCoverMessageContainer;
 
    using FactorList = meta::list< 
       MulticutUnaryFactorContainer,
       MulticutTripletFactorContainer,
-      MulticutTripletPlusSpokeFactorContainer 
+      MulticutTripletPlusSpokeFactorContainer,
+      ConstantFactorContainer 
          >;
    using MessageList = meta::list<
       MulticutUnaryTripletMessageContainer, 
@@ -73,8 +75,9 @@ struct FMC_ODD_WHEEL_MULTICUT {
       MulticutTripletPlusSpokeCoverMessageContainer
       >;
 
-   using multicut = MulticutOddWheelConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,0,2,1,2>;
-   using ProblemDecompositionList = meta::list<multicut>;
+   using multicut_c = MulticutConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,0,3>;
+   using multicut_cow = MulticutOddWheelConstructor<multicut_c,2,1,2>;
+   using ProblemDecompositionList = meta::list<multicut_cow>;
 };
 
 struct FMC_LIFTED_MULTICUT {
@@ -82,18 +85,20 @@ struct FMC_LIFTED_MULTICUT {
    constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
    // no rounding performed: do it via GAEC and K&L, called from problem constructor
-   typedef FactorContainer<MulticutUnaryFactor, FixedSizeExplicitRepamStorage<MulticutUnaryFactor::size()>::type, FMC_LIFTED_MULTICUT, 0> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FixedSizeExplicitRepamStorage<MulticutTripletFactor::size()>::type, FMC_LIFTED_MULTICUT, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<LiftedMulticutCutFactor, ExplicitRepamStorage, FMC_LIFTED_MULTICUT, 2> LiftedMulticutCutFactorContainer;
+   typedef FactorContainer<MulticutUnaryFactor, FMC_LIFTED_MULTICUT, 0> MulticutUnaryFactorContainer;
+   typedef FactorContainer<MulticutTripletFactor, FMC_LIFTED_MULTICUT, 1> MulticutTripletFactorContainer;
+   typedef FactorContainer<LiftedMulticutCutFactor, FMC_LIFTED_MULTICUT, 2> LiftedMulticutCutFactorContainer;
+   using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_LIFTED_MULTICUT, 3>;
 
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, MulticutUnaryTripletMessage<MESSAGE_SENDING>::size(), FMC_LIFTED_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, CutEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT, 1 > CutEdgeLiftedMulticutFactorMessageContainer;
-   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, LiftedEdgeLiftedMulticutFactorMessage::size(), FMC_LIFTED_MULTICUT, 2 > LiftedEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_LIFTED_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, FMC_LIFTED_MULTICUT, 1 > CutEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, FMC_LIFTED_MULTICUT, 2 > LiftedEdgeLiftedMulticutFactorMessageContainer;
 
    using FactorList = meta::list<
       MulticutUnaryFactorContainer, 
       MulticutTripletFactorContainer, 
-      LiftedMulticutCutFactorContainer 
+      LiftedMulticutCutFactorContainer,
+      ConstantFactorContainer 
          >;
    using MessageList = meta::list<
       MulticutUnaryTripletMessageContainer, 
@@ -101,28 +106,28 @@ struct FMC_LIFTED_MULTICUT {
       LiftedEdgeLiftedMulticutFactorMessageContainer
          >;
 
-   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0>;
-   using LiftedMulticutConstructor = LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
+   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,3>;
+   using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 
 
-   using MessageListHana = hana::tuple<
-      MulticutUnaryTripletMessageContainer, 
-      CutEdgeLiftedMulticutFactorMessageContainer, 
-      LiftedEdgeLiftedMulticutFactorMessageContainer
-         >;
+//   using MessageListHana = hana::tuple<
+//      MulticutUnaryTripletMessageContainer, 
+//      CutEdgeLiftedMulticutFactorMessageContainer, 
+//      LiftedEdgeLiftedMulticutFactorMessageContainer
+//         >;
 
-   using FactorListHana = hana::tuple<
-      MulticutUnaryFactorContainer, 
-      MulticutTripletFactorContainer, 
-      LiftedMulticutCutFactorContainer 
-         >;
+//   using FactorListHana = hana::tuple<
+//      MulticutUnaryFactorContainer, 
+//      MulticutTripletFactorContainer, 
+//      LiftedMulticutCutFactorContainer 
+//         >;
    //using MessageListHana = hana::tuple<
    //   MulticutUnaryTripletMessageContainer, 
    //   CutEdgeLiftedMulticutFactorMessageContainer, 
    //   LiftedEdgeLiftedMulticutFactorMessageContainer
    //      >;
-   using ProblemDecompositionListHana = hana::tuple<LiftedMulticutConstructor>;
+//   using ProblemDecompositionListHana = hana::tuple<LiftedMulticutConstructor>;
 
    /*
    hana::tuple_t<
@@ -199,8 +204,8 @@ namespace MulticutOpenGmInput {
       return out;
    }
 
-   template<typename FMC>
-   bool ParseProblem(const std::string filename, Solver<FMC>& pd)
+   template<typename SOLVER>
+   bool ParseProblem(const std::string filename, SOLVER& pd)
    {
       //read with hdf5
       auto fileHandle = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -229,6 +234,7 @@ namespace MulticutOpenGmInput {
          const INDEX two = factor[5*i+2];
          const INDEX i1 = factor[5*i+3];
          const INDEX i2 = factor[5*i+4];
+         assert(i1<i2);
          edges.push_back(std::make_tuple(i1,i2,0.0));
       }
 
@@ -238,20 +244,31 @@ namespace MulticutOpenGmInput {
       static_assert(sizeof(REAL) == 8, "HDF5 file format has 64 bits for floats");
       auto edgeCosts = ReadVector<REAL>(functionHandle,"values");
       assert(edgeCosts.size()/2 == edges.size());
+      auto& mc = pd.template GetProblemConstructor<0>();
       for(INDEX i=0; i<edges.size(); ++i) {
-         std::get<2>(edges[i]) = -edgeCosts[2*i] + edgeCosts[2*i+1]; // do zrobienia: or the other way around
+         std::get<2>(edges[i]) = -edgeCosts[2*i] + edgeCosts[2*i+1]; // do zrobienia: use constant factor and add edgeCosts[2*i] to it
+         mc.AddToConstant(edgeCosts[2*i]);
          //std::get<2>(edges[i]) = edgeCosts[2*i] - edgeCosts[2*i+1];
       }
       // note: theoretically, this could be much more complicated, if some factors are shared etc. Then this simple approach above will not work.
+      
+      // fourth, sort the edges by edges. There may be multiple edges (e.g. image-seg dataset). Merge such edges
+      std::sort(edges.begin(), edges.end(), [](auto a, auto b) { return std::get<0>(a) == std::get<0>(b) ? std::get<1>(a) < std::get<1>(b) : std::get<0>(a) < std::get<0>(b); });
 
-      auto& mc = pd.template GetProblemConstructor<0>();
+
       for(INDEX i=0; i<edges.size(); ++i) {
          INDEX i1 = std::get<0>(edges[i]); 
          INDEX i2 = std::get<1>(edges[i]); 
+         REAL cost = std::get<2>(edges[i]);
+
+         while( i+1 < edges.size() && std::get<0>(edges[i+1]) == i1 && std::get<1>(edges[i+1]) == i2) {
+            cost += std::get<2>(edges[i+1]);
+            ++i;
+         }
          if(i1 > i2) {
+            assert(false);
             std::swap(i1,i2);
          }
-         const REAL cost = std::get<2>(edges[i]);
          //std::cout << "add edge (" << i1 << "," << i2 << ") with cost " << cost << "\n";
          mc.AddUnaryFactor(i1, i2, cost);
       }
@@ -303,33 +320,37 @@ namespace MulticutTextInput {
       std::vector<std::tuple<INDEX,INDEX,REAL>> edges_;
    };
 
-   template<typename FMC, typename Rule >
+   template<typename SOLVER, typename Rule >
       struct action
       : pegtl::nothing< Rule > {};
 
 
-   template<typename FMC> struct action<FMC, positive_integer > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
+   template<typename SOLVER> struct action<SOLVER, positive_integer > {
+      template<typename INPUT>
+      static void apply(const INPUT & in, SOLVER&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
       {
          integer_stack.push(std::stoul(in.string())); 
       }
    };
-   template<typename FMC> struct action<FMC, real_number > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
+   template<typename SOLVER> struct action<SOLVER, real_number > {
+      template<typename INPUT>
+      static void apply(const INPUT & in, SOLVER&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
       {
          real_stack.push(std::stod(in.string())); 
       }
    };
-   template<typename FMC> struct action<FMC, numberOfVariables_line > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+   template<typename SOLVER> struct action<SOLVER, numberOfVariables_line > {
+      template<typename INPUT>
+      static void apply(const INPUT & in, SOLVER&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 1);
          mcInput.numberOfVariables_ = integer_stack.top();
          integer_stack.pop();
       }
    };
-   template<typename FMC> struct action<FMC, edge_line > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+   template<typename SOLVER> struct action<SOLVER, edge_line > {
+      template<typename INPUT>
+      static void apply(const INPUT & in, SOLVER& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 2);
          assert(real_stack.size() == 1);
@@ -348,19 +369,21 @@ namespace MulticutTextInput {
          mc.AddUnaryFactor( i1,i2,cost );
       }
    };
-   template<typename FMC> struct action<FMC, pegtl::eof> {
-      static void apply(const pegtl::action_input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput& mcInput)
+   template<typename SOLVER> struct action<SOLVER, pegtl::eof> {
+      template<typename INPUT>
+      static void apply(const INPUT & in, SOLVER& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput& mcInput)
       {}
    };
 
-   template<typename FMC>
+   template<typename SOLVER>
       struct actionSpecialization {
-         template<typename RULE> struct type : public action<FMC,RULE> {};
+         template<typename RULE> struct type : public action<SOLVER,RULE> {};
       };
 
 
-   template<typename FMC> struct action<FMC, lifted_edge_line > {
-      static void apply(const pegtl::action_input & in, Solver<FMC>& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+   template<typename SOLVER> struct action<SOLVER, lifted_edge_line > {
+      template<typename INPUT>
+      static void apply(const INPUT & in, SOLVER& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
       {
          assert(integer_stack.size() == 2);
          assert(real_stack.size() == 1);
@@ -381,8 +404,8 @@ namespace MulticutTextInput {
    };
 
       
-   template<typename FMC>
-   bool ParseProblem(const std::string filename, Solver<FMC>& pd)
+   template<typename SOLVER>
+   bool ParseProblem(const std::string filename, SOLVER& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;
@@ -391,11 +414,11 @@ namespace MulticutTextInput {
 
       pegtl::file_parser problem(filename);
 
-      return problem.parse< grammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, mcInput);
+      return problem.parse< grammar, actionSpecialization<SOLVER>::template type >(pd, integer_stack, real_stack, mcInput);
    }
 
-   template<typename FMC>
-   bool ParseLiftedProblem(const std::string filename, Solver<FMC>& pd)
+   template<typename SOLVER>
+   bool ParseLiftedProblem(const std::string filename, SOLVER& pd)
    {
       std::stack<SIGNED_INDEX> integer_stack;
       std::stack<REAL> real_stack;
@@ -403,7 +426,7 @@ namespace MulticutTextInput {
       std::cout << "parsing " << filename << "\n";
 
       pegtl::file_parser problem(filename);
-      return problem.parse< LiftedMulticutGrammar, actionSpecialization<FMC>::template type >(pd, integer_stack, real_stack, mcInput);
+      return problem.parse< LiftedMulticutGrammar, actionSpecialization<SOLVER>::template type >(pd, integer_stack, real_stack, mcInput);
    }
 
 
@@ -412,12 +435,13 @@ namespace MulticutTextInput {
 // HDF5 input as in data of Andres et al.
 namespace MulticutH5Input {
 
-   template<typename SOLVER>
+   template<typename SOLVER, bool GRID_GRAPH=false>
    bool ParseLiftedProblem(const std::string filename, SOLVER& pd)
    {
       auto& mc = pd.template GetProblemConstructor<0>();
       
-      andres::graph::GridGraph<2> originalGraph;
+      using orig_graph_type = typename std::conditional<GRID_GRAPH, andres::graph::GridGraph<2>, andres::graph::Graph<>>::type;
+      orig_graph_type originalGraph;
       andres::graph::Graph<> liftedGraph;
       std::vector<REAL> edgeValues;
 
@@ -430,9 +454,8 @@ namespace MulticutH5Input {
       andres::graph::hdf5::closeFile(fileHandle);
 
       // transform to energy cost
-      {
-         std::transform(edgeValues.begin(), edgeValues.end(), edgeValues.begin(), andres::NegativeLogProbabilityRatio<REAL,REAL>());
-      }
+      std::transform(edgeValues.begin(), edgeValues.end(), edgeValues.begin(), andres::NegativeLogProbabilityRatio<REAL,REAL>());
+      assert(edgeValues.size() == liftedGraph.numberOfEdges());
 
       for(std::size_t e=0; e<liftedGraph.numberOfEdges(); ++e) {
          auto i = liftedGraph.vertexOfEdge(e,0);

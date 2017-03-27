@@ -2,25 +2,30 @@
 #define LP_MP_MULTICUT_LIFTED_HXX
 
 #include "LP_MP.h"
+#include "cereal/types/vector.hpp"
+#include "cereal/types/array.hpp"
 
 namespace LP_MP {
 
-class LiftedMulticutCutFactor {
+class LiftedMulticutCutFactor : public std::vector<REAL> {
 public:
+   using repam_storage = std::vector<REAL>; // investigate using std::list with pool allocator. Possibly, the number of cut edges can be stored in a vector, and the lifted edges can be added via a list
    LiftedMulticutCutFactor(const INDEX noCutEdges) 
-      : noCutEdges_(noCutEdges),
+      : repam_storage(noCutEdges, 0.0),
+      noCutEdges_(noCutEdges),
       noLiftedEdges_(0),
       maxCutEdgeVal_(0.0),
       cutEdgeContrib_(0.0),
       liftedEdgeContrib_(0.0),
       liftedEdgeForcedContrib_(0.0) 
-   {}
+   {
+   assert(false);
+   }
    //LiftedMulticutCutFactor(const INDEX noCutEdges, const INDEX noLiftedEdges) : noCutEdges_(noCutEdges), noLiftedEdges_(noLiftedEdges) {}
 
    // the feasible set is: When the ordinary edges are all one (cut), then the lifted edges must be one as well
    // if at least one ordinary edge is zero (not cut), then the lifted edges may be arbitrary
-   template<typename REPAM_ARRAY>
-   REAL LowerBound(const REPAM_ARRAY& repam) const 
+   REAL LowerBound() const 
    {
       assert(noCutEdges_ > 0);
       assert(noLiftedEdges_ > 0);
@@ -37,22 +42,21 @@ public:
       //}
       //std::cout << "\n";
       // do zrobienia: recompute all statistics here from scratch, once they are introduced
-      assert(repam.size() == size());
 
       // do zrobienia: start at index 1, initialize with zero value
       REAL maxCutEdgeVal = -std::numeric_limits<REAL>::max();
       REAL cutEdgeContrib = 0.0;
       for(INDEX i=0; i<noCutEdges_; ++i) {
-         maxCutEdgeVal = std::max(maxCutEdgeVal, repam[i]);
-         cutEdgeContrib += std::min(0.0,repam[i]);
+         maxCutEdgeVal = std::max(maxCutEdgeVal, (*this)[i]);
+         cutEdgeContrib += std::min(0.0,(*this)[i]);
       }
 
       // do zrobienia: start at index 1, initialize with zero value
       REAL liftedEdgeContrib = 0.0; // the value which the lifted edge can contribute to the lower bound
       REAL liftedEdgeForcedContrib = 0.0;
       for(INDEX i=0; i<noLiftedEdges_; ++i) {
-         liftedEdgeContrib += std::min(0.0,repam[i + noCutEdges_]);
-         liftedEdgeForcedContrib += std::max(0.0,repam[i + noCutEdges_]);
+         liftedEdgeContrib += std::min(0.0,(*this)[i + noCutEdges_]);
+         liftedEdgeForcedContrib += std::max(0.0,(*this)[i + noCutEdges_]);
       }
 
       assert(std::abs(liftedEdgeContrib - liftedEdgeContrib_) < eps);
@@ -65,61 +69,54 @@ public:
 
    }
 
-   INDEX size() const { return noCutEdges_ + noLiftedEdges_; }
-
-   template<typename REPAM_ARRAY>
-   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal) const
+   REAL EvaluatePrimal() const
    {
-      assert(repam.size() == size());
-      assert(std::count(primal, primal + noCutEdges_ + noLiftedEdges_, unknownState) == 0);
+      return std::numeric_limits<REAL>::infinity();
       INDEX noCutEdgesOne = 0;
       REAL x = 0.0;
       for(INDEX i=0; i<noCutEdges_; ++i) {
-         assert(primal[i] != unknownState); // message should have inferred this
-         noCutEdgesOne += primal[i];
-         x += primal[i]*repam[i];
+         noCutEdgesOne += primal_[i];
+         x += primal_[i]*(*this)[i];
       }
       INDEX noLiftedEdgesOne = 0;
       for(INDEX i=0; i<noLiftedEdges_; ++i) {
-         assert(primal[i + noCutEdges_] != unknownState); // message should have inferred this
-         noLiftedEdgesOne += primal[i + noCutEdges_];
-         x += primal[i+noCutEdges_]*repam[i+noCutEdges_];
+         noLiftedEdgesOne += primal_[i + noCutEdges_];
+         x += primal_[i+noCutEdges_]*(*this)[i+noCutEdges_];
       }
       if(noCutEdgesOne < noCutEdges_ || noLiftedEdgesOne == noLiftedEdges_) {
          return x;
       } else {
          assert(false);
          //std::cout << "solution infeasible: #cut edges = 1: " << noCutEdgesOne << ", #cut edges = " << noCutEdges_ << ", #lifted edges = 1: " << noLiftedEdgesOne << ", #lifted edges = " << noLiftedEdges_ << "\n\n";
-         //exit(1);
          return std::numeric_limits<REAL>::infinity();
       }
-      assert(false); 
    }
 
    // do zrobienia: use own reparametrization storage and make it bigger here as well.
    void IncreaseLifted()
    {
       ++noLiftedEdges_;
+      this->push_back(0.0); 
+      primal_.push_back(true);
    }
 
    // do zrobienia: make this more efficient by keeping track of needed informations
    // compute by how much we can change the cut edge's cost
-   template<typename REPAM>
-   REAL CutEdgeBreakpoint(const REPAM& repam, const INDEX c) const 
+   REAL CutEdgeBreakpoint(const INDEX c) const 
    { 
       assert(c < noCutEdges_);
 
       const INDEX edgeIndex = c;
-      if(repam[edgeIndex] < maxCutEdgeVal_ || liftedEdgeForcedContrib_ <= -maxCutEdgeVal_) { // do zrobienia: take into account std::max(0.0,...)
-         return repam[edgeIndex] + std::max(0.0,std::min(liftedEdgeForcedContrib_,-maxCutEdgeVal_));
+      if((*this)[edgeIndex] < maxCutEdgeVal_ || liftedEdgeForcedContrib_ <= -maxCutEdgeVal_) { // do zrobienia: take into account std::max(0.0,...)
+         return (*this)[edgeIndex] + std::max(0.0,std::min(liftedEdgeForcedContrib_,-maxCutEdgeVal_));
       } else { // we must recompute maxCutEdgeVal_ without the active repam value
          REAL maxCutEdgeValExcl = -std::numeric_limits<REAL>::max();
          for(INDEX i=0; i<noCutEdges_; ++i) {
             if(i != c) {
-               maxCutEdgeValExcl = std::max(maxCutEdgeValExcl, repam[i]);
+               maxCutEdgeValExcl = std::max(maxCutEdgeValExcl, (*this)[i]);
             }
          }
-         return repam[edgeIndex] + std::max(0.0,std::min(liftedEdgeForcedContrib_,-maxCutEdgeValExcl));
+         return (*this)[edgeIndex] + std::max(0.0,std::min(liftedEdgeForcedContrib_,-maxCutEdgeValExcl));
       }
       assert(false);
 
@@ -130,6 +127,7 @@ public:
  
 
       // do zrobienia: start at index 1, initialize with zero value
+      /*
       REAL maxCutEdgeVal = -std::numeric_limits<REAL>::max();
       REAL cutEdgeContrib = 0.0;
       for(INDEX i=0; i<noCutEdges_; ++i) {
@@ -154,20 +152,20 @@ public:
       const REAL diff = repam[edgeIndex] + std::max(0.0,std::min(liftedEdgeForcedContrib,-maxCutEdgeVal));
       assert(std::abs(oneAssignment - zeroAssignment - diff) < eps);
       return diff;
-
+      */ 
       
       assert(false);
    }
 
-   template<typename REPAM>
-   REAL LiftedEdgeBreakpoint(const REPAM& repam, const INDEX c) const
+   REAL LiftedEdgeBreakpoint(const INDEX c) const
    {
       assert(c < noCutEdges_+noLiftedEdges_);
       assert(c >= noCutEdges_);
       const INDEX edgeIndex = c;
 
-      return repam[edgeIndex] + std::min(0.0,maxCutEdgeVal_) + std::max(0.0,std::min(liftedEdgeForcedContrib_ - std::max(0.0,repam[edgeIndex]),-maxCutEdgeVal_));
+      return (*this)[edgeIndex] + std::min(0.0,maxCutEdgeVal_) + std::max(0.0,std::min(liftedEdgeForcedContrib_ - std::max(0.0,(*this)[edgeIndex]),-maxCutEdgeVal_));
 
+      /*
       REAL maxCutEdgeVal = -std::numeric_limits<REAL>::max();
       REAL cutEdgeContrib = 0.0;
       for(INDEX i=0; i<noCutEdges_; ++i) {
@@ -190,6 +188,42 @@ public:
       const REAL diff = repam[edgeIndex] + std::min(0.0,maxCutEdgeVal) + std::max(0.0,std::min(liftedEdgeForcedContrib,-maxCutEdgeVal));
       assert(std::abs(oneAssignment - zeroAssignment - diff) < eps);
       return oneAssignment - zeroAssignment;
+      */
+   }
+
+   // possibly update summary values implicitly when writing to them by going through a proxy object. Too complicated?
+   void update_cut_edge_contrib(const INDEX c, const REAL msg)
+   {
+      assert(c < NoCutEdges());
+
+      CutEdgeContrib() -= std::min(0.0,(*this)[c]);
+      const REAL prevRepam = (*this)[c];
+      (*this)[c] += msg; 
+      CutEdgeContrib() += std::min(0.0,(*this)[c]);
+ 
+      // update maxCutEdgeVal_, if it needs to be updated.
+      if((*this)[c] > MaxCutEdgeVal()) {
+         MaxCutEdgeVal() = (*this)[c];
+      } else if(prevRepam == MaxCutEdgeVal() && msg < 0.0) {
+         // search through all indices to find possibly new maxCutEdgeVal_
+         REAL maxCutEdgeVal = -std::numeric_limits<REAL>::max();
+         for(INDEX i=0; i<NoCutEdges(); ++i) {
+            maxCutEdgeVal = std::max((*this)[i],maxCutEdgeVal);
+         }
+         MaxCutEdgeVal() = maxCutEdgeVal;
+      }
+
+   }
+
+   void update_lifted_edge_contrib(const INDEX c, const REAL msg)
+   {
+      assert(c < NoLiftedEdges());
+
+      LiftedEdgeContrib() -= std::min(0.0,(*this)[c]);
+      LiftedEdgeForcedContrib() -= std::max(0.0,(*this)[c]);
+      (*this)[c] += msg; 
+      LiftedEdgeContrib() += std::min(0.0,(*this)[c]);
+      LiftedEdgeForcedContrib() += std::max(0.0,(*this)[c]);
    }
 
    // statistics with which evaluation is fast.
@@ -201,11 +235,16 @@ public:
    INDEX NoLiftedEdges() const { return noLiftedEdges_; }
    INDEX NoCutEdges() const { return noCutEdges_; }
 
+   void init_primal() {}
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<repam_storage*>(this) ); ar( maxCutEdgeVal_, cutEdgeContrib_, liftedEdgeContrib_, liftedEdgeForcedContrib_ ); } 
+   template<typename ARCHIVE> void primal_serialize(ARCHIVE& ar) { ar( primal_ ); }
+
 private:
+   std::vector<bool> primal_;
    // edges are arranged as follows: first come the lifted edges, then the original ones.
    // do zrobienia: make const
    INDEX noLiftedEdges_; // number of lifted edges that have endpoints in different components
-   INDEX noCutEdges_; // number of cut edges in the original graph
+   INDEX noCutEdges_; // number of cut edges in the original graph. Possibly can be automatically inferred from this->size() - noLiftedEdges_
 
    // hold these quantities explicitly to avoid having to recompute them after every update -> constant time operations
    REAL maxCutEdgeVal_;
@@ -221,21 +260,18 @@ public:
 
    constexpr static INDEX size() { return 1; }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2>
+   template<typename RIGHT_FACTOR, typename G2>
    void
-   ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg) 
+   ReceiveMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
    {
-      assert(msg.size() == 1);
-      msg[0] -= r->CutEdgeBreakpoint(rightPot,i_);
+      msg[0] -= r.CutEdgeBreakpoint(i_);
    }
 
-   template<typename LEFT_FACTOR, typename G1, typename G3>
+   template<typename LEFT_FACTOR, typename G3>
    void
-   SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega)
+   SendMessageToRight(const LEFT_FACTOR& l, G3& msg, const REAL omega)
    {
-      assert(msg.size() == 1);
-      assert(leftPot.size() == 1);
-      msg[0] -= omega*leftPot[0];
+      msg[0] -= omega*l;
    }
 
    template<typename G>
@@ -243,7 +279,7 @@ public:
    {
       assert(msg_dim == 0);
       assert(repamPot.size() == 1);
-      repamPot[0] += msg;
+      repamPot += msg;
    }
 
    template<typename G>
@@ -252,33 +288,38 @@ public:
       assert(msg_dim == 0);
       //const REAL cutEdgeContribDiff = -std::min(0.0,repamPot[i_]) + std::min(0.0,msg);
       //repamPot.GetFactor()->CutEdgeContrib() += cutEdgeContribDiff;
+      
+      repamPot.update_cut_edge_contrib(i_, msg);
+      return;
 
-      repamPot.GetFactor()->CutEdgeContrib() -= std::min(0.0,repamPot[i_]);
+      repamPot.CutEdgeContrib() -= std::min(0.0,repamPot[i_]);
       const REAL prevRepam = repamPot[i_];
       repamPot[i_] += msg; 
-      repamPot.GetFactor()->CutEdgeContrib() += std::min(0.0,repamPot[i_]);
+      repamPot.CutEdgeContrib() += std::min(0.0,repamPot[i_]);
  
       // update maxCutEdgeVal_, if it needs to be updated.
-      if(repamPot[i_] > repamPot.GetFactor()->MaxCutEdgeVal()) {
-         repamPot.GetFactor()->MaxCutEdgeVal() = repamPot[i_];
-      } else if(prevRepam == repamPot.GetFactor()->MaxCutEdgeVal() && msg < 0.0) {
+      if(repamPot[i_] > repamPot.MaxCutEdgeVal()) {
+         repamPot.MaxCutEdgeVal() = repamPot[i_];
+      } else if(prevRepam == repamPot.MaxCutEdgeVal() && msg < 0.0) {
          // search through all indices to find possibly new maxCutEdgeVal_
          REAL maxCutEdgeVal = -std::numeric_limits<REAL>::max();
-         for(INDEX i=0; i<repamPot.GetFactor()->NoCutEdges(); ++i) {
+         for(INDEX i=0; i<repamPot.NoCutEdges(); ++i) {
             maxCutEdgeVal = std::max(repamPot[i],maxCutEdgeVal);
          }
-         repamPot.GetFactor()->MaxCutEdgeVal() = maxCutEdgeVal;
+         repamPot.MaxCutEdgeVal() = maxCutEdgeVal;
       }
    }
 
+   /*
     template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
     void
-    ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+    ComputeRightFromLeftPrimal(LEFT_FACTOR* l, RIGHT_FACTOR* r)
     {
        assert(right[i_] == unknownState);
        //std::cout << "cut edge index = " << i_ << ", primal value = " << INDEX(left[0]) << "\n";
        right[i_] = left[0];
     }
+    */
 
 
 private:
@@ -324,6 +365,9 @@ public:
       //repamPot.GetFactor()->LiftedEdgeContrib() += liftedEdgeContribDiff;
       //const REAL liftedEdgeForcedContribDiff = -std::max(0.0,repamPot[i_]) + std::max(0.0,msg);
       //repamPot.GetFactor()->LiftedEdgeForcedContrib() += liftedEdgeForcedContribDiff;
+      repamPot.update_lifted_edge_contrib(i_, msg);
+      return;
+
       repamPot.GetFactor()->LiftedEdgeContrib() -= std::min(0.0,repamPot[i_]);
       repamPot.GetFactor()->LiftedEdgeForcedContrib() -= std::max(0.0,repamPot[i_]);
       repamPot[i_] += msg; 

@@ -2,16 +2,19 @@
 #define LP_MP_CONFIG_HXX
 
 //#include "MinCost/MinCost.h"
-#include "Vc/Vc"
+//#include "Vc/Vc"
 //#include "Vc/Memory"
 
+//#include <fenv.h>
+#include <stdexcept>
+#include <string>
+#include <array>
+#include <cmath>
+#include <cassert>
+#include <limits>
+#include "tclap/CmdLine.h"
+
 // type definitions for LP_MP
-
-#ifdef _MSC_VER
-#pragma warning(disable: 4661)
-#endif
-
-
 
 namespace LP_MP {
 
@@ -25,14 +28,14 @@ namespace LP_MP {
    using LONG_INDEX = long unsigned int;
 
    // data types for all floating point/integer operations performed with SIMD
-   using REAL_SIMD = Vc::double_v;
-   using REAL_MASK_SIMD = Vc::double_m;
-   using INDEX_SIMD = Vc::int_v;
-   using INDEX_MASK_SIMD = Vc::int_m;
+//   using REAL_SIMD = Vc::double_v;
+//   using REAL_MASK_SIMD = Vc::double_m;
+//   using INDEX_SIMD = Vc::int_v;
+//   using INDEX_MASK_SIMD = Vc::int_m;
 
    enum class Chirality {left,right};
-   enum class MessageSendingType {SRMP,MPLP};
-   enum class ReparametrizationMode {Explicit,Implicit};
+   enum class MessageSendingType {SRMP,MPLP}; // also add full, for always sending and receiving messages
+   enum class Direction {forward, backward};
 
    constexpr REAL eps = 1e-8;
    
@@ -48,16 +51,20 @@ namespace LP_MP {
    // shortcut to indicate how big the message is: here it is determined only at runtime
    constexpr SIGNED_INDEX variableMessageSize = -1;
 
-
    // do zrobienia: maybe put this into LP_MP.h
-   enum class LPReparametrizationMode {Anisotropic, Uniform, Undefined};
+   enum class LPReparametrizationMode {Anisotropic, Uniform, DampedUniform, Undefined};
 
    inline LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
    {
-      if(s == "uniform") {
-         return LPReparametrizationMode::Uniform;
-      } else if(s == "anisotropic") {
+      //feenableexcept(FE_INVALID | FE_OVERFLOW);
+      const std::string uniform = "uniform";
+      if(s == "anisotropic") {
+         //return LpReparametrizationMode({mode::anisotropic,0.0});
          return LPReparametrizationMode::Anisotropic;
+      } else if(s == "uniform") {
+         return LPReparametrizationMode::Uniform;
+      } else if(s == "damped_uniform") {
+         return LPReparametrizationMode::DampedUniform;
       } else {
          throw std::runtime_error("reparametrization mode " + s + " unknown");
       }
@@ -84,6 +91,40 @@ namespace LP_MP {
       static auto array3 = [](const std::array<INDEX,3> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2]); };
       static auto array4 = [](const std::array<INDEX,4> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3]); };
    }
+
+   REAL normalize(const REAL x) {
+      assert(!std::isnan(x));
+      if(std::isfinite(x)) {
+         return x;
+      } else {
+         return std::numeric_limits<REAL>::infinity();
+      }
+   }
+
+   // TCLAP constraints
+   class PositiveRealConstraint : public TCLAP::Constraint<REAL>
+   {
+      public:
+         std::string description() const { return "positive real constraint"; };
+         std::string shortID() const { return "positive real number"; };
+         bool check(const REAL& value) const { return value >= 0.0; };
+   };
+   class OpenUnitIntervalConstraint: public TCLAP::Constraint<REAL>
+   {
+      public:
+         std::string description() const { return "0<x<1 real constraint"; };
+         std::string shortID() const { return "positive real number smaller 1"; };
+         bool check(const REAL& value) const { return value > 0.0 && value < 1.0; };
+   };
+   class PositiveIntegerConstraint : public TCLAP::Constraint<INDEX>
+   {
+      public:
+         std::string description() const { return "strictly positive integer constraint"; };
+         std::string shortID() const { return "strictly positive integer"; };
+         bool check(const INDEX& value) const { return value > 0; };
+   };
+   static PositiveIntegerConstraint positiveIntegerConstraint;
+
 
 
 }

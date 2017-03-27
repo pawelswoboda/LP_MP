@@ -9,9 +9,11 @@ namespace LP_MP {
 // solve odd wheel constraint by noting that any odd-wheel has tree-width 3, hence we can use separators of size four and directly connect them to each other. Other possiblity, use intermediate separators of size three, which we pursue here.
 // The separators can be made triplets as well
 
-class MulticutTripletPlusSpokeFactor {
+class MulticutTripletPlusSpokeFactor : public std::array<REAL,9> {
 public:
-   MulticutTripletPlusSpokeFactor() {}
+   MulticutTripletPlusSpokeFactor() {
+      std::fill(this->begin(), this->end(), 0.0);
+   }
    // labelings: first are the triplet edges, than the spoke.
    // the triplet edges are ordered as (n1<n2), (n1,centerNode), (n2,centerNode), (centerNode,spokeNode), where n1,n2 are the nodes opposite the spokeNode and n1<n2
    // 0110, 1010, 1100, 1110, 0111, 1011, 1101, 1111, 0001
@@ -32,23 +34,59 @@ public:
    }
 
    constexpr static INDEX size() { return 9; }
-   template<typename REPAM_ARRAY>
-   REAL LowerBound(const REPAM_ARRAY& repam) const
+   REAL LowerBound() const
    {
-      REAL x = 0.0;
-      for(INDEX i=0; i<size(); ++i) {
-         x = std::min(x,repam[i]);
-      }
-      return x;
+      return std::min(0.0, *std::min_element(this->begin(), this->end()));
    }
-   template<typename REPAM_ARRAY, typename PRIMAL>
-   REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PRIMAL primal) const
+   REAL EvaluatePrimal() const
    {
-      assert(repam.size() == 9);
-      return 3e13;
+      const auto sum = std::count(primal_.begin(), primal_.begin()+3, true);
+      if(sum == 1) { 
+         return std::numeric_limits<REAL>::infinity();
+      }
+
+      if(!primal_[3]) {
+         if(!primal_[0] && primal_[1] && primal_[2]) {
+            return (*this)[0];
+         } else if(primal_[0] && !primal_[1] && primal_[2]) {
+            return (*this)[1];
+         } else if(primal_[0] && primal_[1] && !primal_[2]) {
+            return (*this)[2];
+         } else if(primal_[0] && primal_[1] && primal_[2]) {
+            return (*this)[3];
+         } else if(!primal_[0] && !primal_[1] && !primal_[2]) {
+            return 0.0;
+         } else {
+            assert(false);
+            return std::numeric_limits<REAL>::infinity();
+         }
+      } else {
+         if(!primal_[0] && primal_[1] && primal_[2]) {
+            return (*this)[4];
+         } else if(primal_[0] && !primal_[1] && primal_[2]) {
+            return (*this)[5];
+         } else if(primal_[0] && primal_[1] && !primal_[2]) {
+            return (*this)[6];
+         } else if(primal_[0] && primal_[1] && primal_[2]) {
+            return (*this)[7];
+         } else if(!primal_[0] && !primal_[1] && !primal_[2]) {
+            return (*this)[8];
+         } else {
+            assert(false);
+            return std::numeric_limits<REAL>::infinity();
+         }
+      }
    }
 
+   void init_primal() {}
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<std::array<REAL,9>*>(this) ); }
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+
+   auto get_primal() const { return primal_; }
+   auto& set_primal() { return primal_; }
+
 private:
+   std::array<bool,4> primal_;
 };
 
 // left factor is Triplet, right one is TripletPlusSpoke
@@ -122,28 +160,26 @@ public:
    constexpr static INDEX size() { return 3; }
 
    // send message from TripletPlusSpokeFactor
-   template<typename LEFT_FACTOR, typename G1, typename G3>
-   void SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega)
+   template<typename LEFT_FACTOR, typename G3>
+   void SendMessageToRight(const LEFT_FACTOR& l, G3& msg, const REAL omega)
    {
-      assert(leftPot.size() == 4);
-      assert(msg.size() == 3);
-      msg[0] -= omega*leftPot[tripletEdge_[0]]; 
-      msg[1] -= omega*leftPot[tripletEdge_[1]];
-      msg[2] -= omega*std::min(leftPot[3-tripletEdge_[0] - tripletEdge_[1]], leftPot[3]);
+      assert(l.size() == 4);
+      msg[0] -= omega*l[tripletEdge_[0]]; 
+      msg[1] -= omega*l[tripletEdge_[1]];
+      msg[2] -= omega*std::min(l[3-tripletEdge_[0] - tripletEdge_[1]], l[3]);
       //msg[0] -= omega*leftPot[i_]; 
       //msg[1] -= omega*leftPot[s_];
       //msg[2] -= omega*std::min(leftPot[3-i_-s_], leftPot[3]);
    }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2>
-   void ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg) 
+   template<typename RIGHT_FACTOR, typename G2>
+   void ReceiveMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
    {
-      assert(rightPot.size() == 9);
-      assert(msg.size() == 3);
-      const REAL x = std::min(rightPot[tripletPlusSpokeEdge_],0.0); // this entry and label 0000 is not covered by the message, hence it has to be substracted
-      msg[0] -= std::min(rightPot[tripletPlusSpokeEdge_+4],rightPot[8]) - x;
-      msg[1] -= std::min(rightPot[3],std::min(rightPot[(tripletPlusSpokeEdge_+1)%3],rightPot[(tripletPlusSpokeEdge_+2)%3])) - x;
-      msg[2] -= std::min(std::min(rightPot[((tripletPlusSpokeEdge_+1)%3) + 4],rightPot[((tripletPlusSpokeEdge_+2)%3) + 4]),rightPot[7]) - x;
+      assert(r.size() == 9);
+      const REAL x = std::min(r[tripletPlusSpokeEdge_],0.0); // this entry and label 0000 is not covered by the message, hence it has to be substracted
+      msg[0] -= std::min(r[tripletPlusSpokeEdge_+4],r[8]) - x;
+      msg[1] -= std::min({r[3],r[(tripletPlusSpokeEdge_+1)%3],r[(tripletPlusSpokeEdge_+2)%3]}) - x;
+      msg[2] -= std::min({r[((tripletPlusSpokeEdge_+1)%3) + 4],r[((tripletPlusSpokeEdge_+2)%3) + 4],r[7]}) - x;
       //const REAL x = std::min(rightPot[j_],0.0); // this entry and label 0000 is not covered by the message, hence it has to be substracted
       //msg[0] -= std::min(rightPot[j_+4],rightPot[8]) - x;
       //msg[1] -= std::min(rightPot[3],std::min(rightPot[(j_+1)%3],rightPot[(j_+2)%3])) - x;
@@ -219,22 +255,23 @@ public:
       }
       */
    }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r) const
+   {
+      r.set_primal()[tripletPlusSpokeEdge_] = l.get_primal()[tripletEdge_[0]];
+      r.set_primal()[3] = l.get_primal()[tripletEdge_[1]];
+   }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
+   {
+      return true;
+   }
+
 private:
    INDEX tripletPlusSpokeEdge_; // the triplet edge that tripletPlusSpoke has in common, the other being the spoke edge
    std::array<INDEX,2> tripletEdge_; // the two edges triplet has in common
-
-   // a message is parametrized as follows: in the triplet, two edges are affected. One that is connected to a triplet edge in the TripletSpoke factor, and one that is connected to the spoke
-   // Let i_ be the edge that is not affected in the triplet
-   // for the TripletFactor
-   // do zrobienia: let i_ and s_ come from a permutation
-   //Permutation<3> p_; // permutation of triplet edges of tripletPlusSpoke to triplet edges.
-   //unsigned char i_; // shared edge in triplet factor which links to the triplet edge in TripletPlusSpokeFactor
-   //unsigned char s_; // shared edge in triplet factor which links to the spoke edge in TripletPlusSpokeFactor
-   //unsigned char j_; // edge in triplet of spoke that !is! shared
-   //const INDEX i_ : 2; // shared edge in triplet factor which links to the triplet edge in TripletPlusSpokeFactor
-   //const INDEX s_ : 2; // shared edge in triplet factor which links to the spoke edge in TripletPlusSpokeFactor
-   //const INDEX j_ : 2; // edge in triplet of spoke that !is! shared
-   // do zrobienia: check if not using bitfields is faster due to easier execution.
 };
 
 // message between triplet and TripletPlusSpoke, when TripletPlusSpoke completely covers the triplet
@@ -293,25 +330,23 @@ public:
    constexpr static INDEX size() { return 4; } 
 
    // send message from TripletPlusSpokeFactor
-   template<typename LEFT_FACTOR, typename G1, typename G3>
-   void SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega)
+   template<typename LEFT_FACTOR, typename G3>
+   void SendMessageToRight(const LEFT_FACTOR& l, G3& msg, const REAL omega)
    {
-      assert(leftPot.size() == 4);
-      assert(msg.size() == 4);
+      assert(l.size() == 4);
 
-      msg[0] -= omega*leftPot[p_[0]]; // 011
-      msg[1] -= omega*leftPot[p_[1]]; // 101
-      msg[2] -= omega*leftPot[p_[2]]; // 110
-      msg[3] -= omega*leftPot[3];     // 111
+      msg[0] -= omega*l[p_[0]]; // 011
+      msg[1] -= omega*l[p_[1]]; // 101
+      msg[2] -= omega*l[p_[2]]; // 110
+      msg[3] -= omega*l[3];     // 111
    }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2>
-   void ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg) 
+   template<typename RIGHT_FACTOR, typename G2>
+   void ReceiveMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
    {
-      assert(rightPot.size() == 9);
-      assert(msg.size() == 4);
+      assert(r.size() == 9);
       for(INDEX i=0; i<4; ++i) {
-         msg[i] -= std::min(rightPot[i], rightPot[i+4]) - std::min(rightPot[8],0.0);
+         msg[i] -= std::min(r[i], r[i+4]) - std::min(r[8],0.0);
       }
    }
 
@@ -335,6 +370,21 @@ public:
       repam[msg_dim] += msg;
       repam[msg_dim + 4] += msg;
    }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r) const
+   {
+      r.set_primal()[0] = l.get_primal()[p_[0]];
+      r.set_primal()[1] = l.get_primal()[p_[1]];
+      r.set_primal()[2] = l.get_primal()[p_[2]];
+   }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
+   {
+      return true;
+   }
+
 private:
    // the triplet in the TripletPlusSpokeFactor can have edges arranged in arbitrary order. p_ permutes those
    //Permutation<3> p_;

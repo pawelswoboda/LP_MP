@@ -7,10 +7,9 @@
 namespace LP_MP {
 
 // maximize/minimize to second min/max
-// assume FactorType is Simplex. 
-// do zrobienia: or multiplex
-// do zrobienia: use breakpoINDEX cost for message updates
-template<Chirality C>
+// do zrobienia: use breakpoint cost for message updates
+// Sometimes EqualityMessage is only used for receiving restricted messages. In this case COMPUTE_MESSAGES = false
+template<Chirality C, bool COMPUTE_MESSAGES = true>
 class EqualityMessage 
 {
 public:
@@ -26,7 +25,6 @@ public:
    template<typename REPAM_ARRAY, typename MSG>
    void MakeFactorUniform(const REPAM_ARRAY& repamPot, MSG& msg, const INDEX var_idx, const REAL omega = 1.0)
    {
-      assert(msg.size() == 1);
       assert(var_idx < repamPot.size());
 
       // possibly do it differently: search for two second smallest entries and then select first or second one depending upon whether it is rightVar_ or not. Faster?
@@ -40,36 +38,42 @@ public:
       msg[0] -= omega*(repamPot[var_idx] - min_val);
    }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2>
-   void ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg)
+   template<typename RIGHT_FACTOR, typename G1, typename G2, bool ENABLE=COMPUTE_MESSAGES>
+   typename std::enable_if<ENABLE,void>::type
+   ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg)
    { 
       MakeFactorUniform(rightPot, msg, rightVar_);
    }
 
-   template<typename LEFT_FACTOR, typename G1, typename G2>
-   void ReceiveMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg)
+   template<typename LEFT_FACTOR, typename G1, typename G2, bool ENABLE=COMPUTE_MESSAGES>
+   typename std::enable_if<ENABLE,void>::type
+   ReceiveMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg)
    { 
       MakeFactorUniform(leftPot, msg, leftVar_);
    }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2>
-   void ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, typename PrimalSolutionStorage::Element rightPrimal)
+   template<typename RIGHT_FACTOR, typename G1>
+   void ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G1& msg)
    {
-      if(rightPrimal[rightVar_] == false) {
-         msg[0] -= std::numeric_limits<REAL>::infinity();
-      } else if(rightPrimal[rightVar_] == true) {
-         msg[0] -= -std::numeric_limits<REAL>::infinity();
+      if(r.primal() == rightVar_) {
+         msg[0] -= -std::numeric_limits<REAL>::infinity(); 
+      } else if(r.primal() < r.size()) {
+         msg[0] -= std::numeric_limits<REAL>::infinity(); 
+      } else {
+         MakeFactorUniform(r, msg, rightVar_);
       }
    }
 
-   template<typename LEFT_FACTOR, typename G1, typename G2>
-   void ReceiveRestrictedMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg, typename PrimalSolutionStorage::Element leftPrimal)
+   template<typename LEFT_FACTOR, typename G1>
+   void ReceiveRestrictedMessageFromLeft(const LEFT_FACTOR& l, G1& msg)
    { 
-      if(leftPrimal[leftVar_] == false) {
-         msg[0] -= std::numeric_limits<REAL>::infinity();
-      } else if(leftPrimal[leftVar_] == true) {
-         msg[0] -= -std::numeric_limits<REAL>::infinity();
-      }
+      if(l.primal() == leftVar_) {
+         msg[0] -= -std::numeric_limits<REAL>::infinity(); 
+      } else if(l.primal() < l.size()) {
+         msg[0] -= std::numeric_limits<REAL>::infinity(); 
+      } else {
+         MakeFactorUniform(l, msg, leftVar_);
+      } 
    }
 
    // send all messages of the same type at once
@@ -84,12 +88,14 @@ public:
 
    // for sending multiple messages at once: makes factor uniform by sending all messages at once
    template<typename VAR_ACCESS_OP, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
-   static void MakeFactorUniformParallel(VAR_ACCESS_OP var_access_op, const MSG_ARRAY& msgs, const RIGHT_REPAM& repam, ITERATOR omegaIt)
+   static void MakeFactorUniformParallel(VAR_ACCESS_OP var_access_op, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, const RIGHT_REPAM& repam, ITERATOR omegaIt)
    {
       //assert(msgs.size() >= 2); // otherwise calling this method makes no sense, but it can happen for some trivial problems.
-      assert(msgs.size() <= repam.size());
+      //assert(msgs.size() <= repam.size());
       //assert(msgs.size() == repam.size()-1); // special case of one edge is not assignment in QAP or cosegmentation. For now. Only for hotel and house
-      const ITERATOR omegaEnd = omegaIt + msgs.size();
+      INDEX size = 0;
+      for(auto it= msg_begin; it!=msg_end; ++it) ++size;
+      const ITERATOR omegaEnd = omegaIt + size;
 
       // do zrobienia:
       const REAL omega_sum = 0.5 * std::accumulate(omegaIt, omegaEnd, 0.0); // strangely, a smaller factor makes the algorithm faster
@@ -99,15 +105,16 @@ public:
 
       // find minimal value of potential over all indices accessed by messages
       REAL min_val_covered = std::numeric_limits<REAL>::max();
-      for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx) {
-         const INDEX var_idx = var_access_op(msgs[msg_idx].GetMessageOp());
+      //for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx) {
+      for(auto it= msg_begin; it!=msg_end; ++it) {
+         const INDEX var_idx = var_access_op((*it).GetMessageOp());
          //assert(var_idx != repam.size()-1); // this is only valied for assignment problems from house and hotel
          //std::cout << "leftVar = " << leftVar << "\n";
          min_val_covered = std::min(min_val_covered, repam[var_idx]);
       }
 
-      REAL min_val = std::numeric_limits<REAL>::max();
-      REAL second_min_val = std::numeric_limits<REAL>::max();
+      REAL min_val = std::numeric_limits<REAL>::infinity();
+      REAL second_min_val = std::numeric_limits<REAL>::infinity();
       for(INDEX i=0; i<repam.size(); ++i) {
          const REAL cur_val = repam[i];
          //std::cout << "cur_val = " << cur_val << "\n";
@@ -118,7 +125,7 @@ public:
             second_min_val = cur_val;
          }
       }
-      assert(std::make_pair(min_val, second_min_val) == SmallestValues<REAL>(repam));
+      //assert(std::make_pair(min_val, second_min_val) == SmallestValues<REAL>(repam));
 
       REAL new_val;  // this value will be taken by the new reparametrized entries
       if(min_val < min_val_covered) { new_val = min_val; }
@@ -129,38 +136,43 @@ public:
       //const INDEX last_idx = leftRepam.size() - 1;
       //std::cout << "not covered = " << leftRepam[last_idx] << "\n";
 
-      for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx, omegaIt++) {
+      //for(INDEX msg_idx=0; msg_idx<msgs.size(); ++msg_idx, omegaIt++) {
+      for(auto it= msg_begin; it!=msg_end; ++it, ++omegaIt) {
          if(*omegaIt > 0) {
-            const INDEX var_idx = var_access_op(msgs[msg_idx].GetMessageOp());
-            msgs[msg_idx].operator[](0) -= omega_sum*(repam[var_idx] - new_val);
+            const INDEX var_idx = var_access_op((*it).GetMessageOp());
+            (*it).operator[](0) -= omega_sum*(repam[var_idx] - new_val);
          }
       }
    }
 
    // do zrobienia: enable again
-   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
-   static void SendMessagesToLeft(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& rightRepam, const MSG_ARRAY& msgs, ITERATOR omegaIt)
+   template<typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR, bool ENABLE=COMPUTE_MESSAGES>
+   static typename std::enable_if<ENABLE,void>::type
+   SendMessagesToLeft(const RIGHT_REPAM& rightRepam, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
    {
       auto var_access_op = [](const EqualityMessage& msg) -> INDEX { return msg.rightVar_; };
-      MakeFactorUniformParallel(var_access_op, msgs, rightRepam, omegaIt);
+      MakeFactorUniformParallel(var_access_op, msg_begin, msg_end, rightRepam, omegaIt);
    }
 
-   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename LEFT_REPAM, typename ITERATOR>
-   static void SendMessagesToRight(const LEFT_FACTOR& leftFactor, const LEFT_REPAM& leftRepam, const MSG_ARRAY& msgs, ITERATOR omegaIt)
+   template<typename MSG_ARRAY, typename LEFT_REPAM, typename ITERATOR, bool ENABLE=COMPUTE_MESSAGES>
+   static typename std::enable_if<ENABLE,void>::type
+   SendMessagesToRight(const LEFT_REPAM& leftRepam, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
    {
       auto var_access_op = [](const EqualityMessage& msg) -> INDEX { return msg.leftVar_; };
-      MakeFactorUniformParallel(var_access_op, msgs, leftRepam, omegaIt);
+      MakeFactorUniformParallel(var_access_op, msg_begin, msg_end, leftRepam, omegaIt);
    }
 
    template<typename G>
    void RepamLeft(G& leftRepamPot, const REAL msg, const INDEX dim) { 
       assert(dim == 0); 
       leftRepamPot[leftVar_] += msg; 
+      assert(!std::isnan(leftRepamPot[leftVar_]));
    }
    template<typename G>
    void RepamRight(G& rightRepamPot, const REAL msg, const INDEX dim) { 
       assert(dim == 0); 
       rightRepamPot[rightVar_] += msg; 
+      assert(!std::isnan(rightRepamPot[rightVar_]));
    }
 
    template<class LEFT_FACTOR_TYPE,class RIGHT_FACTOR_TYPE>
@@ -173,40 +185,51 @@ public:
       lp->addLinearEquality(lhs,rhs);
    }
 
-   template<bool PROPAGATE_PRIMAL_TO_LEFT_TMP = C == Chirality::left, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   typename std::enable_if<PROPAGATE_PRIMAL_TO_LEFT_TMP,void>::type
-   ComputeLeftFromRightPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool
+   ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
    {
-      if(right[rightVar_] == true) { 
-         left[leftVar_] = true;
-         // do zrobienia: it would be nice to set all other entries to false
-      } else if(right[rightVar_] == false) {
-         left[leftVar_] = false;
+      if(r.primal() == rightVar_) { 
+         const bool ret = (l.primal() != leftVar_);
+         l.primal() = leftVar_;
+         assert(l.primal() == leftVar_);
+         return ret;
       }
+      return false;
    }
 
-   template<bool PROPAGATE_PRIMAL_TO_RIGHT_TMP = C == Chirality::right, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   typename std::enable_if<PROPAGATE_PRIMAL_TO_RIGHT_TMP,void>::type
-   ComputeRightFromLeftPrimal(const typename PrimalSolutionStorage::Element left, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element right, RIGHT_FACTOR* r)
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool
+   ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
    {
-      if(left[leftVar_] == true) { 
-         right[rightVar_] = true;
-         // do zrobienia: it would be nice to set all other entries to false
-      } else if(left[leftVar_] == false) {
-         right[rightVar_] = false;
+      if(l.primal() == leftVar_) { 
+         const bool ret = (r.primal() != rightVar_);
+         r.primal() = rightVar_;
+         assert(r.primal() == rightVar_);
+         return ret;
       }
+      return false;
    }
-  
+
    // here it is checked whether labeling on left side and labeling on right side fulfill the constraints of the message
-   // note: If we build an LP-model, this could be checked automatically!
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, PrimalSolutionStorage::Element rightPrimal) const
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
    {
-      return leftPrimal[leftVar_] == rightPrimal[rightVar_];
+      if(l.primal() == leftVar_) {
+         if(r.primal() != rightVar_) std::cout << "kwaskwaskwas1\n";
+         return r.primal() == rightVar_;
+      }
+      if(r.primal() == rightVar_) {
+         if(l.primal() != leftVar_) std::cout << "kwaskwaskwas2\n";
+         return l.primal() == leftVar_;
+      }
+      return true;
    }
 
 
 private:
    //do zrobienia: possibly SHORT_INDEX or some 16 bit index (i.e. short unsigned int)
+   // certainly 32 bits will be enough.
    const INDEX leftVar_, rightVar_; // variables affected 
 };
 

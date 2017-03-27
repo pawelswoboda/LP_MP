@@ -14,5 +14,9 @@ if(BUILD_DISCRETE_TOMOGRAPHY)
    add_subdirectory(discrete_tomography)
 endif()
 
+if(BUILD_CELL_TRACKING)
+  add_subdirectory(cell_tracking)
+endif()
+
 add_subdirectory(evaluation)
 

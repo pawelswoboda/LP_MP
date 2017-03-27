@@ -7,16 +7,13 @@
 
 namespace LP_MP {
 
-// possibly better inherit from simplex factor with two labels
 class MulticutUnaryFactor 
 {
 public:
-   MulticutUnaryFactor(const double cost) {};
-   template<typename REPAM_ARRAY>
-   static void MaximizePotentialAndComputePrimal(const REPAM_ARRAY& repam, typename PrimalSolutionStorage::Element primal)
+   MulticutUnaryFactor(const double cost) : pot_(cost) {};
+   void MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal)
    {
-      assert(repam.size() == 1);
-      if(repam[0] <= 0) { 
+      if(pot_ <= 0) { 
          primal[0] = true; 
       } else { 
          primal[0] = false; 
@@ -31,29 +28,30 @@ public:
       }
       */
    }
-   template<typename REPAM_ARRAY>
-   static REAL LowerBound(const REPAM_ARRAY& repamPot) {
-      assert(repamPot.size() == 1);
-      return std::min(repamPot[0],0.0);
+   REAL LowerBound() const {
+      return std::min(pot_,0.0);
    }
 
    constexpr static INDEX size() { return 1; }
 
-   template<typename REPAM_ARRAY>
-   static REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PrimalSolutionStorage::Element primal)
+   REAL EvaluatePrimal() const
    {
-      assert(repam.size() == 1);
-      assert(primal[0] == false || primal[0] == true);
-      return primal[0]*repam[0];
-   }
-   void WritePrimal(const PrimalSolutionStorage::Element primal, std::ofstream& fs) const
-   {
-      //fs << primal[0];
+      return primal_*pot_;
    }
 
-   void CreateConstraints(LpInterfaceAdapter* lp) const {} // we do not have to do anything
+   operator REAL() const { return pot_; }
+   operator REAL&() { return pot_; }
+   //void CreateConstraints(LpInterfaceAdapter* lp) const {} // we do not have to do anything
 
+   void init_primal() {}
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar(pot_); }
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+
+   void set_primal(const bool p) { primal_ = p; }
+   bool get_primal() const { return primal_; }
 private:
+   REAL pot_;
+   bool primal_;
 
    static std::uniform_int_distribution<>::param_type p;
    static decltype(std::bind(std::uniform_int_distribution<>{p}, std::default_random_engine{})) r;

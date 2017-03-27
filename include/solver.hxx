@@ -1,28 +1,27 @@
 #ifndef LP_MP_SOLVER_HXX
 #define LP_MP_SOLVER_HXX
 
+#include <type_traits>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <fstream>
+#include <sstream>
 
 #include "LP_MP.h"
-#include "meta/meta.hpp"
 #include "function_existence.hxx"
 #include "template_utilities.hxx"
+#include "static_if.hxx"
 #include "tclap/CmdLine.h"
 #include "lp_interface/lp_interface.h"
 
 namespace LP_MP {
 
-// class containing the LP, problem constructor list, input function
-// takes care of logging
+// class containing the LP, problem constructor list, input function and visitor
 // binds together problem constructors and solver and organizes input/output
 // base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
 
-// do zrobienia: currently we synchronize in all solvers. However, strictly speaking, this is only needed by  LpSolver and MpRoundingSolver. Should only they synchronize?
-
-template<typename FMC>
+template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR>
 class Solver {
    // initialize a tuple uniformly
    //template <class T, class LIST>
@@ -31,34 +30,22 @@ class Solver {
       std::tuple<ARGS...> tupleMaker(meta::list<ARGS...>, T& t) { return std::make_tuple(ARGS(t)...); }
 
 public:
+   using FMC = FACTOR_MESSAGE_CONNECTION;
+   using SolverType = Solver<FMC,LP_TYPE,VISITOR>;
    using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
-   using FactorMessageConnection = FMC;
 
-   Solver()
-      : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
-      lp_(LP()),
-      // do zrobienia: use perfect forwarding or std::piecewise_construct
-      problemConstructor_(tupleMaker(ProblemDecompositionList{}, *this)),
-      // build the standard command line arguments
-      inputFileArg_("i","inputFile","file from which to read problem instance",true,"","file name",cmd_),
-      outputFileArg_("o","outputFile","file to write solution",false,"","file name",cmd_)
-      {
-         // now initialize command line arguments
-         //cmd_.parse(argc,argv); // problem is: 
-
-         // initialize logger
-         //std::vector<spdlog::sink_ptr> sinks;
-         //if(protocolateConsole_) {
-         //   sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_st>());
-         //} 
-         //if(protocolateFile_ != "") {
-         //   sinks.push_back(std::make_shared<spdlog::sinks::simple_file_sink_st>(protocolateFile_.c_str(),true));
-         //}
-         //spdlog::logger logger_("", std::begin(sinks), std::end(sinks));
-         //logger_.set_pattern("%v");
-         //spdlog::register_logger(logger);
-
-      }
+   Solver(int argc, char** argv)
+     : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
+     lp_(cmd_),
+     // do zrobienia: use perfect forwarding or std::piecewise_construct
+     problemConstructor_(tupleMaker(ProblemDecompositionList{}, *this)),
+     // build the standard command line arguments
+     inputFileArg_("i","inputFile","file from which to read problem instance",true,"","file name",cmd_),
+     outputFileArg_("o","outputFile","file to write solution",false,"","file name",cmd_),
+     visitor_(cmd_)
+     {
+       Init(argc,argv);
+     }
 
    ~Solver() {}
 
@@ -85,11 +72,10 @@ public:
       }
    }
 
-   template<typename INPUT_FUNCTION, typename... ARGS>
+   template<class INPUT_FUNCTION, typename... ARGS>
    bool ReadProblem(INPUT_FUNCTION inputFct, ARGS... args)
    {
-      std::unique_lock<std::mutex> guard(LpChangeMutex);
-      const bool success = inputFct(inputFile_,*this,args...);
+      const bool success = inputFct(inputFile_, *this, args...);
 
       assert(success);
       if(!success) throw std::runtime_error("could not parse problem file");
@@ -98,188 +84,227 @@ public:
       return success;
    }
 
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasWritePrimal,WritePrimal);
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasWritePrimal,WritePrimal)
+   template<typename PC>
    constexpr static bool
-   CanWritePrimal()
+   CanWritePrimalIntoFile()
    {
-      // do zrobienia: this is not nice. CanTighten should only be called with valid PROBLEM_CONSTRUCTOR_NO
-      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
-      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
-      else return HasWritePrimal<meta::at_c<ProblemDecompositionList,n>, void, std::ofstream, PrimalSolutionStorage>();
-      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
+      return HasWritePrimal<PC, void, std::ofstream>();
    }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size()>::type
-   WritePrimal(std::ofstream& s) {}
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanWritePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   WritePrimal(std::ofstream& s)
+   template<typename PC>
+   constexpr static bool
+   CanWritePrimalIntoString()
    {
-      return WritePrimal<PROBLEM_CONSTRUCTOR_NO+1>(s);
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanWritePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   WritePrimal(std::ofstream& s) 
-   {
-      std::cout << "WritePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
-      std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).WritePrimal(s,bestPrimal_);
-   }
+      return HasWritePrimal<PC, void, std::stringstream>();
+   } 
 
    void WritePrimal()
    {
       if(outputFileArg_.isSet()) {
          std::ofstream output_file;
-         output_file.open(outputFile_);
+         output_file.open(outputFile_, std::ofstream::out);
          if(!output_file.is_open()) {
             throw std::runtime_error("could not open file " + outputFile_);
          }
-         WritePrimal<0>(output_file);
+
+         for_each_tuple(this->problemConstructor_, [&output_file,this](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<SolverType::CanWritePrimalIntoFile<pc_type>()>([&](auto f) {
+                  f(l).WritePrimal(output_file);
+            });
+         }); 
       }
    }
 
+   std::string write_primal_into_string()
+   {
+      std::stringstream ss;
+
+      for_each_tuple(this->problemConstructor_, [&ss,this](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<SolverType::CanWritePrimalIntoString<pc_type>()>([&](auto f) {
+                  f(l).WritePrimal(ss);
+            });
+      }); 
+
+      std::string sol = ss.str();
+      return std::move(sol);
+   }
 
    // invoke the corresponding functions of problem constructors
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency,CheckPrimalConsistency);
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency,CheckPrimalConsistency)
+   template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanCheckPrimalConsistency()
    {
-      // do zrobienia: this is not nice. CanTighten should only be called with valid PROBLEM_CONSTRUCTOR_NO
-      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
-      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
-      else return HasCheckPrimalConsistency<meta::at_c<ProblemDecompositionList,n>, bool, PrimalSolutionStorage::Element>();
-      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
+      return HasCheckPrimalConsistency<PROBLEM_CONSTRUCTOR, bool>();
    }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size(),INDEX>::type
-   CheckPrimalConsistency(PrimalSolutionStorage::Element primal) 
+   
+   bool CheckPrimalConsistency()
    {
-      return true; 
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanCheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   CheckPrimalConsistency(PrimalSolutionStorage::Element primal)
-   {
-      return CheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO+1>(primal);
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanCheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   CheckPrimalConsistency(PrimalSolutionStorage::Element primal)
-   {
-      if(std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).CheckPrimalConsistency(primal)) {
-         return CheckPrimalConsistency<PROBLEM_CONSTRUCTOR_NO+1>(primal);
-      } else { 
-         return false;
+      bool feasible = true;
+      for_each_tuple(this->problemConstructor_, [this,&feasible](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<SolverType::CanCheckPrimalConsistency<pc_type>()>([&](auto f) {
+                  if(feasible) {
+                     const bool feasible_pc = f(l).CheckPrimalConsistency();
+                     if(!feasible_pc) {
+                        feasible = false;
+                     }
+                  }
+            });
+      });
+
+      if(feasible) {
+         feasible = this->lp_.CheckPrimalConsistency();
       }
-   }
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element primal) 
-   {
-      return CheckPrimalConsistency<0>(primal);
+
+      return feasible;
    }
 
 
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasTighten,Tighten);
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasTighten,Tighten)
+   template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanTighten()
    {
-      // do zrobienia: this is not nice. CanTighten should only be called with valid PROBLEM_CONSTRUCTOR_NO
-      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
-      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
-      else return HasTighten<meta::at_c<ProblemDecompositionList,n>, INDEX, INDEX>();
-      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
+      return HasTighten<PROBLEM_CONSTRUCTOR, INDEX, INDEX>();
    }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= ProblemDecompositionList::size(),INDEX>::type
-   Tighten(const INDEX maxConstraints) { return 0; }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && !CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   Tighten(const INDEX maxConstraints)
-   {
-      return Tighten<PROBLEM_CONSTRUCTOR_NO+1>(maxConstraints);
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < ProblemDecompositionList::size() && CanTighten<PROBLEM_CONSTRUCTOR_NO>(),INDEX>::type
-   Tighten(const INDEX maxConstraints) 
-   {
-      std::cout << "Tighten for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
-      const INDEX noCuttingPlaneAdded = std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_).Tighten(maxConstraints);
-      return noCuttingPlaneAdded + Tighten<PROBLEM_CONSTRUCTOR_NO+1>(maxConstraints);
-   }
-   // maxConstraints gives maximum number of constraints to add
+
+   // maxConstraints gives maximum number of constraints to add for each problem constructor
    INDEX Tighten(const INDEX maxConstraints) 
    {
-      INDEX noConstraintsAdded = Tighten<0>(maxConstraints);
-      if(noConstraintsAdded > 0) { // tell lp to rebuild omegas etc
-         lp_.Init();
-      }
-      return noConstraintsAdded;
+      INDEX constraints_added = 0;
+      for_each_tuple(this->problemConstructor_, [this,maxConstraints,&constraints_added](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<SolverType::CanTighten<pc_type>()>([&](auto f) {
+                  constraints_added += f(l).Tighten(maxConstraints);
+            });
+       });
+
+      return constraints_added;
    }
    
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    meta::at_c<ProblemDecompositionList, PROBLEM_CONSTRUCTOR_NO>& GetProblemConstructor() 
    {
+
       return std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_);
    }
 
-   LP& GetLP() { return lp_; }
+   LP_TYPE& GetLP() { return lp_; }
    
+   LP_MP_FUNCTION_EXISTENCE_CLASS(has_solution,solution)
+   constexpr static bool
+   visitor_has_solution()
+   {
+      return has_solution<VISITOR, void, std::string>();
+   }
+   
+
+   
+   int Solve()
+   {
+      this->Begin();
+      LpControl c = visitor_.begin(this->lp_);
+      while(!c.end && !c.error) {
+         this->PreIterate(c);
+         this->Iterate(c);
+         this->PostIterate(c);
+         c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
+         this->WritePrimal();
+      }
+      if(!c.error) {
+         this->End();
+         // possibly primal has been computed in end. Call visitor again
+         visitor_.end(this->lowerBound_, this->bestPrimalCost_);
+         static_if<visitor_has_solution()>([this](auto f) {
+               f(this)->visitor_.solution(this->solution_);
+         });
+         this->WritePrimal();
+      }
+      return c.error;
+   }
+
+
    // called before first iterations
-   void Begin() {}
+   virtual void Begin() 
+   {
+      lp_.Begin(); 
+   }
 
    // what to do before improving lower bound, e.g. setting reparametrization mode
-   void PreIterate(LpControl c) 
+   virtual void PreIterate(LpControl c) 
    {
-      std::unique_lock<std::mutex> guard(LpChangeMutex);
-      lp_.ComputeWeights(c.repam);
+      lp_.set_reparametrization(c.repam);
    } 
 
    // what to do for improving lower bound, typically ComputePass or ComputePassAndPrimal
-   void Iterate(LpControl c) {
-      std::unique_lock<std::mutex> guard(LpChangeMutex);
+   virtual void Iterate(LpControl c) {
       lp_.ComputePass();
    } 
 
    // what to do after one iteration of message passing, e.g. primal computation and/or tightening
-   void PostIterate(LpControl c) 
+   virtual void PostIterate(LpControl c) 
    {
       if(c.computeLowerBound) {
-         std::unique_lock<std::mutex> guard(LpChangeMutex);
          lowerBound_ = lp_.LowerBound();
+         assert(std::isfinite(lowerBound_));
       }
       if(c.tighten) {
-         std::unique_lock<std::mutex> guard(LpChangeMutex);
          Tighten(c.tightenConstraints);
       }
    } 
 
    // called after last iteration
-   void End() {}
-
-   void RegisterPrimal(PrimalSolutionStorage& p)
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasEnd,End)
+   template<typename PROBLEM_CONSTRUCTOR>
+   constexpr static bool
+   CanCallEnd()
    {
-    std::unique_lock<std::mutex> guard(LpChangeMutex);
-    //std::cout << "size of primal = " << p.size() << "\n";
-    const REAL cost = lp_.EvaluatePrimal(p.begin());
-    if(cost <= bestPrimalCost_) {
-       // check constraints
-       if(CheckPrimalConsistency(p.begin())) {
-          //std::cout << "primal cost = " << cost << ",, solution improved, primal solution feasible. in register primal\n";
-          bestPrimalCost_ = cost;
-          std::swap(bestPrimal_, p); // note: the best primal need not be admissible for the current lp, i.e. after tightening, the lp has changed, while best primal possibly has steyed the same.
-       } else {
-          //std::cout << "primal cost = " << cost << ", solution improved, primal solution infeasible. in register primal\n";
-       }
-    } else {
-       //std::cout << "primal cost = " << cost << ", solution not improved. in register primal\n";
-    }
+      return HasEnd<PROBLEM_CONSTRUCTOR, void>();
+   }
+
+   virtual void End() 
+   {
+      for_each_tuple(this->problemConstructor_, [this](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<SolverType::CanCallEnd<pc_type>()>([&](auto f) {
+                  f(l).End();
+            });
+      }); 
+   }
+
+   // register evaluated primal solution
+   void RegisterPrimal(const REAL cost)
+   {
+      assert(false);
+      if(cost < bestPrimalCost_) {
+         // assume solution is feasible
+         bestPrimalCost_ = cost;
+         solution_ = write_primal_into_string();
+      }
+   }
+
+   // evaluate and register primal solution
+   void RegisterPrimal()
+   {
+      const REAL cost = lp_.EvaluatePrimal();
+      if(cost < bestPrimalCost_) {
+         // assume solution is feasible
+         const bool feasible = CheckPrimalConsistency();
+         if(feasible) {
+            bestPrimalCost_ = cost;
+            solution_ = write_primal_into_string();
+         }
+      }
    }
 
    REAL lower_bound() const { return lowerBound_; }
 protected:
    TCLAP::CmdLine cmd_;
-   LP lp_;
+
+   LP_TYPE lp_;
 
    tuple_from_list<ProblemDecompositionList> problemConstructor_;
 
@@ -292,129 +317,82 @@ protected:
    REAL lowerBound_;
    // while Solver does not know how to compute primal, derived solvers do know. After computing a primal, they are expected to register their primals with the base solver
    REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
-   PrimalSolutionStorage bestPrimal_; // these vectors are stored in the order of forwardOrdering_
-   std::mutex LpChangeMutex;
+   std::string solution_;
+
+   VISITOR visitor_;
 };
 
 // local rounding interleaved with message passing 
-template<typename FMC>
-class MpRoundingSolver : public Solver<FMC>
+template<typename FMC, typename LP_TYPE, typename VISITOR>
+class MpRoundingSolver : public Solver<FMC, LP_TYPE, VISITOR>
 {
 public:
-   void Iterate(LpControl c)
-   {
-      if(c.computePrimal) {
-         {
-                 std::unique_lock<std::mutex> guard(this->LpChangeMutex);
-                 Solver<FMC>::lp_.ComputePassAndPrimal(forwardPrimal_, backwardPrimal_);
-         }
-         this->RegisterPrimal(forwardPrimal_);
-         this->RegisterPrimal(backwardPrimal_);
-      } else {
-         Solver<FMC>::Iterate(c);
-      }
-   }
+  using Solver<FMC, LP_TYPE, VISITOR>::Solver;
+
+  virtual void Iterate(LpControl c)
+  {
+    if(c.computePrimal) {
+      Solver<FMC,LP_TYPE,VISITOR>::lp_.ComputeForwardPassAndPrimal(iter);
+      this->RegisterPrimal();
+      Solver<FMC,LP_TYPE,VISITOR>::lp_.ComputeBackwardPassAndPrimal(iter);
+      this->RegisterPrimal();
+    } else {
+      Solver<FMC,LP_TYPE,VISITOR>::Iterate(c);
+    }
+    ++iter;
+  }
 
 private:
    PrimalSolutionStorage forwardPrimal_, backwardPrimal_;
+   INDEX iter = 0;
 };
 
 // rounding based on primal heuristics provided by problem constructor
-template<typename FMC>
-class ProblemConstructorRoundingSolver : public Solver<FMC>
+template<typename SOLVER>
+class ProblemConstructorRoundingSolver : public SOLVER
 {
 public:
-   using Solver<FMC>::Solver;
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputePrimal,ComputePrimal);
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
+   using SOLVER::SOLVER;
+
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputePrimal,ComputePrimal)
+   template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanComputePrimal()
    {
-      // do zrobienia: this is not nice. CanComputePrimal should only be called with valid PROBLEM_CONSTRUCTOR_NO
-      constexpr INDEX n = PROBLEM_CONSTRUCTOR_NO >= Solver<FMC>::ProblemDecompositionList::size() ? 0 : PROBLEM_CONSTRUCTOR_NO;
-      if(n < PROBLEM_CONSTRUCTOR_NO) return false;
-      else return HasComputePrimal<meta::at_c<typename Solver<FMC>::ProblemDecompositionList,n>, void, PrimalSolutionStorage::Element>();
-      //static_assert(PROBLEM_CONSTRUCTOR_NO<ProblemDecompositionList::size(),"");
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO >= Solver<FMC>::ProblemDecompositionList::size()>::type
-   ComputePrimal(PrimalSolutionStorage::Element primal) { return; }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < Solver<FMC>::ProblemDecompositionList::size() && !CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   ComputePrimal(PrimalSolutionStorage::Element primal)
-   {
-      return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
-   }
-   template<INDEX PROBLEM_CONSTRUCTOR_NO>
-   typename std::enable_if<PROBLEM_CONSTRUCTOR_NO < Solver<FMC>::ProblemDecompositionList::size() && CanComputePrimal<PROBLEM_CONSTRUCTOR_NO>()>::type
-   ComputePrimal(PrimalSolutionStorage::Element primal)
-   {
-      std::cout << "ComputePrimal for pc no " << PROBLEM_CONSTRUCTOR_NO << "\n";
-      std::get<PROBLEM_CONSTRUCTOR_NO>(this->problemConstructor_).ComputePrimal(primal);
-      return ComputePrimal<PROBLEM_CONSTRUCTOR_NO+1>(primal);
-   }
-   void ComputePrimal(PrimalSolutionStorage::Element primal)
-   {
-      ComputePrimal<0>(primal);
+      return HasComputePrimal<PROBLEM_CONSTRUCTOR, void>();
    }
 
-   void PostIterate(LpControl c)
+   void ComputePrimal()
+   {
+      // compute the primal in parallel.
+      // for this, first we have to wait until the rounding procedure has read off everything from the LP model before optimizing further
+      for_each_tuple(this->problemConstructor_, [this](auto& l) {
+            using pc_type = typename std::remove_reference<decltype(l)>::type;
+            static_if<ProblemConstructorRoundingSolver<SOLVER>::CanComputePrimal<pc_type>()>([&](auto f) {
+                  f(l).ComputePrimal();
+            });
+      });
+      this->RegisterPrimal();
+   }
+
+   virtual void PostIterate(LpControl c)
    {
       if(c.computePrimal) {
-         std::unique_lock<std::mutex> guard(this->LpChangeMutex);
-         this->lp_.InitializePrimalVector(primal_); // do zrobienia: this is not nice: reallocation might occur
          // do zrobienia: possibly run this in own thread similar to lp solver
-         ComputePrimal(primal_.begin());
-         this->RegisterPrimal(primal_);
+         ComputePrimal();
       }
-      Solver<FMC>::PostIterate(c);
+      SOLVER::PostIterate(c);
+   }
+
+   virtual void End()
+   {
+      SOLVER::End(); // first let problem constructors end (done in Solver)
+      this->RegisterPrimal();
    }
    
-private:
-   PrimalSolutionStorage primal_;
 };
 
 
-
-// solver holding visitor. We do not want to have this in base class, as this would entail passing visitor information to constructors etc.
-template<typename SOLVER, typename VISITOR>
-class VisitorSolver : public SOLVER {
-public:
-   VisitorSolver(int argc, char** argv) :
-      SOLVER(),
-      visitor_(SOLVER::cmd_)
-   {
-      this->Init(argc,argv);
-   }
-   VisitorSolver(const std::vector<std::string>& arg) :
-      SOLVER(),
-      visitor_(SOLVER::cmd_)
-   {
-      this->Init(arg);
-   }
-   int Solve()
-   {
-      this->lp_.Init();
-      this->Begin();
-      LpControl c = visitor_.begin(this->lp_);
-      while(!c.end && !c.error) {
-         this->PreIterate(c);
-         this->Iterate(c);
-         this->PostIterate(c);
-         c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
-      }
-      if(!c.error) {
-         this->End();
-         // possibly primal has been computed in end. Call visitor again
-         visitor_.end(this->lowerBound_, this->bestPrimalCost_);
-         this->WritePrimal();
-      }
-      return c.error;
-   }
-
-private:
-   VISITOR visitor_;
-};
 
 template<typename SOLVER, typename LP_INTERFACE>
 class LpSolver : public SOLVER {
@@ -450,128 +428,144 @@ public:
    
     void RunLpSolver(int displayLevel=0)
     {
-            std::unique_lock<std::mutex> guard(this->LpChangeMutex);
-            // Jan: lp can change its number of factors, e.g. after tightening. We must synchronize here as well!
-            auto FactorWrapper = [&](INDEX i){ return SOLVER::lp_.GetFactor(i);};
-            FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItBegin(FactorWrapper,0);
-            FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItEnd(FactorWrapper,SOLVER::lp_.GetNumberOfFactors());
+       std::unique_lock<std::mutex> guard(this->LpChangeMutex);
+       auto FactorWrapper = [&](INDEX i){ return SOLVER::lp_.GetFactor(i);};
+       FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItBegin(FactorWrapper,0);
+       FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItEnd(FactorWrapper,SOLVER::lp_.GetNumberOfFactors());
 
-            auto MessageWrapper = [&](INDEX i){ return SOLVER::lp_.GetMessage(i);};
-            FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
-            FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,SOLVER::lp_.GetNumberOfMessages());
+       auto MessageWrapper = [&](INDEX i){ return SOLVER::lp_.GetMessage(i);};
+       FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
+       FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,SOLVER::lp_.GetNumberOfMessages());
 
-            LP_INTERFACE solver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
+       LP_INTERFACE solver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
 
-            solver.ReduceLp(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold_);
-            guard.unlock();
+       solver.ReduceLp(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold_);
+       PrimalSolutionStorage x(FactorItBegin,FactorItEnd); // we need to initialize it here, as the lp might change later.
+       guard.unlock();
 
-            solver.SetTimeLimit(timelimit_.getValue());
-            solver.SetNumberOfThreads(LpThreadsArg_.getValue());
-            solver.SetDisplayLevel(displayLevel);
+       solver.SetTimeLimit(timelimit_.getValue());
+       solver.SetNumberOfThreads(LpThreadsArg_.getValue());
+       solver.SetDisplayLevel(displayLevel);
 
-            auto status = solver.solve();
-            std::cout << "solved lp instance\n";
-            //  TODO: we need a better way to decide, when the number of variables get increased/decreased
-            //  e.g. What to do if the solver hit the timelimit? 
-            if( status == 0 || status == 3 ){     
-                    // Jan: this is only admissible when we have an integral solution, not in RELAXed mode!       
-                    PrimalSolutionStorage x(FactorItBegin,FactorItEnd);
-                    for(INDEX i=0;i<x.size();i++){
-                            x[i] = solver.GetVariableValue(i);
-                    }
-                    this->RegisterPrimal(x);
-                    //std::lock_guard<std::mutex> WriteGuard(BuildLpMutex);
+       auto status = solver.solve();
+       std::cout << "solved lp instance\n";
+       //  TODO: we need a better way to decide, when the number of variables get increased/decreased
+       //  e.g. What to do if the solver hit the timelimit? 
+       if( status == 0 || status == 3 ){     
+          // Jan: this is only admissible when we have an integral solution, not in RELAXed mode!       
+          for(INDEX i=0;i<x.size();i++){
+             x[i] = solver.GetVariableValue(i);
+          }
 
+          std::unique_lock<std::mutex> guard(LpChangeMutex);
+          this->RegisterPrimal(x, solver.GetObjectiveValue());
+          guard.unlock();
 
-                    if( status == 0){
-                            std::cout << "Optimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
-                    } else {
-                            std::cout << "Suboptimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
-                    }
+          if( status == 0){
+             std::cout << "Optimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
+          } else {
+             std::cout << "Suboptimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
+          }
 
-                    std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
-                    // if solution found, decrease number of variables
-                    std::cout << "feas decrease" << std::endl;
-                    VariableThreshold_ *= 0.75;
-                    ub_ = std::min(ub_,solver.GetObjectiveValue());
-            }
-            else if( status == 4){ // hit the timelimit
-                    std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
-                    VariableThreshold_ *= 0.6;
-                    std::cout << "time decrease" << std::endl;
-            }
-            else {
-                    std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
-                    // if ilp infeasible, increase number of variables
-                    std::cout << "infeas increase" << std::endl;
-                    VariableThreshold_ *= 1.3;
-            }
+          std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
+          // if solution found, decrease number of variables
+          std::cout << "feas decrease" << std::endl;
+          VariableThreshold_ *= 0.75;
+          ub_ = std::min(ub_,solver.GetObjectiveValue());
+       }
+       else if( status == 4){ // hit the timelimit
+          std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
+          VariableThreshold_ *= 0.6;
+          std::cout << "time decrease" << std::endl;
+       }
+       else {
+          std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
+          // if ilp infeasible, increase number of variables
+          std::cout << "infeas increase" << std::endl;
+          VariableThreshold_ *= 1.3;
+       }
     }
 
     void IterateLpSolver()
     {
-            while(runLp_) {
-
-                    std::unique_lock<std::mutex> WakeLpGuard(WakeLpSolverMutex_);
-                    WakeLpSolverCond.wait(WakeLpGuard);
-                    WakeLpGuard.unlock();
-                    if(!runLp_) { break; }
-                    RunLpSolver();
-            }
+       while(runLp_) {
+          std::unique_lock<std::mutex> WakeLpGuard(WakeLpSolverMutex_);
+          WakeLpSolverCond.wait(WakeLpGuard);
+          WakeLpGuard.unlock();
+          if(!runLp_) { break; }
+          RunLpSolver();
+       }
     }
 
     void Begin()
     {
-            LpThreads_.resize(threads_.getValue());
-            for(INDEX i=0;i<threads_.getValue();i++){
-                    LpThreads_[i] = std::thread([this] () { this->IterateLpSolver(); });
-            }
+       {
+          std::unique_lock<std::mutex> guard(LpChangeMutex);
+          SOLVER::Begin();
+       }
 
-            VariableThreshold_ = roundBound_.getValue();
-            SOLVER::Begin();
+       LpThreads_.resize(threads_.getValue());
+       for(INDEX i=0;i<threads_.getValue();i++){
+          LpThreads_[i] = std::thread([&,this] () { this->IterateLpSolver(); });
+       }
+
+       VariableThreshold_ = roundBound_.getValue();
+    }
+
+    void PreIterate(LpControl c)
+    {
+       std::unique_lock<std::mutex> guard(LpChangeMutex);
+       SOLVER::PreIterate(c);
     }
 
     void Iterate(LpControl c)
     {
-          // wait if some lp solver constructs lp. Reparametrization is not allowed to change then?
-          SOLVER::Iterate(c);
+       std::unique_lock<std::mutex> guard(LpChangeMutex);
+       SOLVER::Iterate(c);
     }
+
     void PostIterate(LpControl c)
     {
       // wait, as in PostIterate tightening can take place
-      SOLVER::PostIterate(c);
+       {
+          std::unique_lock<std::mutex> guard(LpChangeMutex);
+          SOLVER::PostIterate(c);
+       }
 
       if( curIter_ % LpInterval_.getValue() == 0 ){
-              std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
-              WakeLpSolverCond.notify_one();
-              //std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Jan: why sleep here?
+         std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
+         WakeLpSolverCond.notify_one();
+         //std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Jan: why sleep here?
       }
       ++curIter_;
     }
 
     void End()
     {
+      {
+         std::unique_lock<std::mutex> guard(LpChangeMutex);
+         SOLVER::End();
+      }
+
       runLp_ = false;
       std::cout << "stop lp solvers\n";
       std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
       WakeLpSolverCond.notify_all();
       WakeUpGuard.unlock();
 
-      SOLVER::End();
-      //if(LPOnly_.isSet() || RELAX_.isSet()){
-          std::cout << "construct final lp solver\n";
-          std::thread th([this]() { this->RunLpSolver(1); });
-          th.join();
-      //} 
+      std::cout << "construct final lp solver\n";
+      std::thread th([&,this]() { this->RunLpSolver(1); });
+      th.join();
 
       for(INDEX i=0;i<threads_.getValue();i++){
-              if(LpThreads_[i].joinable()){
-                      LpThreads_[i].join();
-              }
+         if(LpThreads_[i].joinable()){
+            LpThreads_[i].join();
+         }
       }
 
       std::cout << "\n";
       std::cout << "The best objective computed by ILP is " << ub_ << "\n";
+      std::cout << "Best overall objective = " << this->bestPrimalCost_ << "\n";
     }
 
 private:
@@ -584,6 +578,8 @@ private:
   TCLAP::SwitchArg RELAX_;
   //TCLAP::SwitchArg EXPORT_;
   
+  std::mutex LpChangeMutex;
+
   std::mutex UpdateUbLpMutex;
   std::mutex WakeLpSolverMutex_;
   std::condition_variable WakeLpSolverCond;
@@ -602,7 +598,7 @@ private:
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   VisitorSolver<Solver<FMC>,VISITOR> solver(argc,argv); \
+   Solver<FMC,LP,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }
@@ -611,7 +607,7 @@ int main(int argc, char* argv[]) \
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   VisitorSolver<MpRoundingSolver<FMC>,VISITOR> solver(argc,argv); \
+   MpRoundingSolver<FMC,LP,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }
@@ -621,7 +617,7 @@ int main(int argc, char* argv[]) \
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   VisitorSolver<SOLVER,VISITOR> solver(argc,argv); \
+   MpRoundingSolver<FMC,LP,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }
@@ -631,10 +627,31 @@ int main(int argc, char* argv[]) \
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   VisitorSolver<LpSolver<Solver<FMC>,LPSOLVER>,VISITOR> solver(argc,argv); \
+   VisitorSolver<LpSolver<MpRoundingSolver<FMC>,LPSOLVER>,VISITOR> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }
+
+// Macro for generating main function with specific solver with SAT based rounding
+#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_SAT(FMC,PARSE_PROBLEM_FUNCTION,VISITOR) \
+using namespace LP_MP; \
+int main(int argc, char* argv[]) \
+{ \
+   MpRoundingSolver<FMC,LP_sat<LP>,VISITOR> solver(argc,argv); \
+   solver.ReadProblem(PARSE_PROBLEM_FUNCTION<Solver<FMC,LP_sat<LP>,VISITOR>>); \
+   return solver.Solve(); \
+}
+
+// Macro for generating main function with specific solver with SAT based rounding
+#define LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_SAT_CONCURRENT(FMC,PARSE_PROBLEM_FUNCTION,VISITOR) \
+using namespace LP_MP; \
+int main(int argc, char* argv[]) \
+{ \
+   MpRoundingSolver<FMC,LP_sat<LP_concurrent<LP>>,VISITOR> solver(argc,argv); \
+   solver.ReadProblem(PARSE_PROBLEM_FUNCTION<Solver<FMC,LP_sat<LP_concurrent<LP>>,VISITOR>>); \
+   return solver.Solve(); \
+}
+
 
 } // end namespace LP_MP
 

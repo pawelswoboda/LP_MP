@@ -7,7 +7,452 @@
 
 namespace LP_MP{
 
+  constexpr static INDEX MinSumConvolutionThreshold = 1000000;
   using MinConv = discrete_tomo::MinConv<REAL,INDEX>;
+
+  class DiscreteTomographyFactorCounting2{
+  public:
+
+     DiscreteTomographyFactorCounting2(const INDEX no_left_labels, const INDEX left_sum_size, const INDEX no_center_left_labels, const INDEX no_center_right_labels, const INDEX right_sum_size, const INDEX no_right_labels, const INDEX up_sum_size)
+        : reg_(no_center_left_labels, no_center_right_labels, 0.0),
+        up_(no_left_labels, no_right_labels, up_sum_size,0.0), 
+        left_(no_left_labels, no_center_left_labels, left_sum_size,0.0), 
+        right_(no_center_right_labels, no_right_labels, right_sum_size,0.0)
+     {
+        assert(no_left_labels > 0);
+        assert(no_center_left_labels > 0);
+        assert(no_center_right_labels > 0);
+        assert(no_right_labels > 0);
+        assert(left_sum_size > 0);
+        assert(right_sum_size > 0);
+        assert(up_sum_size > 0);
+        //assert(up_sum_size <= left_sum_size + no_center_left_labels + no_center_right_labels + right_sum_size);
+        assert(no_center_left_labels-1 + no_center_right_labels-1 + left_sum_size-1 + right_sum_size-1 >= up_sum_size-1);
+        //assert(min_conv_lower_bound() < 0.000000001);
+     }
+     DiscreteTomographyFactorCounting2(const INDEX no_labels, const INDEX left_sum_size, const INDEX right_sum_size, const INDEX up_sum_size)
+        : DiscreteTomographyFactorCounting2(no_labels, left_sum_size, no_labels, no_labels, right_sum_size, no_labels, up_sum_size)
+     {}
+
+     REAL eval(const INDEX x_left, const INDEX left_sum, const INDEX x_center_left, const INDEX x_center_right, const INDEX right_sum, const INDEX x_right) const {
+        assert(x_left < no_left_labels());
+        assert(x_center_left < no_center_left_labels());
+        assert(x_center_right < no_center_right_labels());
+        assert(x_right < no_right_labels());
+        assert(left_sum + x_center_left + x_center_right + right_sum < up_sum_size());
+        return up_(x_left, x_right, x_center_left + x_center_right + left_sum + right_sum) 
+           + left_(x_left, x_center_left, left_sum) 
+           + right_(x_center_right, x_right, right_sum) 
+           + reg_(x_center_left, x_center_right);
+     }
+
+     template<typename ARRAY>
+     void summation_cost(const ARRAY& cost) {
+        assert(cost.size() <= up_sum_size());
+        for(INDEX x1=0; x1<up_.dim1(); ++x1) {
+           for(INDEX x2=0; x2<up_.dim2(); ++x2) {
+              for(INDEX i=0; i<up_.dim3(); ++i) {
+                 if(x1+x2+i < cost.size()) {
+                    up_(x1,x2,i) = cost[x1+x2+i];
+                 } else {
+                    up_(x1,x2,i) = std::numeric_limits<REAL>::infinity();
+                 }
+              }
+           } 
+        }
+     }
+
+     // explicitly iterate over all possibilities
+     REAL naive_lower_bound() const {
+        REAL bound = std::numeric_limits<REAL>::infinity();
+
+        for_each_label_sum([&](const INDEX x_l, const INDEX lz, const INDEX x_cl, const INDEX x_cr, const INDEX rz, const INDEX x_r) {
+              bound = std::min(bound, eval(x_l, lz, x_cl, x_cr, rz, x_r) );
+              });
+        return bound;
+     }
+
+     // use min sum convolution to replace inner loops for cardinality variables
+     REAL min_conv_lower_bound() const {
+        REAL bound = std::numeric_limits<REAL>::infinity();
+
+        for_each_label([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r) {
+              assert(up_sum_size()-1 >= x_cl + x_cr);
+              // set max_sum_size as sum_max as below! Possibly make do not give left_sum_size and right_sum_size to mc but min(left_sum_size(), max_sum_size()) etc.
+              const INDEX max_sum_size = std::min(up_sum_size(), left_sum_size() + right_sum_size()-1 );
+              assert(max_sum_size >= left_sum_size() && max_sum_size >= right_sum_size());
+              auto op = [=](INDEX i,INDEX j){ return std::min(i+j, max_sum_size); };
+              auto z_left = [&](INDEX k){ return left_(x_l,x_cl, k); };
+              auto z_right = [&](INDEX k){ return right_(x_cr, x_r, k); }; 
+
+              MinConv mc(z_left, z_right, left_sum_size(), right_sum_size(), max_sum_size);
+              mc.CalcConv(op,z_left,z_right);
+
+              const INDEX sum_max = std::min(max_sum_size, up_sum_size() - x_cl - x_cr);
+              for(INDEX sum=0; sum<sum_max; sum++){
+               assert(sum == op(mc.getIdxA(sum),mc.getIdxB(sum)));
+               assert(sum == (mc.getIdxA(sum) + mc.getIdxB(sum)));
+
+               const REAL val = mc.getConv(sum) + up_(x_l, x_r, sum + x_cl + x_cr) + reg_(x_cl, x_cr);
+               bound = std::min(bound, val);
+              }
+              });
+        return bound;
+    }
+    
+     /*
+        for_each_label_min_conv([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r, const MinConv& mc) {
+
+              for(INDEX sum=0;sum<up_sum_size()-x_cl-x_cr;sum++){
+               const REAL val = mc.getConv(sum+x_cl+x_cr) + up_(x_l, x_r, sum) + reg_(x_cl, x_cr);
+               bound = std::min(bound, val);
+              }
+              });
+        return bound; 
+     }
+*/
+     template<typename LAMBDA>
+     void for_each_label_sum(LAMBDA f) const {
+        for(INDEX x_l=0; x_l<no_left_labels(); ++x_l) {
+           for(INDEX x_cl=0; x_cl<no_center_left_labels(); ++x_cl) {
+              for(INDEX x_cr=0; x_cr<no_center_right_labels(); ++x_cr) {
+                 for(INDEX x_r=0; x_r<no_right_labels(); ++x_r) {
+                    for(INDEX lz=0;lz<left_sum_size();lz++){
+                       for(INDEX rz=0;rz<right_sum_size() && rz+lz+x_cl+x_cr<up_sum_size();rz++){
+                          f(x_l, lz, x_cl, x_cr, rz, x_r);
+                       }
+                    }
+                 }
+              }
+           }
+        }
+     }
+
+     template<typename LAMBDA>
+     void for_each_label(LAMBDA f) const {
+        for(INDEX x_l=0; x_l<no_left_labels(); ++x_l) {
+           for(INDEX x_cl=0; x_cl<no_center_left_labels(); ++x_cl) {
+              for(INDEX x_cr=0; x_cr<no_center_right_labels(); ++x_cr) {
+                 for(INDEX x_r=0; x_r<no_right_labels(); ++x_r) {
+                    f(x_l,x_cl, x_cr, x_r);
+                 }
+              }
+           }
+        }
+     }
+
+     template<typename LAMBDA>
+     void for_each_label_min_conv(LAMBDA f) const
+     {
+        for(INDEX x_l=0; x_l<no_left_labels(); ++x_l) {
+           for(INDEX x_cl=0; x_cl<no_center_left_labels(); ++x_cl) {
+              for(INDEX x_cr=0; x_cr<no_center_right_labels(); ++x_cr) {
+                 for(INDEX x_r=0; x_r<no_right_labels(); ++x_r) {
+                    assert(up_sum_size() >= x_cl + x_cr);
+                    auto op = [&](INDEX i,INDEX j){ return std::min(i+j, up_sum_size() - x_cl - x_cr); };
+                    auto z_left = [&](INDEX k){ return left_(x_l,x_cl, k); };
+                    auto z_right = [&](INDEX k){ return right_(x_cr, x_r, k); }; 
+
+                    MinConv mc(z_left,z_right,left_sum_size(),right_sum_size(),up_sum_size() - x_cl - x_cr);
+                    mc.CalcConv(op,z_left,z_right);
+
+                    f(x_l,x_cl, x_cr, x_r, mc);
+                 }
+              }
+           }
+        }
+     }
+
+     REAL LowerBound() const {
+        if(up_.dim3() < MinSumConvolutionThreshold) { // check constant!
+           return naive_lower_bound();
+        } else {
+           return min_conv_lower_bound();
+        }
+     }
+
+     REAL EvaluatePrimal() const {
+        return std::numeric_limits<REAL>::infinity();
+     }
+
+     INDEX size() const { return up_.size() + left_.size() + right_.size() + reg_.size(); }
+     INDEX no_left_labels() const { return left_.dim1(); }
+     INDEX no_center_left_labels() const { return left_.dim2(); }
+     INDEX no_center_right_labels() const { return right_.dim1(); }
+     INDEX no_right_labels() const { return right_.dim2(); }
+     INDEX up_sum_size() const { return up_.dim3(); }
+     INDEX left_sum_size() const { return left_.dim3(); }
+     INDEX right_sum_size() const { return right_.dim3(); }
+     REAL& reg(const INDEX x_cl, const INDEX x_cr) { return reg_(x_cl, x_cr); }
+     REAL& right(const INDEX x_cr, const INDEX x_r, const INDEX sum) { return right_(x_cr, x_r, sum); }
+     REAL& left(const INDEX x_l, const INDEX x_cl, const INDEX sum) { return left_(x_l, x_cl, sum); }
+     REAL& up(const INDEX x_left, const INDEX x_right, const INDEX sum) { return up_(x_left, x_right, sum); }
+     matrix<REAL>& reg() { return reg_; }
+     tensor3<REAL>& right() { return right_; }
+     tensor3<REAL>& left() { return left_; }
+     tensor3<REAL>& up() { return up_; }
+
+
+
+     // marginalization operations
+     template<typename MSG>
+     void MessageCalculation_Up(MSG& msg) const {
+        if(up_sum_size() > MinSumConvolutionThreshold) {
+           MessageCalculation_MinConv_Up(msg);
+        } else {
+           MessageCalculation_Naive_Up(msg);
+        } 
+     }
+     template<typename MSG>
+     void MessageCalculation_Left(MSG& msg) const {
+        if(up_sum_size() > MinSumConvolutionThreshold) {
+           MessageCalculation_MinConv_Left(msg);
+        } else {
+           MessageCalculation_Naive_Left(msg);
+        } 
+     }
+     template<typename MSG>
+     void MessageCalculation_Right(MSG& msg) const {
+        if(up_sum_size() > MinSumConvolutionThreshold) {
+           MessageCalculation_MinConv_Right(msg);
+        } else {
+           MessageCalculation_Naive_Right(msg);
+        } 
+     }
+     template<typename MSG>
+     void MessageCalculation_Reg(MSG& msg) const {
+        if(up_sum_size() > MinSumConvolutionThreshold) {
+           MessageCalculation_MinConv_Reg(msg);
+        } else {
+           MessageCalculation_Naive_Reg(msg);
+        } 
+     }
+
+    template<typename MSG>
+    void MessageCalculation_Naive_Up(MSG& msg) const {
+       std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
+
+        for_each_label_sum([&](const INDEX x_l, const INDEX lz, const INDEX x_cl, const INDEX x_cr, const INDEX rz, const INDEX x_r) {
+           const REAL value = eval(x_l, lz, x_cl, x_cr, rz, x_r);
+           const INDEX sum = lz + x_cl + x_cr + rz;
+           msg(x_l, x_r, sum) = std::min(msg(x_l, x_r, sum), value);
+           });
+    }
+
+    template<typename MSG>
+    void MessageCalculation_Naive_Left(MSG& msg) const {
+        std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
+
+        for_each_label_sum([&](const INDEX x_l, const INDEX lz, const INDEX x_cl, const INDEX x_cr, const INDEX rz, const INDEX x_r) {
+           const REAL value = eval(x_l, lz, x_cl, x_cr, rz, x_r);
+           msg(x_l, x_cl, lz) = std::min(msg(x_l, x_cl, lz), value);
+           });
+    }
+
+    template<typename MSG>
+    void MessageCalculation_Naive_Right(MSG& msg) const {
+        std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
+
+        for_each_label_sum([&](const INDEX x_l, const INDEX lz, const INDEX x_cl, const INDEX x_cr, const INDEX rz, const INDEX x_r) {
+           const REAL value = eval(x_l, lz, x_cl, x_cr, rz, x_r);
+           msg(x_cr, x_r, rz) = std::min(msg(x_cr, x_r, rz), value);
+           });
+    }
+
+
+    template<typename MSG>
+    void MessageCalculation_Naive_Reg(MSG& msg) const {
+        std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
+
+        for_each_label_sum([&](const INDEX x_l, const INDEX lz, const INDEX x_cl, const INDEX x_cr, const INDEX rz, const INDEX x_r) {
+           const REAL value = eval(x_l, lz, x_cl, x_cr, rz, x_r);
+           msg(x_cl, x_cr) = std::min(msg(x_cl, x_cr), value);
+           });
+    }
+    
+    template<typename MSG>
+    void MessageCalculation_MinConv_Up(MSG& msg) const {
+        std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
+
+        for_each_label([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r) {
+              assert(up_sum_size()-1 >= x_cl + x_cr);
+              // set max_sum_size as sum_max as below! Possibly make do not give left_sum_size and right_sum_size to mc but min(left_sum_size(), max_sum_size()) etc.
+              const INDEX max_sum_size = std::min(up_sum_size(), left_sum_size() + right_sum_size()-1 );
+              assert(max_sum_size >= left_sum_size() && max_sum_size >= right_sum_size());
+              auto op = [=](INDEX i,INDEX j){ return i+j; };
+              auto z_left = [&](INDEX k){ return left_(x_l,x_cl, k); };
+              auto z_right = [&](INDEX k){ return right_(x_cr, x_r, k); }; 
+
+              MinConv mc(z_left, z_right, left_sum_size(), right_sum_size(), max_sum_size);
+              mc.CalcConv(op,z_left,z_right);
+
+              const INDEX sum_max = std::min(max_sum_size, up_sum_size() - x_cl - x_cr);
+              for(INDEX sum=0;  sum<sum_max; sum++) {
+               assert(sum == op(mc.getIdxA(sum),mc.getIdxB(sum)));
+               assert(sum == (mc.getIdxA(sum) + mc.getIdxB(sum)));
+
+               const REAL val = mc.getConv(sum) + up_(x_l, x_r, sum + x_cl + x_cr) + reg_(x_cl, x_cr);
+               msg(x_l, x_r, sum+x_cl+x_cr) = std::min(msg(x_l, x_r, sum+x_cl+x_cr), val);
+               }
+               });
+    }
+    
+    template<typename MSG>
+    void MessageCalculation_MinConv_Left(MSG& msg) const {
+        std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
+
+        for_each_label([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r) {
+              assert(up_sum_size() >= x_cl + x_cr);
+              assert(up_sum_size() >= x_cl + x_cr);
+              const INDEX left_size = up_sum_size();// - x_cl - x_cr;
+              // total_sum = left_sum + x_cl + x_cr + right_sum => left_sum = total_sum - x_cl - x_cr - right_sum
+              //const INDEX min_conv_size = left_sum_size();//std::min(left_size, left_sum_size());
+              const INDEX min_conv_size = left_sum_size();//std::min(left_sum_size(), up_sum_size() - right_sum_size());
+              //auto op = [=](INDEX i, INDEX j) { return i-x_cl-x_cr - j; }; 
+              auto op = [&](INDEX i,INDEX j){ // 0 <= i-j < left_size
+              if( i  < j + x_cl + x_cr ){ // i-j < 0
+              return min_conv_size;
+              }
+              else{
+              return (i - x_cl - x_cr - j < min_conv_size) ? i-x_cl-x_cr-j : min_conv_size;
+              }
+              };
+              
+              const INDEX shift = 0; //by which number to shift the result.
+              auto z_left = [x_l,x_r,x_cl,x_cr,this](INDEX k){ return up_(x_l, x_r, k ); };
+              auto z_right = [x_cr,x_r,this](INDEX k){ return right_(x_cr, x_r, k); }; 
+
+              MinConv mc(z_left,z_right, left_size, right_sum_size(), min_conv_size);
+              mc.CalcConv(op,z_left,z_right);
+
+              for(INDEX left_sum=0; left_sum<min_conv_size; left_sum++) {
+                 //REAL test_val = std::numeric_limits<REAL>::infinity();
+                 //for(INDEX right_sum=0; right_sum<right_sum_size(); ++right_sum) {
+                 //   if(left_sum + right_sum + x_cl + x_cr < up_sum_size()) {
+                 //      test_val = std::min(test_val, up_(x_l, x_r, left_sum + right_sum + x_cl + x_cr) + right_(x_cr, x_r, right_sum));
+                 //   }
+                 //}
+                 //const REAL val = test_val + left_(x_l, x_cl, left_sum) + reg_(x_cl, x_cr);
+                 //assert(test_val == mc.getConv(left_sum));
+                 const REAL val = mc.getConv(left_sum) + left_(x_l, x_cl, left_sum) + reg_(x_cl, x_cr);
+                 msg(x_l, x_cl, left_sum) = std::min(msg(x_l, x_cl, left_sum), val);
+              }
+        });
+    }
+
+    template<typename MSG>
+    void MessageCalculation_MinConv_Right(MSG& msg) const {
+        std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
+
+        for_each_label([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r) {
+              assert(up_sum_size() >= x_cl + x_cr);
+              assert(up_sum_size() >= x_cl + x_cr);
+              const INDEX left_size = up_sum_size();// - x_cl - x_cr;
+              // total_sum = left_sum + x_cl + x_cr + right_sum => right_sum = total_sum - x_cl - x_cr - left_sum
+              //const INDEX min_conv_size = left_sum_size();//std::min(left_size, left_sum_size());
+              const INDEX min_conv_size = right_sum_size();//std::min(left_sum_size(), up_sum_size() - right_sum_size());
+              //auto op = [=](INDEX i, INDEX j) { return i-x_cl-x_cr - j; }; 
+              auto op = [&](INDEX i,INDEX j){ // 0 <= i-j < left_size
+              if( i  < j + x_cl + x_cr ){ // i-j < 0
+              return min_conv_size;
+              }
+              else{
+              return (i - x_cl - x_cr - j < min_conv_size) ? i-x_cl-x_cr-j : min_conv_size;
+              }
+              };
+              
+              const INDEX shift = 0; //by which number to shift the result.
+              auto z_left = [x_l,x_r,x_cl,x_cr,this](INDEX k){ return up_(x_l, x_r, k ); };
+              auto z_right = [x_l,x_cl,this](INDEX k){ return left_(x_l, x_cl, k); }; 
+
+              MinConv mc(z_left,z_right, left_size, left_sum_size(), min_conv_size);
+              mc.CalcConv(op,z_left,z_right);
+
+              for(INDEX right_sum=0; right_sum<min_conv_size; right_sum++) {
+                 //REAL test_val = std::numeric_limits<REAL>::infinity();
+                 //for(INDEX right_sum=0; right_sum<right_sum_size(); ++right_sum) {
+                 //   if(left_sum + right_sum + x_cl + x_cr < up_sum_size()) {
+                 //      test_val = std::min(test_val, up_(x_l, x_r, left_sum + right_sum + x_cl + x_cr) + right_(x_cr, x_r, right_sum));
+                 //   }
+                 //}
+                 //const REAL val = test_val + left_(x_l, x_cl, left_sum) + reg_(x_cl, x_cr);
+                 //assert(test_val == mc.getConv(left_sum));
+                 const REAL val = mc.getConv(right_sum) + right_(x_cr, x_r, right_sum) + reg_(x_cl, x_cr);
+                 msg(x_cr, x_r, right_sum) = std::min(msg(x_cr, x_r, right_sum), val);
+              }
+        });
+
+
+        /*
+        for_each_label([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r) {
+              assert(up_sum_size() >= x_cl + x_cr);
+              auto op = [&](INDEX i,INDEX j){ // 0 <= i-j <= right_size
+              if( i < j ){ 
+              return right_sum_size();
+              }
+              else{
+              return (i-j < right_sum_size()) ? i-j : right_sum_size();
+              }
+              };
+              auto z_left = [&](INDEX k){ return up_(x_l,x_cl, k); };
+              auto z_right = [&](INDEX k){ return left_(x_cr, x_r, k); }; 
+
+              MinConv mc(z_left,z_right,up_sum_size(),left_sum_size(),right_sum_size());
+              mc.CalcConv(op,z_left,z_right);
+
+              for(INDEX right_sum=0;right_sum<right_sum_size();right_sum++){
+               const REAL val = mc.getConv(right_sum+x_cl+x_cr) + right_(x_l, x_cl, right_sum) + reg_(x_cl, x_cr);
+               msg(x_cr, x_r, right_sum) = std::min(msg(x_l, right_sum, x_cl), val);
+               }
+               });
+               */
+    }
+
+    template<typename MSG>
+    void MessageCalculation_MinConv_Reg(MSG& msg) const {
+       assert(msg.dim1() == no_center_left_labels());
+       assert(msg.dim2() == no_center_right_labels());
+       std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
+
+        for_each_label([&](const INDEX x_l, const INDEX x_cl, const INDEX x_cr, const INDEX x_r) {
+              assert(up_sum_size()-1 >= x_cl + x_cr);
+              // set max_sum_size as sum_max as below! Possibly make do not give left_sum_size and right_sum_size to mc but min(left_sum_size(), max_sum_size()) etc.
+              const INDEX max_sum_size = std::min(up_sum_size(), left_sum_size() + right_sum_size()-1 );
+              assert(max_sum_size >= left_sum_size() && max_sum_size >= right_sum_size());
+              auto op = [=](INDEX i,INDEX j){ return i+j; };
+              auto z_left = [&](INDEX k){ return left_(x_l,x_cl, k); };
+              auto z_right = [&](INDEX k){ return right_(x_cr, x_r, k); }; 
+
+              MinConv mc(z_left, z_right, left_sum_size(), right_sum_size(), max_sum_size);
+              mc.CalcConv(op,z_left,z_right);
+
+              const INDEX sum_max = std::min(max_sum_size, up_sum_size() - x_cl - x_cr);
+              for(INDEX sum=0; sum<sum_max; sum++){
+               assert(sum == op(mc.getIdxA(sum),mc.getIdxB(sum)));
+               assert(sum == (mc.getIdxA(sum) + mc.getIdxB(sum)));
+
+               const REAL val = mc.getConv(sum) + up_(x_l, x_r, sum + x_cl + x_cr) + reg_(x_cl, x_cr);
+               msg(x_cl, x_cr) = std::min(msg(x_l, x_r), val);
+              }
+              });
+    }
+
+   void init_primal() { 
+      primal_.left_sum = left_sum_size();
+      primal_.right_sum = right_sum_size();
+      primal_.left_label = no_left_labels();
+      primal_.center_left_label = no_center_left_labels();
+      primal_.center_right_label = no_center_right_labels();
+      primal_.right_label = no_right_labels();
+   }
+   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_.left_sum, primal_.right_sum, primal_.left_label, primal_.center_left_label, primal_.center_right_label, primal_.right_label ); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( reg_, up_, left_, right_ ); }
+  private:
+    matrix<REAL> reg_;
+    tensor3<REAL> up_, left_, right_; 
+
+    struct { INDEX left_sum, right_sum, left_label, center_left_label, center_right_label, right_label; } primal_;
+  };
   
   class DiscreteTomographyFactorCounting{
 
@@ -419,7 +864,7 @@ namespace LP_MP{
       else if( noUnkwn > 1 && noTrue == 0 ){
         return IdxLbl(opt,0,numberOfLabels_);
       }
-      else{ assert(false); } // not possible!
+      else{ assert(false); return IdxLbl(opt,0,numberOfLabels_);  } // not possible!
     };
     
     /* Get primal label */

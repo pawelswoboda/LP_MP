@@ -8,10 +8,13 @@ namespace LP_MP {
 
 // encoding with 4 entries corresponding to the four possible labelings in this order:
 // 011 101 110 111. Labeling 000 is always assigned cost 0. Labelings 100 010 001 are forbidden.
-class MulticutTripletFactor
+class MulticutTripletFactor : public std::array<REAL,4>
 {
 public:
-   MulticutTripletFactor() {};
+   MulticutTripletFactor() 
+   {
+      std::fill(this->begin(), this->end(), 0.0);
+   };
 
    using TripletEdges = std::array<std::array<INDEX,2>,3>;
    static TripletEdges SortEdges(const INDEX i1, const INDEX i2, const INDEX i3)
@@ -26,11 +29,9 @@ public:
    constexpr static INDEX size() { return 4; }
    constexpr static INDEX PrimalSize() { return 5; } // primal states: 011 101 110 111 000. Last one receives cost 0 always, however is needed to keep track of primal solution in PropagatePrimal etc.
 
-   template<typename REPAM_ARRAY>
-   static REAL LowerBound(const REPAM_ARRAY& repamPot) 
+   REAL LowerBound() const
    {
-      assert(repamPot.size() == 4);
-      return std::min(std::min(std::min( repamPot[0], repamPot[1]), std::min(repamPot[2], repamPot[3])),0.0); // possibly, if we have a SIMD factor, use a simdized minimum
+      return std::min(0.0, *std::min_element(this->begin(), this->end()));
    }
 
    // if one entry is unknown, set it to true. If one entry is true, set all other to false
@@ -59,10 +60,36 @@ public:
       }
    }
 
-   template<typename REPAM_ARRAY, typename PRIMAL>
-   static REAL EvaluatePrimal(const REPAM_ARRAY& repam, const PRIMAL primal)
+   REAL EvaluatePrimal() const
    {
-      assert(repam.size() == 4);
+      const auto sum = std::count(primal_.begin(), primal_.end(), true);
+      if(sum == 1) { return std::numeric_limits<REAL>::infinity(); }
+      assert(std::count(primal_.begin(), primal_.end(), true) != 1);
+
+      if(!primal_[0] && primal_[1] && primal_[2]) {
+         return (*this)[0];
+      } else if(primal_[0] && !primal_[1] && primal_[2]) {
+         return (*this)[1];
+      } else if(primal_[0] && primal_[1] && !primal_[2]) {
+         return (*this)[2];
+      } else if(primal_[0] && primal_[1] && primal_[2]) {
+         return (*this)[3];
+      } else if(!primal_[0] && !primal_[1] && !primal_[2]) {
+         return 0.0;
+      } else {
+         assert(false);
+         return std::numeric_limits<REAL>::infinity();
+      }
+
+
+      //REAL cost = 
+      //   (*this)[0]*((1-primal_[0])*primal_[1]*primal_[2]) +
+      //   (*this)[1]*(primal_[0]*(1-primal_[1])*primal_[2]) +
+      //   (*this)[2]*(primal_[0]*primal_[1]*(1-primal_[2])) +
+      //   (*this)[3]*(primal_[1]*primal_[2]*primal_[3]) ;
+      //return cost;
+
+      /*
       for(INDEX i=0; i<PrimalSize(); ++i) {
          assert(primal[i] != unknownState);
       }
@@ -70,7 +97,7 @@ public:
       REAL cost = 0.0;
       INDEX noActive = 0;
       for(INDEX i=0; i<size(); ++i) {
-         cost += primal[i]*repam[i];
+         cost += primal[i]*(*this)[i];
          noActive += primal[i];
       }
       noActive += primal[PrimalSize()-1];
@@ -78,8 +105,10 @@ public:
          return std::numeric_limits<REAL>::infinity();
       }
       return cost;
+      */
    }
 
+   /*
    void CreateConstraints(LpInterfaceAdapter* lp) const 
    {
       LinExpr lhs = lp->CreateLinExpr(); 
@@ -91,6 +120,16 @@ public:
       rhs += 1;
       lp->addLinearInequality(lhs,rhs);
    } 
+   */
+
+   void init_primal() {}
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<std::array<REAL,4>*>(this) ); }
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+
+   auto& set_primal() { return primal_; }
+   auto get_primal() const { return primal_; }
+private:
+   std::array<bool,3> primal_;
 };
 
 
@@ -112,22 +151,20 @@ public:
 
    constexpr static INDEX size() { return 1; }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2, MessageSendingType MST_TMP = MST>
+   template<typename RIGHT_FACTOR, typename G2, MessageSendingType MST_TMP = MST>
    //typename std::enable_if<MST_TMP == MessageSending::SRMP,void>::type
    void
-   ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg) const
+   ReceiveMessageFromRight(const RIGHT_FACTOR& r, G2& msg) const
    {
-      assert(msg.size() == 1);
-      msg[0] -= std::min(std::min(rightPot[(i_+1)%3], rightPot[(i_+2)%3]), rightPot[3]) - std::min(rightPot[i_],0.0);
+      msg[0] -= std::min({r[(i_+1)%3], r[(i_+2)%3], r[3]}) - std::min(r[i_],0.0);
    }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2, MessageSendingType MST_TMP = MST>
+   template<typename RIGHT_FACTOR, typename G2, MessageSendingType MST_TMP = MST>
    //typename std::enable_if<MST_TMP == MessageSending::SRMP,void>::type
    void
-   ReceiveRestrictedMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg, PrimalSolutionStorage::Element primal) const
+   ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, PrimalSolutionStorage::Element primal) const
    {
       //return;
-      assert(msg.size() == 1);
       if(primal[(i_+1)%3] == true || primal[(i_+2)%3] == true || primal[3] == true) { // force unary to one
          msg[0] += std::numeric_limits<REAL>::infinity();
          //std::cout << msg.GetLeftFactor()->operator[](0) << "\n";
@@ -138,14 +175,14 @@ public:
          //std::cout << msg.GetLeftFactor()->operator[](0) << "\n";
          //assert(msg.GetLeftFactor()->operator[](0) == std::numeric_limits<REAL>::infinity() );
       } else { // compute message on unknown values only. No entry of primal is true
-         assert(4 == r->size());
+         assert(4 == r.size());
          assert(RIGHT_FACTOR::PrimalSize() == 5);
          std::array<REAL,RIGHT_FACTOR::PrimalSize()> restrictedPot;
          restrictedPot.fill(std::numeric_limits<REAL>::infinity());
          for(INDEX i=0; i<size(); ++i) {
             assert(primal[i] != true);
             if(primal[i] == unknownState) {
-               restrictedPot[i] = rightPot[i];
+               restrictedPot[i] = r[i];
             }
          }
          if(primal[4] == unknownState) {
@@ -155,21 +192,20 @@ public:
       }
    }
 
-   template<typename LEFT_FACTOR, typename G1, typename G3, MessageSendingType MST_TMP = MST>
+   template<typename LEFT_FACTOR, typename G3, MessageSendingType MST_TMP = MST>
    //typename std::enable_if<MST_TMP == MessageSending::SRMP,void>::type
    void
-   SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega) const
+   SendMessageToRight(const LEFT_FACTOR& l, G3& msg, const REAL omega) const
    {
-      assert(msg.size() == 1);
       static_assert(MST_TMP == MST,"");
-      msg[0] -= omega*leftPot[0];
+      msg[0] -= omega*l;
    }
 
    template<typename G>
    void RepamLeft(G& repamPot, const REAL msg, const INDEX msg_dim) const
    {
       assert(msg_dim == 0);
-      repamPot[0] += msg;
+      repamPot += msg;
    }
    template<typename G>
    void RepamRight(G& repamPot, const REAL msg, const INDEX msg_dim) const
@@ -183,37 +219,18 @@ public:
    }
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   void ComputeRightFromLeftPrimal(PrimalSolutionStorage::Element leftPrimal, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element rightPrimal, RIGHT_FACTOR* r) const
+   void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r) const
    {
-      if(leftPrimal[0] == true) {
-         rightPrimal[i_] = false;
-         rightPrimal[4] = false;
-      } else {
-         assert(leftPrimal[0] == false);
-         rightPrimal[(i_+1)%3] = false;
-         rightPrimal[(i_+2)%3] = false;
-         rightPrimal[3] = false;
-      }
-      return;
+      r.set_primal()[i_] = l.get_primal();
    }
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   bool CheckPrimalConsistency(PrimalSolutionStorage::Element leftPrimal, LEFT_FACTOR* l, typename PrimalSolutionStorage::Element rightPrimal, RIGHT_FACTOR* r) const
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
    {
-      return true;
-      assert(leftPrimal[0] != unknownState);
-      if(leftPrimal[0] == false) {
-         if(!(rightPrimal[i_] == true || rightPrimal[4] == true)) {
-            return false;
-         }
-      } else {
-         if(!(rightPrimal[(i_+1)%3] == true || rightPrimal[(i_+2)%3] == true || rightPrimal[3] == true)) {
-            return false;
-         }
-      }
-      return true;
+      return l.get_primal() == r.get_primal()[i_];
    }
 
+   /*
     void CreateConstraints(LpInterfaceAdapter* lp, MulticutUnaryFactor* u, MulticutTripletFactor* t) const
     {
       LinExpr lhs = lp->CreateLinExpr(); 
@@ -224,6 +241,7 @@ public:
       rhs += lp->GetRightVariable(3);
       lp->addLinearEquality(lhs,rhs);
     }
+    */
 
 private:
    const SHORT_INDEX i_;

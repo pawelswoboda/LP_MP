@@ -7,6 +7,8 @@
 #include <queue>
 #include <stdexcept>
 #include <algorithm>
+#include <cassert>
+#include "vector.hxx"
 
 namespace LP_MP {
    namespace discrete_tomo{
@@ -20,23 +22,23 @@ namespace LP_MP {
                   MinConv(T1 a, T2 b, Index n, Index m,Index t);
 
                void init(Index,Index,Index);
-               Value getConv(Index k){ return c_[k]; };
-               Value getMin(){ return minimum_; };
-               Index getIdxA(Index k){ assert(0 <= k);assert(k < outA_.size()); return outA_[k]; };
-               Index getIdxB(Index k){ assert(0 <= k);assert(k < outB_.size()); return outB_[k]; };
+               Value getConv(Index k) const { return c_[k]; };
+               Value getMin() const { return minimum_; };
+               Index getIdxA(Index k) const { assert(0 <= k);assert(k < outA_.size()); return outA_[k]; };
+               Index getIdxB(Index k) const { assert(0 <= k);assert(k < outB_.size()); return outB_[k]; };
 
                template<class T1,class T2,class T3>
                   void CalcConv(T1 op,T2 a,T3 b,bool onlyMin = false);
 
             private:
+               // do zrobienia: replace by own vector or by one large memory chung, which is then subdivided -> faster allocation and deallocation
                std::vector<Index> idxa_;
                std::vector<Index> idxb_;
                std::vector<Index> outA_;
                std::vector<Index> outB_;
-               std::vector<Value> c_;
+               vector<REAL> c_;
                std::vector<Index> cp_;
                Value minimum_ = std::numeric_limits<Value>::infinity();
-               Value inf = std::numeric_limits<Value>::infinity();
 
                template<class T>
                   void sort(const T&,Index,std::vector<Index>&);
@@ -54,14 +56,18 @@ namespace LP_MP {
 
       template<class Value,class Index>
          template<class T1,class T2>
-         MinConv<Value,Index>::MinConv(T1 a, T2 b, Index n, Index m,Index t){
+         MinConv<Value,Index>::MinConv(T1 a, T2 b, Index n, Index m,Index t)
+         : c_(t+1)
+         {
             if( n < 1 || m < 1 || t < 1){ 
                throw std::runtime_error("m,n and t should > 0!");  }
+            //assert(n-1+m-1 >= t-1);
             sort(a,n,idxa_);
             sort(b,m,idxb_);
-            c_.resize(t+1); cp_.resize(t+1);
+            //c_.resize(t+1); 
+            cp_.resize(t+1);
             outA_.resize(t+1); outB_.resize(t+1);
-            std::fill(c_.begin(),c_.end(),inf);
+            std::fill(c_.begin(),c_.end(),std::numeric_limits<Value>::infinity());
             std::fill(cp_.begin(),cp_.end(),0);
          };
 
@@ -77,14 +83,15 @@ namespace LP_MP {
          {
             // access function to the sorted matrix      
             auto M = [&](Index i,Index j){
-               //assert( a(idxa_[i]) < std::numeric_limits<REAL>::max() || b(idxb_[j]) > -std::numeric_limits<REAL>::max() );
-               //assert( a(idxa_[i]) > -std::numeric_limits<REAL>::max() || b(idxb_[j]) < std::numeric_limits<REAL>::max() );
-               //assert( b(idxb_[j]) < std::numeric_limits<REAL>::max() || a(idxa_[i]) > -std::numeric_limits<REAL>::max() );
-               //assert( b(idxb_[j]) > -std::numeric_limits<REAL>::max() || a(idxa_[i]) < std::numeric_limits<REAL>::max() );
+               //assert( a(idxa_[i]) < std::numeric_limits<Value>::max() || b(idxb_[j]) > -std::numeric_limits<Value>::max() );
+               //assert( a(idxa_[i]) > -std::numeric_limits<Value>::max() || b(idxb_[j]) < std::numeric_limits<Value>::max() );
+               //assert( b(idxb_[j]) < std::numeric_limits<Value>::max() || a(idxa_[i]) > -std::numeric_limits<Value>::max() );
+               //assert( b(idxb_[j]) > -std::numeric_limits<Value>::max() || a(idxa_[i]) < std::numeric_limits<Value>::max() );
                assert( !std::isnan(a(idxa_[i])) );
                assert( !std::isnan(b(idxb_[j])) );
-               Value ai = ( a(idxa_[i]) > -std::numeric_limits<REAL>::max() ) ?  a(idxa_[i]) : std::numeric_limits<REAL>::max();
-               Value bj = ( b(idxb_[j]) > -std::numeric_limits<REAL>::max() ) ?  b(idxb_[j]) : std::numeric_limits<REAL>::max();
+               // do zrobienia: below two check are not needed anymore
+               Value ai = ( a(idxa_[i]) > -std::numeric_limits<Value>::max() ) ?  a(idxa_[i]) : std::numeric_limits<Value>::max();
+               Value bj = ( b(idxb_[j]) > -std::numeric_limits<Value>::max() ) ?  b(idxb_[j]) : std::numeric_limits<Value>::max();
                return ai + bj;
             };
 
@@ -100,6 +107,7 @@ namespace LP_MP {
             auto compare = [&](indices x,indices y){
                return M(x.i,x.j) > M(y.i,y.j);
             };
+            // do zrobienia: use static memory pool allocator and better datastructore for indices
             std::priority_queue<indices,std::vector<indices>,decltype(compare) > queue(compare);
             std::vector<Index> cover(m+n,0);
 
@@ -132,6 +140,8 @@ namespace LP_MP {
                   Index inc = 1;
                   while( i+inc < n ){
                      Index idx = op(idxa_[i+inc],idxb_[j]);//idxa_[i+inc]+idxb_[j];
+                     idx = std::min(idx, Index(c_.size()-1));
+                     assert(idx<cp_.size());
                      if( cp_[idx] == 0 ){
                         addCover(i+inc,j);
                         break;
@@ -147,6 +157,8 @@ namespace LP_MP {
                   Index inc = 1;
                   while( j+inc < m ){
                      Index idx = op(idxa_[i],idxb_[j+inc]);//idxa_[i]+idxb_[j+inc];
+                     idx = std::min(idx, Index(c_.size()-1));
+                     assert(idx<cp_.size());
                      if( cp_[idx] == 0 ){
                         addCover(i,j+inc);
                         break;
@@ -175,6 +187,7 @@ namespace LP_MP {
                Value minV = M(i,j);
                assert(!std::isnan(minV));
                Index mink = op(idxa_[i],idxb_[j]);//idxa_[i]+idxb_[j]
+               mink = std::min(mink, Index(c_.size()-1)); // all out of bounds go to entry last entry of c_, i.e. c_.size()-1
                queue.pop();
 
                assert(0 <= mink); assert( mink < cp_.size() ); // operation seems to be wrong
@@ -219,7 +232,7 @@ namespace LP_MP {
                   addCoverJ(i,j);
                }
             }
-            assert(open == 1 || open == 0);
+            //assert(open == 1 || open == 0);
          }
    }
 }

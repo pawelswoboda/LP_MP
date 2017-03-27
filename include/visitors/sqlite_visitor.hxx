@@ -22,7 +22,92 @@ struct IterationStatistics {
 // do zrobienia: transaction support to avoid concurrent writing to database?
 // do zrobienia: error handling
 template<class BASE_VISITOR = StandardVisitor>
+
+
 class SqliteVisitor : public BASE_VISITOR {
+
+const std::string sql = 
+R"(
+CREATE TABLE IF NOT EXISTS SOLVERS (
+id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+algorithmName TEXT NOT NULL,
+algorithmFMC TEXT NOT NULL,
+UNIQUE(algorithmName, algorithmFMC) 
+);
+
+CREATE TABLE IF NOT EXISTS Datasets (
+id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+name TEXT NOT NULL,
+UNIQUE(name) 
+);
+
+CREATE TABLE IF NOT EXISTS Instances (
+id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+dataset_id INT,
+name TEXT NOT NULL,
+ground_truth TEXT,
+FOREIGN KEY(dataset_id) REFERENCES Datasets(id),
+UNIQUE(dataset_id, name) 
+);
+
+CREATE INDEX IF NOT EXISTS InstancesIndex ON Instances(id,dataset_id);
+
+CREATE TABLE IF NOT EXISTS Iterations (
+instance_id INTEGER NOT NULL,
+solver_id INTEGER NOT NULL,
+iteration INTEGER NOT NULL,
+runtime INT,
+lowerBound DOUBLE PRECISION,
+upperBound DOUBLE PRECISION,
+FOREIGN KEY(instance_id) REFERENCES Instances(id),
+FOREIGN KEY(solver_id) REFERENCES Solvers(id),
+UNIQUE(instance_id, solver_id, iteration) 
+);
+
+CREATE TABLE IF NOT EXISTS Solutions (
+instance_id INTEGER NOT NULL,
+solver_id INTEGER NOT NULL,
+solution TEXT NOT NULL,
+FOREIGN KEY(instance_id) REFERENCES Instances(id),
+FOREIGN KEY(solver_id) REFERENCES Solvers(id),
+UNIQUE(instance_id, solver_id)
+);
+
+CREATE INDEX IF NOT EXISTS IterationsIndex ON Iterations(instance_id,solver_id,lowerBound,upperBound,runtime);
+
+CREATE VIEW IF NOT EXISTS LowerBoundView AS
+SELECT MAX(lowerBound),solver_id,instance_id FROM Iterations GROUP BY solver_id,instance_id;
+
+CREATE VIEW IF NOT EXISTS MaxLowerBoundView AS
+SELECT MAX(lowerBound),instance_id FROM Iterations GROUP BY instance_id;
+
+CREATE VIEW IF NOT EXISTS UpperBoundView AS
+SELECT MIN(upperBound),solver_id,instance_id FROM Iterations GROUP BY solver_id,instance_id;
+
+CREATE VIEW IF NOT EXISTS MinUpperBoundView AS
+SELECT MIN(upperBound),instance_id FROM Iterations GROUP BY instance_id;
+
+CREATE VIEW IF NOT EXISTS RuntimeView AS 
+SELECT MAX(runtime),solver_id,instance_id FROM Iterations GROUP BY solver_id,instance_id;
+
+CREATE VIEW IF NOT EXISTS AggregateIterationsHelper AS
+SELECT LowerBoundView.lowerBound AS lowerBound, UpperBoundView.upperBound AS upperBound, RuntimeView.runtime AS runtime, LowerBoundView.solver_id AS solver_id, LowerBoundView.instance_id AS instance_id
+FROM LowerBoundView
+INNER JOIN UpperBoundView ON (LowerBoundView.solver_id = UpperBoundView.solver_id AND LowerBoundView.instance_id = UpperBoundView.instance_id)
+INNER JOIN RuntimeView ON (LowerBoundView.solver_id = RuntimeView.solver_id AND LowerBoundView.instance_id = RuntimeView.instance_id);
+
+CREATE VIEW IF NOT EXISTS MinMaxBoundInstancesView AS
+SELECT MAX(lowerBound),MIN(upperBound),instance_id FROM Iterations GROUP BY instance_id;
+
+CREATE VIEW IF NOT EXISTS AggregateIterations AS
+SELECT MAX(lowerBound) AS lowerBound, MIN(upperBound) AS upperBound, MAX(runtime) as runtime,instance_id, Datasets.id AS dataset_id, Datasets.name AS datasetName, Solvers.id AS solver_id, Solvers.algorithmName AS algorithmName, Solvers.algorithmFMC AS algorithmFmc FROM Iterations INNER JOIN Instances ON (Instances.id = instance_id) INNER JOIN Datasets ON (Instances.dataset_id = Datasets.id) INNER JOIN Solvers ON (Solvers.id = solver_id) GROUP BY instance_id,solver_id;
+
+CREATE VIEW IF NOT EXISTS AggregateInstances AS
+SELECT AVG(ai.lowerBound) AS lowerBound, AVG(ai.upperBound) AS upperBound, AVG(ai.runtime) AS runtime, Instances.dataset_id AS dataset_id, ai.datasetName AS datasetName, ai.solver_id AS solver_id FROM AggregateIterations AS ai INNER JOIN Instances ON (ai.instance_id = Instances.id)  GROUP BY Instances.dataset_id, ai.solver_id;
+
+CREATE VIEW IF NOT EXISTS MinMaxBoundDatasetsView AS
+SELECT MAX(ai.lowerBound) as lowerBound, MIN(ai.upperBound) as upperBound, MIN(ai.runtime) AS runtime, ai.dataset_id AS dataset_id, ai.datasetName AS datasetName FROM AggregateInstances AS ai GROUP BY ai.dataset_id;
+)";
 
    using BaseVisitor = BASE_VISITOR;
 
@@ -64,168 +149,12 @@ public:
       return 0;
    }
 
-   bool TableExists(const std::string& tableName)
-   {
-      int rc, ret = 0; // callback is not called when select does not return anything
-      const std::string existsTable = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='" + tableName + "';";
-      rc = sqlite3_exec(database_, existsTable.c_str(), &CountCallback, &ret, NULL);
-      if(rc != SQLITE_OK || !(rc == 0 || rc == 1)) {
-         throw std::runtime_error("Could not determine whether table " + tableName + " exists in database");
-      }  
-      assert(rc == 0);
-      assert(ret == 0 || ret == 1);
-      return ret == 1;
-   }
-
-   void CreateTable(const std::string tableName, const std::vector<std::string>& columns)
-   {
-      std::string createTable = "CREATE TABLE " + tableName + "(";
-      for(INDEX i=0; i<columns.size(); ++i) {
-         createTable += columns[i];
-         if(i < columns.size()-1) {
-            createTable += ", ";
-         }
-      }
-      createTable += ");";
-      std::cout << createTable << "\n";
-      int rc = sqlite3_exec(database_, createTable.c_str(), nullptr, nullptr, nullptr);
-      if(rc != SQLITE_OK) {
-         throw std::runtime_error("Could not create table " + tableName);
-      }
-      assert(rc == 0);
-   }
-   void ConditionallyCreateTable(const std::string tableName, const std::vector<std::string>& columns)
-   {
-      if(!TableExists(tableName)) { CreateTable(tableName, columns); }
-   }
-
-   bool ViewExists(const std::string& viewName) 
-   {
-      int rc, ret = 0;
-      const std::string existsView = "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name='" + viewName + "';";
-      rc = sqlite3_exec(database_, existsView.c_str(), &CountCallback, &ret, NULL);
-      if(rc != SQLITE_OK || !(rc == 0 || rc == 1)) {
-         throw std::runtime_error("Could not determine whether view " + viewName + " exists in database");
-      }  
-      assert(rc == 0);
-      assert(ret == 0 || ret == 1);
-      return ret == 1;
-   }
-   void CreateView(const std::string& viewName, const std::string command)
-   {
-      const std::string sql = "CREATE VIEW " + viewName + " AS " + command;
-      int rc = sqlite3_exec(database_, sql.c_str(), nullptr, nullptr, nullptr);
-      if(rc != SQLITE_OK) {
-         throw std::runtime_error("Could not create view " + viewName + ": " + sql);
-      }
-      assert(rc == 0);
-   }
-   void ConditionallyCreateView(const std::string& viewName, const std::string command)
-   {
-      if(!ViewExists(viewName)) { CreateView(viewName, command); }
-   }
-
-   bool IndexExists(const std::string& indexName) 
-   {
-      int rc, ret = 0;
-      const std::string existsIndex = "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='" + indexName + "';";
-      rc = sqlite3_exec(database_, existsIndex.c_str(), &CountCallback, &ret, NULL);
-      if(rc != SQLITE_OK || !(rc == 0 || rc == 1)) {
-         throw std::runtime_error("Could not determine whether index " + indexName + " exists in database");
-      }  
-      assert(rc == 0);
-      assert(ret == 0 || ret == 1);
-      return ret == 1;
-   }
-   void CreateIndex(const std::string& indexName, const std::string command)
-   {
-      const std::string sql = "CREATE INDEX " + indexName + " ON " + command;
-      int rc = sqlite3_exec(database_, sql.c_str(), nullptr, nullptr, nullptr);
-      if(rc != SQLITE_OK) {
-         throw std::runtime_error("Could not create index " + indexName + ": " + sql);
-      }
-   }
-   void ConditionallyCreateIndex(const std::string& indexName, const std::string command)
-   {
-      if(!IndexExists(indexName)) { CreateIndex(indexName, command); }
-   }
    void BuildDb() 
    {
-      ConditionallyCreateTable("Solvers", 
-            {"id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL",
-            "algorithmName TEXT NOT NULL",
-            "algorithmFMC TEXT NOT NULL",
-            "UNIQUE(algorithmName, algorithmFMC)"});
-      ConditionallyCreateTable("Datasets", 
-            {"id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL",
-            "name TEXT NOT NULL",
-            "UNIQUE(name)"});
-      ConditionallyCreateTable("Instances", 
-            {"id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL",
-            "dataset_id INT",
-            "name TEXT NOT NULL",
-            "FOREIGN KEY(dataset_id) REFERENCES Datasets(id)",
-            "UNIQUE(dataset_id, name)"});
-      ConditionallyCreateIndex("InstancesIndex","Instances(id,dataset_id)");
-      ConditionallyCreateTable("Iterations", 
-            {"instance_id INTEGER NOT NULL",
-            "solver_id INTEGER NOT NULL",
-            "iteration INTEGER NOT NULL",
-            "runtime INT",
-            "lowerBound DOUBLE PRECISION", // or REAL
-            "upperBound DOUBLE PRECISION",
-            "FOREIGN KEY(instance_id) REFERENCES Instances(id)",
-            "FOREIGN KEY(solver_id) REFERENCES Solvers(id)",
-            "UNIQUE(instance_id, solver_id, iteration)"});
-      // do zrobienia: or should one make a covering index?
-      ConditionallyCreateIndex("IterationsIndex1","Iterations(instance_id,solver_id,lowerBound,upperBound,runtime)");
-      ConditionallyCreateIndex("InstancesIndex1","Instances(id,dataset_id)");
-      //ConditionallyCreateIndex("IterationsIndex2","Iterations(instance_id,solver_id,lowerBound)");
-      //ConditionallyCreateIndex("IterationsIndex3","Iterations(instance_id,solver_id,upperBound)");
-      //ConditionallyCreateIndex("IterationsIndex4","Iterations(instance_id,solver_id,runtime)");
-
-      ConditionallyCreateView("LowerBoundView", 
-"SELECT lowerBound,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.lowerBound < b.lowerBound) GROUP BY solver_id, instance_id;");
-      // maximum lower bound over all solvers
-      ConditionallyCreateView("MaxLowerBoundView",
-"SELECT MAX(lowerBound) as lowerBound, instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.instance_id = b.instance_id AND a.lowerBound < b.lowerBound) GROUP BY instance_id;");
-      ConditionallyCreateView("UpperBoundView", 
-"SELECT upperBound,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations AS b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.upperBound > b.upperBound) GROUP BY solver_id, instance_id");
-      ConditionallyCreateView("MinUpperBoundView",
-"SELECT MIN(upperBound) as upperBound, instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations as b WHERE a.instance_id = b.instance_id AND a.upperBound > b.upperBound) GROUP BY instance_id;");
-      ConditionallyCreateView("RuntimeView", 
-"SELECT runtime,iteration,solver_id,instance_id FROM Iterations AS a WHERE NOT EXISTS (SELECT 1 FROM Iterations AS b WHERE a.solver_id = b.solver_id AND a.instance_id = b.instance_id AND a.runtime < b.runtime) GROUP BY solver_id, instance_id;");
-      ConditionallyCreateView("AggregateIterationsHelper",
-" SELECT LowerBoundView.lowerBound AS lowerBound, UpperBoundView.upperBound AS upperBound, RuntimeView.runtime AS runtime, LowerBoundView.solver_id AS solver_id, LowerBoundView.instance_id AS instance_id"
-" FROM LowerBoundView "
-" INNER JOIN UpperBoundView ON (LowerBoundView.solver_id = UpperBoundView.solver_id AND LowerBoundView.instance_id = UpperBoundView.instance_id)"
-" INNER JOIN RuntimeView ON (LowerBoundView.solver_id = RuntimeView.solver_id AND LowerBoundView.instance_id = RuntimeView.instance_id)"
-";"); 
-      ConditionallyCreateView("MinMaxBoundInstancesView",
-" SELECT MaxLowerBoundView.lowerBound, MinUpperBoundView.upperBound, RuntimeView.runtime, RuntimeView.iteration, MaxLowerBoundView.instance_id"
-" FROM MaxLowerBoundView "
-" INNER JOIN MinUpperBoundView ON (MaxLowerBoundView.instance_id = MinUpperBoundView.instance_id)"
-" INNER JOIN RuntimeView ON (MaxLowerBoundView.instance_id = RuntimeView.instance_id)"
-";");
-      ConditionallyCreateView("AggregateIterations", 
-" SELECT AggregateIterationsHelper.lowerBound, AggregateIterationsHelper.upperBound, AggregateIterationsHelper.runtime, AggregateIterationsHelper.instance_id, AggregateIterationsHelper.solver_id, Instances.name AS instanceName, Datasets.id AS dataset_id, Datasets.name AS datasetName, Solvers.algorithmName, Solvers.algorithmFmc"
-" FROM AggregateIterationsHelper"
-" INNER JOIN Instances ON (Instances.id = AggregateIterationsHelper.instance_id)"
-" INNER JOIN Datasets ON (Instances.dataset_id = Datasets.id)"
-" INNER JOIN Solvers ON (Solvers.id = AggregateIterationsHelper.solver_id)"
-";");
-      ConditionallyCreateView("AggregateInstances",
-" SELECT AVG(ai.lowerBound) AS lowerBound, AVG(ai.upperBound) AS upperBound, AVG(ai.runtime) AS runtime, ai.dataset_id AS dataset_id, ai.datasetName AS datasetName, ai.solver_id AS solver_id FROM AggregateIterations AS ai "
-" WHERE (SELECT 1 FROM Instances WHERE Instances.dataset_id = ai.dataset_id AND Instances.id = ai.instance_id) "
-//" INNER JOIN Instances ON (Instances.dataset_id = ai.dataset_id AND Instances.id = ai.instance_id)"
-" GROUP BY ai.dataset_id, ai.solver_id"
-";");
-      ConditionallyCreateView("MinMaxBoundDatasetsView",
-"SELECT MAX(ai.lowerBound) AS lowerBound, MIN(ai.upperBound) AS upperBound, MIN(ai.runtime) AS runtime, ai.dataset_id AS dataset_id, ai.datasetName AS datasetName FROM AggregateInstances AS ai "
-" WHERE (SELECT 1 FROM AggregateInstances WHERE AggregateInstances.dataset_id = ai.dataset_id)"
-" GROUP BY ai.dataset_id"
-";");
-
+      int rc = sqlite3_exec(database_, sql.c_str(), nullptr, nullptr, nullptr);
+      if(rc != SQLITE_OK) {
+         throw std::runtime_error(std::string("Could not create schema: ") + sqlite3_errmsg(database_));
+      }
    }
 
    // assume that conditionSQL returns an id if record is present, otherwise insert record and retrieve id again
@@ -319,6 +248,7 @@ public:
       dataset_id_ = GetDatasetId(datasetName_);
       instance_id_ = GetInstanceId(inputFile, dataset_id_);
 
+      // do zrobienia: functions not in parallel! -> in parallel more than one optimization can take place. make lock in database
       if(!overwriteDbRecord_ && CheckIterationsPresent(solver_id_, instance_id_)) { 
          std::cout << "Not performing optimization, as instance was already optimized with same algorithm\n";
          ret.error = true;
@@ -337,14 +267,37 @@ public:
 
       return ret_state;
    }
+
    void end(const REAL lowerBound, const REAL upperBound)
    {
       const INDEX timeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - BaseVisitor::GetBeginTime()).count();
       const INDEX curIter = BaseVisitor::GetIter();
-      iterationStatistics_.push_back({curIter+1,timeElapsed,lowerBound,upperBound}); // additional fake iteration, e.g. for post-processing
+      iterationStatistics_.push_back({curIter+1,timeElapsed,lowerBound,upperBound}); // additional fake iteration, e.g. for post-processing, collecting primal rounding by external rounding routines etc.
 
       std::cout << "write bounds to database\n";
       WriteBounds(iterationStatistics_);
+   }
+
+   void solution(const std::string& sol)
+   {
+      std::cout << "solution visitor function called, write solution to database\n"; 
+
+      int rc = sqlite3_exec(database_,"BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+      assert(rc == SQLITE_OK);
+      const std::string rmIterStmt = "DELETE FROM Solutions WHERE solver_id = " + std::to_string(solver_id_) + " AND instance_id = " + std::to_string(instance_id_) + "\n";
+      rc = sqlite3_exec(database_, rmIterStmt.c_str(), nullptr, nullptr, nullptr);
+      assert(rc == 0);
+      const std::string stmt = "INSERT INTO Solutions (solver_id, instance_id, solution) VALUES ('" + std::to_string(solver_id_) + "', '" + std::to_string(instance_id_) + "', '" + sol + "');";
+      rc = sqlite3_exec(database_, stmt.c_str(), nullptr, nullptr, nullptr);
+      if(rc != SQLITE_OK) {
+         sqlite3_exec(database_,"ROLLBACK TRANSACTION;", nullptr, nullptr, nullptr);
+         throw std::runtime_error("Could not insert solution: " + stmt);
+      }
+      assert(rc == 0);
+      if(sqlite3_exec(database_,"END TRANSACTION;", nullptr, nullptr, nullptr) != SQLITE_OK) {
+         throw std::runtime_error(std::string("Could not commit transaction: ") + sqlite3_errmsg(database_) );
+      }
+      assert(rc == SQLITE_OK); 
    }
 
    void WriteBounds(const std::vector<IterationStatistics>& iterStats)
@@ -393,6 +346,9 @@ private:
    int solver_id_;
    int dataset_id_;
    int instance_id_;
+
+   REAL best_upper_bound = std::numeric_limits<REAL>::infinity();
+   std::string best_solution;
 };
 
 } // end namespace LP_MP

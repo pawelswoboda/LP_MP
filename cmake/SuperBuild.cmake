@@ -7,41 +7,41 @@ set (EXTRA_CMAKE_ARGS)
 
 # SIMD library
 # note: Ubuntu has package vc-dev, but it is old (version 0.7.4), hence unusable
-list (APPEND DEPENDENCIES Vc_Project)
-ExternalProject_Add(
-   Vc_Project
-   GIT_REPOSITORY "https://github.com/VcDevel/Vc.git"
-   GIT_TAG "1.2.0"
-   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/Vc_Project"
-   BUILD_COMMAND make Vc
-   INSTALL_COMMAND make install
-   )
-ExternalProject_Get_Property(Vc_Project install_dir)
-add_library(Vc STATIC IMPORTED)
-add_dependencies(Vc Vc_Project)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake"
-   -DVc_ROOT=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Vc_Project
-   )
+#list (APPEND DEPENDENCIES Vc_Project)
+#ExternalProject_Add(
+#   Vc_Project
+#   GIT_REPOSITORY "https://github.com/VcDevel/Vc.git"
+#   GIT_TAG "1.2.0"
+#   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/Vc_Project"
+#   BUILD_COMMAND make Vc
+#   INSTALL_COMMAND make install
+#   )
+#ExternalProject_Get_Property(Vc_Project install_dir)
+#add_library(Vc STATIC IMPORTED)
+#add_dependencies(Vc Vc_Project)
+#list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake"
+#   -DVc_ROOT=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Vc_Project
+#   )
 
 # boost hana for compile time metaprogramming. However only use when find_package could not find valid hana installation
-list(APPEND DEPENDENCIES Hana_Project)
-ExternalProject_Add(
-   Hana_Project
-   GIT_REPOSITORY "https://github.com/boostorg/hana.git"
-   GIT_TAG "v1.0.0"
-   #CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/Hana_Project --target install"
-   BUILD_COMMAND ""
-   INSTALL_COMMAND ""
-   #BUILD_COMMAND cmake --build
-   #INSTALL_COMMAND cmake --target install -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/Hana_Project
-  )
-ExternalProject_Get_Property(Hana_Project install_dir)
-include_directories(${install_dir}/Dependencies/Source/Hana_Project/include)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-set(Hana_INCLUDE_DIR "${install_dir}/Dependencies/Source/Hana_Project/include")
-find_package_handle_standard_args(Hana
-   REQUIRED_VARS Hana_INCLUDE_DIR
-   )
+#list(APPEND DEPENDENCIES Hana_Project)
+#ExternalProject_Add(
+#   Hana_Project
+#   GIT_REPOSITORY "https://github.com/boostorg/hana.git"
+#   GIT_TAG "v1.0.0"
+#   #CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/Hana_Project --target install"
+#   BUILD_COMMAND ""
+#   INSTALL_COMMAND ""
+#   #BUILD_COMMAND cmake --build
+#   #INSTALL_COMMAND cmake --target install -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/Hana_Project
+#  )
+#ExternalProject_Get_Property(Hana_Project install_dir)
+#include_directories(${install_dir}/Dependencies/Source/Hana_Project/include)
+#list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+#set(Hana_INCLUDE_DIR "${install_dir}/Dependencies/Source/Hana_Project/include")
+#find_package_handle_standard_args(Hana
+#   REQUIRED_VARS Hana_INCLUDE_DIR
+#   )
 
 # meta package for compile time metaprogramming
 list(APPEND DEPENDENCIES meta_Project)
@@ -100,7 +100,7 @@ list(APPEND DEPENDENCIES PEGTL_Project)
 ExternalProject_Add(
    PEGTL_Project
    GIT_REPOSITORY "https://github.com/ColinH/PEGTL.git"
-   GIT_TAG "master"
+   GIT_TAG "1.3.1"
    INSTALL_COMMAND ""
    BUILD_COMMAND ""
    CONFIGURE_COMMAND ""
@@ -122,6 +122,18 @@ ExternalProject_Add(
 ExternalProject_Get_Property(Andres_Project install_dir)
 include_directories(${install_dir}/Dependencies/Source/Andres_Project/include)
 #ENDIF()
+
+list(APPEND DEPENDENCIES Cereal_Project)
+ExternalProject_Add(
+   Cereal_Project
+   GIT_REPOSITORY "https://github.com/USCiLab/cereal.git"
+   GIT_TAG "master"
+   INSTALL_COMMAND "" 
+   BUILD_COMMAND ""
+   CONFIGURE_COMMAND ""
+   )
+ExternalProject_Get_Property(Cereal_Project install_dir)
+include_directories(${install_dir}/Dependencies/Source/Cereal_Project/include)
 
 # command line library
 list(APPEND DEPENDENCIES TCLAP_Project)
@@ -148,17 +160,42 @@ ExternalProject_Get_Property(TCLAP_Project install_dir)
 #ExternalProject_Get_Property(LEMON_Project install_dir)
 
 # minimum cost flow solver based on Goldberg's implementation
-list(APPEND DEPENDENCIES CS2_CPP_Project)
+#list(APPEND DEPENDENCIES CS2_CPP_Project)
+#ExternalProject_ADD(
+#   CS2_CPP_Project
+#   GIT_REPOSITORY "https://github.com/pawelswoboda/CS2-CPP.git"
+#   GIT_TAG "master"
+#   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/CS2_CPP_Project"
+#   BUILD_COMMAND ""
+#   INSTALL_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(CS2_CPP_Project install_dir)
+
+#list(APPEND DEPENDENCIES CryptoMiniSat_Project)
+#ExternalProject_ADD(
+#   CryptoMiniSat_Project
+#   GIT_REPOSITORY "https://github.com/msoos/cryptominisat.git"
+#   GIT_TAG "master"
+#   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/CryptoMiniSat_Project"
+#   BUILD_COMMAND make
+#   INSTALL_COMMAND ""
+#   CONFIGURE_COMMAND cmake ../../Source/CryptoMiniSat_Project/
+#   )
+#ExternalProject_Get_Property(CS2_CPP_Project install_dir)
+
+# lingeling SAT solver
+list(APPEND DEPENDENCIES Lingeling_Project)
 ExternalProject_ADD(
-   CS2_CPP_Project
-   GIT_REPOSITORY "https://github.com/pawelswoboda/CS2-CPP.git"
-   GIT_TAG "master"
-   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Install/CS2_CPP_Project"
-   BUILD_COMMAND ""
+   Lingeling_Project
+   URL "http://fmv.jku.at/lingeling/lingeling-bal-2293bef-151109.tar.gz"
    INSTALL_COMMAND ""
-   CONFIGURE_COMMAND ""
+   BUILD_IN_SOURCE 1
+   BUILD_COMMAND "make"
+   CONFIGURE_COMMAND "./configure.sh"
    )
-ExternalProject_Get_Property(CS2_CPP_Project install_dir)
+ExternalProject_Get_Property(TCLAP_Project install_dir)
+
 
 ExternalProject_Add (LP_MP
    DEPENDS ${DEPENDENCIES}
