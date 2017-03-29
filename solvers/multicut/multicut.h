@@ -4,6 +4,7 @@
 #include "LP_MP.h"
 #include "solver.hxx"
 #include "factors_messages.hxx"
+#include "multicut_factors_messages.hxx"
 #include "multicut_unary_factor.hxx"
 #include "multicut_triplet_factor.hxx"
 #include "multicut_odd_wheel.hxx"
