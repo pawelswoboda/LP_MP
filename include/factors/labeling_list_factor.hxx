@@ -1,56 +1,47 @@
-//#include "graph_matching.h"
-//#include "visitors/standard_visitor.hxx"
-//using FMC_INST = FMC_MP_T<PairwiseConstruction::Left>;
-//using BaseSolverType = Solver<FMC_INST,LP,StandardTighteningVisitor>;
-//LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_MP_ROUNDING(FMC_INST, TorresaniEtAlInput::ParseProblemMP<BaseSolverType>, StandardTighteningVisitor);
+#ifndef LP_MP_LABELING_LIST_FACTOR
+#define LP_MP_LABELING_LIST_FACTOR
 
-#include <iostream>
-#include <array>
-#include <type_traits>
-#include <utility>
-#include <algorithm>
-#include <assert.h>
-#include "vector.hxx"
+#include "config.hxx"
 
-using namespace LP_MP;
+namespace LP_MP {
 
-template<size_t... LABELS>
+template<INDEX... LABELS>
 struct labeling {
 
-   template<size_t LABEL_NO, size_t LABEL, size_t... LABELS_REST>
+   template<INDEX LABEL_NO, INDEX LABEL, INDEX... LABELS_REST>
    constexpr static
-   typename std::enable_if<LABEL_NO == 0,size_t>::type get_label()
+   typename std::enable_if<LABEL_NO == 0,INDEX>::type get_label()
    {
       return LABEL;
    }
 
-   template<size_t LABEL_NO, size_t LABEL, size_t... LABELS_REST>
+   template<INDEX LABEL_NO, INDEX LABEL, INDEX... LABELS_REST>
    constexpr static
-   typename std::enable_if<(LABEL_NO > 0),size_t>::type get_label()
+   typename std::enable_if<(LABEL_NO > 0),INDEX>::type get_label()
    {
       return get_label<LABEL_NO-1, LABELS_REST...>();
    }
 
-   template<size_t LABEL_NO>
-   constexpr static size_t label()
+   template<INDEX LABEL_NO>
+   constexpr static INDEX label()
    { 
       static_assert(LABEL_NO < sizeof...(LABELS), "label number must be smaller than number of labels");
       return get_label<LABEL_NO, LABELS...>();
    } 
 
-   constexpr static size_t no_labels()
+   constexpr static INDEX no_labels()
    {
       return sizeof...(LABELS);
    }
 
-   template<size_t I, size_t... LABELS_REST>
+   template<INDEX I, INDEX... LABELS_REST>
    static typename std::enable_if<(I == sizeof...(LABELS)),bool>::type
    matches_impl(const std::array<bool, sizeof...(LABELS)>& l)
    {
       return true;
    }
 
-   template<size_t I, size_t LABEL, size_t... LABELS_REST>
+   template<INDEX I, INDEX LABEL, INDEX... LABELS_REST>
    static typename std::enable_if<(I < sizeof...(LABELS)),bool>::type
    matches_impl(const std::array<bool, sizeof...(LABELS)>& l)
    {
@@ -76,51 +67,51 @@ struct labelings
       // to do: check whether each label occurs at most once and each labeling has same number of labels.
    }
 
-   template<size_t LABELING_NO, size_t LABEL_NO, typename LABELING, typename... LABELINGS_REST>
-   constexpr static typename std::enable_if<LABELING_NO == 0,size_t>::type 
+   template<INDEX LABELING_NO, INDEX LABEL_NO, typename LABELING, typename... LABELINGS_REST>
+   constexpr static typename std::enable_if<LABELING_NO == 0,INDEX>::type 
    get_label()
    {
       return LABELING::template label<LABEL_NO>();
    }
 
-   template<size_t LABELING_NO, size_t LABEL_NO, typename LABELING, typename... LABELINGS_REST>
-   constexpr static typename std::enable_if<(LABELING_NO > 0),size_t>::type 
+   template<INDEX LABELING_NO, INDEX LABEL_NO, typename LABELING, typename... LABELINGS_REST>
+   constexpr static typename std::enable_if<(LABELING_NO > 0),INDEX>::type 
    get_label()
    {
       return get_label<LABELING_NO-1, LABEL_NO, LABELINGS_REST...>();
    }
 
-   template<size_t LABELING_NO, size_t LABEL_NO>
-   constexpr static size_t label()
+   template<INDEX LABELING_NO, INDEX LABEL_NO>
+   constexpr static INDEX label()
    {
       static_assert(LABELING_NO < sizeof...(LABELINGS), "labeling number must be smaller than number of labelings");
       return get_label<LABELING_NO,LABEL_NO,LABELINGS...>();
    }
 
-   constexpr static size_t no_labelings()
+   constexpr static INDEX no_labelings()
    {
       return sizeof...(LABELINGS);
    }
 
    template<typename LABELING, typename... LABELINGS_REST>
-   constexpr static size_t no_labels_impl()
+   constexpr static INDEX no_labels_impl()
    {
       return LABELING::no_labels();
    }
-   constexpr static size_t no_labels()
+   constexpr static INDEX no_labels()
    {
       return no_labels_impl<LABELINGS...>();
    }
 
-   template<size_t I, typename... LABELINGS_REST>
-   static typename std::enable_if<(I >= sizeof...(LABELINGS)), size_t>::type
+   template<INDEX I, typename... LABELINGS_REST>
+   static typename std::enable_if<(I >= sizeof...(LABELINGS)), INDEX>::type
    matching_labeling_impl(const std::array<bool, no_labels()>& l)
    {
       return no_labelings();
    }
 
-   template<size_t I, typename LABELING, typename... LABELINGS_REST>
-   static typename std::enable_if<(I < sizeof...(LABELINGS)), size_t>::type
+   template<INDEX I, typename LABELING, typename... LABELINGS_REST>
+   static typename std::enable_if<(I < sizeof...(LABELINGS)), INDEX>::type
    matching_labeling_impl(const std::array<bool, no_labels()>& l)
    {
       if(LABELING::matches(l)) {
@@ -130,7 +121,7 @@ struct labelings
       }
    }
 
-   static size_t matching_labeling(const std::array<bool, no_labels()>& l)
+   static INDEX matching_labeling(const std::array<bool, no_labels()>& l)
    {
       return matching_labeling_impl<0, LABELINGS...>(l); 
    }
@@ -140,42 +131,42 @@ struct labelings
 template<>
 class labelings<>
 {
-   template<size_t LABELING_NO, size_t LABEL_NO>
-   constexpr static size_t label()
+   template<INDEX LABELING_NO, INDEX LABEL_NO>
+   constexpr static INDEX label()
    {
       return 42;
    }
 
-   constexpr static size_t no_labelings()
+   constexpr static INDEX no_labelings()
    {
       return 0;
    }
 
-   constexpr static size_t no_labels()
+   constexpr static INDEX no_labels()
    {
       return 0;
    }
 
    template<typename VEC>
-   static size_t matching_labeling(const VEC& l)
+   static INDEX matching_labeling(const VEC& l)
    {
       return 0;
    }
 };
 
 template<typename LABELINGS, bool IMPLICIT_ORIGIN>
-class labeling_factor : public std::array<double, LABELINGS::no_labelings()>
+class labeling_factor : public std::array<REAL, LABELINGS::no_labelings()>
 {
 public:
    constexpr static bool has_implicit_origin() { return IMPLICIT_ORIGIN; } // means zero label has cost 0 and is not recorded.
-   constexpr static size_t size() {
+   constexpr static INDEX size() {
       return LABELINGS::no_labelings();
    }
-   constexpr static size_t primal_size() {
+   constexpr static INDEX primal_size() {
       return LABELINGS::no_labels(); 
    }
 
-   double LowerBound() const
+   REAL LowerBound() const
    {
       if(IMPLICIT_ORIGIN) {
          return std::min(0.0, *std::min_element(this->begin(), this->end()));
@@ -185,9 +176,9 @@ public:
    }
 
 
-   double EvaluatePrimal() const
+   REAL EvaluatePrimal() const
    {
-      const size_t labeling_no = LABELINGS::matching_labeling(primal_);
+      const INDEX labeling_no = LABELINGS::matching_labeling(primal_);
       if(labeling_no < size()) {
          return (*this)[labeling_no];
       }
@@ -206,19 +197,19 @@ private:
 };
 
 // we assume that LEFT_LABELING contains sublageings of RIGHT_LABELING, where we INDICES indicate i-th entry of LEFT_LABELING is mapped to INDICES[i]-th entry of right labeling
-template<typename LEFT_LABELINGS, typename RIGHT_LABELINGS, size_t... INDICES>
+template<typename LEFT_LABELINGS, typename RIGHT_LABELINGS, INDEX... INDICES>
 class labeling_message {
 
-using msg_val_type = std::array<double, LEFT_LABELINGS::no_labelings()>;
+using msg_val_type = std::array<REAL, LEFT_LABELINGS::no_labelings()>;
 
 public:
-   template<typename LEFT_LABELING, typename RIGHT_LABELING, size_t LEFT_INDEX, size_t... I_REST>
+   template<typename LEFT_LABELING, typename RIGHT_LABELING, INDEX LEFT_INDEX, INDEX... I_REST>
    constexpr static typename std::enable_if<(LEFT_INDEX >= LEFT_LABELINGS::no_labelings()),bool>::type
    matches()
    {
       return true;
    }
-   template<typename LEFT_LABELING, typename RIGHT_LABELING, size_t LEFT_INDEX, size_t I, size_t... I_REST>
+   template<typename LEFT_LABELING, typename RIGHT_LABELING, INDEX LEFT_INDEX, INDEX I, INDEX... I_REST>
    constexpr static typename std::enable_if<(LEFT_INDEX < LEFT_LABELINGS::no_labelings()),bool>::type
    matches()
    {
@@ -235,14 +226,14 @@ public:
       return matches<LEFT_LABELING, RIGHT_LABELING, 0, INDICES...>();
    }
 
-   template<typename RIGHT_LABELING, size_t I, typename... LEFT_LABELINGS_REST>
-   constexpr static typename std::enable_if<(I >= LEFT_LABELINGS::no_labelings()),size_t >::type
+   template<typename RIGHT_LABELING, INDEX I, typename... LEFT_LABELINGS_REST>
+   constexpr static typename std::enable_if<(I >= LEFT_LABELINGS::no_labelings()),INDEX >::type
    matching_left_labeling_impl(labelings<LEFT_LABELINGS_REST...>)
    {
       return I; // return 1 + number of left labelings;
    }
-   template<typename RIGHT_LABELING, size_t I, typename LEFT_LABELING, typename... LEFT_LABELINGS_REST>
-   constexpr static typename std::enable_if<(I < LEFT_LABELINGS::no_labelings()),size_t>::type
+   template<typename RIGHT_LABELING, INDEX I, typename LEFT_LABELING, typename... LEFT_LABELINGS_REST>
+   constexpr static typename std::enable_if<(I < LEFT_LABELINGS::no_labelings()),INDEX>::type
    matching_left_labeling_impl(labelings<LEFT_LABELING, LEFT_LABELINGS_REST...>)
    {
       if(matches<LEFT_LABELING, RIGHT_LABELING>()) {
@@ -254,23 +245,23 @@ public:
 
    // we assume that there is as most one matching left labeling
    template<typename RIGHT_LABELING>
-   constexpr static size_t matching_left_labeling()
+   constexpr static INDEX matching_left_labeling()
    {
       return matching_left_labeling_impl<RIGHT_LABELING,0>(LEFT_LABELINGS{});
    } 
 
-  template<typename RIGHT_FACTOR, size_t I, typename... RIGHT_LABELINGS_REST>
+  template<typename RIGHT_FACTOR, INDEX I, typename... RIGHT_LABELINGS_REST>
   typename std::enable_if<(I >= RIGHT_LABELINGS::no_labelings())>::type 
-  compute_msg_impl(msg_val_type& msg_val, const RIGHT_FACTOR& r, double& min_of_labels_not_taken, labelings<RIGHT_LABELINGS_REST...>)
+  compute_msg_impl(msg_val_type& msg_val, const RIGHT_FACTOR& r, REAL& min_of_labels_not_taken, labelings<RIGHT_LABELINGS_REST...>)
   {
      return;
   }
 
-  template<typename RIGHT_FACTOR, size_t I, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
+  template<typename RIGHT_FACTOR, INDEX I, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
   typename std::enable_if<(I < RIGHT_LABELINGS::no_labelings())>::type 
-  compute_msg_impl(msg_val_type& msg_val, const RIGHT_FACTOR& r, double& min_of_labels_not_taken, labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>)
+  compute_msg_impl(msg_val_type& msg_val, const RIGHT_FACTOR& r, REAL& min_of_labels_not_taken, labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>)
   {
-     size_t left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr!
+     INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr!
      if(left_label_number < msg_val.size()) {
         msg_val[left_label_number] = std::min(msg_val[left_label_number], r[I]);
      } else {
@@ -283,13 +274,13 @@ public:
   template<typename RIGHT_FACTOR>
   void compute_msg(msg_val_type& msg_val, const RIGHT_FACTOR& r)
   {
-     double min_of_labels_not_taken;
+     REAL min_of_labels_not_taken;
      if(r.has_implicit_origin()) {
         min_of_labels_not_taken = 0.0;
      } else {
-        min_of_labels_not_taken = std::numeric_limits<double>::infinity();
+        min_of_labels_not_taken = std::numeric_limits<REAL>::infinity();
      }
-     std::fill(msg_val.begin(), msg_val.end(), std::numeric_limits<double>::infinity());
+     std::fill(msg_val.begin(), msg_val.end(), std::numeric_limits<REAL>::infinity());
      compute_msg_impl<RIGHT_FACTOR, 0>(msg_val, r, min_of_labels_not_taken, RIGHT_LABELINGS{});
      // note: this is possibly wrong, if r.has_implicit_origin() is false
      for(auto& v : msg_val) {
@@ -297,18 +288,18 @@ public:
      }
   }
 
-   template<typename RIGHT_FACTOR, typename MSG, size_t I, typename... RIGHT_LABELINGS_REST>
+   template<typename RIGHT_FACTOR, typename MSG, INDEX I, typename... RIGHT_LABELINGS_REST>
    typename std::enable_if<(I >= RIGHT_LABELINGS::no_labelings())>::type 
    repam_right_impl(RIGHT_FACTOR& r, const MSG& msg, labelings<RIGHT_LABELINGS_REST...>)
    {
       return;
    }
 
-   template<typename RIGHT_FACTOR, typename MSG, size_t I, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
+   template<typename RIGHT_FACTOR, typename MSG, INDEX I, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
    typename std::enable_if<(I < RIGHT_LABELINGS::no_labelings())>::type 
    repam_right_impl(RIGHT_FACTOR& r, const MSG& msg, labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>)
    {
-     size_t left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr!
+     INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr!
      r[I] += msg[left_label_number];
      repam_right_impl<RIGHT_FACTOR, MSG, I+1, RIGHT_LABELINGS_REST...>(r, msg, labelings<RIGHT_LABELINGS_REST...>{});
    }
@@ -340,7 +331,7 @@ public:
    }
 
    template<typename LEFT_FACTOR, typename MSG>
-   void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const double omega)
+   void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
    {
       msg -= omega*l;
    }
@@ -349,54 +340,7 @@ public:
 private:
 };
 
-int main()
-{
-   using l = labelings<
-      labeling<0,1,1,1,0>,
-      labeling<1,0,0,1,1>,
-      labeling<0,0,0,0,1>
-         >;
 
+} // end namespace LP_MP
 
-   std::cout << l::label<0,0>() << "," << l::label<0,1>() << "," << l::label<0,2>() << "," << l::label<0,3>() << "," << l::label<0,4>() << "\n";
-   std::cout << l::label<1,0>() << "," << l::label<1,1>() << "," << l::label<1,2>() << "," << l::label<1,3>() << "," << l::label<1,4>() << "\n";
-   std::cout << l::label<2,0>() << "," << l::label<2,1>() << "," << l::label<2,2>() << "," << l::label<2,3>() << "," << l::label<2,4>() << "\n";
-
-   using edge_labelings = labelings< labeling<1> >;
-   using triplet_labelings = labelings<
-      labeling<0,1,1>,
-      labeling<1,0,1>,
-      labeling<1,1,0>,
-      labeling<1,1,1>
-         >;
-
-
-   labeling_factor<edge_labelings,true> edge_factor;
-   labeling_factor<triplet_labelings,true> triplet_factor;
-   labeling_message<edge_labelings, triplet_labelings, 0> msg;
-
-   triplet_factor[0] = -1.0;
-   triplet_factor[1] = 0.5;
-   triplet_factor[2] = 1.0;
-   triplet_factor[3] = 2.0;
-   
-   triplet_factor.primal() = {0,1,1};
-   std::cout << triplet_factor.EvaluatePrimal() << "\n";
-   triplet_factor.primal() = {1,0,1};
-   std::cout << triplet_factor.EvaluatePrimal() << "\n";
-   triplet_factor.primal() = {1,1,0};
-   std::cout << triplet_factor.EvaluatePrimal() << "\n";
-   triplet_factor.primal() = {1,1,1};
-   std::cout << triplet_factor.EvaluatePrimal() << "\n";
-   triplet_factor.primal() = {0,0,0};
-   std::cout << triplet_factor.EvaluatePrimal() << "\n";
-
-   std::array<double,1> msg_val {0.0};
-   msg.ReceiveMessageFromRight(triplet_factor, msg_val);
-   std::cout << msg_val[0] << "\n";
-   msg.RepamRight(triplet_factor, msg_val);
-   msg.RepamLeft(edge_factor, msg_val);
-
-
-   return 0;
-}
+#endif //  LP_MP_LABELING_LIST_FACTOR

@@ -80,32 +80,6 @@ public:
          assert(false);
          return std::numeric_limits<REAL>::infinity();
       }
-
-
-      //REAL cost = 
-      //   (*this)[0]*((1-primal_[0])*primal_[1]*primal_[2]) +
-      //   (*this)[1]*(primal_[0]*(1-primal_[1])*primal_[2]) +
-      //   (*this)[2]*(primal_[0]*primal_[1]*(1-primal_[2])) +
-      //   (*this)[3]*(primal_[1]*primal_[2]*primal_[3]) ;
-      //return cost;
-
-      /*
-      for(INDEX i=0; i<PrimalSize(); ++i) {
-         assert(primal[i] != unknownState);
-      }
-
-      REAL cost = 0.0;
-      INDEX noActive = 0;
-      for(INDEX i=0; i<size(); ++i) {
-         cost += primal[i]*(*this)[i];
-         noActive += primal[i];
-      }
-      noActive += primal[PrimalSize()-1];
-      if(noActive != 1) {
-         return std::numeric_limits<REAL>::infinity();
-      }
-      return cost;
-      */
    }
 
    /*
