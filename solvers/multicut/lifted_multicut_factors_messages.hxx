@@ -271,7 +271,7 @@ public:
    void
    SendMessageToRight(const LEFT_FACTOR& l, G3& msg, const REAL omega)
    {
-      msg[0] -= omega*l;
+      msg[0] -= omega*l[0];
    }
 
    template<typename G>
@@ -279,7 +279,7 @@ public:
    {
       assert(msg_dim == 0);
       assert(repamPot.size() == 1);
-      repamPot += msg;
+      repamPot[0] += msg;
    }
 
    template<typename G>

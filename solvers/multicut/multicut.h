@@ -94,29 +94,39 @@ struct FMC_LIFTED_MULTICUT {
    constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
    // no rounding performed: do it via GAEC and K&L, called from problem constructor
-   typedef FactorContainer<MulticutUnaryFactor, FMC_LIFTED_MULTICUT, 0> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FMC_LIFTED_MULTICUT, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<LiftedMulticutCutFactor, FMC_LIFTED_MULTICUT, 2> LiftedMulticutCutFactorContainer;
+   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_LIFTED_MULTICUT, 0, true>;
+   using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_LIFTED_MULTICUT, 1>;
+   using cut_factor_container = FactorContainer<LiftedMulticutCutFactor, FMC_LIFTED_MULTICUT, 2>;
    using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_LIFTED_MULTICUT, 3>;
 
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_LIFTED_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, FMC_LIFTED_MULTICUT, 1 > CutEdgeLiftedMulticutFactorMessageContainer;
-   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, FMC_LIFTED_MULTICUT, 2 > LiftedEdgeLiftedMulticutFactorMessageContainer;
+   using edge_triplet_message_0_container = MessageContainer<multicut_edge_triplet_message_0, 0, 1, variableMessageNumber, 1, FMC_LIFTED_MULTICUT, 0 >;
+   using edge_triplet_message_1_container = MessageContainer<multicut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_LIFTED_MULTICUT, 1 >;
+   using edge_triplet_message_2_container = MessageContainer<multicut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_LIFTED_MULTICUT, 2 >;
+
+
+   //typedef FactorContainer<MulticutUnaryFactor, FMC_LIFTED_MULTICUT, 0> MulticutUnaryFactorContainer;
+   //typedef FactorContainer<MulticutTripletFactor, FMC_LIFTED_MULTICUT, 1> MulticutTripletFactorContainer;
+   //typedef FactorContainer<LiftedMulticutCutFactor, FMC_LIFTED_MULTICUT, 2> LiftedMulticutCutFactorContainer;
+   //using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_LIFTED_MULTICUT, 3>;
+
+   //typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_LIFTED_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, FMC_LIFTED_MULTICUT, 3 > CutEdgeLiftedMulticutFactorMessageContainer;
+   typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, FMC_LIFTED_MULTICUT, 4 > LiftedEdgeLiftedMulticutFactorMessageContainer;
 
    using FactorList = meta::list<
-      MulticutUnaryFactorContainer, 
-      MulticutTripletFactorContainer, 
-      LiftedMulticutCutFactorContainer,
+      edge_factor_container, 
+      triplet_factor_container, 
+      cut_factor_container,
       ConstantFactorContainer 
          >;
    using MessageList = meta::list<
-      MulticutUnaryTripletMessageContainer, 
+      edge_triplet_message_0_container, edge_triplet_message_1_container, edge_triplet_message_2_container,
       CutEdgeLiftedMulticutFactorMessageContainer, 
       LiftedEdgeLiftedMulticutFactorMessageContainer
          >;
 
    using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,1,2,3>;
-   using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
+   using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,3,4>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 
 };

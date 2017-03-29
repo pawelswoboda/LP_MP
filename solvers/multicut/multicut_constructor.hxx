@@ -1665,12 +1665,12 @@ public:
       //collect connectivity information with union find w.r.t. base edges
       UnionFind uf(MULTICUT_CONSTRUCTOR::noNodes_);
       for(const auto& e : baseEdges_) {
-         if(e.f->GetFactor()->get_primal() == false) {
+         if(e.f->GetFactor()->primal()[0] == false) {
             uf.merge(e.i,e.j);
          }
       }
       for(const auto& e : liftedEdges_) {
-         if(e.f->GetFactor()->get_primal() == false) {
+         if(e.f->GetFactor()->primal()[0] == false) {
             if(!uf.connected(e.i,e.j)) {
               return false;
            }
@@ -1751,7 +1751,7 @@ public:
       INDEX i; 
       INDEX j; 
       typename MULTICUT_CONSTRUCTOR::UnaryFactorContainer* f;
-      REAL weight() const { return (*f->GetFactor()); }
+      REAL weight() const { return (*f->GetFactor())[0]; }
    };
    bool addingTighteningEdges = false; // controls whether edges are added to baseEdges_
    std::vector<MulticutEdge> baseEdges_;
