@@ -51,7 +51,7 @@ public:
    using edge_triplet_message_2_container = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_2_NO>::MessageContainerType;
 
    template<typename SOLVER>
-   MulticutConstructor(SOLVER& pd) 
+   MulticutConstructor(SOLVER& pd, TCLAP::CmdLine&)
    : lp_(&pd.GetLP()),
    //unaryFactors_(100,hash::array2),
    tripletFactors_(100,hash::array3)
@@ -850,8 +850,8 @@ public:
    //using TripletPlusSpokeCoverMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>::MessageContainerType;
 
    template<typename SOLVER>
-   MulticutOddWheelConstructor(SOLVER& pd) :
-      BaseConstructor(pd)
+   MulticutOddWheelConstructor(SOLVER& pd, TCLAP::CmdLine& cmd) :
+      BaseConstructor(pd, cmd)
       //, tripletPlusSpokeFactors_(100,hash::array4) { 
    {
       //tripletPlusSpokeFactors_.max_load_factor(0.7); 
@@ -1337,7 +1337,7 @@ public:
    using CutId = std::vector<Edge>;
 
    template<typename SOLVER>
-   LiftedMulticutConstructor(SOLVER& pd) : MULTICUT_CONSTRUCTOR(pd) {}
+   LiftedMulticutConstructor(SOLVER& pd, TCLAP::CmdLine& cmd) : MULTICUT_CONSTRUCTOR(pd, cmd) {}
 
    virtual typename MULTICUT_CONSTRUCTOR::UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost)
    {
