@@ -34,8 +34,8 @@ using multicut_triplet_plus_spoke_labelings = labelings<
       >;
 using multicut_triplet_plus_spoke_factor = labeling_factor< multicut_triplet_plus_spoke_labelings, true >; 
 
-using multicut_triplet_plus_spoke_cover_message = labeling_message< multicut_triplet_labelings, mutlcit_triplet_plus_spoke_labelings, 0,1,2 >;
-using multicut_triplet_plus_spoke_message = labeling_message< multicut_triplet_labelings, mutlcit_triplet_plus_spoke_labelings, 0,1,2 >;
+using multicut_triplet_plus_spoke_cover_message = labeling_message< multicut_triplet_labelings, multicut_triplet_plus_spoke_labelings, 0,1,2 >;
+using multicut_triplet_plus_spoke_message = labeling_message< multicut_triplet_labelings, multicut_triplet_plus_spoke_labelings, 0,1,2 >;
 
 } // end namespace LP_MP 
 
