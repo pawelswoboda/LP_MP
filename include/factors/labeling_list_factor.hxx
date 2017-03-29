@@ -1,6 +1,7 @@
 #ifndef LP_MP_LABELING_LIST_FACTOR
 #define LP_MP_LABELING_LIST_FACTOR
 
+#include <array>
 #include "config.hxx"
 
 namespace LP_MP {
@@ -192,6 +193,10 @@ public:
    auto& primal() { return primal_; }
    const auto& primal() const { return primal_; }
 
+   void init_primal() {}
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<std::array<REAL,size()>*>(this) ); }
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+
 private:
    std::array<bool,primal_size()> primal_;
 };
@@ -319,7 +324,8 @@ public:
       // go over all right labelings. Then find left labeling corresponding to it, and compute minimum
       msg_val_type msg_val; // additional last entry is minimum over unmatched right labelings
       compute_msg(msg_val, r);
-      msg = msg_val;  // put -= here
+      assert(false);
+      //msg -= msg_val;
    }
 
    template<typename LEFT_FACTOR, typename MSG>
@@ -333,7 +339,8 @@ public:
    template<typename LEFT_FACTOR, typename MSG>
    void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
    {
-      msg -= omega*l;
+      assert(false);
+      //msg -= omega*l;
    }
 
 

@@ -37,16 +37,18 @@ struct FMC_MULTICUT {
    constexpr static const char* name = "Multicut with cycle constraints";
    //constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
-   typedef FactorContainer<MulticutUnaryFactor, FMC_MULTICUT, 0, true> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
+   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_MULTICUT, 0, true>;
+   using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_MULTICUT, 1>;
    using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_MULTICUT, 2>;
 
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   using edge_triplet_message_0_container = MessageContainer<multicut_edge_triplet_message_0, 0, 1, variableMessageNumber, 1, FMC_MULTICUT, 0 >;
+   using edge_triplet_message_1_container = MessageContainer<multicut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_MULTICUT, 1 >;
+   using edge_triplet_message_2_container = MessageContainer<multicut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_MULTICUT, 2 >;
 
-   using FactorList = meta::list< MulticutUnaryFactorContainer, MulticutTripletFactorContainer, ConstantFactorContainer>;
-   using MessageList = meta::list<MulticutUnaryTripletMessageContainer>;
+   using FactorList = meta::list< edge_factor_container, triplet_factor_container, ConstantFactorContainer>;
+   using MessageList = meta::list<edge_triplet_message_0_container,edge_triplet_message_1_container,edge_triplet_message_2_container>;
 
-   using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0,2>;
+   using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0,1,2,2>;
    using ProblemDecompositionList = meta::list<multicut>;
 };
 
@@ -55,29 +57,35 @@ template<MessageSendingType MESSAGE_SENDING>
 struct FMC_ODD_WHEEL_MULTICUT {
    constexpr static const char* name = "Multicut with cycle and odd wheel constraints";
 
-   typedef FactorContainer<MulticutUnaryFactor, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
-   typedef FactorContainer<MulticutTripletFactor, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
-   typedef FactorContainer<MulticutTripletPlusSpokeFactor, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeFactorContainer;
+   //typedef FactorContainer<MulticutUnaryFactor, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
+   //typedef FactorContainer<MulticutTripletFactor, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
+   //typedef FactorContainer<multicut_triplet_factor, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
+   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_ODD_WHEEL_MULTICUT, 0, true>;
+   using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_ODD_WHEEL_MULTICUT, 1>;
+   using odd_3_wheel_factor_container = FactorContainer<multicut_odd_3_wheel_factor, FMC_ODD_WHEEL_MULTICUT, 2>;
    using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_ODD_WHEEL_MULTICUT, 3>;
       
-   typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 2, variableMessageNumber, variableMessageNumber, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletPlusSpokeMessageContainer;
-   typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeCoverMessageContainer;
+   using edge_triplet_message_0_container = MessageContainer<multicut_edge_triplet_message_0, 0, 1, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 0 >;
+   using edge_triplet_message_1_container = MessageContainer<multicut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 1 >;
+   using edge_triplet_message_2_container = MessageContainer<multicut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 2 >;
 
-   using FactorList = meta::list< 
-      MulticutUnaryFactorContainer,
-      MulticutTripletFactorContainer,
-      MulticutTripletPlusSpokeFactorContainer,
-      ConstantFactorContainer 
-         >;
+   using triplet_odd_wheel_message_012 = MessageContainer<multicut_triplet_odd_3_wheel_message_012, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 3>;
+   using triplet_odd_wheel_message_013 = MessageContainer<multicut_triplet_odd_3_wheel_message_013, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 4>;
+   using triplet_odd_wheel_message_023 = MessageContainer<multicut_triplet_odd_3_wheel_message_023, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 5>;
+   using triplet_odd_wheel_message_123 = MessageContainer<multicut_triplet_odd_3_wheel_message_123, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 6>;
+
+   //typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
+   //typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 2, variableMessageNumber, variableMessageNumber, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletPlusSpokeMessageContainer;
+   //typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeCoverMessageContainer;
+
+   using FactorList = meta::list< edge_factor_container, triplet_factor_container, odd_3_wheel_factor_container, ConstantFactorContainer>;
    using MessageList = meta::list<
-      MulticutUnaryTripletMessageContainer, 
-      MulticutTripletPlusSpokeMessageContainer, // one unfortunately cannot use a fixed size container on the right, as one spoke factor might participate in more than one odd wheel constraint
-      MulticutTripletPlusSpokeCoverMessageContainer
+      edge_triplet_message_0_container, edge_triplet_message_1_container, edge_triplet_message_2_container,  
+      triplet_odd_wheel_message_012, triplet_odd_wheel_message_013, triplet_odd_wheel_message_023, triplet_odd_wheel_message_123 
       >;
 
-   using multicut_c = MulticutConstructor<FMC_ODD_WHEEL_MULTICUT,0,1,0,3>;
-   using multicut_cow = MulticutOddWheelConstructor<multicut_c,2,1,2>;
+   using multicut_c = MulticutConstructor<FMC_ODD_WHEEL_MULTICUT,0,1, 0,1,2, 2>;
+   using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
    using ProblemDecompositionList = meta::list<multicut_cow>;
 };
 
@@ -107,42 +115,9 @@ struct FMC_LIFTED_MULTICUT {
       LiftedEdgeLiftedMulticutFactorMessageContainer
          >;
 
-   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,3>;
+   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,1,2,3>;
    using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,1,2>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
-
-
-//   using MessageListHana = hana::tuple<
-//      MulticutUnaryTripletMessageContainer, 
-//      CutEdgeLiftedMulticutFactorMessageContainer, 
-//      LiftedEdgeLiftedMulticutFactorMessageContainer
-//         >;
-
-//   using FactorListHana = hana::tuple<
-//      MulticutUnaryFactorContainer, 
-//      MulticutTripletFactorContainer, 
-//      LiftedMulticutCutFactorContainer 
-//         >;
-   //using MessageListHana = hana::tuple<
-   //   MulticutUnaryTripletMessageContainer, 
-   //   CutEdgeLiftedMulticutFactorMessageContainer, 
-   //   LiftedEdgeLiftedMulticutFactorMessageContainer
-   //      >;
-//   using ProblemDecompositionListHana = hana::tuple<LiftedMulticutConstructor>;
-
-   /*
-   hana::tuple_t<
-      MulticutUnaryFactorContainer, 
-      MulticutTripletFactorContainer, 
-      LiftedMulticutCutFactorContainer 
-         > FactorListHana;
-   hana::tuple_t<
-      MulticutUnaryTripletMessageContainer, 
-      CutEdgeLiftedMulticutFactorMessageContainer, 
-      LiftedEdgeLiftedMulticutFactorMessageContainer
-         > MessageListHana;
-   hana::tuple_t<LiftedMulticutConstructor> ProblemDecompositionListHana;
-   */
 
 };
 

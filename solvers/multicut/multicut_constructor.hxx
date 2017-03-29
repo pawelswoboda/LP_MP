@@ -35,19 +35,21 @@ namespace LP_MP {
 
 enum class cut_type { multicut, maxcut };
 
-template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO, INDEX UNARY_TRIPLET_MESSAGE_NO, INDEX CONSTANT_FACTOR_NO, cut_type CUT_TYPE = cut_type::multicut>
+template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO,
+   INDEX UNARY_TRIPLET_MESSAGE_0_NO, INDEX UNARY_TRIPLET_MESSAGE_1_NO, INDEX UNARY_TRIPLET_MESSAGE_2_NO,
+   INDEX CONSTANT_FACTOR_NO, cut_type CUT_TYPE = cut_type::multicut>
 class MulticutConstructor {
 public:
-   using MulticutConstructorType = MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_NO, CONSTANT_FACTOR_NO>;
+   using MulticutConstructorType = MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_0_NO, UNARY_TRIPLET_MESSAGE_1_NO, UNARY_TRIPLET_MESSAGE_2_NO, CONSTANT_FACTOR_NO, CUT_TYPE>;
    using FMC = FACTOR_MESSAGE_CONNECTION;
 
    using UnaryFactorContainer = meta::at_c<typename FMC::FactorList, UNARY_FACTOR_NO>;
    using TripletFactorContainer = meta::at_c<typename FMC::FactorList, TRIPLET_FACTOR_NO>;
    using ConstantFactorContainer = meta::at_c<typename FMC::FactorList, CONSTANT_FACTOR_NO>;
-   using UnaryTripletMessageContainer = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_NO>::MessageContainerType;
-   using UnaryTripletMessageType = typename UnaryTripletMessageContainer::MessageType;
+   using edge_triplet_message_0_container = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_0_NO>::MessageContainerType;
+   using edge_triplet_message_1_container = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_1_NO>::MessageContainerType;
+   using edge_triplet_message_2_container = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_2_NO>::MessageContainerType;
 
-public:
    template<typename SOLVER>
    MulticutConstructor(SOLVER& pd) 
    : lp_(&pd.GetLP()),
@@ -70,8 +72,8 @@ public:
 
    ~MulticutConstructor()
    {
-      static_assert(std::is_same<typename UnaryFactorContainer::FactorType, MulticutUnaryFactor>::value,"");
-      static_assert(std::is_same<typename TripletFactorContainer::FactorType, MulticutTripletFactor>::value,"");
+      //static_assert(std::is_same<typename UnaryFactorContainer::FactorType, MulticutUnaryFactor>::value,"");
+      //static_assert(std::is_same<typename TripletFactorContainer::FactorType, MulticutTripletFactor>::value,"");
       //static_assert(std::is_same<typename MessageContainer::MessageType, MulticutUnaryTripletMessage<MessageSending::SRMP>>::value,"");
    }
 
@@ -92,7 +94,8 @@ public:
       assert(i1 < i2);
       assert(!HasUnaryFactor(i1,i2));
       
-      auto* u = new UnaryFactorContainer(cost);
+      auto* u = new UnaryFactorContainer();
+      (*u->GetFactor())[0] = cost;
       lp_->AddFactor(u);
       auto it = unaryFactors_.insert(std::make_pair(std::array<INDEX,2>{i1,i2}, u)).first;
       unaryFactorsVector_.push_back(std::make_pair(std::array<INDEX,2>{i1,i2}, u));
@@ -125,10 +128,10 @@ public:
       assert(HasUnaryFactor(i1,i2));
       return unaryFactors_.find(std::array<INDEX,2>{i1,i2})->second;
    }
-   UnaryTripletMessageContainer* LinkUnaryTriplet(UnaryFactorContainer* u, TripletFactorContainer* t, const INDEX i) // argument i denotes which edge the unary factor connects to
+   template<typename MESSAGE_CONTAINER>
+   MESSAGE_CONTAINER* LinkUnaryTriplet(UnaryFactorContainer* u, TripletFactorContainer* t) 
    {
-      assert(i < 3);
-      auto* m = new UnaryTripletMessageContainer(UnaryTripletMessageType(i), u, t);
+      auto* m = new MESSAGE_CONTAINER(u, t);
       lp_->AddMessage(m);
       return m;
    }
@@ -170,12 +173,9 @@ public:
       //}
       auto tripletEdges = MulticutTripletFactor::SortEdges(i1,i2,i3);
       // link with all three unary factors
-      LinkUnaryTriplet(GetUnaryFactor(tripletEdges[0][0],tripletEdges[0][1]), t, 0);
-      LinkUnaryTriplet(GetUnaryFactor(tripletEdges[1][0],tripletEdges[1][1]), t, 1);
-      LinkUnaryTriplet(GetUnaryFactor(tripletEdges[2][0],tripletEdges[2][1]), t, 2);
-      //LinkUnaryTriplet(GetUnaryFactor(i1,i2), t, 0);
-      //LinkUnaryTriplet(GetUnaryFactor(i1,i3), t, 1);
-      //LinkUnaryTriplet(GetUnaryFactor(i2,i3), t, 2);
+      LinkUnaryTriplet<edge_triplet_message_0_container>(GetUnaryFactor(tripletEdges[0][0],tripletEdges[0][1]), t);
+      LinkUnaryTriplet<edge_triplet_message_1_container>(GetUnaryFactor(tripletEdges[1][0],tripletEdges[1][1]), t);
+      LinkUnaryTriplet<edge_triplet_message_2_container>(GetUnaryFactor(tripletEdges[2][0],tripletEdges[2][1]), t);
       return t;
    }
    bool HasUnaryFactor(const std::tuple<INDEX,INDEX> e) const 
@@ -301,7 +301,7 @@ public:
       for(auto& it : unaryFactorsVector_) {
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
-         const REAL cost_ij = *(it.second->GetFactor());
+         const REAL cost_ij = (*it.second->GetFactor())[0];
          assert(i<j);
          adjacency_list[i][adjacency_list_count[i]] = std::make_tuple(j,cost_ij);
          adjacency_list_count[i]++;
@@ -332,7 +332,7 @@ public:
          std::vector<std::tuple<INDEX,INDEX,INDEX,REAL>> triplet_candidates_per_thread;
 #pragma omp for schedule(guided)
          for(INDEX c=0; c<unaryFactorsVector_.size(); ++c) {
-            const REAL cost_ij = *(unaryFactorsVector_[c].second->GetFactor());
+            const REAL cost_ij = (*unaryFactorsVector_[c].second->GetFactor())[0];
             const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
             const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
 
@@ -410,7 +410,7 @@ public:
       std::vector<INDEX> number_outgoing_arcs(2*noNodes_,0); // number of arcs outgoing arcs of each node
       INDEX number_arcs_total = 0;
       for(auto& it : unaryFactorsVector_) {
-         const REAL v = *(it.second->GetFactor());
+         const REAL v = (*it.second->GetFactor())[0];
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
          if(v != 0.0) {
@@ -537,7 +537,7 @@ public:
       std::vector<INDEX> number_outgoing_arcs(noNodes_,0); // number of arcs outgoing arcs of each node
       INDEX number_outgoing_arcs_total = 0;
       for(auto& it : unaryFactorsVector_) {
-         const REAL v = *(it.second->GetFactor());
+         const REAL v = (*it.second->GetFactor())[0];
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
          if(v >= 0.0) {
@@ -553,7 +553,7 @@ public:
 
       Graph posEdgesGraph(noNodes_, number_outgoing_arcs_total, number_outgoing_arcs); // graph consisting of positive edges
       for(auto& it : unaryFactorsVector_) {
-         const REAL v = *(it.second->GetFactor());
+         const REAL v = (*it.second->GetFactor())[0];
          const INDEX i = std::get<0>(it.first);
          const INDEX j = std::get<1>(it.first);
          assert(i<j);
@@ -594,7 +594,7 @@ public:
          }
          // first update union find datastructure
          for(auto& it : unaryFactorsVector_) {
-            const REAL v = *(it.second->GetFactor());
+            const REAL v = (*it.second->GetFactor())[0];
             const INDEX i = std::get<0>(it.first);
             const INDEX j = std::get<1>(it.first);
             if(v >= th) {
@@ -679,7 +679,7 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
          UnionFind uf(noNodes_);
          for(const auto& e : unaryFactorsVector_) {
             UnaryFactorContainer* f = e.second; 
-            if(f->GetFactor()->get_primal() == false) {
+            if(f->GetFactor()->primal()[0] == false) {
                // connect components 
                const INDEX i = std::get<0>(e.first);
                const INDEX j = std::get<1>(e.first);
@@ -688,7 +688,7 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
          }
          for(const auto& e : unaryFactorsVector_) {
             UnaryFactorContainer* f = e.second; 
-            if(f->GetFactor()->get_primal() == true) {
+            if(f->GetFactor()->primal()[0] == true) {
                const INDEX i = std::get<0>(e.first);
                const INDEX j = std::get<1>(e.first);
                // there must not be a path from i1 to i2 consisting of edges with primal value false only
@@ -717,7 +717,7 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
 
       for(const auto& e : unaryFactorsVector_) {
          graph.insertEdge(e.first[0], e.first[1]);
-         edgeValues.push_back(*(e.second->GetFactor()));
+         edgeValues.push_back((*e.second->GetFactor())[0]);
       }
 
       primal_handle_ = std::async(std::launch::async, gaec_klj, std::move(graph), std::move(edgeValues));
@@ -735,7 +735,7 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
       assert(labeling.size() <= unaryFactorsVector_.size());
       for(INDEX c=0; c<labeling.size(); ++c) {
          auto* f = unaryFactorsVector_[c].second;
-         f->GetFactor()->set_primal(labeling[c]);
+         f->GetFactor()->primal()[0] = labeling[c];
          f->ComputePrimalThroughMessages();
       }
 
@@ -744,7 +744,7 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
          UnionFind uf(noNodes_);
          for(INDEX c=0; c<labeling.size(); ++c) {
             UnaryFactorContainer* f = unaryFactorsVector_[c].second; 
-            if(f->GetFactor()->get_primal() == false) {
+            if(f->GetFactor()->primal()[0] == false) {
                // connect components 
                const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
                const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
@@ -757,9 +757,9 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
             const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
             const INDEX j = std::get<1>(unaryFactorsVector_[c].first);
             if(uf.connected(i,j)) {
-               f->GetFactor()->set_primal(false);
+               f->GetFactor()->primal()[0] = false;
             } else {
-               f->GetFactor()->set_primal(true);
+               f->GetFactor()->primal()[0] = true;
             }
             f->ComputePrimalThroughMessages();
          }
@@ -829,18 +829,32 @@ protected:
 
 
 
-template<class MULTICUT_CONSTRUCTOR, INDEX TRIPLET_PLUS_SPOKE_FACTOR_NO, INDEX TRIPLET_PLUS_SPOKE_MESSAGE_NO, INDEX TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>
+template<
+   class MULTICUT_CONSTRUCTOR,
+   INDEX ODD_3_WHEEL_FACTOR_NO,
+   INDEX TRIPLET_ODD_3_WHEEL_MESSAGE_012_NO, INDEX TRIPLET_ODD_3_WHEEL_MESSAGE_013_NO, INDEX TRIPLET_ODD_3_WHEEL_MESSAGE_023_NO, INDEX TRIPLET_ODD_3_WHEEL_MESSAGE_123_NO
+>
 class MulticutOddWheelConstructor : public MULTICUT_CONSTRUCTOR {
+public:
    using FMC = typename MULTICUT_CONSTRUCTOR::FMC;
    using BaseConstructor = MULTICUT_CONSTRUCTOR;
 
-   using TripletPlusSpokeFactorContainer = meta::at_c<typename FMC::FactorList, TRIPLET_PLUS_SPOKE_FACTOR_NO>;
-   using TripletPlusSpokeMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_MESSAGE_NO>::MessageContainerType;
-   using TripletPlusSpokeCoverMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>::MessageContainerType;
-public:
+   using odd_3_wheel_factor_container = meta::at_c<typename FMC::FactorList, ODD_3_WHEEL_FACTOR_NO>;
+   using triplet_odd_3_wheel_message_012_container = meta::at_c<typename FMC::FactorList, TRIPLET_ODD_3_WHEEL_MESSAGE_012_NO>;
+   using triplet_odd_3_wheel_message_013_container = meta::at_c<typename FMC::FactorList, TRIPLET_ODD_3_WHEEL_MESSAGE_013_NO>;
+   using triplet_odd_3_wheel_message_023_container = meta::at_c<typename FMC::FactorList, TRIPLET_ODD_3_WHEEL_MESSAGE_023_NO>;
+   using triplet_odd_3_wheel_message_123_container = meta::at_c<typename FMC::FactorList, TRIPLET_ODD_3_WHEEL_MESSAGE_123_NO>;
+
+   //using TripletPlusSpokeFactorContainer = meta::at_c<typename FMC::FactorList, TRIPLET_PLUS_SPOKE_FACTOR_NO>;
+   //using TripletPlusSpokeMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_MESSAGE_NO>::MessageContainerType;
+   //using TripletPlusSpokeCoverMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>::MessageContainerType;
+
    template<typename SOLVER>
-   MulticutOddWheelConstructor(SOLVER& pd) : BaseConstructor(pd), tripletPlusSpokeFactors_(100,hash::array4) { 
-      tripletPlusSpokeFactors_.max_load_factor(0.7); 
+   MulticutOddWheelConstructor(SOLVER& pd) :
+      BaseConstructor(pd)
+      //, tripletPlusSpokeFactors_(100,hash::array4) { 
+   {
+      //tripletPlusSpokeFactors_.max_load_factor(0.7); 
    }
 
    // add triplet indices additionally to tripletIndices_
@@ -885,6 +899,40 @@ public:
       }
    }
 
+   odd_3_wheel_factor_container* add_odd_3_wheel_factor(const INDEX i0, const INDEX i1, const INDEX i2, const INDEX i3)
+   {
+      assert(!has_odd_3_wheel_factor(i0,i1,i2,i3));
+
+      auto* f = new odd_3_wheel_factor_container();
+      this->lp_->AddFactor(f);
+      odd_3_wheel_factors_.insert(std::make_pair(std::array<INDEX,4>({i0,i1,i2,i3}), f));
+
+      auto* t012 = this->GetTripletFactor(i0,i1,i2);
+      auto* m012 = new triplet_odd_3_wheel_message_012_container(t012, f);
+      this->lp_->AddMessage(m012);
+
+      auto* t013 = this->GetTripletFactor(i0,i1,i2);
+      auto* m013 = new triplet_odd_3_wheel_message_013_container(t013, f);
+      this->lp_->AddMessage(m013);
+
+      auto* t023 = this->GetTripletFactor(i0,i1,i2);
+      auto* m023 = new triplet_odd_3_wheel_message_023_container(t023, f);
+      this->lp_->AddMessage(m023);
+
+      auto* t123 = this->GetTripletFactor(i0,i1,i2);
+      auto* m123 = new triplet_odd_3_wheel_message_123_container(t123, f);
+      this->lp_->AddMessage(m123);
+   }
+   bool has_odd_3_wheel_factor(const INDEX i0, const INDEX i1, const INDEX i2, const INDEX i3) const
+   {
+      assert(i0 < i1 && i1 < i2 << i2 < i3);
+      return odd_3_wheel_factors_.find(std::array<INDEX,4>({i0,i1,i2,i3})) != odd_3_wheel_factors_.end();
+   }
+   odd_3_wheel_factor_container* get_odd_3_wheel_factor(const INDEX i0, const INDEX i1, const INDEX i2, const INDEX i3) const
+   {
+      return odd_3_wheel_factors_.find(std::array<INDEX,4>({i0,i1,i2,i3}))->second; 
+   }
+   /*
    TripletPlusSpokeFactorContainer* AddTripletPlusSpokeFactor(const INDEX n1, const INDEX n2, const INDEX centerNode, const INDEX spokeNode)
    {
       assert(!HasTripletPlusSpokeFactor(n1,n2,centerNode,spokeNode));
@@ -900,6 +948,8 @@ public:
       //BaseConstructor::lp_->AddFactorRelation(t,tps);
       return tps;
    }
+   */
+   /*
    bool HasTripletPlusSpokeFactor(const INDEX n1, const INDEX n2, const INDEX centerNode, const INDEX spokeNode) const
    {
       assert(n1<n2);
@@ -951,6 +1001,7 @@ public:
       }
       return m;
    }
+   */
 
    INDEX EnforceOddWheel(const INDEX centerNode, std::vector<INDEX> cycle)
    {
@@ -990,6 +1041,15 @@ public:
          // the edge {centerNode,cycle[0]} is the spoke
          INDEX n1 = cycle[i];
          INDEX n2 = cycle[i+1];
+
+         std::array<INDEX,4> nodes({n1,n2,centerNode, cycle[0]});
+         std::sort(nodes.begin(), nodes.end());
+         if(!has_odd_3_wheel_factor(nodes[0], nodes[1], nodes[2], nodes[3])) {
+            add_odd_3_wheel_factor(nodes[0], nodes[1], nodes[2], nodes[3]);
+            ++tripletPlusSpokesAdded;
+         }
+
+         /*
          if(n1>n2) {
             std::swap(n1,n2); 
          }
@@ -999,6 +1059,7 @@ public:
             LinkTripletPlusSpokeFactor(n1,n2,centerNode,cycle[0],n2);
             ++tripletPlusSpokesAdded;
          }
+         */
       }
 
       return tripletPlusSpokesAdded;
@@ -1253,10 +1314,12 @@ public:
    
 
 private:
+   std::unordered_map<std::array<INDEX,4>, odd_3_wheel_factor_container*,decltype(hash::array4)> odd_3_wheel_factors_;
+
    std::vector<std::vector<std::tuple<INDEX,INDEX,typename BaseConstructor::TripletFactorContainer*>>> tripletByIndices_; // of triplet factor with indices (i1,i2,i3) exists, then (i1,i2,i3) will be in the vector of index i1, i2 and i3
    // the format for TripletPlusSpoke is (node1,node2, centerNode, spokeNode) and we assume n1<n2
    // hash for std::array<INDEX,4>
-   std::unordered_map<std::array<INDEX,4>,TripletPlusSpokeFactorContainer*,decltype(hash::array4)> tripletPlusSpokeFactors_;
+   //std::unordered_map<std::array<INDEX,4>,TripletPlusSpokeFactorContainer*,decltype(hash::array4)> tripletPlusSpokeFactors_;
 };
 
 template<class MULTICUT_CONSTRUCTOR, INDEX LIFTED_MULTICUT_CUT_FACTOR_NO, INDEX CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO, INDEX LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO>
