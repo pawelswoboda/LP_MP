@@ -158,6 +158,92 @@ private:
   T* end_;
 };
 
+template<typename T, INDEX N>
+using array_impl = std::array<T,N>;
+
+
+
+template<typename T, INDEX N>
+class array : public vector_expression<T,array<T,N>> {
+public:
+   array() {}
+
+   template<typename ITERATOR>
+   array(ITERATOR begin, ITERATOR end)
+   {
+      const INDEX size = std::distance(begin,end);
+      assert(size == N);
+      for(auto it=array_.begin(); it!=array_.end(); ++it) {
+         (*it) = *begin;
+      }
+   }
+
+   array(const T value) 
+   {
+      std::fill(array_.begin(), array_.end(), value);
+   }
+   array(const array<T,N>& o)  {
+      assert(size() == o.size());
+      auto it = begin();
+      for(auto o_it = o.begin(); o_it!=o.end(); ++it, ++o_it) { *it = *o_it; }
+   }
+   template<typename E>
+   void operator=(const vector_expression<T,E>& o) {
+      assert(size() == o.size());
+      for(INDEX i=0; i<o.size(); ++i) { 
+         (*this)[i] = o[i]; }
+   }
+   template<typename E>
+   void operator-=(const vector_expression<T,E>& o) {
+      assert(size() == o.size());
+      for(INDEX i=0; i<o.size(); ++i) { 
+         (*this)[i] -= o[i]; } 
+   }
+   template<typename E>
+   void operator+=(const vector_expression<T,E>& o) {
+      assert(size() == o.size());
+      for(INDEX i=0; i<o.size(); ++i) { 
+         (*this)[i] += o[i]; } 
+   }
+
+
+   // force construction from expression template
+   template<typename E>
+   array(vector_expression<T,E>& v) 
+   {
+      for(INDEX i=0; v.size(); ++i) {
+         (*this)[i] = v[i];
+      }
+   }
+
+   constexpr static INDEX size() { return N; }
+
+   T operator[](const INDEX i) const {
+      assert(i<size());
+      assert(!std::isnan(array_[i]));
+      return array_[i];
+   }
+   T& operator[](const INDEX i) {
+      assert(i<size());
+      return array_[i];
+   }
+   using iterator = T*;
+   auto begin() const { return array_.begin(); }
+   auto end() const { return array_.end(); }
+   auto begin() { return array_.begin(); }
+   auto end() { return array_.end(); }
+
+   template<typename ARCHIVE>
+   void serialize(ARCHIVE& ar)
+   {
+      ar( array_ );
+   } 
+
+private:
+   std::array<T,N> array_;
+};
+
+
 template<typename T=REAL>
 class matrix : public matrix_expression<T,matrix<T>> {
 public:

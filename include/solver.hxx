@@ -26,12 +26,8 @@ class Solver {
    // initialize a tuple uniformly
    //template <class T, class LIST>
    //   tuple_from_list<LIST> tupleMaker(LIST l, T& t) { return tuple_from_list<LIST>(t); }
-   template <class Arg1, class Arg2, class... ARGS>
-      std::tuple<ARGS...> tupleMaker(Arg1& arg1, Arg2& arg2, meta::list<ARGS...>) { return std::make_tuple(ARGS(arg1, arg2)...); }
-
-   // a problem constructor can have either of two constructors: 
-   // (i) accepting the solver object only, or 
-   // (ii) accepting the solver object and the command line object
+   template <class T, class... ARGS>
+      std::tuple<ARGS...> tupleMaker(meta::list<ARGS...>, T& t) { return std::make_tuple(ARGS(t)...); }
 
 public:
    using FMC = FACTOR_MESSAGE_CONNECTION;
@@ -42,7 +38,7 @@ public:
      : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
      lp_(cmd_),
      // do zrobienia: use perfect forwarding or std::piecewise_construct
-     problemConstructor_(tupleMaker(*this, cmd_, ProblemDecompositionList{})),
+     problemConstructor_(tupleMaker(ProblemDecompositionList{}, *this)),
      // build the standard command line arguments
      inputFileArg_("i","inputFile","file from which to read problem instance",true,"","file name",cmd_),
      outputFileArg_("o","outputFile","file to write solution",false,"","file name",cmd_),
@@ -52,6 +48,8 @@ public:
      }
 
    ~Solver() {}
+
+   TCLAP::CmdLine& get_cmd() const { return cmd_; }
 
    // needed, as more arguments could be passed to cmd_, and then we need to parse again
    void Init(std::vector<std::string> arg)

@@ -51,7 +51,7 @@ public:
    using edge_triplet_message_2_container = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_2_NO>::MessageContainerType;
 
    template<typename SOLVER>
-   MulticutConstructor(SOLVER& pd, TCLAP::CmdLine&)
+   MulticutConstructor(SOLVER& pd)
    : lp_(&pd.GetLP()),
    //unaryFactors_(100,hash::array2),
    tripletFactors_(100,hash::array3)
@@ -841,17 +841,18 @@ public:
 
    using odd_3_wheel_factor_container = meta::at_c<typename FMC::FactorList, ODD_3_WHEEL_FACTOR_NO>;
    using triplet_odd_3_wheel_message_012_container = meta::at_c<typename FMC::FactorList, TRIPLET_ODD_3_WHEEL_MESSAGE_012_NO>;
-   using triplet_odd_3_wheel_message_013_container = meta::at_c<typename FMC::FactorList, TRIPLET_ODD_3_WHEEL_MESSAGE_013_NO>;
-   using triplet_odd_3_wheel_message_023_container = meta::at_c<typename FMC::FactorList, TRIPLET_ODD_3_WHEEL_MESSAGE_023_NO>;
-   using triplet_odd_3_wheel_message_123_container = meta::at_c<typename FMC::FactorList, TRIPLET_ODD_3_WHEEL_MESSAGE_123_NO>;
+   using triplet_odd_3_wheel_message_013_container = meta::at_c<typename FMC::MessageList, TRIPLET_ODD_3_WHEEL_MESSAGE_013_NO>;
+   using triplet_odd_3_wheel_message_023_container = meta::at_c<typename FMC::MessageList, TRIPLET_ODD_3_WHEEL_MESSAGE_023_NO>;
+   using triplet_odd_3_wheel_message_123_container = meta::at_c<typename FMC::MessageList, TRIPLET_ODD_3_WHEEL_MESSAGE_123_NO>;
 
    //using TripletPlusSpokeFactorContainer = meta::at_c<typename FMC::FactorList, TRIPLET_PLUS_SPOKE_FACTOR_NO>;
    //using TripletPlusSpokeMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_MESSAGE_NO>::MessageContainerType;
    //using TripletPlusSpokeCoverMessageContainer = typename meta::at_c<typename FMC::MessageList, TRIPLET_PLUS_SPOKE_COVER_MESSAGE_NO>::MessageContainerType;
 
    template<typename SOLVER>
-   MulticutOddWheelConstructor(SOLVER& pd, TCLAP::CmdLine& cmd) :
-      BaseConstructor(pd, cmd)
+   MulticutOddWheelConstructor(SOLVER& pd) :
+      BaseConstructor(pd),
+      odd_3_wheel_factors_(100, hash::array4)
       //, tripletPlusSpokeFactors_(100,hash::array4) { 
    {
       //tripletPlusSpokeFactors_.max_load_factor(0.7); 
@@ -1322,7 +1323,11 @@ private:
    //std::unordered_map<std::array<INDEX,4>,TripletPlusSpokeFactorContainer*,decltype(hash::array4)> tripletPlusSpokeFactors_;
 };
 
-template<class MULTICUT_CONSTRUCTOR, INDEX LIFTED_MULTICUT_CUT_FACTOR_NO, INDEX CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO, INDEX LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO>
+template<
+   class MULTICUT_CONSTRUCTOR,
+   INDEX LIFTED_MULTICUT_CUT_FACTOR_NO,
+   INDEX CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO, INDEX LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO
+   >
 class LiftedMulticutConstructor : public MULTICUT_CONSTRUCTOR {
 public:
    using FMC = typename MULTICUT_CONSTRUCTOR::FMC;
@@ -1337,7 +1342,7 @@ public:
    using CutId = std::vector<Edge>;
 
    template<typename SOLVER>
-   LiftedMulticutConstructor(SOLVER& pd, TCLAP::CmdLine& cmd) : MULTICUT_CONSTRUCTOR(pd, cmd) {}
+   LiftedMulticutConstructor(SOLVER& pd) : MULTICUT_CONSTRUCTOR(pd) {}
 
    virtual typename MULTICUT_CONSTRUCTOR::UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost)
    {

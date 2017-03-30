@@ -2,6 +2,7 @@
 #define LP_MP_LABELING_LIST_FACTOR
 
 #include <array>
+#include "vector.hxx"
 #include "config.hxx"
 
 namespace LP_MP {
@@ -156,7 +157,7 @@ class labelings<>
 };
 
 template<typename LABELINGS, bool IMPLICIT_ORIGIN>
-class labeling_factor : public std::array<REAL, LABELINGS::no_labelings()>
+class labeling_factor : public array<REAL, LABELINGS::no_labelings()>
 {
 public:
    constexpr static bool has_implicit_origin() { return IMPLICIT_ORIGIN; } // means zero label has cost 0 and is not recorded.
@@ -176,7 +177,6 @@ public:
       }
    }
 
-
    REAL EvaluatePrimal() const
    {
       const INDEX labeling_no = LABELINGS::matching_labeling(primal_);
@@ -194,7 +194,7 @@ public:
    const auto& primal() const { return primal_; }
 
    void init_primal() {}
-   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<std::array<REAL,size()>*>(this) ); }
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<array<REAL,size()>*>(this) ); }
    template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
 
 private:
@@ -205,7 +205,7 @@ private:
 template<typename LEFT_LABELINGS, typename RIGHT_LABELINGS, INDEX... INDICES>
 class labeling_message {
 
-using msg_val_type = std::array<REAL, LEFT_LABELINGS::no_labelings()>;
+using msg_val_type = array<REAL, LEFT_LABELINGS::no_labelings()>;
 
 public:
    template<typename LEFT_LABELING, typename RIGHT_LABELING, INDEX LEFT_INDEX, INDEX... I_REST>
@@ -266,7 +266,7 @@ public:
   typename std::enable_if<(I < RIGHT_LABELINGS::no_labelings())>::type 
   compute_msg_impl(msg_val_type& msg_val, const RIGHT_FACTOR& r, REAL& min_of_labels_not_taken, labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>)
   {
-     INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr!
+     INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr! Is this an llvm bug?
      if(left_label_number < msg_val.size()) {
         msg_val[left_label_number] = std::min(msg_val[left_label_number], r[I]);
      } else {
@@ -304,8 +304,10 @@ public:
    typename std::enable_if<(I < RIGHT_LABELINGS::no_labelings())>::type 
    repam_right_impl(RIGHT_FACTOR& r, const MSG& msg, labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>)
    {
-     INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr!
-     r[I] += msg[left_label_number];
+     INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr! Is this an llvm bug?
+     if(left_label_number < msg.size()) {
+        r[I] += msg[left_label_number];
+     }
      repam_right_impl<RIGHT_FACTOR, MSG, I+1, RIGHT_LABELINGS_REST...>(r, msg, labelings<RIGHT_LABELINGS_REST...>{});
    }
 
@@ -324,8 +326,8 @@ public:
       // go over all right labelings. Then find left labeling corresponding to it, and compute minimum
       msg_val_type msg_val; // additional last entry is minimum over unmatched right labelings
       compute_msg(msg_val, r);
-      assert(false);
-      //msg -= msg_val;
+      //assert(false);
+      msg -= msg_val;
    }
 
    template<typename LEFT_FACTOR, typename MSG>
@@ -339,8 +341,7 @@ public:
    template<typename LEFT_FACTOR, typename MSG>
    void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
    {
-      assert(false);
-      //msg -= omega*l;
+      msg -= omega*l;
    }
 
 
