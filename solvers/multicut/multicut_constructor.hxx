@@ -128,6 +128,7 @@ public:
       assert(HasUnaryFactor(i1,i2));
       return unaryFactors_.find(std::array<INDEX,2>{i1,i2})->second;
    }
+
    template<typename MESSAGE_CONTAINER>
    MESSAGE_CONTAINER* LinkUnaryTriplet(UnaryFactorContainer* u, TripletFactorContainer* t) 
    {
@@ -211,6 +212,18 @@ public:
    {
       assert(HasUnaryFactor(i1,i2));
       return *(unaryFactors_.find(std::array<INDEX,2>{i1,i2})->second->GetFactor());
+   }
+
+   INDEX NumOfUnaryFactors() const {
+      return unaryFactorsVector_.size();
+   }
+
+   std::array<INDEX,2> GetEdge(const INDEX e) const {
+      return unaryFactorsVector_[e].first;
+   }
+
+   REAL GetEdgeCost(const INDEX e) const {
+      return *(unaryFactorsVector_[e].second->GetFactor());
    }
 
    INDEX AddCycle(std::vector<INDEX> cycle)

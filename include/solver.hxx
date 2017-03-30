@@ -49,7 +49,7 @@ public:
 
    ~Solver() {}
 
-   TCLAP::CmdLine& get_cmd() const { return cmd_; }
+  TCLAP::CmdLine& get_cmd() { return cmd_; }
 
    // needed, as more arguments could be passed to cmd_, and then we need to parse again
    void Init(std::vector<std::string> arg)
