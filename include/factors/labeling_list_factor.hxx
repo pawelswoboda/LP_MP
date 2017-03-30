@@ -204,22 +204,22 @@ private:
 // we assume that LEFT_LABELING contains sublageings of RIGHT_LABELING, where we INDICES indicate i-th entry of LEFT_LABELING is mapped to INDICES[i]-th entry of right labeling
 template<typename LEFT_LABELINGS, typename RIGHT_LABELINGS, INDEX... INDICES>
 class labeling_message {
-
+using type = labeling_message<LEFT_LABELINGS, RIGHT_LABELINGS, INDICES...>;
 using msg_val_type = array<REAL, LEFT_LABELINGS::no_labelings()>;
 
 public:
    template<typename LEFT_LABELING, typename RIGHT_LABELING, INDEX LEFT_INDEX, INDEX... I_REST>
-   constexpr static typename std::enable_if<(LEFT_INDEX >= LEFT_LABELINGS::no_labelings()),bool>::type
+   constexpr static typename std::enable_if<(LEFT_INDEX >= LEFT_LABELING::no_labels()),bool>::type
    matches()
    {
       return true;
    }
    template<typename LEFT_LABELING, typename RIGHT_LABELING, INDEX LEFT_INDEX, INDEX I, INDEX... I_REST>
-   constexpr static typename std::enable_if<(LEFT_INDEX < LEFT_LABELINGS::no_labelings()),bool>::type
+   constexpr static typename std::enable_if<(LEFT_INDEX < LEFT_LABELING::no_labels()),bool>::type
    matches()
    {
       if(LEFT_LABELING::template label<LEFT_INDEX>() == RIGHT_LABELING::template label<I>()) {
-         return matches<LEFT_LABELING, RIGHT_LABELING, LEFT_INDEX+1, I_REST...>();
+         return type::matches<LEFT_LABELING, RIGHT_LABELING, LEFT_INDEX+1, I_REST...>();
       } else {
          return false;
       }

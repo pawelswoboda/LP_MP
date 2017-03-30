@@ -840,7 +840,7 @@ public:
    using BaseConstructor = MULTICUT_CONSTRUCTOR;
 
    using odd_3_wheel_factor_container = meta::at_c<typename FMC::FactorList, ODD_3_WHEEL_FACTOR_NO>;
-   using triplet_odd_3_wheel_message_012_container = meta::at_c<typename FMC::FactorList, TRIPLET_ODD_3_WHEEL_MESSAGE_012_NO>;
+   using triplet_odd_3_wheel_message_012_container = meta::at_c<typename FMC::MessageList, TRIPLET_ODD_3_WHEEL_MESSAGE_012_NO>;
    using triplet_odd_3_wheel_message_013_container = meta::at_c<typename FMC::MessageList, TRIPLET_ODD_3_WHEEL_MESSAGE_013_NO>;
    using triplet_odd_3_wheel_message_023_container = meta::at_c<typename FMC::MessageList, TRIPLET_ODD_3_WHEEL_MESSAGE_023_NO>;
    using triplet_odd_3_wheel_message_123_container = meta::at_c<typename FMC::MessageList, TRIPLET_ODD_3_WHEEL_MESSAGE_123_NO>;
@@ -923,6 +923,8 @@ public:
       auto* t123 = this->GetTripletFactor(i0,i1,i2);
       auto* m123 = new triplet_odd_3_wheel_message_123_container(t123, f);
       this->lp_->AddMessage(m123);
+
+      return f;
    }
    bool has_odd_3_wheel_factor(const INDEX i0, const INDEX i1, const INDEX i2, const INDEX i3) const
    {
@@ -1083,9 +1085,9 @@ public:
          cost[3] += (*t)[3];
       } 
       // get cost directly from edge factors
-      const REAL c01 = *(this->GetUnaryFactor(triplet[0], triplet[1])->GetFactor());
-      const REAL c02 = *(this->GetUnaryFactor(triplet[0], triplet[2])->GetFactor());
-      const REAL c12 = *(this->GetUnaryFactor(triplet[1], triplet[2])->GetFactor());
+      const REAL c01 = (*this->GetUnaryFactor(triplet[0], triplet[1])->GetFactor())[0];
+      const REAL c02 = (*this->GetUnaryFactor(triplet[0], triplet[2])->GetFactor())[0];
+      const REAL c12 = (*this->GetUnaryFactor(triplet[1], triplet[2])->GetFactor())[0];
       cost[0] += c02 + c12;
       cost[1] += c01 + c12;
       cost[2] += c01 + c02;
