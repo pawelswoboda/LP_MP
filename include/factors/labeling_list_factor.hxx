@@ -160,10 +160,17 @@ template<typename LABELINGS, bool IMPLICIT_ORIGIN>
 class labeling_factor : public array<REAL, LABELINGS::no_labelings()>
 {
 public:
+   labeling_factor() 
+   {
+      std::fill(this->begin(), this->end(), 0.0);
+   }
+
    constexpr static bool has_implicit_origin() { return IMPLICIT_ORIGIN; } // means zero label has cost 0 and is not recorded.
+
    constexpr static INDEX size() {
       return LABELINGS::no_labelings();
    }
+   
    constexpr static INDEX primal_size() {
       return LABELINGS::no_labels(); 
    }

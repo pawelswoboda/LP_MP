@@ -17,28 +17,27 @@
 
 namespace LP_MP {
 
+
 // class containing the LP, problem constructor list, input function and visitor
 // binds together problem constructors and solver and organizes input/output
 // base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
 
 template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR>
 class Solver {
-   // initialize a tuple uniformly
-   //template <class T, class LIST>
-   //   tuple_from_list<LIST> tupleMaker(LIST l, T& t) { return tuple_from_list<LIST>(t); }
-   template <class T, class... ARGS>
-      std::tuple<ARGS...> tupleMaker(meta::list<ARGS...>, T& t) { return std::make_tuple(ARGS(t)...); }
 
 public:
    using FMC = FACTOR_MESSAGE_CONNECTION;
    using SolverType = Solver<FMC,LP_TYPE,VISITOR>;
    using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
 
-   Solver(int argc, char** argv)
+   Solver(int argc, char** argv) : Solver(argc, argv, ProblemDecompositionList{}) {}
+
+private:
+   template<typename... PROBLEM_CONSTRUCTORS>
+   Solver(int argc, char** argv, meta::list<PROBLEM_CONSTRUCTORS...>&& pc_list)
      : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
      lp_(cmd_),
-     // do zrobienia: use perfect forwarding or std::piecewise_construct
-     problemConstructor_(tupleMaker(ProblemDecompositionList{}, *this)),
+     problemConstructor_((sizeof(PROBLEM_CONSTRUCTORS),  new PROBLEM_CONSTRUCTORS( *this ) )...), //(SolverType&)(*this))
      // build the standard command line arguments
      inputFileArg_("i","inputFile","file from which to read problem instance",true,"","file name",cmd_),
      outputFileArg_("o","outputFile","file to write solution",false,"","file name",cmd_),
@@ -46,6 +45,7 @@ public:
      {
        Init(argc,argv);
      }
+public:
 
    ~Solver() {}
 
@@ -108,6 +108,7 @@ public:
          if(!output_file.is_open()) {
             throw std::runtime_error("could not open file " + outputFile_);
          }
+         assert(false); // conert to pointer below
 
          for_each_tuple(this->problemConstructor_, [&output_file,this](auto& l) {
             using pc_type = typename std::remove_reference<decltype(l)>::type;
@@ -145,11 +146,11 @@ public:
    bool CheckPrimalConsistency()
    {
       bool feasible = true;
-      for_each_tuple(this->problemConstructor_, [this,&feasible](auto& l) {
-            using pc_type = typename std::remove_reference<decltype(l)>::type;
+      for_each_tuple(this->problemConstructor_, [this,&feasible](auto* l) {
+            using pc_type = typename std::remove_pointer<decltype(l)>::type;
             static_if<SolverType::CanCheckPrimalConsistency<pc_type>()>([&](auto f) {
                   if(feasible) {
-                     const bool feasible_pc = f(l).CheckPrimalConsistency();
+                     const bool feasible_pc = f(*l).CheckPrimalConsistency();
                      if(!feasible_pc) {
                         feasible = false;
                      }
@@ -177,10 +178,10 @@ public:
    INDEX Tighten(const INDEX maxConstraints) 
    {
       INDEX constraints_added = 0;
-      for_each_tuple(this->problemConstructor_, [this,maxConstraints,&constraints_added](auto& l) {
-            using pc_type = typename std::remove_reference<decltype(l)>::type;
+      for_each_tuple(this->problemConstructor_, [this,maxConstraints,&constraints_added](auto* l) {
+            using pc_type = typename std::remove_pointer<decltype(l)>::type;
             static_if<SolverType::CanTighten<pc_type>()>([&](auto f) {
-                  constraints_added += f(l).Tighten(maxConstraints);
+                  constraints_added += f(*l).Tighten(maxConstraints);
             });
        });
 
@@ -190,8 +191,8 @@ public:
    template<INDEX PROBLEM_CONSTRUCTOR_NO>
    meta::at_c<ProblemDecompositionList, PROBLEM_CONSTRUCTOR_NO>& GetProblemConstructor() 
    {
-
-      return std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_);
+      auto& pc = *std::get<PROBLEM_CONSTRUCTOR_NO>(problemConstructor_);
+      return pc;
    }
 
    LP_TYPE& GetLP() { return lp_; }
@@ -269,10 +270,10 @@ public:
 
    virtual void End() 
    {
-      for_each_tuple(this->problemConstructor_, [this](auto& l) {
-            using pc_type = typename std::remove_reference<decltype(l)>::type;
+      for_each_tuple(this->problemConstructor_, [this](auto* l) {
+            using pc_type = typename std::remove_pointer<decltype(l)>::type;
             static_if<SolverType::CanCallEnd<pc_type>()>([&](auto f) {
-                  f(l).End();
+                  f(*l).End();
             });
       }); 
    }
@@ -308,7 +309,18 @@ protected:
 
    LP_TYPE lp_;
 
-   tuple_from_list<ProblemDecompositionList> problemConstructor_;
+   struct add_pointer {
+      template<typename T>
+         using invoke = T*;
+      template<typename T>
+         using type = T*;
+   };
+   using constructor_pointer_list = meta::transform< ProblemDecompositionList, add_pointer >;
+   meta::apply<meta::quote<std::tuple>, constructor_pointer_list> problemConstructor_;
+   // unfortunately, std::tuple cannot intialize properly when tuple elements are non-copyable and non-moveable. This happens, when problem constructors hold TCLAP arguments. Hence we must hold references to problem constructors, which is less nice.
+   //meta::apply<meta::quote<std::tuple>, ProblemDecompositionList> problemConstructor_;
+   //tuple_from_list<ProblemDecompositionList> problemConstructor_;
+   //problem_constructor_storage_from_list<ProblemDecompositionList> problemConstructor_;
 
    // command line arguments
    TCLAP::ValueArg<std::string> inputFileArg_;
@@ -368,10 +380,10 @@ public:
    {
       // compute the primal in parallel.
       // for this, first we have to wait until the rounding procedure has read off everything from the LP model before optimizing further
-      for_each_tuple(this->problemConstructor_, [this](auto& l) {
-            using pc_type = typename std::remove_reference<decltype(l)>::type;
+      for_each_tuple(this->problemConstructor_, [this](auto* l) {
+            using pc_type = typename std::remove_pointer<decltype(l)>::type;
             static_if<ProblemConstructorRoundingSolver<SOLVER>::CanComputePrimal<pc_type>()>([&](auto f) {
-                  f(l).ComputePrimal();
+                  f(*l).ComputePrimal();
             });
       });
       this->RegisterPrimal();

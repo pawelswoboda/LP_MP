@@ -908,18 +908,30 @@ public:
       this->lp_->AddFactor(f);
       odd_3_wheel_factors_.insert(std::make_pair(std::array<INDEX,4>({i0,i1,i2,i3}), f));
 
+      if(!this->HasTripletFactor(i0,i1,i2)) {
+         this->AddTripletFactor(i0,i1,i2);
+      }
       auto* t012 = this->GetTripletFactor(i0,i1,i2);
       auto* m012 = new triplet_odd_3_wheel_message_012_container(t012, f);
       this->lp_->AddMessage(m012);
 
+      if(!this->HasTripletFactor(i0,i1,i3)) {
+         this->AddTripletFactor(i0,i1,i3);
+      }
       auto* t013 = this->GetTripletFactor(i0,i1,i2);
       auto* m013 = new triplet_odd_3_wheel_message_013_container(t013, f);
       this->lp_->AddMessage(m013);
 
+      if(!this->HasTripletFactor(i0,i2,i3)) {
+         this->AddTripletFactor(i0,i2,i3);
+      }
       auto* t023 = this->GetTripletFactor(i0,i1,i2);
       auto* m023 = new triplet_odd_3_wheel_message_023_container(t023, f);
       this->lp_->AddMessage(m023);
 
+      if(!this->HasTripletFactor(i1,i2,i3)) {
+         this->AddTripletFactor(i1,i2,i3);
+      }
       auto* t123 = this->GetTripletFactor(i0,i1,i2);
       auto* m123 = new triplet_odd_3_wheel_message_123_container(t123, f);
       this->lp_->AddMessage(m123);
@@ -1317,6 +1329,8 @@ public:
    
 
 private:
+   std::atomic<int> kwas_delete;
+
    std::unordered_map<std::array<INDEX,4>, odd_3_wheel_factor_container*,decltype(hash::array4)> odd_3_wheel_factors_;
 
    std::vector<std::vector<std::tuple<INDEX,INDEX,typename BaseConstructor::TripletFactorContainer*>>> tripletByIndices_; // of triplet factor with indices (i1,i2,i3) exists, then (i1,i2,i3) will be in the vector of index i1, i2 and i3
