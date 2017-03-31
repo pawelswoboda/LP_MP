@@ -64,7 +64,7 @@ struct FMC_MLT {
 	mc_base_edge_lifted_cut_factor_message_container, mc_lifted_edge_lifted_cut_factor_message_container
 	>;
 
-	// input FMC struct, factor numbers, message numbers
+	// input FMC struct, factor numbers, message numbers, constant factor
 	using mc_constructor = MulticutConstructor<FMC_MLT, 0, 1, 0, 1, 2, 5>;
 	using lifted_mc_constructor = LiftedMulticutConstructor<mc_constructor, 4, 10, 11>;
 	using mlt_constructor = MLT_constructor<lifted_mc_constructor, 2, 3, 3, 4, 5, 6, 7, 8, 9>;

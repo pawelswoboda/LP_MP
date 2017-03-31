@@ -76,9 +76,19 @@ public:
 		auto* f = lifted_mc_constructor_.AddLiftedUnaryFactor(node_1, node_2, cost);
 	}
 
+	bool HasEdge(const INDEX node_1, const INDEX node_2) 
+	{
+		return lifted_mc_constructor_.HasUnaryFactor(node_1, node_2);
+	}
+
 	void AddMcTriplet(const INDEX node_1, const INDEX node_2, const INDEX node_3)
 	{
 		auto* f = lifted_mc_constructor_.AddTripletFactor(node_1, node_2, node_3);
+	}
+
+	bool HasMcTriplet(const INDEX node_1, const INDEX node_2, const INDEX node_3)
+	{
+		return lifted_mc_constructor_.HasTripletFactor(node_1, node_2, node_3);
 	}
 
 	void AddMltTriplet(const INDEX node_1, const INDEX node_2, const INDEX node_3)
@@ -107,6 +117,11 @@ public:
 	{
 		assert(node_1 < node_2 && node_2 < node_3);
 		return mlt_triplet_factors_.find(std::array<INDEX,3>{node_1, node_2, node_3}) != mlt_triplet_factors_.end();
+	}
+
+	bool HasTriplet(const INDEX node_1, const INDEX node_2, const INDEX node_3)
+	{
+		return HasMcTriplet(node_1, node_2, node_3) || HasMltTriplet(node_1, node_2, node_3);
 	}
 
 	void AddBifurcation(const INDEX node_1, const INDEX node_2, const INDEX node_3, const INDEX node_4, const INDEX node_5, const INDEX node_6)
@@ -214,10 +229,37 @@ public:
 
 	}
 
-	INDEX AddCycle(std::vector<INDEX> path)
+	INDEX AddCycle(std::vector<INDEX> cycle)
 	{
-		// TODO
-		return 0;
+		assert(cycle.size() >= 3);
+		std::rotate(cycle.begin(), std::min_element(cycle.begin(), cycle.end()), cycle.end());
+		const INDEX firstNode = cycle[0];
+		const INDEX t = node_to_timestep_[firstNode];
+
+		// triangulate by adding edges from firstNode to all other nodes
+		INDEX noTripletsAdded = 0;
+		for (INDEX i = 2; i < cycle.size(); ++i)
+		{
+			if (!HasEdge(firstNode, cycle[i]))
+// TODO: shouldn't we add a lifted edge?
+				AddBaseEdge(firstNode, cycle[i], 0.0);
+
+			const INDEX secondNode = std::min(cycle[i], cycle[i-1]);
+			const INDEX thirdNode = std::max(cycle[i], cycle[i-1]);
+			const INDEX t1 = node_to_timestep_[secondNode];
+			const INDEX t2 = node_to_timestep_[thirdNode];
+			if (!HasTriplet(firstNode, secondNode, thirdNode))
+			{
+				// firstNode has the minimal index, thus minimal timestep among the triplet
+				// if the other timesteps are both higher, then we have an MLT triplet
+				if (t < t1 && t < t2)
+					AddMltTriplet(firstNode, secondNode, thirdNode);
+				else
+					AddMcTriplet(firstNode, secondNode, thirdNode);
+				noTripletsAdded++;
+			}
+		}
+		return noTripletsAdded;
 	}
 
    	INDEX Tighten(const INDEX maxCuttingPlanesToAdd)
