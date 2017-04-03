@@ -918,21 +918,21 @@ public:
       if(!this->HasTripletFactor(i0,i1,i3)) {
          this->AddTripletFactor(i0,i1,i3);
       }
-      auto* t013 = this->GetTripletFactor(i0,i1,i2);
+      auto* t013 = this->GetTripletFactor(i0,i1,i3);
       auto* m013 = new triplet_odd_3_wheel_message_013_container(t013, f);
       this->lp_->AddMessage(m013);
 
       if(!this->HasTripletFactor(i0,i2,i3)) {
          this->AddTripletFactor(i0,i2,i3);
       }
-      auto* t023 = this->GetTripletFactor(i0,i1,i2);
+      auto* t023 = this->GetTripletFactor(i0,i2,i3);
       auto* m023 = new triplet_odd_3_wheel_message_023_container(t023, f);
       this->lp_->AddMessage(m023);
 
       if(!this->HasTripletFactor(i1,i2,i3)) {
          this->AddTripletFactor(i1,i2,i3);
       }
-      auto* t123 = this->GetTripletFactor(i0,i1,i2);
+      auto* t123 = this->GetTripletFactor(i1,i2,i3);
       auto* m123 = new triplet_odd_3_wheel_message_123_container(t123, f);
       this->lp_->AddMessage(m123);
 
@@ -940,7 +940,7 @@ public:
    }
    bool has_odd_3_wheel_factor(const INDEX i0, const INDEX i1, const INDEX i2, const INDEX i3) const
    {
-      assert(i0 < i1 && i1 < i2 << i2 < i3);
+      assert(i0 < i1 && i1 < i2 && i2 < i3);
       return odd_3_wheel_factors_.find(std::array<INDEX,4>({i0,i1,i2,i3})) != odd_3_wheel_factors_.end();
    }
    odd_3_wheel_factor_container* get_odd_3_wheel_factor(const INDEX i0, const INDEX i1, const INDEX i2, const INDEX i3) const

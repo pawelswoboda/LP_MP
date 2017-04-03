@@ -5,6 +5,9 @@
 #include "vector.hxx"
 #include "config.hxx"
 
+
+// to do: make _impl functions private
+
 namespace LP_MP {
 
 template<INDEX... LABELS>
@@ -12,23 +15,23 @@ struct labeling {
 
    template<INDEX LABEL_NO, INDEX LABEL, INDEX... LABELS_REST>
    constexpr static
-   typename std::enable_if<LABEL_NO == 0,INDEX>::type get_label()
+   typename std::enable_if<LABEL_NO == 0,INDEX>::type label_impl()
    {
       return LABEL;
    }
 
    template<INDEX LABEL_NO, INDEX LABEL, INDEX... LABELS_REST>
    constexpr static
-   typename std::enable_if<(LABEL_NO > 0),INDEX>::type get_label()
+   typename std::enable_if<(LABEL_NO > 0),INDEX>::type label_impl()
    {
-      return get_label<LABEL_NO-1, LABELS_REST...>();
+      return label_impl<LABEL_NO-1, LABELS_REST...>();
    }
 
    template<INDEX LABEL_NO>
    constexpr static INDEX label()
    { 
       static_assert(LABEL_NO < sizeof...(LABELS), "label number must be smaller than number of labels");
-      return get_label<LABEL_NO, LABELS...>();
+      return label_impl<LABEL_NO, LABELS...>();
    } 
 
    constexpr static INDEX no_labels()
@@ -164,6 +167,10 @@ public:
    {
       std::fill(this->begin(), this->end(), 0.0);
    }
+   ~labeling_factor()
+   {
+      static_assert(IMPLICIT_ORIGIN, "implicit zero label obligatory yet");
+   }
 
    constexpr static bool has_implicit_origin() { return IMPLICIT_ORIGIN; } // means zero label has cost 0 and is not recorded.
 
@@ -215,18 +222,23 @@ using type = labeling_message<LEFT_LABELINGS, RIGHT_LABELINGS, INDICES...>;
 using msg_val_type = array<REAL, LEFT_LABELINGS::no_labelings()>;
 
 public:
+   ~labeling_message() 
+   {
+      static_assert(sizeof...(INDICES) == LEFT_LABELINGS::no_labels(), "each left label must be matched to a right one");
+   }
+
    template<typename LEFT_LABELING, typename RIGHT_LABELING, INDEX LEFT_INDEX, INDEX... I_REST>
    constexpr static typename std::enable_if<(LEFT_INDEX >= LEFT_LABELING::no_labels()),bool>::type
-   matches()
+   matches_impl()
    {
       return true;
    }
    template<typename LEFT_LABELING, typename RIGHT_LABELING, INDEX LEFT_INDEX, INDEX I, INDEX... I_REST>
    constexpr static typename std::enable_if<(LEFT_INDEX < LEFT_LABELING::no_labels()),bool>::type
-   matches()
+   matches_impl()
    {
       if(LEFT_LABELING::template label<LEFT_INDEX>() == RIGHT_LABELING::template label<I>()) {
-         return type::matches<LEFT_LABELING, RIGHT_LABELING, LEFT_INDEX+1, I_REST...>();
+         return type::matches_impl<LEFT_LABELING, RIGHT_LABELING, LEFT_INDEX+1, I_REST...>();
       } else {
          return false;
       }
@@ -235,7 +247,7 @@ public:
    template<typename LEFT_LABELING, typename RIGHT_LABELING>
    constexpr static bool matches()
    {
-      return matches<LEFT_LABELING, RIGHT_LABELING, 0, INDICES...>();
+      return matches_impl<LEFT_LABELING, RIGHT_LABELING, 0, INDICES...>();
    }
 
    template<typename RIGHT_LABELING, INDEX I, typename... LEFT_LABELINGS_REST>
@@ -351,6 +363,41 @@ public:
       msg -= omega*l;
    }
 
+   template<INDEX LEFT_INDEX, INDEX... RIGHT_INDICES_REST>
+   typename std::enable_if<(LEFT_INDEX >= LEFT_LABELINGS::no_labels())>::type
+   compute_right_from_left_primal_impl(const std::array<bool,LEFT_LABELINGS::no_labels()>& l, std::array<bool, RIGHT_LABELINGS::no_labels()>& r)
+   {}
+   template<INDEX LEFT_INDEX, INDEX RIGHT_INDEX, INDEX... RIGHT_INDICES_REST>
+   typename std::enable_if<(LEFT_INDEX < LEFT_LABELINGS::no_labels())>::type
+   compute_right_from_left_primal_impl(const std::array<bool,LEFT_LABELINGS::no_labels()>& l, std::array<bool, RIGHT_LABELINGS::no_labels()>& r)
+   {
+      r[RIGHT_INDEX] = l[LEFT_INDEX];
+      compute_right_from_left_primal_impl<LEFT_INDEX+1, RIGHT_INDICES_REST...>(l,r); 
+   }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+   {
+      compute_right_from_left_primal_impl<0, INDICES...>(l.primal(), r.primal()); 
+   } 
+
+   template<INDEX RIGHT_INDEX, typename... RIGHT_LABELINGS_REST>
+   static typename std::enable_if<(RIGHT_INDEX >= RIGHT_LABELINGS::no_labelings())>::type
+   print_matching_impl(labelings<RIGHT_LABELINGS_REST...>)
+   {}
+   template<INDEX RIGHT_INDEX, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
+   static typename std::enable_if<(RIGHT_INDEX < RIGHT_LABELINGS::no_labelings())>::type
+   print_matching_impl(labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>)
+   {
+      INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr! Is this an llvm bug?
+      std::cout << left_label_number << "," << RIGHT_INDEX << "\n";
+      print_matching_impl<RIGHT_INDEX+1>(labelings<RIGHT_LABELINGS_REST...>{});
+   }
+   static void print_matching()
+   {
+      // for each right labeling, print left one that is matched (for debugging purposes)
+      print_matching_impl<0>(RIGHT_LABELINGS{});
+   }
 
 private:
 };
