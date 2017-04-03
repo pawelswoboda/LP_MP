@@ -165,9 +165,22 @@ namespace LP_MP {
 	      return std::move(std::make_tuple(c,std::move(path)));
       }
 
+      //static auto no_mask_op = [](const INDEX i, const INDEX j, const REAL weight) { return true; };
+      static bool no_mask_op(const INDEX, const INDEX, const REAL) { return true;}
+      
       // do bfs with thresholded costs and iteratively lower threshold until enough cycles are found
       // only consider edges that have cost equal or larger than th
-      std::tuple<REAL,std::vector<INDEX>> FindPath(const INDEX startNode, const INDEX endNode, const Graph& g, const REAL th = 0.0, const INDEX max_length = std::numeric_limits<INDEX>::max()) 
+      std::tuple<REAL, std::vector<INDEX>> FindPath(const INDEX startNode, const INDEX endNode, const Graph& g, const REAL th = 0.0)
+      {
+         return FindPath(startNode, endNode, g, th, no_mask_op);
+      }
+
+      template<typename MASK_OP>
+      std::tuple<REAL,std::vector<INDEX>> 
+      FindPath(
+         const INDEX startNode, const INDEX endNode, const Graph& g, const REAL th,
+         MASK_OP mask_op
+         )
       {
          Reset();
          visit.push_back({startNode, 0});
@@ -184,20 +197,24 @@ namespace LP_MP {
             const INDEX distance = visit.front()[1];
             visit.pop_front();
 
-            if(distance <= max_length) {
 
             if(Labelled1(i)) {
                for(auto* a=g[i].begin(); a->cost>=th && a!=g[i].end(); ++a) { 
                   auto* head = a->head;
                   const INDEX j = g[head];
-                  if(!Labelled(j)) {
-                     visit.push_back({j, distance+1});
-                     Parent(j) = i;
-                     Cost(j) = a->cost;
-                     Label1(j);
-                  } else if(Labelled2(j)) { // shortest path found
-                     // trace back path from j to endNode and from i to startNode
-                     return std::move(TracePath(i,j, a->cost));
+
+                  if(mask_op(i,j,a->cost)) {
+
+                     if(!Labelled(j)) {
+                        visit.push_back({j, distance+1});
+                        Parent(j) = i;
+                        Cost(j) = a->cost;
+                        Label1(j);
+                     } else if(Labelled2(j)) { // shortest path found
+                        // trace back path from j to endNode and from i to startNode
+                        return std::move(TracePath(i,j, a->cost));
+                     }
+
                   }
                }
             } else {
@@ -205,19 +222,24 @@ namespace LP_MP {
                for(auto* a=g[i].begin(); a->cost>=th && a!=g[i].end(); ++a) { 
                   auto* head = a->head;
                   const INDEX j = g[head];
-                  if(!Labelled(j)) {
-                     visit.push_back({j, distance+1});
-                     Parent(j) = i;
-                     Cost(j) = a->cost;
-                     Label2(j);
-                  } else if(Labelled1(j)) { // shortest path found
-                     // trace back path from j to endNode and from i to startNode
-                     return std::move(TracePath(i,j, a->cost));
+
+                  if(mask_op(i,j,a->cost)) {
+
+                     if(!Labelled(j)) {
+                        visit.push_back({j, distance+1});
+                        Parent(j) = i;
+                        Cost(j) = a->cost;
+                        Label2(j);
+                     } else if(Labelled1(j)) { // shortest path found
+                        // trace back path from j to endNode and from i to startNode
+                        return std::move(TracePath(i,j, a->cost));
+                     }
+
                   }
                }
             }
 
-            }
+            
          }
          return std::make_tuple(-std::numeric_limits<REAL>::infinity(),std::vector<INDEX>(0));
       }
@@ -227,7 +249,6 @@ private:
    std::deque<std::array<INDEX,2>> visit; // node number, distance from start or end 
    INDEX flag1, flag2;
 };
-
 
 
 

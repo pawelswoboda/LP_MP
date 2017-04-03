@@ -1,8 +1,7 @@
 SET(SOURCE_FILES 
+	mlt_solver.cpp
    )
 
-
-# note: HDF5 is only required for the opengm versions. Do not require HDF5 per default
 foreach( source_file ${SOURCE_FILES} )
    string( REPLACE ".cpp" "" executable_file ${source_file} )
    add_executable( ${executable_file} ${source_file} ${headers} ${sources})
