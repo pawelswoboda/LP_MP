@@ -23,56 +23,57 @@ class DiscreteTomographyTreeConstructor {
     using counting_factor_type = COUNTING_FACTOR;
     using PairwiseFactorType = typename MrfConstructorType::PairwiseFactorContainer;
 
-    DiscreteTomographyTreeConstructor(Solver<FMC>& pd) : pd_(pd) {}
+    template<typename SOLVER>
+    DiscreteTomographyTreeConstructor(SOLVER& s) : s_(s), lp_(&s.GetLPP()) {}
     
     void SetNumberOfLabels(const INDEX noLabels) { noLabels_ = noLabels; }
 
     void connect_pairwise_counting_center(PairwiseFactorType* p, COUNTING_FACTOR* c) {
        auto* m = new PAIRWISE_COUNTING_CENTER(false, p, c);
-       pd_.GetLP().AddMessage(m);
-       pd_.GetLP().AddFactorRelation(p,c);
+       lp_->AddMessage(m);
+       lp_->AddFactorRelation(p,c);
     }
     void connect_pairwise_counting_left(PairwiseFactorType* p, COUNTING_FACTOR* c) {
        auto* m = new PAIRWISE_COUNTING_LEFT(false, p, c);
-       pd_.GetLP().AddMessage(m);
-       pd_.GetLP().AddFactorRelation(p,c);
+       lp_->AddMessage(m);
+       lp_->AddFactorRelation(p,c);
     }
     void connect_pairwise_counting_right(PairwiseFactorType* p, COUNTING_FACTOR* c) {
        auto* m = new PAIRWISE_COUNTING_RIGHT(false, p, c);
-       pd_.GetLP().AddMessage(m);
-       pd_.GetLP().AddFactorRelation(p,c);
+       lp_->AddMessage(m);
+       lp_->AddFactorRelation(p,c);
     }
     void connect_pairwise_counting_left(PairwiseFactorType* p1, PairwiseFactorType* p2, COUNTING_FACTOR* c) {
        auto* m1 = new LEFT_PAIRWISE_COUNTING_LEFT(false,p1,c);
-       pd_.GetLP().AddMessage(m1);
+       lp_->AddMessage(m1);
        auto* m2 = new RIGHT_PAIRWISE_COUNTING_LEFT(false,p2,c);
-       pd_.GetLP().AddMessage(m2);
-       pd_.GetLP().AddFactorRelation(p2,c);
+       lp_->AddMessage(m2);
+       lp_->AddFactorRelation(p2,c);
     }
     void connect_pairwise_counting_right(PairwiseFactorType* p1, PairwiseFactorType* p2, COUNTING_FACTOR* c) {
        auto* m1 = new LEFT_PAIRWISE_COUNTING_RIGHT(false,p1,c);
-       pd_.GetLP().AddMessage(m1);
+       lp_->AddMessage(m1);
        auto* m2 = new RIGHT_PAIRWISE_COUNTING_RIGHT(false,p2,c);
-       pd_.GetLP().AddMessage(m2);
-       pd_.GetLP().AddFactorRelation(p2,c);
+       lp_->AddMessage(m2);
+       lp_->AddFactorRelation(p2,c);
     }
 
     void connect_counting_factors_left(COUNTING_FACTOR* c_left, COUNTING_FACTOR* c_top) {
        assert(c_left->GetFactor()->up_sum_size() == c_top->GetFactor()->left_sum_size());
        assert(c_left->GetFactor()->left().dim1() == c_top->GetFactor()->up().dim1());
-       pd_.GetLP().AddFactorRelation(c_left,c_top);
+       lp_->AddFactorRelation(c_left,c_top);
        auto* m = new COUNTING_MESSAGE_LEFT(DIRECTION::left, c_left, c_top);
-       pd_.GetLP().AddMessage(m);
+       lp_->AddMessage(m);
     }
     void connect_counting_factors_right(COUNTING_FACTOR* c_right, COUNTING_FACTOR* c_top) {
        assert(c_right->GetFactor()->up_sum_size() == c_top->GetFactor()->right_sum_size());
        const INDEX no_right_labels_1 = c_right->GetFactor()->right().dim2();
        const INDEX no_right_labels_2 = c_top->GetFactor()->up().dim2();
        assert(c_right->GetFactor()->right().dim2() == c_top->GetFactor()->up().dim2());
-       //pd_.GetLP().AddFactorRelation(c_right,c_top);
-       pd_.GetLP().AddFactorRelation(c_top,c_right);
+       //lp_->AddFactorRelation(c_right,c_top);
+       lp_->AddFactorRelation(c_top,c_right);
        auto* m = new COUNTING_MESSAGE_LEFT(DIRECTION::right, c_right, c_top);
-       pd_.GetLP().AddMessage(m);
+       lp_->AddMessage(m);
     }
 
 
@@ -85,7 +86,7 @@ class DiscreteTomographyTreeConstructor {
     COUNTING_FACTOR* join_factors_recursively(std::deque<counting_factor_rec>& queue, ITERATOR projection_var_begin, const INDEX max_sum)
     {
        assert(queue.size() >= 2);
-       auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+       auto& mrf = s_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
        // recursively join factors on lower levels
        while(queue.size() > 1) {
           const INDEX q_size = queue.size();
@@ -109,7 +110,7 @@ class DiscreteTomographyTreeConstructor {
              const INDEX no_center_right_labels = right.f->GetFactor()->no_center_right_labels();
              const INDEX no_right_labels = right.f->GetFactor()->no_right_labels();
              auto* f = new COUNTING_FACTOR(no_left_labels,  left_sum_size, no_center_left_labels, no_center_right_labels, right_sum_size, no_right_labels, std::min(left_sum_size + no_center_left_labels + no_center_right_labels + right_sum_size-3, max_sum));
-             pd_.GetLP().AddFactor(f);
+             lp_->AddFactor(f);
              connect_counting_factors_left(left.f, f);
              connect_pairwise_counting_center( mrf.GetPairwiseFactor(*(projection_var_begin+left.rightmost_var), *(projection_var_begin+left.rightmost_var+1)), f);
              connect_counting_factors_right(right.f,f);
@@ -131,8 +132,8 @@ class DiscreteTomographyTreeConstructor {
     {
        assert(var1<var2);
        auto* f = new COUNTING_FACTOR(1, left_sum, noLabels_, noLabels_, right_sum, 1, std::min(left_sum + right_sum + 2*noLabels_-3, max_sum));
-       pd_.GetLP().AddFactor(f);
-       auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+       lp_->AddFactor(f);
+       auto& mrf = s_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
        connect_pairwise_counting_center(mrf.GetPairwiseFactor(var1,var2),f);
        return f;
     }
@@ -144,7 +145,7 @@ class DiscreteTomographyTreeConstructor {
     {
        const INDEX no_nodes = std::distance(projection_var_begin, projection_var_end); 
        assert(no_nodes % 6 == 2 && no_nodes >= 8);
-       auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+       auto& mrf = s_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
        assert(std::is_sorted(projection_var_begin, projection_var_end));
 
        for(auto it=projection_var_begin; it!=projection_var_end-1; ++it) {
@@ -160,7 +161,7 @@ class DiscreteTomographyTreeConstructor {
 
        // create leftmost counting factor
        auto* f_left = new COUNTING_FACTOR(1, initial_left_sum, noLabels_, noLabels_, noLabels_, noLabels_, std::min(initial_left_sum + 2*noLabels_-2, max_sum));
-       pd_.GetLP().AddFactor(f_left);
+       lp_->AddFactor(f_left);
        connect_pairwise_counting_center(mrf.GetPairwiseFactor(*projection_var_begin, *(projection_var_begin+1)),f_left);
        connect_pairwise_counting_right(mrf.GetPairwiseFactor(*(projection_var_begin+1),*(projection_var_begin+2)), mrf.GetPairwiseFactor(*(projection_var_begin+2), *(projection_var_begin+3)), f_left);
        queue.push_back({f_left,3});
@@ -168,17 +169,17 @@ class DiscreteTomographyTreeConstructor {
        // create cardinality factors on base level spanning six unaries
        for(INDEX i=4; i+6<no_nodes; i+=6) {
          auto* f = new COUNTING_FACTOR(noLabels_, noLabels_, noLabels_, std::min(4*noLabels_-3, max_sum));
-         pd_.GetLP().AddFactor(f);
+         lp_->AddFactor(f);
          connect_pairwise_counting_left(mrf.GetPairwiseFactor(*(projection_var_begin+i),*(projection_var_begin+i+1)), mrf.GetPairwiseFactor(*(projection_var_begin+i+1), *(projection_var_begin+i+2)), f);
          connect_pairwise_counting_center(mrf.GetPairwiseFactor(*(projection_var_begin+i+2),*(projection_var_begin+i+3)),f);
          connect_pairwise_counting_right(mrf.GetPairwiseFactor(*(projection_var_begin+i+3),*(projection_var_begin+i+4)), mrf.GetPairwiseFactor(*(projection_var_begin+i+4), *(projection_var_begin+i+5)), f);
-         pd_.GetLP().AddFactorRelation(f, mrf.GetUnaryFactor(*(projection_var_begin+i+5)));
+         lp_->AddFactorRelation(f, mrf.GetUnaryFactor(*(projection_var_begin+i+5)));
          queue.push_back({f,i+5}); 
        } 
 
        // create rightmost counting factor
        auto* f_right = new COUNTING_FACTOR(noLabels_, noLabels_, noLabels_, noLabels_, initial_right_sum, 1, std::min(initial_right_sum + 2*noLabels_-2, max_sum));
-       pd_.GetLP().AddFactor(f_right);
+       lp_->AddFactor(f_right);
        auto projection_var_right = projection_var_end - 4;
        connect_pairwise_counting_left(mrf.GetPairwiseFactor(*(projection_var_right),*(projection_var_right+1)), mrf.GetPairwiseFactor(*(projection_var_right+1), *(projection_var_right+2)), f_right);
        connect_pairwise_counting_center(mrf.GetPairwiseFactor(*(projection_var_right+2), *(projection_var_right+3)),f_right);
@@ -192,11 +193,11 @@ class DiscreteTomographyTreeConstructor {
     void AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost)
     {      
        const INDEX max_sum = std::max(noLabels_,INDEX(summationCost.size()));
-       auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+       auto& mrf = s_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
        assert(projectionVar.size() > 3); // otherwise just use a ternary factor to enforce consistency
        assert(std::is_sorted(projectionVar.begin(), projectionVar.end())); // support unsorted projectionVar (transpose in messages) later
 
-      auto& mrfConstructor = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+      auto& mrfConstructor = s_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
 
       for(INDEX i=0;i<projectionVar.size()-1;++i) {
         const INDEX i1 = std::min(projectionVar[i],projectionVar[i+1]);
@@ -215,18 +216,18 @@ class DiscreteTomographyTreeConstructor {
          case 0: begin_rest = 0; break;// nothing to do
          case 1: {// use two counting factors. Right counting subfactor of left counting factor is connected to top subcounting factor of right counting factor 
                  auto* f1 = new COUNTING_FACTOR(noLabels_, 1, 1, std::min(2*noLabels_-1,max_sum));
-                 pd_.GetLP().AddFactor(f1);
+                 lp_->AddFactor(f1);
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[0],projectionVar[1]),f1);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[1],projectionVar[2]),f1);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[2],projectionVar[3]),f1);
-                 pd_.GetLP().AddFactorRelation(f1, mrf.GetUnaryFactor(projectionVar[3]));
+                 lp_->AddFactorRelation(f1, mrf.GetUnaryFactor(projectionVar[3]));
 
                  auto* f2 = new COUNTING_FACTOR(noLabels_, f1->GetFactor()->up_sum_size(), 1, std::min(f1->GetFactor()->up_sum_size() + 2*noLabels_-2, max_sum));
-                 pd_.GetLP().AddFactor(f2);
+                 lp_->AddFactor(f2);
                  connect_counting_factors_left(f1,f2);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[3],projectionVar[4]),f2);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[4],projectionVar[5]),f2);
-                 pd_.GetLP().AddFactorRelation(f2, mrf.GetUnaryFactor(projectionVar[5]));
+                 lp_->AddFactorRelation(f2, mrf.GetUnaryFactor(projectionVar[5]));
 
                  begin_rest = 7;
                  queue.push_back({f2,6});
@@ -235,19 +236,19 @@ class DiscreteTomographyTreeConstructor {
                  }
          case 2: {// for the remaining cases we use two separate counting factors.
                  auto* f1 = new COUNTING_FACTOR(noLabels_, 1, 1, std::min(2*noLabels_-1, max_sum));
-                 pd_.GetLP().AddFactor(f1);
+                 lp_->AddFactor(f1);
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[0],projectionVar[1]), f1);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[1],projectionVar[2]),f1);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[2],projectionVar[3]),f1);
-                 pd_.GetLP().AddFactorRelation(f1, mrf.GetUnaryFactor(projectionVar[3]));
+                 lp_->AddFactorRelation(f1, mrf.GetUnaryFactor(projectionVar[3]));
                  queue.push_back({f1,3});
 
                  auto* f2 = new COUNTING_FACTOR(noLabels_, 1, 1, std::min(2*noLabels_-1, max_sum));
-                 pd_.GetLP().AddFactor(f2);
+                 lp_->AddFactor(f2);
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[4],projectionVar[5]), f2);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[5],projectionVar[6]),f2);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[6],projectionVar[7]),f2);
-                 pd_.GetLP().AddFactorRelation(f2, mrf.GetUnaryFactor(projectionVar[7]));
+                 lp_->AddFactorRelation(f2, mrf.GetUnaryFactor(projectionVar[7]));
                  queue.push_back({f2,7});
 
                  begin_rest = 8;
@@ -255,19 +256,19 @@ class DiscreteTomographyTreeConstructor {
                  }
          case 3: {
                  auto* f1 = new COUNTING_FACTOR(noLabels_, noLabels_, 1, std::min(3*noLabels_-2, max_sum));
-                 pd_.GetLP().AddFactor(f1);
+                 lp_->AddFactor(f1);
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[0],projectionVar[1]), mrf.GetPairwiseFactor(projectionVar[1], projectionVar[2]), f1);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[2],projectionVar[3]),f1);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[3],projectionVar[4]),f1);
-                 pd_.GetLP().AddFactorRelation(f1, mrf.GetUnaryFactor(projectionVar[4]));
+                 lp_->AddFactorRelation(f1, mrf.GetUnaryFactor(projectionVar[4]));
                  queue.push_back({f1,4});
 
                  auto* f2 = new COUNTING_FACTOR(noLabels_, 1, 1, std::min(2*noLabels_-1, max_sum));
-                 pd_.GetLP().AddFactor(f2);
+                 lp_->AddFactor(f2);
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[5],projectionVar[6]), f2);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[6],projectionVar[7]),f2);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[7],projectionVar[8]),f2);
-                 pd_.GetLP().AddFactorRelation(f2, mrf.GetUnaryFactor(projectionVar[8]));
+                 lp_->AddFactorRelation(f2, mrf.GetUnaryFactor(projectionVar[8]));
                  queue.push_back({f2,8});
 
                  begin_rest = 9;
@@ -275,11 +276,11 @@ class DiscreteTomographyTreeConstructor {
                  }
          case 4: {
                  auto* f = new COUNTING_FACTOR(noLabels_, 1, 1, std::min(2*noLabels_-1, max_sum));
-                 pd_.GetLP().AddFactor(f);
+                 lp_->AddFactor(f);
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[0],projectionVar[1]), f);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[1],projectionVar[2]),f);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[2],projectionVar[3]), f);
-                 pd_.GetLP().AddFactorRelation(f, mrf.GetUnaryFactor(projectionVar[3]));
+                 lp_->AddFactorRelation(f, mrf.GetUnaryFactor(projectionVar[3]));
                  queue.push_back({f,3});
 
                  begin_rest = 4;
@@ -287,11 +288,11 @@ class DiscreteTomographyTreeConstructor {
                  }
          case 5: {
                  auto* f = new COUNTING_FACTOR(noLabels_, noLabels_, 1, std::min(3*noLabels_-2, max_sum));
-                 pd_.GetLP().AddFactor(f);
+                 lp_->AddFactor(f);
                  connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[0],projectionVar[1]), mrf.GetPairwiseFactor(projectionVar[1], projectionVar[2]), f);
                  connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[2],projectionVar[3]),f);
                  connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[3],projectionVar[4]), f);
-                 pd_.GetLP().AddFactorRelation(f, mrf.GetUnaryFactor(projectionVar[4]));
+                 lp_->AddFactorRelation(f, mrf.GetUnaryFactor(projectionVar[4]));
                  queue.push_back({f,4});
 
                  begin_rest = 5;
@@ -302,11 +303,11 @@ class DiscreteTomographyTreeConstructor {
 
       for(INDEX i=begin_rest;i<projectionVar.size(); i+=6){ // a counting factor on base level can take care of six unaries
          auto* f = new COUNTING_FACTOR(noLabels_, noLabels_, noLabels_, std::min(4*noLabels_-3, max_sum));
-         pd_.GetLP().AddFactor(f);
+         lp_->AddFactor(f);
          connect_pairwise_counting_left(mrf.GetPairwiseFactor(projectionVar[i],projectionVar[i+1]), mrf.GetPairwiseFactor(projectionVar[i+1], projectionVar[i+2]), f);
          connect_pairwise_counting_center(mrf.GetPairwiseFactor(projectionVar[i+2],projectionVar[i+3]),f);
          connect_pairwise_counting_right(mrf.GetPairwiseFactor(projectionVar[i+3],projectionVar[i+4]), mrf.GetPairwiseFactor(projectionVar[i+4], projectionVar[i+5]), f);
-         pd_.GetLP().AddFactorRelation(f, mrf.GetUnaryFactor(projectionVar[i+5]));
+         lp_->AddFactorRelation(f, mrf.GetUnaryFactor(projectionVar[i+5]));
          queue.push_back({f,i+5});
       }
 
@@ -319,7 +320,8 @@ class DiscreteTomographyTreeConstructor {
   private:
     //std::vector<Tree> treeIndices_;
     INDEX noLabels_ = 0;
-    Solver<FMC>& pd_;
+    Solver<FMC>& s_;
+    LP* lp_;
 };
 
 // construct one-dimensional discrete tomography problem with sequential factors
@@ -338,14 +340,14 @@ public:
       typename meta::at_c<typename FMC::ProblemDecompositionList,MRF_PROBLEM_CONSTRUCTOR_NO>;
    using PairwiseFactorType = typename MrfConstructorType::PairwiseFactorContainer;
 
-   dt_sequential_constructor(Solver<FMC>& pd) : pd_(pd) {}
+   dt_sequential_constructor(Solver<FMC>& s) : s_(s), lp_(&s.GetLP()) {}
 
    void SetNumberOfLabels(const INDEX noLabels) { noLabels_ = noLabels; }
 
    //void connect_unary_and_sum_factor(typename MrfConstructorType::UnaryFactorContainer* u, SUM_FACTOR* s)
    //{
    //   auto* m = new UNARY_SUM_MESSAGE(u,s);
-   //   pd_.GetLP().AddMessage(m);
+   //   lp_->AddMessage(m);
    //}
 
    SUM_FACTOR* AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost, LP_tree* tree = nullptr)
@@ -360,10 +362,10 @@ public:
    template<typename ITERATOR>
    SUM_FACTOR* AddProjection(ITERATOR projection_var_begin, ITERATOR projection_var_end, const INDEX max_sum, LP_tree* tree = nullptr)
    { 
-      auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+      auto& mrf = s_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
       assert(noLabels_ > 0);
 
-      auto& mrfConstructor = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+      auto& mrfConstructor = s_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
 
       for(auto it=projection_var_begin; it!=projection_var_end-1; ++it) {
          const INDEX i1 = std::min(*it, *(it+1));
@@ -376,23 +378,23 @@ public:
 
       auto* f_prev = new SUM_FACTOR(noLabels_, 1);
       //connect_unary_and_sum_factor(mrf.GetUnaryFactor(*projection_var_begin), f_prev);
-      pd_.GetLP().AddFactor(f_prev);
+      lp_->AddFactor(f_prev);
       INDEX i=1;
       for(auto it=projection_var_begin+1; it!=projection_var_end; ++it, ++i) {
          const INDEX sum_size = std::min(i*(noLabels_-1)+1, max_sum);
          auto* f = new SUM_FACTOR(noLabels_, sum_size);
          //connect_unary_and_sum_factor(mrf.GetUnaryFactor(*it), f);
-         pd_.GetLP().AddFactor(f);
+         lp_->AddFactor(f);
          auto* f_p = new SUM_PAIRWISE_FACTOR(noLabels_, f_prev->GetFactor()->sum_size(), sum_size);
-         pd_.GetLP().AddFactor(f_p);
+         lp_->AddFactor(f_p);
          const bool transpose = *(it-1) > *it;
          auto* m_l = new SUM_PAIRWISE_MESSAGE_LEFT(transpose,f_prev,f_p);
-         pd_.GetLP().AddMessage(m_l);
+         lp_->AddMessage(m_l);
          auto* m_r = new SUM_PAIRWISE_MESSAGE_RIGHT(transpose,f,f_p);
-         pd_.GetLP().AddMessage(m_r);
+         lp_->AddMessage(m_r);
          auto* p = mrf.GetPairwiseFactor(std::min(*(it-1), *it), std::max(*(it-1), *it));
          auto* m_c = new SUM_PAIRWISE_PAIRWISE_MESSAGE(transpose, p, f_p);
-         pd_.GetLP().AddMessage(m_c);
+         lp_->AddMessage(m_c);
 
          assert(!transpose);
          if(tree != nullptr) {
@@ -402,23 +404,23 @@ public:
 
          // this only works for non-transposed
          if(!transpose) {
-            pd_.GetLP().AddFactorRelation(f_prev,f_p);
-            pd_.GetLP().AddFactorRelation(f_prev,p);
-            pd_.GetLP().AddFactorRelation(f_p,f);
-            pd_.GetLP().AddFactorRelation(p,f);
-            pd_.GetLP().AddFactorRelation(mrf.GetUnaryFactor(*(it-1)), f_p);
-            pd_.GetLP().AddFactorRelation(f_p,mrf.GetUnaryFactor(*it));
-            //pd_.GetLP().ForwardPassFactorRelation(f_p,p);
-            //pd_.GetLP().BackwardPassFactorRelation(f_p,p);
-            pd_.GetLP().ForwardPassFactorRelation(p,f_p);
-            pd_.GetLP().BackwardPassFactorRelation(p,f_p);
+            lp_->AddFactorRelation(f_prev,f_p);
+            lp_->AddFactorRelation(f_prev,p);
+            lp_->AddFactorRelation(f_p,f);
+            lp_->AddFactorRelation(p,f);
+            lp_->AddFactorRelation(mrf.GetUnaryFactor(*(it-1)), f_p);
+            lp_->AddFactorRelation(f_p,mrf.GetUnaryFactor(*it));
+            //lp_->ForwardPassFactorRelation(f_p,p);
+            //lp_->BackwardPassFactorRelation(f_p,p);
+            lp_->ForwardPassFactorRelation(p,f_p);
+            lp_->BackwardPassFactorRelation(p,f_p);
          } else {
             assert(false);
             exit(1);
-            pd_.GetLP().AddFactorRelation(f_p,f_prev);
-            pd_.GetLP().AddFactorRelation(f,f_p);
-            pd_.GetLP().AddFactorRelation(mrf.GetUnaryFactor(*it), f_p);
-            pd_.GetLP().AddFactorRelation(f_p, mrf.GetUnaryFactor(*(it-1)));
+            lp_->AddFactorRelation(f_p,f_prev);
+            lp_->AddFactorRelation(f,f_p);
+            lp_->AddFactorRelation(mrf.GetUnaryFactor(*it), f_p);
+            lp_->AddFactorRelation(f_p, mrf.GetUnaryFactor(*(it-1)));
          }
 
          f_prev = f;
@@ -428,7 +430,8 @@ public:
    }
 private:
    INDEX noLabels_ = 0;
-   Solver<FMC>& pd_;
+   Solver<FMC>& s_;
+   LP* lp_;
 };
 
 // note: when mixing sequential and recursive mode, messages of type PAIRWISE_COUNTING_LEFT and PAIRWISE_COUNTING_RIGHT used in recursive constructor are not needed
@@ -446,7 +449,7 @@ public:
       typename meta::at_c<typename FMC::ProblemDecompositionList,MRF_PROBLEM_CONSTRUCTOR_NO>;
    using PairwiseFactorType = typename MrfConstructorType::PairwiseFactorContainer;
 
-   dt_combined_constructor(Solver<FMC>& pd) : SEQUENTIAL_CONSTRUCTOR(pd), RECURSIVE_CONSTRUCTOR(pd), pd_(pd) {}
+   dt_combined_constructor(Solver<FMC>& s) : SEQUENTIAL_CONSTRUCTOR(s), RECURSIVE_CONSTRUCTOR(s), s_(s), , lp_(&s.GetLPP()) {}
 
    void SetNumberOfLabels(const INDEX noLabels) 
    { 
@@ -471,7 +474,7 @@ public:
    { 
       assert(summationCost.size() > 0);
       const INDEX max_sum = std::max(noLabels_,INDEX(summationCost.size()));
-      auto& mrf = pd_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
+      auto& mrf = s_.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>();
       assert(std::is_sorted(projectionVar.begin(), projectionVar.end())); // support unsorted projectionVar (transpose in messages) later
 
       assert(projectionVar.size() > 2); // otherwise pairwise factor can take care
@@ -527,7 +530,8 @@ public:
 
 private:
    INDEX noLabels_ = 0;
-   Solver<FMC>& pd_; 
+   Solver<FMC>& s_; 
+   LP* lp_;
 };
 
 }

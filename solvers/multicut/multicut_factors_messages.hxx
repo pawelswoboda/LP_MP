@@ -22,6 +22,7 @@ using multicut_edge_triplet_message_1 = labeling_message< multicut_edge_labeling
 using multicut_edge_triplet_message_2 = labeling_message< multicut_edge_labelings, multicut_triplet_labelings, 2 >;
 
 /*
+
    ______i1_____
   /      |      \
  /       |       \
@@ -142,16 +143,11 @@ labeling<1,1,1,1,1,1,1,1,1,1>
    >;
 using multicut_odd_bicycle_3_wheel_factor = labeling_factor< multicut_odd_bicycle_3_wheel_labelings, true >;
 
-using multicut_odd_3_wheel_odd_bicycle_message012 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 0,1,2 >;
-using multicut_odd_3_wheel_odd_bicycle_message013 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 0,3,5 >;
-using multicut_odd_3_wheel_odd_bicycle_message014 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 0,4,6 >;
-using multicut_odd_3_wheel_odd_bicycle_message023 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 1,3,7 >;
-using multicut_odd_3_wheel_odd_bicycle_message024 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 1,4,8 >;
-using multicut_odd_3_wheel_odd_bicycle_message034 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 3,4,9 >;
-using multicut_odd_3_wheel_odd_bicycle_message123 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 2,5,7 >;
-using multicut_odd_3_wheel_odd_bicycle_message124 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 2,6,8 >;
-using multicut_odd_3_wheel_odd_bicycle_message134 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 5,6,9 >;
-using multicut_odd_3_wheel_odd_bicycle_message234 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 7,8,9 >;
+using multicut_odd_3_wheel_odd_bicycle_message0123 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 0,1,3,2,5,7 >;
+using multicut_odd_3_wheel_odd_bicycle_message0124 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 0,1,4,2,6,8 >;
+using multicut_odd_3_wheel_odd_bicycle_message0134 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 0,3,4,5,6,9 >;
+using multicut_odd_3_wheel_odd_bicycle_message0234 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 1,3,4,7,8,9 >;
+using multicut_odd_3_wheel_odd_bicycle_message1234 = labeling_message< multicut_odd_3_wheel_factor, multicut_odd_bicycle_3_wheel_factor, 2,5,6,7,8,9 >;
 
 /*
 using multicut_triplet_plus_spoke_labelings = labelings<

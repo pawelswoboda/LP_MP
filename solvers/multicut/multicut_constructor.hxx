@@ -2,9 +2,6 @@
 #define LP_MP_MULTICUT_CONSTRUCTOR_HXX
 
 #include "LP_MP.h"
-#include "multicut_unary_factor.hxx"
-#include "multicut_triplet_factor.hxx"
-#include "multicut_odd_wheel.hxx"
 #include "lifted_multicut_factors_messages.hxx"
 
 #include "union_find.hxx"
@@ -88,6 +85,14 @@ public:
    }
 
    void AddToConstant(const REAL delta) { constant_factor_->GetFactor()->AddToOffset(delta); }
+
+   bool get_edge_label(const INDEX i0, const INDEX i1) const
+   {
+      assert(i0 < i1);
+      assert(HasUnaryFactor(i0,i1));
+      auto* f = GetUnaryFactor(i0,i1);
+      return f->GetFactor()->primal()[0];
+   }
 
    virtual UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost) // declared virtual so that derived class notices when unary factor is added
    {
@@ -1342,14 +1347,86 @@ public:
    
 
 private:
-   std::atomic<int> kwas_delete;
-
    std::unordered_map<std::array<INDEX,4>, odd_3_wheel_factor_container*,decltype(hash::array4)> odd_3_wheel_factors_;
 
    std::vector<std::vector<std::tuple<INDEX,INDEX,typename BaseConstructor::TripletFactorContainer*>>> tripletByIndices_; // of triplet factor with indices (i1,i2,i3) exists, then (i1,i2,i3) will be in the vector of index i1, i2 and i3
    // the format for TripletPlusSpoke is (node1,node2, centerNode, spokeNode) and we assume n1<n2
    // hash for std::array<INDEX,4>
    //std::unordered_map<std::array<INDEX,4>,TripletPlusSpokeFactorContainer*,decltype(hash::array4)> tripletPlusSpokeFactors_;
+};
+
+template<typename MULTICUT_ODD_WHEEL_CONSTRUCTOR, 
+   INDEX MULTICUT_ODD_BICYCLE_3_WHEEL_FACTOR_NO,
+   INDEX MULTICUT_ODD_WHEEL_ODD_BICYCLE_3_WHEEL_MESSAGE_0123_NO,
+   INDEX MULTICUT_ODD_WHEEL_ODD_BICYCLE_3_WHEEL_MESSAGE_0124_NO,
+   INDEX MULTICUT_ODD_WHEEL_ODD_BICYCLE_3_WHEEL_MESSAGE_0134_NO,
+   INDEX MULTICUT_ODD_WHEEL_ODD_BICYCLE_3_WHEEL_MESSAGE_0234_NO,
+   INDEX MULTICUT_ODD_WHEEL_ODD_BICYCLE_3_WHEEL_MESSAGE_1234_NO
+   >
+class multicut_odd_bicycle_wheel_constructor : public MULTICUT_ODD_WHEEL_CONSTRUCTOR {
+public:
+   using FMC = typename MULTICUT_ODD_WHEEL_CONSTRUCTOR::FMC;
+   using BaseConstructor = MULTICUT_ODD_WHEEL_CONSTRUCTOR;
+   using odd_bicycle_3_wheel_factor_container = meta::at_c<typename FMC::FactorList, MULTICUT_ODD_BICYCLE_3_WHEEL_FACTOR_NO>;
+   using odd_3_wheel_odd_bicycle_3_wheel_message_0123_container = meta::at_c<typename FMC::FactorList, MULTICUT_ODD_WHEEL_ODD_BICYCLE_3_WHEEL_MESSAGE_0123_NO>;
+   using odd_3_wheel_odd_bicycle_3_wheel_message_0124_container = meta::at_c<typename FMC::FactorList, MULTICUT_ODD_WHEEL_ODD_BICYCLE_3_WHEEL_MESSAGE_0124_NO>;
+   using odd_3_wheel_odd_bicycle_3_wheel_message_0134_container = meta::at_c<typename FMC::FactorList, MULTICUT_ODD_WHEEL_ODD_BICYCLE_3_WHEEL_MESSAGE_0134_NO>;
+   using odd_3_wheel_odd_bicycle_3_wheel_message_0234_container = meta::at_c<typename FMC::FactorList, MULTICUT_ODD_WHEEL_ODD_BICYCLE_3_WHEEL_MESSAGE_0234_NO>;
+   using odd_3_wheel_odd_bicycle_3_wheel_message_1234_container = meta::at_c<typename FMC::FactorList, MULTICUT_ODD_WHEEL_ODD_BICYCLE_3_WHEEL_MESSAGE_1234_NO>;
+
+   template<typename SOLVER>
+   multicut_odd_bicycle_wheel_constructor(SOLVER& s) : MULTICUT_ODD_WHEEL_CONSTRUCTOR(s) {}
+
+   template<typename MSG_TYPE>
+   void connect_odd_3_wheel_factor(odd_bicycle_3_wheel_factor_container* f, const std::array<INDEX,4> idx)
+   {
+      if(!this->has_odd_3_wheel_factor(idx[0], idx[1], idx[2], idx[3])) {
+         this->add_odd_3_wheel_factor(idx[0], idx[1], idx[2], idx[3]);
+      }
+      auto* o = this->get_odd_3_wheel_factor(idx[0], idx[1], idx[2], idx[3]);
+      auto* m = new MSG_TYPE(o, f);
+      this->lp_->AddMessage(m);
+   }
+
+   void add_odd_bicycle_3_wheel(const std::array<INDEX,5> idx) {
+      assert(std::is_sorted(idx.begin(), idx.end()));
+      auto* f = new odd_bicycle_3_wheel_factor_container();
+      this->lp_->AddFactor(f);
+      odd_bicycle_3_wheel_factors_.insert(std::make_pair(idx, f));
+
+      connect_odd_3_wheel_factor<odd_3_wheel_odd_bicycle_3_wheel_message_0123_container>({idx[0], idx[1], idx[2], idx[3]});
+      connect_odd_3_wheel_factor<odd_3_wheel_odd_bicycle_3_wheel_message_0124_container>({idx[0], idx[1], idx[2], idx[4]});
+      connect_odd_3_wheel_factor<odd_3_wheel_odd_bicycle_3_wheel_message_0134_container>({idx[0], idx[1], idx[3], idx[4]});
+      connect_odd_3_wheel_factor<odd_3_wheel_odd_bicycle_3_wheel_message_0234_container>({idx[0], idx[2], idx[3], idx[4]});
+      connect_odd_3_wheel_factor<odd_3_wheel_odd_bicycle_3_wheel_message_1234_container>({idx[1], idx[2], idx[3], idx[4]});
+   }
+
+   INDEX Tighten(const INDEX max_factors_to_add)
+   {
+      // preprocessing: sort triplets for fast intersection later
+      for(INDEX i=0; i<this->noNodes_; ++i) {
+         //std::sort(this->tripletByIndices_[i]->begin(), this->tripletByIndices_[i]_->end() []);
+      }
+      // given a cut axle edge (negative cost), find cut wheel edges such that among the four spokes exactly two are cut and two are connected.
+      for(INDEX e=0; e<this->unaryFactorsVector_.size(); ++e) {
+         const INDEX i = std::get<0>(this->unaryFactorsVector_[e])[0];
+         const INDEX j = std::get<0>(this->unaryFactorsVector_[e])[1];
+         const REAL cost_ij = std::get<1>(this->unaryFactorsVector_[e])->GetFactor()[0];
+         if(cost_ij < 0) {
+            // find all edges uv such that there exist edges triplets iuv and juv. 
+            // this is done by sorting all triplets which have node i and node j, and intersecting the set
+            //if(this->has_odd_3_wheel_factor(i,j)
+
+         } 
+      }
+
+   }
+private:
+
+   std::unordered_map<std::array<INDEX,4>, odd_bicycle_3_wheel_factor_container*,decltype(hash::array4)> odd_bicycle_3_wheel_factors_;
+
+   //std::unordered_map<std::vector<std::tuple<INDEX,INDEX,typename BaseConstructor::odd_3_wheel_factor_container*>>> odd_3_wheel_factor_by_indices_; // if odd 3 wheel factor with indices (i1,i2,i3,i4) exists, then (i1,i2,i3,i4) will be in the hash indexed by all two-subsets of the indices.
+
 };
 
 template<

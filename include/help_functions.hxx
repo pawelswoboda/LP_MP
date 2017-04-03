@@ -105,6 +105,20 @@ std::array<T,2> two_smallest_elements(ITERATOR begin, ITERATOR end)
   return {smallest, second_smallest};
 }
 
+template<typename T, typename ITERATOR>
+std::array<T,2> two_largest_elements(ITERATOR begin, ITERATOR end)
+{
+  T largest = -std::numeric_limits<T>::infinity();
+  T second_largest = -std::numeric_limits<T>::infinity();
+  for(; begin!=end; ++begin) {
+    const REAL max = std::max(largest, *begin);
+    const REAL min = std::min(largest, *begin);
+    largest = max;
+    second_largest = std::max(min, second_largest);
+  }
+  return {largest, second_largest};
+}
+
 // return indices belonging to the three smallest entries
 template<class T>
 std::tuple<size_t,size_t,size_t> MinThreeIndices(const std::vector<T>& v)
