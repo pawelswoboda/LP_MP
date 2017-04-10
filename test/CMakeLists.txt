@@ -6,7 +6,8 @@ if(BUILD_TESTS)
       #min_cost_flow.cpp
       #min_conv.cpp
       #shortest_path.cpp
-      cycle_inequalities.cpp
+      #cycle_inequalities.cpp
+      discrete_tomography_chain.cpp
       )
    enable_testing()
 

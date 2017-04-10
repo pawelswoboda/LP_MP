@@ -6,6 +6,7 @@
 namespace LP_MP {
 
 // class holding state of variable and sum of chain up to that variable
+/*
 class dt_sum_state_factor {
 public:
    constexpr static INDEX no_primal_decision = std::numeric_limits<INDEX>::max();
@@ -74,6 +75,7 @@ public:
 private:
    matrix<REAL> pot_; // first dimension is state, second one is sum
 };
+*/
 
 class dt_sum_state_pairwise_factor {
 public:
@@ -84,7 +86,23 @@ public:
       next_(no_labels, next_sum_size, 0.0),
       reg_(no_labels, no_labels, 0.0)
    {
-      assert(prev_sum_size <= next_sum_size);
+      assert(this->prev_sum_size() <= this->next_sum_size());
+      assert(this->next_sum_size() <= this->prev_sum_size() + this->no_labels());
+      assert(this->next_sum_size() >= this->no_labels());
+   }
+
+   template<typename ITERATOR>
+   void summation_cost(ITERATOR begin, ITERATOR end) {
+      assert(std::distance(begin,end) <= next_sum_size()+no_labels());
+      for(INDEX x2=0; x2<no_labels(); ++x2) {
+         for(INDEX sum=0; sum<next_sum_size(); ++sum) {
+            if(sum+x2 < std::distance(begin,end)) {
+               next_(x2,sum) = *(begin + sum+x2);
+            } else {
+               next_(x2,sum) = std::numeric_limits<REAL>::infinity(); 
+            }
+         }
+      }
    }
 
    template<typename LAMBDA>
@@ -92,8 +110,8 @@ public:
       assert(prev_sum_size() <= next_sum_size());
       assert(prev_sum_size() + no_labels()-1 >= next_sum_size());
       for(INDEX x1=0; x1<no_labels(); ++x1) {
+         const INDEX max_sum = std::min(prev_sum_size(), next_sum_size()-x1);
          for(INDEX x2=0; x2<no_labels(); ++x2) {
-            const INDEX max_sum = std::min(prev_sum_size(), next_sum_size()-x1);
             for(INDEX sum=0; sum<max_sum; ++sum) {
                f(x1,x2,sum);
             }
@@ -118,6 +136,15 @@ public:
    void marginalize_pairwise(matrix<REAL>& msg) const {
       std::fill(msg.begin(), msg.end(), std::numeric_limits<REAL>::infinity());
       for_each_label_sum([&](INDEX x1, INDEX x2, INDEX sum) { msg(x1,x2) = std::min(msg(x1,x2), eval(x1,x2,sum)); });
+
+      //std::cout << "(" << no_labels() << "," << prev_sum_size() << "," << next_sum_size() <<")\n";
+      //for(INDEX x1=0; x1<no_labels(); ++x1) {
+      //   for(INDEX x2=0; x2<no_labels(); ++x2) {
+      //      std::cout << msg(x1,x2) << ",";
+      //   }
+      //std::cout << "\n";
+      //}
+      //std::cout << "\n";
    }
 
    REAL& prev(const INDEX state, const INDEX sum) { return prev_(state,sum); }
@@ -144,47 +171,120 @@ private:
    matrix<REAL> reg_; // regularizer
 };
 
-// message between unaries and sum, not necessary for the relaxation. Also does not seem to improve convergence
-/*
-class dt_unary_sum_message {
-public:
-   dt_unary_sum_message() {}
 
+// message between two dt_sequential_pairwise_factors. Left factor is smaller one
+class dt_pairwise_message {
+public:
    template<typename RIGHT_FACTOR, typename G2>
    void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 1.0);
+      MakeRightFactorUniform(f_right, msg, 0.5);
    }
 
-   //template<typename RIGHT_FACTOR, typename G2>
-   //void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-   //   MakeRightFactorUniform(f_right, msg, omega);
-   //}
+   template<typename RIGHT_FACTOR, typename G2>
+   void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
+      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+   }
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-      MakeLeftFactorUniform(f_left, msg, omega);
+      //std::cout << "sum to sum pairwise weight = " << omega << "\n";
+      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
    }
 
-   //template<typename LEFT_FACTOR, typename G3>
-   //void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-   //   MakeLeftFactorUniform(f_left, msg, 1.0);
-   //}
+   template<typename LEFT_FACTOR, typename G3>
+   void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
+      MakeLeftFactorUniform(f_left, msg, 0.5);
+   }
 
    template<typename LEFT_FACTOR, typename MSG>
-   void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega){
-      auto& pot = f_left;
-      msg -= omega*pot;
+   void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega)
+   {
+      matrix<REAL> msgs(f_left.no_labels(), f_left.next_sum_size(), std::numeric_limits<REAL>::infinity());
+      f_left.for_each_label_sum([&msgs, f_left](const INDEX x1, const INDEX x2, const INDEX sum) {
+            assert(sum+x1 < f_left.next_sum_size());
+            msgs(x2,sum+x1) = std::min(msgs(x2,sum+x1), f_left.eval(x1,x2,sum));
+      });
+      msg -= omega*msgs;
    }
 
    template<typename RIGHT_FACTOR, typename MSG>
-   void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
-      vector marg(f_right.no_labels(), std::numeric_limits<REAL>::infinity());
-      for(INDEX x=0; x<f_right.no_labels(); ++x) {
-         for(INDEX sum=0; sum<f_right.sum_size(); ++sum) {
-            marg[x] = std::min(marg[x], f_right(x,sum));
+   void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega)
+   {
+      matrix<REAL> msgs(f_right.no_labels(), f_right.prev_sum_size(), std::numeric_limits<REAL>::infinity());
+      f_right.for_each_label_sum([&msgs, f_right](const INDEX x1, const INDEX x2, const INDEX sum) {
+            msgs(x1,sum) = std::min(msgs(x1,sum), f_right.eval(x1,x2,sum));
+      });
+      msg -= omega*msgs;
+   }
+
+   template<typename LEFT_FACTOR, typename MSG>
+   void RepamLeft(LEFT_FACTOR& f_left, const MSG& msg)
+   {
+      assert(msg.dim1() == f_left.no_labels());
+      assert(msg.dim2() == f_left.next_sum_size());
+      for(INDEX x=0; x<f_left.no_labels(); ++x) {
+         for(INDEX sum=0; sum<f_left.next_sum_size(); ++sum) {
+            f_left.next(x,sum) += normalize( msg(x,sum) );
          }
-      } 
-      msg -= omega*marg;
+      }
+   }
+
+   template<typename RIGHT_FACTOR, typename MSG>
+   void RepamRight(RIGHT_FACTOR& f_right, const MSG& msg)
+   {
+      assert(msg.dim1() == f_right.no_labels());
+      assert(msg.dim2() == f_right.prev_sum_size()); 
+      for(INDEX x=0; x<f_right.no_labels(); ++x) {
+         for(INDEX sum=0; sum<f_right.prev_sum_size(); ++sum) {
+            f_right.prev(x,sum) += normalize( msg(x,sum) );
+         }
+      }
+   }
+
+};
+
+// message from mrf unary to sequential pairwise factor
+template<Chirality DIRECTION>
+class dt_sum_unary_message {
+public:
+   template<typename RIGHT_FACTOR, typename G2>
+   void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
+      MakeRightFactorUniform(f_right, msg, 0.5);
+   }
+
+   template<typename RIGHT_FACTOR, typename G2>
+   void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
+      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+   }
+
+   template<typename LEFT_FACTOR, typename G3>
+   void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
+      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
+   }
+
+   template<typename LEFT_FACTOR, typename G3>
+   void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
+      MakeLeftFactorUniform(f_left, msg, 0.5);
+   }
+
+   template<typename LEFT_FACTOR, typename MSG>
+   void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega)
+   {
+      msg -= omega*f_left;
+   }
+
+   template<typename RIGHT_FACTOR, typename MSG>
+   void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega)
+   {
+      vector<REAL> msg_val(f_right.no_labels(), std::numeric_limits<REAL>::infinity());
+      f_right.for_each_label_sum([&msg_val,&f_right](const INDEX x1, const INDEX x2, const INDEX sum) {
+            if(DIRECTION == Chirality::left) {
+              msg_val[x1] = std::min( msg_val[x1], f_right.eval(x1,x2,sum) ); 
+            } else {
+              msg_val[x2] = std::min( msg_val[x2], f_right.eval(x1,x2,sum) ); 
+            }
+      });
+      msg -= omega*msg_val;
    }
 
    template<typename LEFT_FACTOR, typename MSG>
@@ -198,14 +298,17 @@ public:
    template<typename RIGHT_FACTOR, typename MSG>
    void RepamRight(RIGHT_FACTOR& f_right, const MSG& msg)
    {
-      for(INDEX x=0; x<f_right.no_labels(); ++x) {
-         for(INDEX sum=0; sum<f_right.sum_size(); ++sum) {
-            f_right(x,sum) += normalize( msg[x] );
+      for(INDEX x1=0; x1<f_right.no_labels(); ++x1) {
+         for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
+            if(DIRECTION == Chirality::left) {
+               f_right.reg(x1,x2) += normalize( msg[x1] );
+            } else {
+               f_right.reg(x1,x2) += normalize( msg[x2] );
+            }
          }
       }
-   }
+   } 
 };
-*/
 
 // left factor is dt_sum_state_factor, right one is dt_sum_state_pairwise_factor
 // DIRECTION signifies: left = sum_state_factor is previous
@@ -224,24 +327,24 @@ public:
 
    template<typename RIGHT_FACTOR, typename G2>
    void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 1.0);
+      MakeRightFactorUniform(f_right, msg, 0.5);
    }
 
-   //template<typename RIGHT_FACTOR, typename G2>
-   //void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-   //   MakeRightFactorUniform(f_right, msg, omega);
-   //}
+   template<typename RIGHT_FACTOR, typename G2>
+   void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
+      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+   }
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
       //std::cout << "sum to sum pairwise weight = " << omega << "\n";
-      MakeLeftFactorUniform(f_left, msg, omega);
+      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
    }
 
-   //template<typename LEFT_FACTOR, typename G3>
-   //void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-   //   MakeLeftFactorUniform(f_left, msg, 1.0);
-   //}
+   template<typename LEFT_FACTOR, typename G3>
+   void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
+      MakeLeftFactorUniform(f_left, msg, 0.5);
+   }
 
    template<typename LEFT_FACTOR, typename MSG>
    void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega){
@@ -344,37 +447,41 @@ private:
    bool transpose_; // not needed
 };
 
-// connect sequential dt_sum_factor (left) with recursive DiscreteTomograhpyCountingFactor (right)
+// connect sequential dt_sum_state_pairwise_factor (left) with recursive DiscreteTomograhpyCountingFactor (right)
 template<Chirality DIRECTION>
 class dt_sum_counting_message {
 public:
    ~dt_sum_counting_message() {
       static_assert(DIRECTION == Chirality::left || DIRECTION == Chirality::right, "");
    }
+
    template<typename RIGHT_FACTOR, typename G2>
    void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 1.0);
+      MakeRightFactorUniform(f_right, msg, 0.5);
    }
 
-   //template<typename RIGHT_FACTOR, typename G2>
-   //void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-   //   MakeRightFactorUniform(f_right, msg, omega);
-   //}
+   template<typename RIGHT_FACTOR, typename G2>
+   void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
+      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+   }
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-      MakeLeftFactorUniform(f_left, msg, omega);
+      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
    }
 
-   //template<typename LEFT_FACTOR, typename G3>
-   //void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-   //   MakeLeftFactorUniform(f_left, msg, 1.0);
-   //}
+   template<typename LEFT_FACTOR, typename G3>
+   void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
+      MakeLeftFactorUniform(f_left, msg, 0.5);
+   }
 
    template<typename LEFT_FACTOR, typename MSG>
    void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega){
-      auto& pot = f_left.pot();
-      msg -= omega*pot;
+      matrix<REAL> msg_val(f_left.no_labels(), f_left.next_sum_size(), std::numeric_limits<REAL>::infinity());
+      f_left.for_each_label_sum([&msg_val,&f_left](const INDEX x1, const INDEX x2, const INDEX sum) {
+            msg_val(x2, x1+sum) = std::min( msg_val(x2, x1+sum), f_left.eval(x1,x2,sum) ); 
+      });
+      msg -= omega*msg_val;
    }
 
    template<typename RIGHT_FACTOR, typename MSG>
@@ -406,10 +513,10 @@ public:
    {
       //static_if<std::is_base_of<matrix,msg>([&](auto f) {});
       assert(msg.dim1() == f_left.no_labels());
-      assert(msg.dim2() == f_left.sum_size());
+      assert(msg.dim2() == f_left.next_sum_size());
       for(INDEX x=0; x<f_left.no_labels(); ++x) {
-         for(INDEX sum=0; sum<f_left.sum_size(); ++sum) {
-            f_left(x,sum) += normalize( msg(x,sum) );
+         for(INDEX sum=0; sum<f_left.next_sum_size(); ++sum) {
+            f_left.next(x,sum) += normalize( msg(x,sum) );
          }
       }
    }
@@ -446,24 +553,24 @@ public:
 
    template<typename RIGHT_FACTOR, typename G2>
    void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 1.0);
+      MakeRightFactorUniform(f_right, msg, 0.5);
    }
 
-   //template<typename RIGHT_FACTOR, typename G2>
-   //void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-   //   MakeRightFactorUniform(f_right, msg, omega);
-   //}
+   template<typename RIGHT_FACTOR, typename G2>
+   void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
+      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+   }
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
       //std::cout << "pairwise to sum pairwise weight = " << omega << "\n";
-      MakeLeftFactorUniform(f_left, msg, omega);
+      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
    }
 
-   //template<typename LEFT_FACTOR, typename G3>
-   //void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-   //   MakeLeftFactorUniform(f_left, msg, 1.0);
-   //}
+   template<typename LEFT_FACTOR, typename G3>
+   void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
+      MakeLeftFactorUniform(f_left, msg, 0.5);
+   }
 
    template<typename LEFT_FACTOR, typename MSG>
    void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega){
@@ -472,7 +579,7 @@ public:
 
    template<typename RIGHT_FACTOR, typename MSG>
    void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
-      matrix<REAL> msgs(f_right.no_labels(), f_right.no_labels());
+      matrix<REAL> msgs(f_right.no_labels(), f_right.no_labels(), std::numeric_limits<REAL>::infinity());
       f_right.marginalize_pairwise(msgs);
       if(transpose_) {
          msgs.transpose();
@@ -485,7 +592,7 @@ public:
    {
       for(INDEX x1=0; x1<f_left.dim1(); ++x1) {
          for(INDEX x2=0; x2<f_left.dim2(); ++x2) {
-            f_left(x1,x2) += normalize( msg(x1,x2) );
+            f_left.cost(x1,x2) += normalize( msg(x1,x2) );
          }
       }
    }

@@ -89,7 +89,7 @@ public:
 
       for(INDEX x1=0; x1<f_left.dim1(); ++x1) {
          for(INDEX x2=0; x2<f_left.dim2(); ++x2) {
-            f_left(x1,x2) += normalize( msg(x1,x2) );
+            f_left.cost(x1,x2) += normalize( msg(x1,x2) );
             //static_if<TYPE == CountingPairwiseMessageType::center>([&](auto f){
             //});
             //static_if<TYPE == CountingPairwiseMessageType::left>([&](auto f){
@@ -258,7 +258,7 @@ public:
    {
       for(INDEX x1=0; x1<f_left.dim1(); ++x1) {
          for(INDEX x2=0; x2<f_left.dim2(); ++x2) {
-            f_left(x1,x2) += normalize( msg(x1,x2) );
+            f_left.cost(x1,x2) += normalize( msg(x1,x2) );
          }
       }
    }

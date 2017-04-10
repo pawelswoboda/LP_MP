@@ -87,9 +87,27 @@ namespace LP_MP {
 
    // hash function for various types
    namespace hash {
+      // equivalent of boost hash combine
+      size_t hash_combine( size_t lhs, size_t rhs ) {
+         lhs^= rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2);
+         return lhs;
+      }
+
+      template<typename T, size_t N>
+      size_t hash_array(const std::array<T,N>& x)
+      {
+         size_t hash = std::hash<T>()(x[0]);
+         for(INDEX i=0; i<N; ++i) {
+            hash = hash_combine(hash, std::hash<T>()(x[i]));
+         }
+         return hash; 
+      }
+
+      // obsolete
       static auto array2 = [](const std::array<INDEX,2> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1]); };
       static auto array3 = [](const std::array<INDEX,3> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2]); };
       static auto array4 = [](const std::array<INDEX,4> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3]); };
+      static auto array5 = [](const std::array<INDEX,5> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3])^std::hash<INDEX>()(x[4]); };
    }
 
    REAL normalize(const REAL x) {
@@ -127,6 +145,20 @@ namespace LP_MP {
 
 
 
+}
+
+// insert hash functions from above into standard namespace
+namespace std
+{
+    template<size_t N> struct hash<std::array<LP_MP::INDEX,N>>
+    {
+        typedef std::array<LP_MP::INDEX,N> argument_type;
+        typedef std::size_t result_type;
+        result_type operator()(argument_type const& s) const
+        {
+            return LP_MP::hash::hash_array(s);
+        }
+    };
 }
 
 //template class MinCost<LP_MP::SIGNED_INDEX,LP_MP::REAL>;

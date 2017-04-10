@@ -114,7 +114,8 @@ public:
    using DiscreteTomographyCountingMessage =
       typename meta::at_c<typename FMC::MessageList, MESSAGE_NO>::MessageContainerType;
 
-   DiscreteTomographyNaiveConstructor(Solver<FMC>& s) : s_(s) {}
+   template<typename SOLVER>
+   DiscreteTomographyNaiveConstructor(SOLVER& s) : lp_(&s.GetLP()), mrf_constructor_(s.template GetProblemConstructor<MRF_PROBLEM_CONSTRUCTOR_NO>()) {}
 
    void SetNumberOfLabels(const INDEX noLabels) { noLabels_ = noLabels; }
 
@@ -132,17 +133,17 @@ public:
       // create new counting factor
       auto f = DiscreteTomographyFactorCountingNaive(noLabels_, projectionVar.size(), sum);
       auto* fc = new DiscreteTomographyCountingFactorContainer(f, std::vector<REAL>(f.size(),0.0));
-      s_.GetLP().AddFactor(fc);
+      lp_->AddFactor(fc);
       // connect unaries with counting factor
-      auto& mrf = s_.template GetProblemConstructor<0>();
       for(INDEX i=0; i<projectionVar.size(); ++i) {
-         auto* u = mrf.GetUnaryFactor(projectionVar[i]);
+         auto* u = mrf_constructor_.GetUnaryFactor(projectionVar[i]);
          auto *m = new DiscreteTomographyCountingMessage(DiscreteTomographyUnaryToFactorCountingNaiveMessage(i), u, fc, u->size());
-         s_.GetLP().AddMessage(m);
+         lp_->AddMessage(m);
       }
    }
 private:
-   Solver<FMC>& s_;
+   LP* lp_;
+   MrfConstructorType& mrf_constructor_;
    INDEX noLabels_;
 };
 

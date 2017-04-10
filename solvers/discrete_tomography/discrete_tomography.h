@@ -30,12 +30,12 @@ namespace LP_MP{
     typedef FactorContainer<UnarySimplexFactor, FMC_DT, 0, false> UnaryFactor;
     typedef FactorContainer<PairwiseSimplexFactor, FMC_DT, 1> PairwiseFactor;
     typedef FactorContainer<DiscreteTomographyFactorCounting2, FMC_DT, 2> DiscreteTomographyCountingFactorContainer;
-    using dt_sequential_factor = FactorContainer<dt_sum_state_factor, FMC_DT, 3>;
-    using dt_sequential_pairwise_factor = FactorContainer<dt_sum_state_pairwise_factor, FMC_DT, 4>;
+    //using dt_sequential_factor = FactorContainer<dt_sum_state_factor, FMC_DT, 3>;
+    using dt_sequential_pairwise_factor = FactorContainer<dt_sum_state_pairwise_factor, FMC_DT, 3>;
    
     // do zrobienia: possibly try out MPLP as well
-    typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_DT, 0 > UnaryPairwiseMessageLeft;
-    typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_DT, 1 > UnaryPairwiseMessageRight;
+    typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_DT, 0 > UnaryPairwiseMessageLeftContainer;
+    typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_DT, 1 > UnaryPairwiseMessageRightContainer;
     
     typedef MessageContainer<DiscreteTomographyMessageCounting2, 2, 2, atMostTwoMessages, atMostTwoMessages, FMC_DT, 2>
       DiscreteTomographyCountingMessageLeft;
@@ -53,24 +53,27 @@ namespace LP_MP{
     using right_pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::right,Chirality::right>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 10>;
 
     // connect sequential dt factors
-    using dt_sequential_message_left = MessageContainer<dt_sum_pairwise_message<Chirality::left>, 3,4, atMostOneMessage, atMostOneMessage, FMC_DT, 11>;
-    using dt_sequential_message_right = MessageContainer<dt_sum_pairwise_message<Chirality::right>, 3,4, atMostOneMessage, atMostOneMessage, FMC_DT, 12>;
-    using dt_sequential_recursive_message_left = MessageContainer<dt_sum_counting_message<Chirality::left>, 3,2, atMostOneMessage, atMostOneMessage, FMC_DT, 13>;
-    using dt_sequential_recursive_message_right = MessageContainer<dt_sum_counting_message<Chirality::right>, 3,2, atMostOneMessage, atMostOneMessage, FMC_DT, 14>;
-    using dt_pairwise_pairwise_message = MessageContainer<dt_sum_pairwise_pairwise_message, 1, 4, variableMessageNumber, atMostOneMessage, FMC_DT, 15>;
+    using dt_sequential_message = MessageContainer<dt_pairwise_message, 3, 3, atMostOneMessage, atMostOneMessage, FMC_DT, 11>;
+    //using dt_sequential_message_left = MessageContainer<dt_sum_pairwise_message<Chirality::left>, 3,4, atMostOneMessage, atMostOneMessage, FMC_DT, 11>;
+    //using dt_sequential_message_right = MessageContainer<dt_sum_pairwise_message<Chirality::right>, 3,4, atMostOneMessage, atMostOneMessage, FMC_DT, 12>;
+    using dt_sequential_recursive_message_left = MessageContainer<dt_sum_counting_message<Chirality::left>, 3,2, atMostOneMessage, atMostOneMessage, FMC_DT, 12>;
+    using dt_sequential_recursive_message_right = MessageContainer<dt_sum_counting_message<Chirality::right>, 3,2, atMostOneMessage, atMostOneMessage, FMC_DT, 13>;
+    using dt_pairwise_pairwise_message = MessageContainer<dt_sum_pairwise_pairwise_message, 1, 3, variableMessageNumber, atMostOneMessage, FMC_DT, 14>;
+    using dt_sum_unary_message_left = MessageContainer<dt_sum_unary_message<Chirality::left>, 0, 3, variableMessageNumber, 1, FMC_DT, 18>;
+    using dt_sum_unary_message_right = MessageContainer<dt_sum_unary_message<Chirality::right>, 0, 3, variableMessageNumber, 1, FMC_DT, 19>;
 
     //using dt_unary_sum_message_container = MessageContainer<dt_unary_sum_message, 0, 3, variableMessageNumber, 1, FMC_DT, 19>;
 
     // tightening
-    typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_DT, 5> EmptyTripletFactor;
-    typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 5, variableMessageNumber, 1, FMC_DT, 16> PairwiseTriplet12MessageContainer;
-    typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 5, variableMessageNumber, 1, FMC_DT, 17> PairwiseTriplet13MessageContainer;
-    typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 5, variableMessageNumber, 1, FMC_DT, 18> PairwiseTriplet23MessageContainer;
+    typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_DT, 4> EmptyTripletFactor;
+    typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 15> PairwiseTriplet12MessageContainer;
+    typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 16> PairwiseTriplet13MessageContainer;
+    typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 17> PairwiseTriplet23MessageContainer;
 
-    using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer, dt_sequential_factor, dt_sequential_pairwise_factor, EmptyTripletFactor >;
+    using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer, dt_sequential_pairwise_factor, EmptyTripletFactor >;
     using MessageList = meta::list<
-       UnaryPairwiseMessageLeft,
-       UnaryPairwiseMessageRight,
+       UnaryPairwiseMessageLeftContainer,
+       UnaryPairwiseMessageRightContainer,
        DiscreteTomographyCountingMessageLeft,
        DiscreteTomographyCountingMessageRight,
        pairwise_to_center_counting,
@@ -80,18 +83,19 @@ namespace LP_MP{
        right_pairwise_to_left_counting,
        left_pairwise_to_right_counting,
        right_pairwise_to_right_counting,
-       dt_sequential_message_left,
-       dt_sequential_message_right,
+       dt_sequential_message,
        dt_sequential_recursive_message_left,
        dt_sequential_recursive_message_right,
        dt_pairwise_pairwise_message,
        PairwiseTriplet12MessageContainer,
        PairwiseTriplet13MessageContainer,
-       PairwiseTriplet23MessageContainer
+       PairwiseTriplet23MessageContainer,
+       dt_sum_unary_message_left,
+       dt_sum_unary_message_right
        >;
 
     using mrf = StandardMrfConstructor<FMC_DT,0,1,0,1>;
-    using tighteningMrf = TighteningMRFProblemConstructor<mrf,5,16,17,18>;
+    using tighteningMrf = TighteningMRFProblemConstructor<mrf,4,15,16,17>;
     using dt_recursive = DiscreteTomographyTreeConstructor<FMC_DT,0,
           DiscreteTomographyCountingFactorContainer,
           DiscreteTomographyCountingMessageLeft,
@@ -104,11 +108,11 @@ namespace LP_MP{
           left_pairwise_to_right_counting,
           right_pairwise_to_right_counting>;
     using dt_sequential = dt_sequential_constructor<FMC_DT, 0,
-          dt_sequential_factor,
           dt_sequential_pairwise_factor, 
-          dt_sequential_message_left,
-          dt_sequential_message_right,
-          dt_pairwise_pairwise_message
+          dt_sequential_message,
+          dt_pairwise_pairwise_message,
+          dt_sum_unary_message_left,
+          dt_sum_unary_message_right
           >;
     using dt_combined = dt_combined_constructor<FMC_DT, 0,
           dt_sequential,
@@ -267,8 +271,8 @@ namespace LP_MP{
           }
        };
 
-    template<typename FMC>
-    inline bool ParseProblem(const std::string& filename, Solver<FMC>& pd) {
+    template<typename SOLVER>
+    inline bool ParseProblem(const std::string& filename, SOLVER& pd) {
        std::cout << "parsing " << filename << "\n";
        pegtl::file_parser problem(filename);
 
@@ -288,16 +292,17 @@ namespace LP_MP{
        }
        assert(p.projectionVar.size() == p.projectionCost.size());
        for(INDEX i=0; i<p.projectionVar.size(); ++i) {
-          LP_tree t;
-          pd.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i], &t);
-          t.compute_subgradient();
-          assert(false); 
+          pd.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i]);
+          //LP_tree t;
+          //pd.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i], &t);
+          //t.compute_subgradient();
+          //assert(false); 
        }
        return true;
     }
 
-    template<typename FMC>
-    inline bool ParseProblemCombined(const std::string& filename, Solver<FMC>& pd) {
+    template<typename SOLVER>
+    inline bool ParseProblemCombined(const std::string& filename, SOLVER& pd) {
        std::cout << "parsing " << filename << "\n";
        pegtl::file_parser problem(filename);
 

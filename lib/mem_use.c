@@ -5,6 +5,7 @@
 #ifdef __linux__
 # include <sys/sysinfo.h>
 # include <fstream>
+# include <unistd.h>
 #endif
 
 #ifdef __APPLE__

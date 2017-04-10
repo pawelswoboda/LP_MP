@@ -267,7 +267,7 @@ public:
       std::fill(this->begin(), this->end(), val);
    }
    matrix(const matrix& o) 
-      : vec_(o.vector_),
+      : vec_(o.vec_),
       dim2_(o.dim2_) 
    {}
    matrix(matrix&& o) 
@@ -310,14 +310,16 @@ public:
    tensor3(const INDEX d1, const INDEX d2, const INDEX d3, const T val) : tensor3<T>(d1,d2,d3) {
       std::fill(this->begin(), this->end(), val);
    }
-   tensor3(const tensor3<T>& o) : vector<T>(o) {
-      dim2_ = o.dim2_;
-      dim3_ = o.dim3_; 
-   }
-   tensor3(tensor3&& o) : vector<T>(std::move(o)) {
-      dim2_ = o.dim2_;
-      dim3_ = o.dim3_;
-   }
+   tensor3(const tensor3<T>& o) :
+      vector<T>(o),
+      dim2_(o.dim2_),
+      dim3_(o.dim3_)
+   {}
+   tensor3(tensor3&& o) :
+      vector<T>(std::move(o)),
+      dim2_(o.dim2_),
+      dim3_(o.dim3_)
+   {}
    void operator=(const tensor3<T>& o) {
       assert(this->size() == o.size() && o.dim2_ == dim2_ && o.dim3_ == dim3_);
       for(INDEX i=0; i<o.size(); ++i) { 

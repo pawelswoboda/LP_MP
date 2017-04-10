@@ -37,17 +37,27 @@ private:
    Solver(int argc, char** argv, meta::list<PROBLEM_CONSTRUCTORS...>&& pc_list)
      : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
      lp_(cmd_),
-     problemConstructor_((sizeof(PROBLEM_CONSTRUCTORS),  new PROBLEM_CONSTRUCTORS( *this ) )...), //(SolverType&)(*this))
+     //problemConstructor_((sizeof(PROBLEM_CONSTRUCTORS), new PROBLEM_CONSTRUCTORS( *this ) )...), //(SolverType&)(*this))
      // build the standard command line arguments
-     inputFileArg_("i","inputFile","file from which to read problem instance",true,"","file name",cmd_),
+     inputFileArg_("i","inputFile","file from which to read problem instance",false,"","file name",cmd_),
      outputFileArg_("o","outputFile","file to write solution",false,"","file name",cmd_),
      visitor_(cmd_)
      {
+      for_each_tuple(this->problemConstructor_, [this](auto& l) {
+            assert(l == nullptr);
+            l = new typename std::remove_pointer<typename std::remove_reference<decltype(l)>::type>::type(*this); // note: this is not so nice: if problem constructor needs other problem constructors, those must already be allocated, otherwise address is invalid. This is only a problem for circular references, though, otherwise order problem constructors accordingly. This should be resolved when std::tuple will be constructed without move and copy constructors.
+      });
        Init(argc,argv);
      }
 public:
 
-   ~Solver() {}
+   ~Solver() 
+   {
+      for_each_tuple(this->problemConstructor_, [this](auto& l) {
+            assert(l != nullptr);
+            delete l;
+      });
+   }
 
   TCLAP::CmdLine& get_cmd() { return cmd_; }
 
@@ -357,7 +367,6 @@ public:
   }
 
 private:
-   PrimalSolutionStorage forwardPrimal_, backwardPrimal_;
    INDEX iter = 0;
 };
 
@@ -405,6 +414,36 @@ public:
    }
    
 };
+
+// rounding based on (i) interleaved message passing followed by (ii) problem constructor rounding.
+// It is expected that (ii) takes (i)'s rounding into account.
+template<typename SOLVER>
+class CombinedMPProblemConstructorRoundingSolver : public ProblemConstructorRoundingSolver<SOLVER>
+{
+public:
+   using ProblemConstructorRoundingSolver<SOLVER>::ProblemConstructorRoundingSolver;
+
+   virtual void Iterate(LpControl c)
+   {
+      if(c.computePrimal) {
+         this->lp_.ComputeForwardPassAndPrimal(iter);
+         this->ComputePrimal();
+         this->RegisterPrimal();
+
+         this->lp_.ComputeBackwardPassAndPrimal(iter);
+         this->ComputePrimal();
+         this->RegisterPrimal();
+      } else {
+         SOLVER::Iterate(c);
+      }
+    ++iter;
+  }
+
+private:
+   INDEX iter = 0;
+};
+
+
 
 
 

@@ -41,9 +41,9 @@ using multicut_odd_3_wheel_labelings = labelings<
    labeling<0,0,0,1,1,1>, // 0001
 
    // two components of two nodes each
-   labeling<0,1,1,1,1,0>, // 1100
-   labeling<1,0,1,1,0,1>, // 0101
-   labeling<1,1,0,0,1,1>, // 1001
+   labeling<0,1,1,1,1,0>, // 1100 // 4
+   labeling<1,0,1,1,0,1>, // 0101 // 5
+   labeling<1,1,0,0,1,1>, // 1001 // 6
 
    // three components
    labeling<0,1,1,1,1,1>,

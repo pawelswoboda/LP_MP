@@ -120,7 +120,7 @@ namespace LP_MP {
             if(c.computePrimal) {
                std::cout << ", upper bound = " << primalBound;
             }
-            std::cout << ", time elapsed = " << timeElapsed << "\n";
+            std::cout << ", time elapsed = " << timeElapsed/1000 << "." << (timeElapsed%1000)/10 << "s\n";
          }
 
          curIter_++;

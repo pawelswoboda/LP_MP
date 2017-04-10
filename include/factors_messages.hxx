@@ -854,8 +854,8 @@ public:
       static_if<CanBatchRepamLeft<ARRAY>()>([&](auto f) {
             f(msg_op_).RepamLeft(*(leftFactor_->GetFactor()), m);
       }).else_([&](auto f) {
-         for(INDEX i=0; i<m.size(); ++i) {
-            f(msg_op_).RepamLeft(*(leftFactor_->GetFactor()), m[i], i);
+         for(INDEX i=0; i<f(m).size(); ++i) {
+            f(msg_op_).RepamLeft(*(leftFactor_->GetFactor()), f(m)[i], i);
          }
       });
    }
@@ -907,8 +907,8 @@ public:
       static_if<CanBatchRepamRight<ARRAY>()>([&](auto f) {
             f(msg_op_).RepamRight(*(rightFactor_->GetFactor()), m);
       }).else_([&](auto f) {
-         for(INDEX i=0; i<m.size(); ++i) {
-            f(msg_op_).RepamRight(*(rightFactor_->GetFactor()), m[i], i);
+         for(INDEX i=0; i<f(m).size(); ++i) {
+            f(msg_op_).RepamRight(*(rightFactor_->GetFactor()), f(m)[i], i);
          }
       });
    }

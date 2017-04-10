@@ -5,6 +5,7 @@
 #include "solver.hxx"
 #include "factors_messages.hxx"
 #include "multicut_factors_messages.hxx"
+#include "multiway_cut_factors_messages.hxx"
 #include "multicut_unary_factor.hxx"
 #include "multicut_triplet_factor.hxx"
 #include "multicut_odd_wheel.hxx"
@@ -129,6 +130,47 @@ struct FMC_LIFTED_MULTICUT {
    using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,3,4>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 
+};
+
+// possibly use separate terminal edge class
+struct FMC_MULTIWAY_CUT {
+   constexpr static const char* name = "Multiway cut with cycle and odd wheel constraints";
+
+   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_MULTIWAY_CUT, 0>;
+   using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_MULTIWAY_CUT, 1>;
+   using odd_3_wheel_factor_container = FactorContainer<multicut_odd_3_wheel_factor, FMC_MULTIWAY_CUT, 2>;
+   using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_MULTIWAY_CUT, 3>;
+   
+   using one_terminal_edge_active_factor_container = FactorContainer<one_terminal_edge_active_factor, FMC_MULTIWAY_CUT, 4, true>; 
+      
+   using edge_triplet_message_0_container = MessageContainer<multicut_edge_triplet_message_0, 0, 1, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 0 >;
+   using edge_triplet_message_1_container = MessageContainer<multicut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 1 >;
+   using edge_triplet_message_2_container = MessageContainer<multicut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 2 >;
+
+   using triplet_odd_wheel_message_012 = MessageContainer<multicut_triplet_odd_3_wheel_message_012, 1, 2, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 3>;
+   using triplet_odd_wheel_message_013 = MessageContainer<multicut_triplet_odd_3_wheel_message_013, 1, 2, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 4>;
+   using triplet_odd_wheel_message_023 = MessageContainer<multicut_triplet_odd_3_wheel_message_023, 1, 2, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 5>;
+   using triplet_odd_wheel_message_123 = MessageContainer<multicut_triplet_odd_3_wheel_message_123, 1, 2, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 6>;
+
+   using one_terminal_edge_active_message_container = MessageContainer<edge_terminal_constraint_message, 0, 4, atMostOneMessage, variableMessageNumber, FMC_MULTIWAY_CUT, 7>;
+
+   using FactorList = meta::list< 
+      edge_factor_container,
+      triplet_factor_container,
+      odd_3_wheel_factor_container,
+      ConstantFactorContainer,
+      one_terminal_edge_active_factor_container
+         >;
+   using MessageList = meta::list<
+      edge_triplet_message_0_container, edge_triplet_message_1_container, edge_triplet_message_2_container,  
+      triplet_odd_wheel_message_012, triplet_odd_wheel_message_013, triplet_odd_wheel_message_023, triplet_odd_wheel_message_123,
+      one_terminal_edge_active_message_container 
+      >;
+
+   using multicut_c = MulticutConstructor<FMC_MULTIWAY_CUT,0,1, 0,1,2, 3>;
+   using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
+   using multiway_cut_= multiway_cut_constructor<multicut_cow, 4, 7>;
+   using ProblemDecompositionList = meta::list<multiway_cut_>; 
 };
 
 namespace MulticutOpenGmInput {
@@ -262,6 +304,50 @@ namespace MulticutOpenGmInput {
       return true;
    }
 
+   // mock mrf problem for use in ParseGM function
+   template<typename MULTIWAY_CUT_CONSTRUCTOR>
+   struct mrf_mock_constructor {
+      mrf_mock_constructor(MULTIWAY_CUT_CONSTRUCTOR& c) : c_(c) {}
+      template<typename VEC>
+         void AddUnaryFactor(const INDEX i, const VEC& costs) {
+            if(c_.no_classes() > 0) {
+               assert(costs.size() == c_.no_classes());
+            }
+            c_.set_no_classes(costs.size());
+            c_.add_class_costs(i, costs.begin(), costs.end());
+         }
+
+      template<typename VEC>
+         void AddPairwiseFactor(const INDEX i, const INDEX j, const VEC& costs)
+         {
+            assert(costs.size() == c_.no_classes()*c_.no_classes());
+            for(INDEX xi=0; xi<c_.no_classes(); ++xi) {
+               for(INDEX xj=0; xj<c_.no_classes(); ++xj) {
+                  if(xi == xj) {
+                     assert(costs[xi*c_.no_classes() + xj] == costs[0]);
+                  } else {
+                     assert(costs[xi*c_.no_classes() + xj] == costs[1]);
+                  } 
+               }
+            }
+
+            const REAL potts_val = costs[1] - costs[0]; // also assert that costs are indeed Potts costs
+            c_.AddToConstant(costs[0]);
+            c_.AddUnaryFactor(i,j,potts_val); 
+         }
+
+      MULTIWAY_CUT_CONSTRUCTOR& c_;
+   };
+
+   // transform a Potts problem into a multiway cut one
+   template<typename SOLVER>
+   bool ParsePottsProblem(const std::string filename, SOLVER& pd)
+   {
+      auto& c = pd.template GetProblemConstructor<0>();
+      
+      mrf_mock_constructor<decltype(c)> mock_c(c);
+      return ParseGM(filename, mock_c);
+   } 
 }
 
 namespace MulticutTextInput {

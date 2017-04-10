@@ -786,10 +786,10 @@ namespace UaiMrfInput {
                const INDEX dim2 = mrf.GetNumberOfLabels(var2);
                assert(var1<var2 && var2 < input.number_of_variables_);
                assert(input.function_tables_[i].size() == input.cardinality_[var1]*input.cardinality_[var2]);
-               std::vector<REAL> pairwise_cost(dim1*dim2);
+               matrix<REAL> pairwise_cost(dim1,dim2);
                for(INDEX l1=0; l1<dim1; ++l1) {
                   for(INDEX l2=0; l2<dim2; ++l2) {
-                     pairwise_cost[l1 + l2*dim1] = input.function_tables_[i][l2*dim1 + l1];
+                     pairwise_cost(l1,l2) = input.function_tables_[i][l2*dim1 + l1];
                   }
                }
                mrf.AddPairwiseFactor(var1,var2,pairwise_cost); // or do we have to transpose the values?

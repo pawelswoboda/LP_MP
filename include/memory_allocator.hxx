@@ -727,12 +727,12 @@ template<typename T1, typename T2>
 
 // global stack allocator
 int stack_arena_mem[100000];
-stack_arena<REAL> global_real_stack_arena(stack_arena_mem,100000);
-stack_allocator<REAL> global_real_stack_allocator(global_real_stack_arena);
+static stack_arena<REAL> global_real_stack_arena(stack_arena_mem,100000);
+static stack_allocator<REAL> global_real_stack_allocator(global_real_stack_arena);
 
 // global block allocator
-block_arena<REAL> global_real_block_arena;
-block_allocator<REAL> global_real_block_allocator(global_real_block_arena);
+static block_arena<REAL> global_real_block_arena;
+static block_allocator<REAL> global_real_block_allocator(global_real_block_arena);
 
 #ifdef LP_MP_PARALLEL
 constexpr INDEX no_stack_allocators = 4;
@@ -740,16 +740,16 @@ constexpr INDEX no_stack_allocators = 4;
 constexpr INDEX no_stack_allocators = 1;
 #endif
 
-std::array<block_arena<REAL>, no_stack_allocators> global_real_block_arena_array;
+static std::array<block_arena<REAL>, no_stack_allocators> global_real_block_arena_array;
 
 template <std::size_t... I, typename RandomAccessIterator>
 std::array<block_allocator<REAL>, no_stack_allocators> make_block_allocator_array(RandomAccessIterator& first, std::integer_sequence<size_t,I...>) {
   return std::array<block_allocator<REAL>, no_stack_allocators>{ { first[I]... } };
 }
 
-std::array<block_allocator<REAL>, no_stack_allocators> global_real_block_allocator_array ( make_block_allocator_array(global_real_block_arena_array, std::make_integer_sequence<size_t,no_stack_allocators>{} ) ) ;
+static std::array<block_allocator<REAL>, no_stack_allocators> global_real_block_allocator_array ( make_block_allocator_array(global_real_block_arena_array, std::make_integer_sequence<size_t,no_stack_allocators>{} ) ) ;
 
-thread_local INDEX stack_allocator_index = 0;
+static thread_local INDEX stack_allocator_index = 0;
 // do zrobienia: both above allocators do not destroy their arenas
 } // end namespace LP_MP
 

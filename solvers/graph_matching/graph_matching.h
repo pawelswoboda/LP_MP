@@ -249,7 +249,7 @@ struct FMC_GM {
 
    using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>>;
    using mrf_left = mrf;
-   using mrf_right = mrf;
+   using mrf_right = disable_write_constructor< mrf >;
    using ProblemDecompositionList = meta::list<mrf_left, mrf_right>;//,mcfLabeling>;
 };
 
@@ -291,7 +291,7 @@ struct FMC_GM_T {
    using mrf = AssignmentGmConstructor<StandardMrfConstructor<FMC_GM_PARAM,0,1,0,1>>;
    using tighteningMrf = TighteningMRFProblemConstructor<mrf,2,2,3,4>;
    using mrf_left = tighteningMrf;
-   using mrf_right = tighteningMrf;
+   using mrf_right = disable_write_constructor< tighteningMrf >;
    using ProblemDecompositionList = meta::list<mrf_left, mrf_right>;//,mcfLabeling>;
 };
 

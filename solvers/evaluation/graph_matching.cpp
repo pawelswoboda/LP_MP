@@ -508,7 +508,7 @@ int main()
 
    //RunSolver<FMC_MP_LEFT_T, MpRoundingSolver<FMC_MP_LEFT_T,LP,VisitorType>>(TORRESANI_MP_LEFT_INPUT_T,graphMatchingHotelDatasets,mp_options,"hotel","AMP-O");
    //RunSolver<FMC_MP_LEFT_T, MpRoundingSolver<FMC_MP_LEFT_T,LP,VisitorType>>(TORRESANI_MP_LEFT_INPUT_T,graphMatchingHouseDatasets,mp_options,"house","AMP-O");
-   RunSolver<FMC_MP_LEFT_T, MpRoundingSolver<FMC_MP_LEFT_T,LP,VisitorType>>(TORRESANI_MP_LEFT_INPUT_T,graphMatchingHassanDatasets,mp_options,"Hassan","AMP-O");
+//   RunSolver<FMC_MP_LEFT_T, MpRoundingSolver<FMC_MP_LEFT_T,LP,VisitorType>>(TORRESANI_MP_LEFT_INPUT_T,graphMatchingHassanDatasets,mp_options,"Hassan","AMP-O");
 
    //RunSolver<FMC_MP_RIGHT_T, MpRoundingSolver<FMC_MP_RIGHT_T,LP,VisitorType>>(TORRESANI_MP_RIGHT_INPUT_T,graphMatchingHotelDatasets,mp_options,"hotel","AMP-I");
    //RunSolver<FMC_MP_RIGHT_T, MpRoundingSolver<FMC_MP_RIGHT_T,LP,VisitorType>>(TORRESANI_MP_RIGHT_INPUT_T,graphMatchingHouseDatasets,mp_options,"house","AMP-I");
@@ -520,7 +520,7 @@ int main()
 
    //RunSolver<FMC_MCF_LEFT_T, MpRoundingSolver<FMC_MCF_LEFT_T,LP,VisitorType>>(TORRESANI_MCF_LEFT_INPUT_T,graphMatchingHotelDatasets,mcf_options,"hotel","AMCF-O");
    //RunSolver<FMC_MCF_LEFT_T, MpRoundingSolver<FMC_MCF_LEFT_T,LP,VisitorType>>(TORRESANI_MCF_LEFT_INPUT_T,graphMatchingHouseDatasets,mcf_options,"house","AMCF-O");
-   RunSolver<FMC_MCF_LEFT_T, MpRoundingSolver<FMC_MCF_LEFT_T,LP,VisitorType>>(TORRESANI_MCF_LEFT_INPUT_T,graphMatchingHassanDatasets,mcf_options,"Hassan","AMCF-O");
+//   RunSolver<FMC_MCF_LEFT_T, MpRoundingSolver<FMC_MCF_LEFT_T,LP,VisitorType>>(TORRESANI_MCF_LEFT_INPUT_T,graphMatchingHassanDatasets,mcf_options,"Hassan","AMCF-O");
 
    //RunSolver<FMC_MCF_RIGHT_T, MpRoundingSolver<FMC_MCF_RIGHT_T,LP,VisitorType>>(TORRESANI_MCF_RIGHT_INPUT_T,graphMatchingHotelDatasets,mcf_options,"hotel","AMCF-I");
    //RunSolver<FMC_MCF_RIGHT_T, MpRoundingSolver<FMC_MCF_RIGHT_T,LP,VisitorType>>(TORRESANI_MCF_RIGHT_INPUT_T,graphMatchingHouseDatasets,mcf_options,"house","AMCF-I");
@@ -528,7 +528,7 @@ int main()
    
    RunSolver<FMC_GM_LEFT_T, MpRoundingSolver<FMC_GM_LEFT_T,LP,VisitorType>>(TORRESANI_GM_LEFT_INPUT_T,graphMatchingHotelDatasets,gm_options,"hotel","GM-O");
    RunSolver<FMC_GM_LEFT_T, MpRoundingSolver<FMC_GM_LEFT_T,LP,VisitorType>>(TORRESANI_GM_LEFT_INPUT_T,graphMatchingHouseDatasets,gm_options,"house","GM-O");
-   RunSolver<FMC_GM_LEFT_T, MpRoundingSolver<FMC_GM_LEFT_T,LP,VisitorType>>(TORRESANI_GM_LEFT_INPUT_T,graphMatchingHassanDatasets,gm_options,"Hassan","GM-O");
+//   RunSolver<FMC_GM_LEFT_T, MpRoundingSolver<FMC_GM_LEFT_T,LP,VisitorType>>(TORRESANI_GM_LEFT_INPUT_T,graphMatchingHassanDatasets,gm_options,"Hassan","GM-O");
    
    //RunSolver<FMC_GM_RIGHT_T, MpRoundingSolver<FMC_GM_RIGHT_T,LP,VisitorType>>(TORRESANI_GM_RIGHT_INPUT_T,graphMatchingHotelDatasets,gm_options,"hotel","GM-I");
    //RunSolver<FMC_GM_RIGHT_T, MpRoundingSolver<FMC_GM_RIGHT_T,LP,VisitorType>>(TORRESANI_GM_RIGHT_INPUT_T,graphMatchingHouseDatasets,gm_options,"house","GM-I");
@@ -544,7 +544,7 @@ int main()
 
    //RunSolver<FMC_HUNGARIAN_BP_LEFT_T, MpRoundingSolver<FMC_HUNGARIAN_BP_LEFT_T,LP,VisitorType>>(TORRESANI_HUNGARIAN_BP_LEFT_INPUT_T,graphMatchingHotelDatasets,hbp_options,"hotel","HUNGARIAN_BP-O");
    //RunSolver<FMC_HUNGARIAN_BP_LEFT_T, MpRoundingSolver<FMC_HUNGARIAN_BP_LEFT_T,LP,VisitorType>>(TORRESANI_HUNGARIAN_BP_LEFT_INPUT_T,graphMatchingHouseDatasets,hbp_options,"house","HUNGARIAN_BP-O");
-   RunSolver<FMC_HUNGARIAN_BP_LEFT_T, MpRoundingSolver<FMC_HUNGARIAN_BP_LEFT_T,LP,VisitorType>>(TORRESANI_HUNGARIAN_BP_LEFT_INPUT_T,graphMatchingHassanDatasets,hbp_options,"Hassan","HUNGARIAN_BP-O");
+//   RunSolver<FMC_HUNGARIAN_BP_LEFT_T, MpRoundingSolver<FMC_HUNGARIAN_BP_LEFT_T,LP,VisitorType>>(TORRESANI_HUNGARIAN_BP_LEFT_INPUT_T,graphMatchingHassanDatasets,hbp_options,"Hassan","HUNGARIAN_BP-O");
 
    //RunSolver<FMC_MP_LEFT_T, MpRoundingSolver<FMC_MP_LEFT_T,LP,VisitorType>>(TORRESANI_MP_LEFT_INPUT_T,graphMatchingCarDatasets,mp_options,"car","AMP-O");
    //RunSolver<FMC_MCF_LEFT_T, MpRoundingSolver<FMC_MCF_LEFT_T,LP,VisitorType>>(TORRESANI_MCF_LEFT_INPUT_T,graphMatchingCarDatasets,mcf_options,"car","AMCF-O");
@@ -566,10 +566,10 @@ int main()
    RunSolver<FMC_GM_LEFT_T, MpRoundingSolver<FMC_GM_LEFT_T,LP,VisitorType>>(TORRESANI_GM_LEFT_INPUT_T,graphMatchingMotorDatasets,gm_options,"motor","GM-B");
    RunSolver<FMC_HUNGARIAN_BP_BOTH_SIDES_T, MpRoundingSolver<FMC_HUNGARIAN_BP_BOTH_SIDES_T,LP,VisitorType>>(TORRESANI_HUNGARIAN_BP_BOTH_SIDES_INPUT_T,graphMatchingMotorDatasets,hbp_options,"motor","HUNGARIAN_BP-B");
 
-   RunSolver<FMC_MP_LEFT_T, MpRoundingSolver<FMC_MP_LEFT_T,LP,VisitorType>>(TORRESANI_MP_LEFT_INPUT_T,graphMatchingWormsDatasets,mp_options,"worms","AMP-O");
-   RunSolver<FMC_MCF_LEFT_T, MpRoundingSolver<FMC_MCF_LEFT_T,LP,VisitorType>>(TORRESANI_MCF_LEFT_INPUT_T,graphMatchingWormsDatasets,mcf_options,"worms","AMCF-O");
-   RunSolver<FMC_GM_LEFT_T, MpRoundingSolver<FMC_GM_LEFT_T,LP,VisitorType>>(TORRESANI_GM_LEFT_INPUT_T,graphMatchingWormsDatasets,gm_options,"worms","GM-O");
-   RunSolver<FMC_HUNGARIAN_BP_LEFT_T, MpRoundingSolver<FMC_HUNGARIAN_BP_LEFT_T,LP,VisitorType>>(TORRESANI_HUNGARIAN_BP_LEFT_INPUT_T,graphMatchingWormsDatasets,hbp_options,"worms","HUNGARIAN_BP-O");
+   //RunSolver<FMC_MP_LEFT_T, MpRoundingSolver<FMC_MP_LEFT_T,LP,VisitorType>>(TORRESANI_MP_LEFT_INPUT_T,graphMatchingWormsDatasets,mp_options,"worms","AMP-O");
+   //RunSolver<FMC_MCF_LEFT_T, MpRoundingSolver<FMC_MCF_LEFT_T,LP,VisitorType>>(TORRESANI_MCF_LEFT_INPUT_T,graphMatchingWormsDatasets,mcf_options,"worms","AMCF-O");
+   //RunSolver<FMC_GM_LEFT_T, MpRoundingSolver<FMC_GM_LEFT_T,LP,VisitorType>>(TORRESANI_GM_LEFT_INPUT_T,graphMatchingWormsDatasets,gm_options,"worms","GM-O");
+   //RunSolver<FMC_HUNGARIAN_BP_LEFT_T, MpRoundingSolver<FMC_HUNGARIAN_BP_LEFT_T,LP,VisitorType>>(TORRESANI_HUNGARIAN_BP_LEFT_INPUT_T,graphMatchingWormsDatasets,hbp_options,"worms","HUNGARIAN_BP-O");
    }
    return 0;
 }
