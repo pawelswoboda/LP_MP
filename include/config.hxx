@@ -2,8 +2,6 @@
 #define LP_MP_CONFIG_HXX
 
 //#include "MinCost/MinCost.h"
-//#include "Vc/Vc"
-//#include "Vc/Memory"
 
 //#include <fenv.h>
 #include <stdexcept>
@@ -26,12 +24,6 @@ namespace LP_MP {
    using SHORT_INDEX = unsigned char;
    using LONG_SIGNED_INDEX = long int;
    using LONG_INDEX = long unsigned int;
-
-   // data types for all floating point/integer operations performed with SIMD
-//   using REAL_SIMD = Vc::double_v;
-//   using REAL_MASK_SIMD = Vc::double_m;
-//   using INDEX_SIMD = Vc::int_v;
-//   using INDEX_MASK_SIMD = Vc::int_m;
 
    enum class Chirality {left,right};
    enum class MessageSendingType {SRMP,MPLP}; // also add full, for always sending and receiving messages
@@ -104,10 +96,12 @@ namespace LP_MP {
       }
 
       // obsolete
+      /*
       static auto array2 = [](const std::array<INDEX,2> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1]); };
       static auto array3 = [](const std::array<INDEX,3> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2]); };
       static auto array4 = [](const std::array<INDEX,4> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3]); };
       static auto array5 = [](const std::array<INDEX,5> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3])^std::hash<INDEX>()(x[4]); };
+      */
    }
 
    REAL normalize(const REAL x) {

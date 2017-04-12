@@ -23,9 +23,11 @@ void add_projection_and_run(SOLVER& s, std::vector<INDEX> projection_var, const 
    if((projection_sum) % 10 != 0) {
       assert(std::abs(s.lower_bound() - 1.0) < eps);
       REQUIRE(std::abs(s.lower_bound() - 1.0) < eps);
+      REQUIRE(std::abs(s.primal_cost() - 1.0) < eps);
    } else {
       assert(std::abs(s.lower_bound()) < eps);
       REQUIRE(std::abs(s.lower_bound()) < eps);
+      REQUIRE(std::abs(s.primal_cost()) < eps);
    }
 }
 
@@ -40,7 +42,7 @@ TEST_CASE("discrete tomography single chain", "[dt chain]") {
    options[3] = "--maxIter";
    options[4] = "100";
 
-   Solver<FMC_DT,LP,StandardVisitor> s(5,options);
+   MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> s(5,options);
 
    // add single Potts chain of length 10 with varying summation costs
    const INDEX noLabels = 3;

@@ -1168,6 +1168,27 @@ public:
       //return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
       return FunctionExistence::HasCreateConstraints<MessageType,void, LpInterfaceAdapter*, LeftFactorType*, RightFactorType*>();
    }
+
+   // sat related functions
+   LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_sat_clauses,construct_sat_clauses)
+
+   constexpr static bool
+   can_construct_sat_clauses()
+   {
+      return has_construct_sat_clauses<MessageType,void,LGL*, LeftFactorType, RightFactorType, sat_var, sat_var>();
+   }
+
+   void construct_sat_clauses(LGL* s, sat_var left_var, sat_var right_var) 
+   {
+      static_if<can_construct_sat_clauses()>([&](auto f) {
+            f(msg_op_).construct_sat_clauses(s, *leftFactor_->GetFactor(), *rightFactor_->GetFactor(), left_var, right_var);
+            });
+      if(!can_construct_sat_clauses()) {
+         assert(false);
+      }
+   }
+
+
    
    virtual void CreateConstraints(LpInterfaceAdapter* l) final
    {
@@ -1435,6 +1456,26 @@ public:
    {
       return FunctionExistence::HasMaximizePotential<FactorType,void>();
    }
+
+   // sat related functions
+   LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_sat_clauses,construct_sat_clauses)
+
+   constexpr static bool
+   can_construct_sat_clauses()
+   {
+      return has_construct_sat_clauses<FactorType,void,LGL*>();
+   }
+
+   void construct_sat_clauses(LGL* s) 
+   {
+      static_if<can_construct_sat_clauses()>([&](auto f) {
+            f(factor_).construct_sat_clauses(s);
+            });
+      if(!can_construct_sat_clauses()) {
+         assert(false);
+      }
+   }
+
 
    template<typename SAT_SOLVER>
    constexpr static bool can_convert_primal()
@@ -1838,7 +1879,7 @@ public:
       ComputePrimalThroughMessages();
    }
 
-   // do zrobienia: possibly do it with std::result_of
+      // do zrobienia: possibly do it with std::result_of
    //auto begin() -> decltype(std::declval<RepamStorageType>().begin()) { return RepamStorageType::begin(); }
    //auto end()   -> decltype(std::declval<RepamStorageType>().end()) { return RepamStorageType::end(); }
    //auto cbegin() -> decltype(std::declval<RepamStorageType>().cbegin()) const { return RepamStorageType::cbegin(); } // do zrobienia: somehow discards const qualifiers

@@ -126,6 +126,17 @@ namespace LP_MP {
       }
       */
 
+    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+    {
+       for(INDEX i=0; i<l.size(); ++i) {
+          auto left_var = left_begin+i;
+          auto right_var = right_begin+i;
+          make_sat_var_equal(s, to_literal(left_var), to_literal(right_var)); 
+       }
+    }
+ 
+
   private:
     template<typename LEFT_FACTOR, typename G2>
     void MaximizeLeft(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
@@ -269,6 +280,16 @@ namespace LP_MP {
         }
       }
       */
+    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+    {
+       for(INDEX i=0; i<l.size(); ++i) {
+          auto left_var = left_begin+i;
+          auto right_var = right_begin + r.dim1() + i;
+          make_sat_var_equal(s, to_literal(left_var), to_literal(right_var)); 
+       }
+    }
+ 
 
   private:
     template<typename LEFT_FACTOR, typename G2>
@@ -457,6 +478,45 @@ namespace LP_MP {
 
        } else {
           assert(false);
+       }
+    }
+
+    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+    {
+       assert(false);
+       if(I1 == 0 && I2 == 1) {
+
+          for(INDEX x1=0; x1<l.dim1(); ++x1) {
+             for(INDEX x2=0; x2<l.dim2(); ++x2) {
+                const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim1() + x2;
+                const auto right_var = right_begin + x1*l.dim1() + x2;
+                make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+             }
+          }
+
+       } else
+       if(I1 == 0 && I2 == 2) {
+
+          for(INDEX x1=0; x1<l.dim1(); ++x1) {
+             for(INDEX x2=0; x2<l.dim2(); ++x2) {
+                const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim1() + x2;
+                const auto right_var = right_begin + r.dim1()*r.dim2() + x1*l.dim1() + x2;
+                make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+             }
+          }
+
+       } else
+       if(I1 == 1 && I2 == 2) {
+
+          for(INDEX x1=0; x1<l.dim1(); ++x1) {
+             for(INDEX x2=0; x2<l.dim2(); ++x2) {
+                const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim1() + x2;
+                const auto right_var = right_begin + r.dim1()*r.dim2() + r.dim1()*r.dim3() + x1*l.dim1() + x2;
+                make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+             }
+          }
+
        }
     }
 

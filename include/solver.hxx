@@ -314,6 +314,8 @@ public:
    }
 
    REAL lower_bound() const { return lowerBound_; }
+   REAL primal_cost() const { return bestPrimalCost_; }
+
 protected:
    TCLAP::CmdLine cmd_;
 
@@ -347,21 +349,21 @@ protected:
 };
 
 // local rounding interleaved with message passing 
-template<typename FMC, typename LP_TYPE, typename VISITOR>
-class MpRoundingSolver : public Solver<FMC, LP_TYPE, VISITOR>
+template<typename SOLVER>
+class MpRoundingSolver : public SOLVER
 {
 public:
-  using Solver<FMC, LP_TYPE, VISITOR>::Solver;
+  using SOLVER::SOLVER;
 
   virtual void Iterate(LpControl c)
   {
     if(c.computePrimal) {
-      Solver<FMC,LP_TYPE,VISITOR>::lp_.ComputeForwardPassAndPrimal(iter);
+      SOLVER::lp_.ComputeForwardPassAndPrimal(iter);
       this->RegisterPrimal();
-      Solver<FMC,LP_TYPE,VISITOR>::lp_.ComputeBackwardPassAndPrimal(iter);
+      SOLVER::lp_.ComputeBackwardPassAndPrimal(iter);
       this->RegisterPrimal();
     } else {
-      Solver<FMC,LP_TYPE,VISITOR>::Iterate(c);
+      SOLVER::Iterate(c);
     }
     ++iter;
   }
@@ -690,7 +692,7 @@ int main(int argc, char* argv[]) \
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   MpRoundingSolver<FMC,LP_sat<LP>,VISITOR> solver(argc,argv); \
+   MpRoundingSolver<Solver<FMC,LP_sat<LP>,VISITOR>> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION<Solver<FMC,LP_sat<LP>,VISITOR>>); \
    return solver.Solve(); \
 }
@@ -700,7 +702,7 @@ int main(int argc, char* argv[]) \
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   MpRoundingSolver<FMC,LP_sat<LP_concurrent<LP>>,VISITOR> solver(argc,argv); \
+   MpRoundingSolver<Solver<FMC,LP_sat<LP_concurrent<LP>>,VISITOR>> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION<Solver<FMC,LP_sat<LP_concurrent<LP>>,VISITOR>>); \
    return solver.Solve(); \
 }

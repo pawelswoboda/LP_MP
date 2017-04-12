@@ -50,6 +50,7 @@ public:
    virtual void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec<sat_literal>& assumptions) = 0;
    //virtual void convert_primal(Glucose::SimpSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
    //virtual void convert_primal(CMSat::SATSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
+   virtual void construct_sat_clauses(LGL*) = 0;
    virtual void convert_primal(LGL*, sat_var) = 0; // this is not nice: the solver should be templatized
    virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
    virtual INDEX size() const = 0;
@@ -108,6 +109,7 @@ public:
    //virtual bool CanSendMessageToLeft() const = 0;
    //virtual bool CanSendMessageToRight() const = 0;
 
+   virtual void construct_sat_clauses(LGL*, sat_var, sat_var) = 0;
    // for the LP interface
    virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) = 0;
 };
@@ -136,7 +138,10 @@ inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, 
 
 class LP {
 public:
-   LP(TCLAP::CmdLine& cmd) {}
+   LP(TCLAP::CmdLine& cmd) 
+   {
+      std::cout << "kwaskwaskwas3\n";
+   }
    ~LP() 
    {
       for(INDEX i=0; i<m_.size(); i++) { delete m_[i]; }
@@ -223,12 +228,16 @@ public:
    LPReparametrizationMode repamMode_ = LPReparametrizationMode::Undefined;
    */
 
-   template<typename FACTOR_CONTAINER_TYPE>
-   INDEX AddFactor(FACTOR_CONTAINER_TYPE* f)
+   virtual INDEX AddFactor(FactorTypeAdapter* f)
    {
       set_flags_dirty();
+      assert(factor_address_to_index_.size() == f_.size());
       f_.push_back(f);
+
+      assert(factor_address_to_index_.find(f) == factor_address_to_index_.end());
       factor_address_to_index_.insert(std::make_pair(f,f_.size()-1));
+      assert(factor_address_to_index_.find(f)->second == f_.size()-1);
+
       return f_.size() - 1;
    }
 
@@ -236,8 +245,7 @@ public:
    FactorTypeAdapter* GetFactor(const INDEX i) const { return f_[i]; }
    INDEX size() const { INDEX size=0; for(auto* f : f_) { size += f->size(); } return size; }
 
-   template<typename MESSAGE_CONTAINER_TYPE>
-   INDEX AddMessage(MESSAGE_CONTAINER_TYPE* m)
+   virtual INDEX AddMessage(MessageTypeAdapter* m)
    {
       set_flags_dirty();
       m_.push_back(m);
@@ -491,7 +499,7 @@ protected:
    std::vector<std::pair<FactorTypeAdapter*, FactorTypeAdapter*> > forward_pass_factor_rel_, backward_pass_factor_rel_; // factor ordering relations. First factor must come before second factor. factorRel_ must describe a DAG
 
    
-   std::map<FactorTypeAdapter*,INDEX> factor_address_to_index_;
+   std::unordered_map<FactorTypeAdapter*,INDEX> factor_address_to_index_;
    std::vector<INDEX> f_sorted_; // sorted indices in factor vector f_ 
 
    LPReparametrizationMode repamMode_ = LPReparametrizationMode::Undefined;
@@ -615,9 +623,10 @@ public:
 
   LP_sat(TCLAP::CmdLine& cmd) : BASE_LP_CLASS(cmd)
   {
-    sat_ = lglinit();
-    assert(sat_ != nullptr);
-    //sat_.set_no_simplify(); // seems to make solver much faster
+     std::cout << "kwaskwaskwas1\n";
+     sat_ = lglinit();
+     assert(sat_ != nullptr);
+     //sat_.set_no_simplify(); // seems to make solver much faster
   }
 
   ~LP_sat()
@@ -626,44 +635,40 @@ public:
   }
 
   LP_sat(LP_sat& o)
-    : factor_to_index_(o.factor_to_index_),
+    : 
     sat_var_(lglclone(o.sat_var_)),
     forward_sat_th_(o.forward_sat_th_), 
     backward_sat_th_(backward_sat_th_),
     cur_sat_reduction_direction_(o.cur_sat_reduction_direction_)
 
   {
-    assert(sat_handle_.valid()); //should not be copied and we assume that currently no sat solver is running
+     assert(sat_handle_.valid()); //should not be copied and we assume that currently no sat solver is running
   }
 
 
-  template<typename FACTOR_CONTAINER_TYPE>
-  INDEX AddFactor(FACTOR_CONTAINER_TYPE* f) 
+  virtual INDEX AddFactor(FactorTypeAdapter* f) 
   {
      sat_var_.push_back( lglmaxvar(sat_) );
      //sat_var_.push_back(sat_.nVars());
      //std::cout << "number of variables in sat_ = " << sat_var_[sat_var_.size()-1] << "\n";
-     f->GetFactor()->construct_sat_clauses(sat_);
+     f->construct_sat_clauses(sat_);
      INDEX n = BASE_LP_CLASS::AddFactor(f);
-     factor_to_index_.insert(std::make_pair(f,n));
      return n;
   }
 
-   template<typename MESSAGE_CONTAINER_TYPE>
-   INDEX AddMessage(MESSAGE_CONTAINER_TYPE* m)
+   virtual INDEX AddMessage(MessageTypeAdapter* m)
    {
-      const INDEX left_factor_number = factor_to_index_[m->GetLeftFactor()];
-      const INDEX right_factor_number = factor_to_index_[m->GetRightFactor()];
-      auto* left = m->GetLeftFactor()->GetFactor();
-      auto* right = m->GetRightFactor()->GetFactor();
-      m->GetMessageOp().construct_sat_clauses(sat_, *left, *right, sat_var_[left_factor_number], sat_var_[right_factor_number]);
+      assert(this->factor_address_to_index_.find(m->GetLeftFactor()) != this->factor_address_to_index_.end());
+      assert(this->factor_address_to_index_.find(m->GetRightFactor()) != this->factor_address_to_index_.end());
+      const INDEX left_factor_number = this->factor_address_to_index_[m->GetLeftFactor()];
+      const INDEX right_factor_number = this->factor_address_to_index_[m->GetRightFactor()];
+      m->construct_sat_clauses(sat_, sat_var_[left_factor_number], sat_var_[right_factor_number]);
 
       return BASE_LP_CLASS::AddMessage(m);
    }
 
    static bool solve_sat_problem(LP_type* c, sat_vec<sat_literal> assumptions, sat_th* th)
    {
-     //for(const auto lit : assumptions) {
      for(INDEX i=0; i<assumptions.size(); ++i) {
        lglassume( c->sat_, assumptions[i] );
      }
@@ -680,80 +685,83 @@ public:
      return feasible;
    }
 
+   void ComputeForwardPassAndPrimal(const INDEX iteration)
+   {
+      const auto omega = this->get_omega();
+      if(cur_sat_reduction_direction_ == Direction::forward && !sat_computation_running()) {
+         compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), omega.forward.begin(), forward_sat_th_);
+         cur_sat_reduction_direction_ = Direction::backward; 
+      } else {
+         this->ComputePass(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), omega.forward.begin()); 
+      }
+   }
+   void ComputeBackwardPassAndPrimal(const INDEX iteration)
+   {
+      const auto omega = this->get_omega();
+      if(cur_sat_reduction_direction_ == Direction::backward && !sat_computation_running()) {
+         compute_pass_reduce_sat(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), omega.backward.begin(), backward_sat_th_);
+         cur_sat_reduction_direction_ = Direction::forward; 
+      } else {
+         this->ComputePass(this->backwardUpdateOrdering_.begin(), this->backwardUpdateOrdering_.end(), omega.backward.begin()); 
+      }
+   }
    void ComputePassAndPrimal(const INDEX iteration)
    {
-     bool sat_call_finished;
-     if(cur_sat_reduction_direction_ == Direction::forward) {
-       sat_call_finished = compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), this->omegaForward_.begin(), forward_sat_th_);
-       this->ComputePass(this->backwardUpdateOrdering_.rbegin(), this->backwardUpdateOrdering_.rend(), this->omegaBackward_.begin());
-     } else {
-       this->ComputePass(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), this->omegaBackward_.begin());
-       sat_call_finished = compute_pass_reduce_sat(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), this->omegaBackward_.begin(), backward_sat_th_);
-     }
+      assert(false);
+      ComputeForwardPassAndPrimal(2*iteration+1);
+      ComputeBackwardPassAndPrimal(2*iteration+2);
+   }
 
-     if(sat_call_finished) {
-       std::cout << "next sat reduction is in direction ";
-       if(cur_sat_reduction_direction_ == Direction::forward) {
-         cur_sat_reduction_direction_ = Direction::backward;
-         std::cout << "backward\n";
-       } else {
-         cur_sat_reduction_direction_ = Direction::forward;
-         std::cout << "forward\n";
-       }
+   bool sat_computation_running() const
+   {
+     if(!sat_handle_.valid()) {
+        return false; // sat not yet begun.
      }
+     const auto sat_state = sat_handle_.wait_for(std::chrono::seconds(0));
+     assert(sat_state != std::future_status::deferred); // this should not happen as we launch primal computation immediately.
+     return sat_state != std::future_status::ready; 
    }
 
    template<typename FACTOR_ITERATOR, typename WEIGHT_ITERATOR>
-   bool compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, sat_th& th)
+   void compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, sat_th& th)
    {
-     sat_vec<sat_literal> assumptions;
-     for(auto it=factor_begin; it!=factor_end; ++it, ++omega_begin) {
-       const INDEX factor_number = factor_to_index_[*it];
-       (*it)->UpdateFactorSAT(*omega_begin, th.th, sat_var_[factor_number], assumptions);
-     }
-     // run sat solver on reduced problem asynchronuously
-     if(!sat_handle_.valid()) { 
-       std::cout << "start sat calculation\n";
-       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
-       return true;
-     }
+      assert(!sat_computation_running());
+      sat_vec<sat_literal> assumptions;
+      for(auto it=factor_begin; it!=factor_end; ++it, ++omega_begin) {
+         const INDEX factor_number = this->factor_address_to_index_[*it];
+         (*it)->UpdateFactorSAT(*omega_begin, th.th, sat_var_[factor_number], assumptions);
+      }
 
-     const auto sat_state = sat_handle_.wait_for(std::chrono::seconds(0));
-     if(sat_state == std::future_status::deferred) {
-       assert(false); // this should not happen, we launch immediately!
-       throw std::runtime_error("asynchronuous sat was deferred, but this should not happen");
-     } else if(sat_state == std::future_status::ready) {
+      // run sat solver on reduced problem asynchronuously
+      if(!sat_handle_.valid()) { 
+         std::cout << "start sat calculation\n";
+         sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
+      }
 
-       std::cout << "collect sat result\n";
-       const bool feasible = sat_handle_.get();
-       if(feasible) {
+      std::cout << "collect sat result\n";
+      const bool feasible = sat_handle_.get();
+      if(feasible) {
          for(sat_var i=0; i<lglmaxvar(sat_); ++i) {
-         //for(sat_var i=0; i<sat_.nVars(); ++i) {
-           //assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
+            //for(sat_var i=0; i<sat_.nVars(); ++i) {
+            //assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
+            //}
          }
          // convert sat solution to original solution format and compute primal cost
          for(INDEX i=0; i<this->f_.size(); ++i) {
-           assert(factor_to_index_[this->f_[i]] == i);
-           this->f_[i]->convert_primal(sat_, sat_var_[i]);
+            assert(this->factor_address_to_index_[this->f_[i]] == i);
+            this->f_[i]->convert_primal(sat_, sat_var_[i]);
          }
          REAL primal_cost = this->EvaluatePrimal(this->f_.begin(), this->f_.end());
          std::cout << "sat solution cost = " << primal_cost << ", sat threshold = " << th.th << "\n"; 
-       } else {
+      } else {
          std::cout << "sat not feasible with current threshold = " << th.th << "\n";
-       }
+      }
 
-       std::cout << "restart sat calculation\n";
-       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
-       return true;
-
-     } else {
-       std::cout << "do not call sat, it is currently running\n";
-       return false;
-     }
+      std::cout << "restart sat calculation\n";
+      sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
    }
 private:
 
-   std::map<FactorTypeAdapter*,INDEX> factor_to_index_; // possibly make hash out of this
    std::vector<sat_var> sat_var_;
    //Glucose::SimpSolver sat_;
    //CMSat::SATSolver sat_;

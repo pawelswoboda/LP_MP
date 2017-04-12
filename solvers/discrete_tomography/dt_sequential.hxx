@@ -130,7 +130,16 @@ public:
    }
 
    REAL EvaluatePrimal() const {
-      return std::numeric_limits<REAL>::infinity();
+      if( !(state_[0] < no_labels() && state_[1] < no_labels()) ) {
+         return std::numeric_limits<REAL>::infinity();
+      }
+      if( !(sum_[0] + state_[0] == sum_[1]) ) {
+         return std::numeric_limits<REAL>::infinity();
+      }
+      if( !(sum_[0] < prev_sum_size() && sum_[1] < next_sum_size()) ) {
+         return std::numeric_limits<REAL>::infinity();
+      }
+      return eval(state_[0], state_[1], sum_[0]);
    }
 
    void marginalize_pairwise(matrix<REAL>& msg) const {
@@ -163,6 +172,108 @@ public:
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( state_, sum_ ); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( prev_, next_, reg_ ); }
 
+
+
+   template<typename SAT_SOLVER>
+   void construct_sat_clauses(SAT_SOLVER& s) const
+   {
+      auto prev_vars = create_sat_variables(s, no_labels()*prev_sum_size());
+      auto next_vars = create_sat_variables(s, no_labels()*next_sum_size());
+      auto pairwise_vars = create_sat_variables(s, no_labels()*no_labels());
+      auto gluing_vars = create_sat_variables(s, no_labels()*no_labels()*prev_sum_size());
+
+      add_simplex_constraint_sat(s, prev_vars.begin(), prev_vars.end());
+      add_simplex_constraint_sat(s, next_vars.begin(), next_vars.end());
+      // pairwise vars sum to one through message to pairwise simplex factor
+      //add_simplex_constraint_sat(s, pairwise_vars.begin(), pairwise_vars.end());
+      // not needed, forced by simplex constraints on marginalized variables
+      //add_simplex_constraint_sat(s, gluing_vars.begin(), gluing_vars.end()); 
+
+      std::vector<sat_var> tmp_vars;
+      tmp_vars.reserve(no_labels()*prev_sum_size());
+
+      for(INDEX x1=0; x1<no_labels(); ++x1) {
+         for(INDEX sum=0; sum<prev_sum_size(); ++sum) {
+            for(INDEX x2=0; x2<no_labels(); ++x2) {
+               tmp_vars.push_back(gluing_vars[x1*no_labels()*prev_sum_size() + x2*prev_sum_size() + sum]);
+            }
+            const auto prev_var = prev_vars[x1*prev_sum_size() + sum];
+            const auto sum_var = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            make_sat_var_equal(s, to_literal(prev_var), to_literal(sum_var));
+            tmp_vars.clear();
+         }
+      }
+
+      for(INDEX x2=0; x2<no_labels(); ++x2) {
+         for(INDEX next_sum=0; next_sum<next_sum_size(); ++next_sum) {
+            for(INDEX x1=0; x1<no_labels(); ++x1) {
+               if(x1 <= next_sum  && next_sum-x1 < prev_sum_size()) {
+                  tmp_vars.push_back(gluing_vars[x1*no_labels()*prev_sum_size() + x2*prev_sum_size() + (next_sum-x1)]);
+               }
+            }
+            const auto next_var = next_vars[x2*next_sum_size() + next_sum];
+            const auto sum_var = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            if(!tmp_vars.empty()) {
+               make_sat_var_equal(s, to_literal(next_var), to_literal(sum_var));
+            }
+            tmp_vars.clear();
+         }
+      }
+
+      for(INDEX x1=0; x1<no_labels(); ++x1) {
+         for(INDEX x2=0; x2<no_labels(); ++x2) {
+            for(INDEX sum=0; sum<prev_sum_size(); ++sum) {
+               tmp_vars.push_back(gluing_vars[x1*no_labels()*prev_sum_size() + x2*prev_sum_size() + sum]);
+            }
+            const auto pairwise_var = pairwise_vars[x1*no_labels() + x2];
+            const auto sum_var = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            make_sat_var_equal(s, to_literal(pairwise_var), to_literal(sum_var));
+            tmp_vars.clear(); 
+         }
+      } 
+   }
+
+   template<typename VEC>
+   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
+   {
+      const REAL lb = LowerBound();
+      const sat_var gluing_vars_begin = begin + no_labels()*prev_sum_size() + no_labels()*next_sum_size() + no_labels()*no_labels();
+      INDEX no_active_labels = 0;
+      for_each_label_sum([this,lb,th,gluing_vars_begin,&assumptions,&no_active_labels](const INDEX x1, const INDEX x2, const INDEX sum) {
+            if(this->eval(x1,x2,sum) > lb + th) {
+              assumptions.push_back(-to_literal(gluing_vars_begin + x1*this->no_labels()*this->prev_sum_size() + x2*this->prev_sum_size() + sum));
+            } else {
+              no_active_labels++;
+            } 
+      });
+      assert(no_active_labels > 0);
+      if(no_active_labels == 1) { // possibly directly force label if only one active label survives
+      }
+   }
+
+   template<typename SAT_SOLVER>
+   void convert_primal(SAT_SOLVER& s, sat_var first)
+   {
+      for(INDEX x1=0; x1<no_labels(); ++x1) {
+         for(INDEX sum=0; sum<prev_sum_size(); ++sum) {
+            if(lglderef(s,to_literal(first + x1*prev_sum_size() + sum)) == 1) {
+               state_[0] = x1;
+               sum_[0] = sum;
+            }
+         }
+      }
+
+      for(INDEX x2=0; x2<no_labels(); ++x2) {
+         for(INDEX sum=0; sum<next_sum_size(); ++sum) {
+            if(lglderef(s,to_literal(first + no_labels()*prev_sum_size() + x2*next_sum_size() + sum)) == 1) {
+               state_[1] = x2;
+               sum_[1] = sum;
+            }
+         }
+      }
+      assert(state_[0] + sum_[0] == sum_[1]);
+   }
+
    std::array<INDEX,2> state_;
    std::array<INDEX,2> sum_; // both sums are not strictly needed, they help however in labeling
 private:
@@ -177,23 +288,23 @@ class dt_pairwise_message {
 public:
    template<typename RIGHT_FACTOR, typename G2>
    void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 0.5);
+      MakeRightFactorUniform(f_right, msg, 01.0);
    }
 
    template<typename RIGHT_FACTOR, typename G2>
    void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+      MakeRightFactorUniform(f_right, msg, 01.0*omega);
    }
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
       //std::cout << "sum to sum pairwise weight = " << omega << "\n";
-      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
+      MakeLeftFactorUniform(f_left, msg, 01.0*omega);
    }
 
    template<typename LEFT_FACTOR, typename G3>
    void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-      MakeLeftFactorUniform(f_left, msg, 0.5);
+      MakeLeftFactorUniform(f_left, msg, 01.0);
    }
 
    template<typename LEFT_FACTOR, typename MSG>
@@ -241,6 +352,19 @@ public:
       }
    }
 
+   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+   {
+      assert(l.next_sum_size() == r.prev_sum_size());
+      for(INDEX x=0; x<l.no_labels(); ++x) {
+         for(INDEX sum=0; sum<l.next_sum_size(); ++sum) {
+            const auto left_var = left_begin + l.no_labels()*l.prev_sum_size()  + x*l.next_sum_size() + sum;
+            const auto right_var = right_begin + x*r.prev_sum_size() + sum;
+            make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+         }
+      }
+   } 
+
 };
 
 // message from mrf unary to sequential pairwise factor
@@ -249,22 +373,22 @@ class dt_sum_unary_message {
 public:
    template<typename RIGHT_FACTOR, typename G2>
    void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 0.5);
+      MakeRightFactorUniform(f_right, msg, 01.0);
    }
 
    template<typename RIGHT_FACTOR, typename G2>
    void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+      MakeRightFactorUniform(f_right, msg, 01.0*omega);
    }
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
+      MakeLeftFactorUniform(f_left, msg, 01.0*omega);
    }
 
    template<typename LEFT_FACTOR, typename G3>
    void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-      MakeLeftFactorUniform(f_left, msg, 0.5);
+      MakeLeftFactorUniform(f_left, msg, 01.0);
    }
 
    template<typename LEFT_FACTOR, typename MSG>
@@ -308,12 +432,17 @@ public:
          }
       }
    } 
+   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+   {
+   }
 };
 
 // left factor is dt_sum_state_factor, right one is dt_sum_state_pairwise_factor
 // DIRECTION signifies: left = sum_state_factor is previous
 //                      right = sum_state_factor is next
 // possibly make functions static
+/*
 template<Chirality DIRECTION>
 class dt_sum_pairwise_message {
 public:
@@ -327,23 +456,23 @@ public:
 
    template<typename RIGHT_FACTOR, typename G2>
    void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 0.5);
+      MakeRightFactorUniform(f_right, msg, 01.0);
    }
 
    template<typename RIGHT_FACTOR, typename G2>
    void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+      MakeRightFactorUniform(f_right, msg, 01.0*omega);
    }
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
       //std::cout << "sum to sum pairwise weight = " << omega << "\n";
-      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
+      MakeLeftFactorUniform(f_left, msg, 01.0*omega);
    }
 
    template<typename LEFT_FACTOR, typename G3>
    void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-      MakeLeftFactorUniform(f_left, msg, 0.5);
+      MakeLeftFactorUniform(f_left, msg, 01.0);
    }
 
    template<typename LEFT_FACTOR, typename MSG>
@@ -429,23 +558,24 @@ public:
       } 
    }
 
-   /*
-   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   void ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r) {
-      if(DIRECTION == Chirality::left) {
-         assert(r.state_[0] < r.no_labels() && r.sum_[0] < r.prev_sum_size());
-         l.state_ = r.state_[0];
-         l.sum_ = r.sum_[0];
-      } else {
-         assert(r.state_[1] < r.no_labels() && r.sum_[1] < r.prev_sum_size());
-         l.state_ = r.state_[1]; 
-         l.sum_ = r.sum_[1];
-      } 
-   }
-   */
+   
+   //template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   //void ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r) {
+   //   if(DIRECTION == Chirality::left) {
+   //      assert(r.state_[0] < r.no_labels() && r.sum_[0] < r.prev_sum_size());
+   //      l.state_ = r.state_[0];
+   //      l.sum_ = r.sum_[0];
+   //   } else {
+   //      assert(r.state_[1] < r.no_labels() && r.sum_[1] < r.prev_sum_size());
+   //      l.state_ = r.state_[1]; 
+   //      l.sum_ = r.sum_[1];
+   //   } 
+   //}
+   
 private:
    bool transpose_; // not needed
 };
+*/
 
 // connect sequential dt_sum_state_pairwise_factor (left) with recursive DiscreteTomograhpyCountingFactor (right)
 template<Chirality DIRECTION>
@@ -457,22 +587,22 @@ public:
 
    template<typename RIGHT_FACTOR, typename G2>
    void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 0.5);
+      MakeRightFactorUniform(f_right, msg, 01.0);
    }
 
    template<typename RIGHT_FACTOR, typename G2>
    void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+      MakeRightFactorUniform(f_right, msg, 01.0*omega);
    }
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
+      MakeLeftFactorUniform(f_left, msg, 01.0*omega);
    }
 
    template<typename LEFT_FACTOR, typename G3>
    void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-      MakeLeftFactorUniform(f_left, msg, 0.5);
+      MakeLeftFactorUniform(f_left, msg, 01.0);
    }
 
    template<typename LEFT_FACTOR, typename MSG>
@@ -553,23 +683,23 @@ public:
 
    template<typename RIGHT_FACTOR, typename G2>
    void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 0.5);
+      MakeRightFactorUniform(f_right, msg, 01.0);
    }
 
    template<typename RIGHT_FACTOR, typename G2>
    void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-      MakeRightFactorUniform(f_right, msg, 0.5*omega);
+      MakeRightFactorUniform(f_right, msg, 01.0*omega);
    }
 
    template<typename LEFT_FACTOR, typename G3>
    void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
       //std::cout << "pairwise to sum pairwise weight = " << omega << "\n";
-      MakeLeftFactorUniform(f_left, msg, 0.5*omega);
+      MakeLeftFactorUniform(f_left, msg, 01.0*omega);
    }
 
    template<typename LEFT_FACTOR, typename G3>
    void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-      MakeLeftFactorUniform(f_left, msg, 0.5);
+      MakeLeftFactorUniform(f_left, msg, 01.0);
    }
 
    template<typename LEFT_FACTOR, typename MSG>
@@ -611,6 +741,22 @@ public:
             for(INDEX x2=0; x2<f_right.no_labels(); ++x2) {
                f_right.reg(x1,x2) += normalize( msg(x2,x1) );
             }
+         }
+      }
+   }
+
+   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+   {
+      assert(!transpose_);
+      assert(r.no_labels() == l.dim1());
+      assert(r.no_labels() == l.dim2());
+      // to do: take care of transposed_!
+      for(INDEX x1=0; x1<l.dim1(); ++x1) {
+         for(INDEX x2=0; x2<l.dim2(); ++x2) {
+            const sat_var left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim1() + x2;
+            const sat_var right_var = right_begin + r.no_labels()*r.prev_sum_size() + r.no_labels()*r.next_sum_size() + x1*r.no_labels() + x2;
+            make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
          }
       }
    }

@@ -2,6 +2,11 @@
 add_executable(discrete_tomography discrete_tomography.cpp  ${headers} ${sources})
 target_link_libraries(discrete_tomography m stdc++ pthread)
 
+if(WITH_SAT_BASED_ROUNDING)
+   add_executable(discrete_tomography_sat discrete_tomography_sat.cpp  ${headers} ${sources})
+   target_link_libraries(discrete_tomography_sat m stdc++ pthread lgl) 
+endif()
+
 if(WITH_GUROBI)
 
         SET(SOURCE_FILES

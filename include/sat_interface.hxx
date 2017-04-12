@@ -10,6 +10,7 @@ extern "C" {
 
 namespace LP_MP {
 
+  using sat_solver = LGL*;
   using sat_var = int;
   //using sat_var = Glucose::Var;
   using sat_literal = int;
@@ -24,6 +25,7 @@ namespace LP_MP {
     //return CMSat::mkLit(v,false);
   }
 
+  // rename to make sat_literal_equal
   template<typename SAT_SOLVER>
   void make_sat_var_equal(SAT_SOLVER& s, const sat_literal i, const sat_literal j)
   {
@@ -36,7 +38,8 @@ namespace LP_MP {
   template<typename SAT_SOLVER>
   std::vector<sat_var> create_sat_variables(SAT_SOLVER& s, const INDEX n)
   {
-    std::vector<sat_var> v(n);
+    std::vector<sat_var> v;
+    v.reserve(n);
     for(INDEX i=0; i<n; ++i) {
       //v.push_back(s.nVars());
       //s.new_var(); 
@@ -86,6 +89,29 @@ namespace LP_MP {
   }
 
   template<typename SAT_SOLVER, typename ITERATOR>
+  void add_simplex_constraint_naive_sat(SAT_SOLVER& s, ITERATOR var_begin, ITERATOR var_end)
+  {
+    const INDEX n = std::distance(var_begin, var_end);
+    if(n == 1) {
+      lgladd(s, to_literal(*var_begin));;
+      lgladd(s, 0);
+    } else {
+       for(INDEX i=0; i<n; ++i) {
+          for(INDEX j=i+1; j<n; ++j) {
+             lgladd(s, -to_literal(*(var_begin+i)));
+             lgladd(s, -to_literal(*(var_begin+j)));
+             lgladd(s, 0);
+          }
+       }
+
+       for(INDEX i=0; i<n; ++i) {
+          lgladd(s, to_literal(*(var_begin+i)));
+       }
+       lgladd(s, 0);
+    } 
+  }
+
+  template<typename SAT_SOLVER, typename ITERATOR>
   sat_var add_at_most_one_constraint_sat(SAT_SOLVER& s, ITERATOR var_begin, ITERATOR var_end)
   {
     constexpr INDEX th = 3; // pursue a direct approach until 6 variables, and if more a recursive one
@@ -109,8 +135,27 @@ namespace LP_MP {
     }
   }
 
-
-
+  template<typename SAT_SOLVER, typename ITERATOR>
+  void add_simplex_constraint_sat(SAT_SOLVER& s, ITERATOR var_begin, ITERATOR var_end)
+  {
+    constexpr INDEX th = 3; // pursue a direct approach until 6 variables, and if more a recursive one
+    const INDEX n = std::distance(var_begin, var_end);
+    assert(n > 0);
+    if(n <= th) {
+       add_simplex_constraint_naive_sat(s, var_begin, var_end);
+    } else if(n <= 3*th) {
+       auto c1 = add_at_most_one_constraint_sat(s, var_begin, var_begin + n/2);
+       auto c2 = add_at_most_one_constraint_sat(s, var_begin + n/2, var_end);
+       std::array<sat_var,2> c_list {c1,c2};
+       add_simplex_constraint_naive_sat(s, c_list.begin(), c_list.end()); 
+    } else {
+       auto c1 = add_at_most_one_constraint_sat(s, var_begin, var_begin + n/3);
+       auto c2 = add_at_most_one_constraint_sat(s, var_begin + n/3, var_begin + 2*n/3);
+       auto c3 = add_at_most_one_constraint_sat(s, var_begin  + 2*n/3, var_end);
+       std::array<sat_var,3> c_list {c1,c2,c3};
+       add_simplex_constraint_naive_sat(s, c_list.begin(), c_list.end());
+    }
+  } 
 } // end namespace LP_MP
 
 #endif

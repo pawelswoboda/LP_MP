@@ -12,7 +12,7 @@ if(BUILD_TESTS)
    enable_testing()
 
    add_executable(test_main test_main.cpp ${headers} ${sources})
-   target_link_libraries(test_main m stdc++ pthread ${GUROBI_LIBRARIES} ${CPLEX_LIBRARIES} ${HDF5_LIBRARIES}) # do zrobienia: include GUROBI in general?
+   target_link_libraries(test_main m stdc++ pthread lgl ${HDF5_LIBRARIES}) # do zrobienia: include GUROBI in general?
 
    target_sources(test_main PUBLIC ${BASE_TEST_FILES})
 

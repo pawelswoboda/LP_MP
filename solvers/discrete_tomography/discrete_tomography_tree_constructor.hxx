@@ -410,6 +410,8 @@ public:
          if(f_prev != nullptr) {
             auto* m = new SUM_PAIRWISE_MESSAGE(f_prev,f);
             lp_->AddMessage(m);
+
+            lp_->AddFactorRelation(f_prev, f);
          }
 
          auto* p = mrf_constructor_.GetPairwiseFactor(std::min(*(it-1), *it), std::max(*(it-1), *it));
@@ -424,28 +426,24 @@ public:
             tree->AddMessage( m_l, Chirality::right );
             tree->AddMessage( m_r, Chirality::left );
          }
+         */
 
          // this only works for non-transposed
          if(!transpose) {
-            lp_->AddFactorRelation(f_prev,f_p);
-            lp_->AddFactorRelation(f_prev,p);
-            lp_->AddFactorRelation(f_p,f);
-            lp_->AddFactorRelation(p,f);
-            lp_->AddFactorRelation(mrf_constructor_.GetUnaryFactor(*(it-1)), f_p);
-            lp_->AddFactorRelation(f_p,mrf_constructor_.GetUnaryFactor(*it));
+            //lp_->AddFactorRelation(f_l, f);
+            //lp_->AddFactorRelation(f,f_r);
             //lp_->ForwardPassFactorRelation(f_p,p);
             //lp_->BackwardPassFactorRelation(f_p,p);
-            lp_->ForwardPassFactorRelation(p,f_p);
-            lp_->BackwardPassFactorRelation(p,f_p);
+            //lp_->ForwardPassFactorRelation(p,f_p);
+            //lp_->BackwardPassFactorRelation(p,f_p);
          } else {
             assert(false);
             exit(1);
-            lp_->AddFactorRelation(f_p,f_prev);
-            lp_->AddFactorRelation(f,f_p);
-            lp_->AddFactorRelation(mrf_constructor_.GetUnaryFactor(*it), f_p);
-            lp_->AddFactorRelation(f_p, mrf_constructor_.GetUnaryFactor(*(it-1)));
+            //lp_->AddFactorRelation(f_p,f_prev);
+            //lp_->AddFactorRelation(f,f_p);
+            //lp_->AddFactorRelation(mrf_constructor_.GetUnaryFactor(*it), f_p);
+            //lp_->AddFactorRelation(f_p, mrf_constructor_.GetUnaryFactor(*(it-1)));
          }
-         */
 
          f_prev = f;
          prev_sum_size = sum_size;

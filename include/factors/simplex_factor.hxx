@@ -4,6 +4,7 @@
 #include "LP_MP.h"
 #include "memory_allocator.hxx"
 #include "vector.hxx"
+#include "sat_interface.hxx"
 
 // Investigate contingency tables (Knuth) for more general tabular structures.
 
@@ -26,6 +27,12 @@ public:
    SimplexFactor(const INDEX n)
       : VECTOR(n,0.0)
    {}
+
+   ~SimplexFactor()
+   {
+      std::cout << "do not use anymore\n";
+      throw std::runtime_error("do not use anymore");
+   }
 
    void MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal) const
    {
@@ -139,28 +146,40 @@ public:
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector<REAL>*>(this) ); }
 
-   /*
-   // I do not think that both are needed.
-   void serialize_primal(bit_vector primal_bits) const
-   {
-      std::fill(primal_bits, primal_bits+size(), false);
-      primal_bits[primal_] = true;
-   }
-      
-   void deserialize_primal(bit_vector primal_bits) 
-   {
-      assert(std::count(primal_bits, primal_bits+size(), true) == 1);
-      for(INDEX i=0; i<size(); ++i) {
-         if(primal_bits[i] == true) {
-            primal_ = i;
-         }
-      } 
-   }
-   */
    void init_primal() { primal_ = size(); }
    INDEX primal() const { return primal_; }
    INDEX& primal() { return primal_; }
    void primal(const INDEX p) { primal_ = p; }
+
+
+   template<typename SAT_SOLVER>
+   void construct_sat_clauses(SAT_SOLVER& s) const
+   {
+      auto vars = create_sat_variables(s, size());
+      add_simplex_constraint_sat(s, vars.begin(), vars.end());
+   }
+
+   template<typename VEC>
+   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
+   {
+      const REAL lb = LowerBound();
+      for(INDEX i=0; i<this->size(); ++i) {
+         if((*this)[i] > lb + th) { 
+            assumptions.push_back(-to_literal(begin+i));
+         }
+      } 
+   }
+
+   template<typename SAT_SOLVER>
+   void convert_primal(SAT_SOLVER& s, sat_var first)
+   {
+      for(INDEX i=first; i<first+this->size(); ++i) {
+         if(lglderef(s,to_literal(i)) == 1) {
+            primal_ = i-first;
+         }
+      }
+   }
+
 private:
    INDEX primal_;
 };
@@ -296,6 +315,68 @@ public:
    }
    */
 
+
+   template<typename SAT_SOLVER>
+   void construct_sat_clauses(SAT_SOLVER& s) const
+   {
+      auto vars = create_sat_variables(s, dim1() + dim2() + dim1()*dim2());
+      sat_var pairwise_var_begin = vars[dim1() + dim2()];
+
+      std::vector<sat_var> tmp_vars;
+      tmp_vars.reserve(std::max(dim1(), dim2()));
+
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); ++x2) {
+            tmp_vars.push_back(pairwise_var_begin + x1*dim2() + x2);
+         }
+         sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+         make_sat_var_equal(s, to_literal(c), to_literal(vars[x1]));
+         tmp_vars.clear();
+      }
+      for(INDEX x2=0; x2<dim2(); ++x2) {
+         for(INDEX x1=0; x1<dim1(); ++x1) {
+            tmp_vars.push_back(pairwise_var_begin + x1*dim2() + x2);
+         }
+         sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+         make_sat_var_equal(s, to_literal(c), to_literal(vars[dim1() + x2]));
+         tmp_vars.clear();
+      }
+
+      // is superfluous: summation constraints must be active due to unary simplex factors
+      //add_simplex_constraint_sat(sat_var.begin(), sat_var.begin()+dim1());
+      //add_simplex_constraint_sat(sat_var.begin()+dim1(), sat_var.begin()+dim1()+dim2());
+   }
+
+   template<typename VEC>
+   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
+   {
+      begin += dim1() + dim2();
+      const REAL lb = LowerBound();
+      for(INDEX x1=0; x1<this->dim1(); ++x1) {
+         for(INDEX x2=0; x2<this->dim2(); ++x2) {
+            if((*this)(x1,x2) > lb + th) { 
+               assumptions.push_back(-to_literal(begin + x1*dim2() + x2));
+            }
+         }
+      } 
+   }
+
+   template<typename SAT_SOLVER>
+   void convert_primal(SAT_SOLVER& s, sat_var first)
+   {
+      for(INDEX x1=0; x1<this->dim1(); ++x1) {
+         if(lglderef(s,to_literal(first + x1)) == 1) {
+            primal_[0] = x1;
+         } 
+      }
+      for(INDEX x2=0; x2<this->dim2(); ++x2) {
+         if(lglderef(s,to_literal(first + dim1() + x2)) == 1) {
+            primal_[1] = x2;
+         } 
+      }
+   }
+
+
    //INDEX primal_[0], primal_[1]; // not so nice: make getters and setters!
    std::array<INDEX,2> primal_;
 private:
@@ -357,9 +438,8 @@ public:
    REAL EvaluatePrimal() const
    {
       assert(primal_[0] < dim1_ && primal_[1] < dim2_ && primal_[2] < dim3_);
-      const REAL val = (*this)(primal_[0], primal_[1], primal_[2]);
-      //assert(val < std::numeric_limits<REAL>::infinity());
-      return val;
+      //assert((*this)(primal_[0], primal_[1], primal_[2]) < std::numeric_limits<REAL>::infinity());
+      return (*this)(primal_[0], primal_[1], primal_[2]);
    }
 
    REAL operator()(const INDEX x1, const INDEX x2, const INDEX x3) const {
@@ -459,6 +539,95 @@ public:
       ar( cereal::binary_data( msg13_, sizeof(REAL)*(dim1()*dim3()) ) );
       ar( cereal::binary_data( msg23_, sizeof(REAL)*(dim2()*dim3()) ) );
    }
+
+
+   template<typename SAT_SOLVER>
+   void construct_sat_clauses(SAT_SOLVER& s) const
+   {
+      assert(false);
+      auto vars = create_sat_variables(s, dim1()*dim2() + dim1()*dim3() + dim2()*dim3() + size());
+      auto triplet_var_begin = vars[dim1()*dim2() + dim1()*dim3() + dim2()*dim3()];
+
+      std::vector<sat_var> tmp_vars;
+      tmp_vars.reserve(std::max({dim1()*dim2(), dim1()*dim3(), dim2()*dim3()}));
+
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); ++x2) {
+            for(INDEX x3=0; x3<dim3(); ++x3) {
+               tmp_vars.push_back(triplet_var_begin + x1*dim2()*dim3() + x2*dim3() + x3);
+            }
+            auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            make_sat_var_equal(s, to_literal(c), to_literal(vars[x1*dim2() + x2]));
+            tmp_vars.clear();
+         }
+      }
+
+      const INDEX pairwise_var_begin_13 = vars[dim1()*dim2()];
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x3=0; x3<dim3(); ++x3) {
+            for(INDEX x2=0; x2<dim2(); ++x2) {
+               tmp_vars.push_back(triplet_var_begin + x1*dim2()*dim3() + x2*dim3() + x3);
+            }
+            auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            make_sat_var_equal(s, to_literal(c), to_literal(pairwise_var_begin_13 + x1*dim3() + x3));
+            tmp_vars.clear();
+         }
+      }
+
+      const INDEX pairwise_var_begin_23 = pairwise_var_begin_13 + dim1()*dim3(); 
+      for(INDEX x2=0; x2<dim2(); ++x2) {
+         for(INDEX x3=0; x3<dim3(); ++x3) {
+            for(INDEX x1=0; x1<dim1(); ++x1) {
+               tmp_vars.push_back(triplet_var_begin + x1*dim2()*dim3() + x2*dim3() + x3);
+            }
+            auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            make_sat_var_equal(s, to_literal(c), to_literal(pairwise_var_begin_23 + x2*dim3() + x3));
+            tmp_vars.clear();
+         }
+      }
+
+      // summation constraints over triplet variables are superfluous: they are enforced via messages
+   }
+
+   template<typename VEC>
+   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
+   {
+      begin += dim1()*dim2() + dim1()*dim3() + dim2()*dim3();
+      const REAL lb = LowerBound();
+      for(INDEX x1=0; x1<this->dim1(); ++x1) {
+         for(INDEX x2=0; x2<this->dim2(); ++x2) {
+            for(INDEX x3=0; x3<this->dim3(); ++x3) {
+               if((*this)(x1,x2,x3) > lb + th) { 
+                  assumptions.push_back(-to_literal(begin + x1*dim2()*dim3() + x2*dim3() + x3));
+               }
+            }
+         }
+      } 
+   }
+
+   template<typename SAT_SOLVER>
+   void convert_primal(SAT_SOLVER& s, sat_var first)
+   {
+      for(INDEX x1=0; x1<this->dim1(); ++x1) {
+         for(INDEX x2=0; x2<this->dim2(); ++x2) {
+            if(lglderef(s,to_literal(first + x1*dim2() + x2)) == 1) {
+               primal_[0] = x1;
+               primal_[1] = x2;
+            }
+         } 
+      }
+
+      const INDEX pairwise_var_begin_13 = first + dim1()*dim2(); 
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x3=0; x3<dim3(); ++x3) {
+            if(lglderef(s,to_literal(pairwise_var_begin_13 + x1*dim3() + x3)) == 1) {
+               assert(primal_[0] == x1);
+               primal_[2] = x3;
+            }
+         }
+      }
+   }
+
 
    std::array<INDEX,3> primal_;
 protected:

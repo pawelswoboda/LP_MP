@@ -77,6 +77,7 @@ public:
       //assert(pairwiseMap_.find(std::make_tuple(var1,var2)) == pairwiseMap_.end());
       //PairwiseFactorContainer* p = new PairwiseFactorContainer(PairwiseFactor(cost), cost);
       auto* p = new PairwiseFactorContainer(GetNumberOfLabels(var1), GetNumberOfLabels(var2));
+      lp_->AddFactor(p);
       ConstructPairwiseFactor(*(p->GetFactor()), cost, var1, var2);
       pairwiseFactor_.push_back(p);
       pairwiseIndices_.push_back(std::make_tuple(var1,var2));
@@ -84,7 +85,6 @@ public:
       pairwiseMap_.insert(std::make_pair(std::make_tuple(var1,var2), factorId));
       LinkUnaryPairwiseFactor(unaryFactor_[var1], p, unaryFactor_[var2]);
 
-      lp_->AddFactor(p);
       lp_->AddFactorRelation(unaryFactor_[var1], p);
       lp_->AddFactorRelation(p, unaryFactor_[var2]);
 
