@@ -303,6 +303,7 @@ public:
    void RegisterPrimal()
    {
       const REAL cost = lp_.EvaluatePrimal();
+      std::cout << "register primal cost = " << cost << "\n"; 
       if(cost < bestPrimalCost_) {
          // assume solution is feasible
          const bool feasible = CheckPrimalConsistency();

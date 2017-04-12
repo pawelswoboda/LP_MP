@@ -416,15 +416,15 @@ public:
    {
       const auto omega = get_omega();
       ComputePassAndPrimal(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), 2*iteration+1); // timestamp must be > 0, otherwise in the first iteration primal does not get initialized
-      const REAL forward_cost = EvaluatePrimal();
-      std::cout << "forward cost = " << forward_cost << "\n";
+      //const REAL forward_cost = EvaluatePrimal();
+      //std::cout << "forward cost = " << forward_cost << "\n";
    }
    void ComputeBackwardPassAndPrimal(const INDEX iteration)
    {
       const auto omega = get_omega();
       ComputePassAndPrimal(forwardUpdateOrdering_.rbegin(), forwardUpdateOrdering_.rend(), omega.backward.begin(), 2*iteration + 2); 
-      const REAL backward_cost = EvaluatePrimal();
-      std::cout << "backward cost = " << backward_cost << "\n";
+      //const REAL backward_cost = EvaluatePrimal();
+      //std::cout << "backward cost = " << backward_cost << "\n";
    }
    void ComputePassAndPrimal(const INDEX iteration)
    {
@@ -640,29 +640,69 @@ public:
     forward_sat_th_(o.forward_sat_th_), 
     backward_sat_th_(backward_sat_th_),
     cur_sat_reduction_direction_(o.cur_sat_reduction_direction_)
-
   {
      assert(sat_handle_.valid()); //should not be copied and we assume that currently no sat solver is running
+  }
+
+  void collect_sat_result()
+  {
+     std::cout << "collect sat result\n";
+     const bool feasible = sat_handle_.get();
+     if(feasible && !sat_dirty_) {
+
+        for(sat_var i=0; i<lglmaxvar(sat_); ++i) {
+           //for(sat_var i=0; i<sat_.nVars(); ++i) {
+           //assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
+           //}
+        }
+        // convert sat solution to original solution format and compute primal cost
+        for(INDEX i=0; i<this->f_.size(); ++i) {
+           assert(this->factor_address_to_index_[this->f_[i]] == i);
+           this->f_[i]->convert_primal(sat_, sat_var_[i]);
+        }
+        // to do: remove this
+        REAL primal_cost = this->EvaluatePrimal(this->f_.begin(), this->f_.end());
+        std::cout << "sat solution cost = " << primal_cost << "\n";// ", sat threshold = " << th.th << "\n"; 
+     } else {
+        std::cout << "sat not feasible with current threshold\n"; // = " << th.th << "\n";
+     }
   }
 
 
   virtual INDEX AddFactor(FactorTypeAdapter* f) 
   {
+     // we must wait for the sat solver to finish
+     if(sat_computation_running()) {
+        sat_handle_.wait();
+        collect_sat_result();
+     }
+
      sat_var_.push_back( lglmaxvar(sat_) );
      //sat_var_.push_back(sat_.nVars());
      //std::cout << "number of variables in sat_ = " << sat_var_[sat_var_.size()-1] << "\n";
      f->construct_sat_clauses(sat_);
      INDEX n = BASE_LP_CLASS::AddFactor(f);
+
+     sat_dirty_ = true;
+
      return n;
   }
 
    virtual INDEX AddMessage(MessageTypeAdapter* m)
    {
+      // we must wait for the sat solver to finish
+      if(sat_computation_running()) {
+         sat_handle_.wait();
+         collect_sat_result();
+      }
+
       assert(this->factor_address_to_index_.find(m->GetLeftFactor()) != this->factor_address_to_index_.end());
       assert(this->factor_address_to_index_.find(m->GetRightFactor()) != this->factor_address_to_index_.end());
       const INDEX left_factor_number = this->factor_address_to_index_[m->GetLeftFactor()];
       const INDEX right_factor_number = this->factor_address_to_index_[m->GetRightFactor()];
       m->construct_sat_clauses(sat_, sat_var_[left_factor_number], sat_var_[right_factor_number]);
+
+      sat_dirty_ = true;
 
       return BASE_LP_CLASS::AddMessage(m);
    }
@@ -692,7 +732,7 @@ public:
          compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), omega.forward.begin(), forward_sat_th_);
          cur_sat_reduction_direction_ = Direction::backward; 
       } else {
-         this->ComputePass(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), omega.forward.begin()); 
+         this->ComputePass(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), omega.forward.begin());
       }
    }
    void ComputeBackwardPassAndPrimal(const INDEX iteration)
@@ -702,7 +742,7 @@ public:
          compute_pass_reduce_sat(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), omega.backward.begin(), backward_sat_th_);
          cur_sat_reduction_direction_ = Direction::forward; 
       } else {
-         this->ComputePass(this->backwardUpdateOrdering_.begin(), this->backwardUpdateOrdering_.end(), omega.backward.begin()); 
+         this->ComputePass(this->forwardUpdateOrdering_.rbegin(), this->forwardUpdateOrdering_.rend(), omega.backward.begin());
       }
    }
    void ComputePassAndPrimal(const INDEX iteration)
@@ -736,11 +776,15 @@ public:
       if(!sat_handle_.valid()) { 
          std::cout << "start sat calculation\n";
          sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
+         sat_dirty_ = false;
       }
 
+      collect_sat_result();
+      /*
       std::cout << "collect sat result\n";
       const bool feasible = sat_handle_.get();
-      if(feasible) {
+      if(feasible && !sat_dirty_) {
+
          for(sat_var i=0; i<lglmaxvar(sat_); ++i) {
             //for(sat_var i=0; i<sat_.nVars(); ++i) {
             //assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
@@ -751,14 +795,17 @@ public:
             assert(this->factor_address_to_index_[this->f_[i]] == i);
             this->f_[i]->convert_primal(sat_, sat_var_[i]);
          }
+         // to do: remove this
          REAL primal_cost = this->EvaluatePrimal(this->f_.begin(), this->f_.end());
          std::cout << "sat solution cost = " << primal_cost << ", sat threshold = " << th.th << "\n"; 
       } else {
          std::cout << "sat not feasible with current threshold = " << th.th << "\n";
       }
 
+      */
       std::cout << "restart sat calculation\n";
       sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
+      sat_dirty_ = false;
    }
 private:
 
@@ -771,6 +818,8 @@ private:
 
    decltype(std::async(std::launch::async, solve_sat_problem, nullptr, sat_vec<sat_literal>{}, nullptr)) sat_handle_;
    Direction cur_sat_reduction_direction_ = Direction::forward;
+   // possibly not needed anymore
+   bool sat_dirty_ = false; // sat solver is run asynchronously. When factor graph changes, then sat solution cannot be read in anymore and has to be discarded. This flag signifies this case
 };
 
 
@@ -952,6 +1001,9 @@ REAL LP::EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEn
    REAL cost = 0.0;
    for(; factorIt!=factorEndIt; ++factorIt) {
       cost += (*factorIt)->EvaluatePrimal();
+      if(cost == std::numeric_limits<REAL>::infinity()) {
+         break;
+      }
    }
    std::cout << "primal cost = " << cost << "\n";
    return cost;

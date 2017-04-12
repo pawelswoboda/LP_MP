@@ -127,7 +127,7 @@ namespace LP_MP {
       */
 
     template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+    void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_var left_begin, const sat_var right_begin) const
     {
        for(INDEX i=0; i<l.size(); ++i) {
           auto left_var = left_begin+i;
@@ -281,7 +281,7 @@ namespace LP_MP {
       }
       */
     template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+    void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_var left_begin, const sat_var right_begin) const
     {
        for(INDEX i=0; i<l.size(); ++i) {
           auto left_var = left_begin+i;
@@ -357,7 +357,7 @@ namespace LP_MP {
         typename std::enable_if<ENABLE,void>::type
         ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
         {
-           throw std::runtime_error("rounding on pairwise factors is not ucrrently supported");
+           throw std::runtime_error("rounding on pairwise factors is not currently supported");
            assert(false);
         }
 
@@ -408,44 +408,85 @@ namespace LP_MP {
       }
 
       template<bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-         //typename std::enable_if<ENABLE,void>::type
-         void
-         ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
-         {
-            if(I1 == 0 && I2 == 1) {
+      //typename std::enable_if<ENABLE,void>::type
+      void
+      ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+      {
+         if(I1 == 0 && I2 == 1) {
 
-               if(l.primal_[0] < l.dim1()) {
-                  r.primal_[0] = l.primal_[0];
-               }
-               if(l.primal_[1] < l.dim2()) {
-                  r.primal_[1] = l.primal_[1];
-               }
+            if(l.primal_[0] < l.dim1()) {
+               r.primal_[0] = l.primal_[0];
+            }
+            if(l.primal_[1] < l.dim2()) {
+               r.primal_[1] = l.primal_[1];
+            }
 
-            } else
+         } else
+         if(I1 == 0 && I2 == 2) {
+
+            if(l.primal_[0] < l.dim1()) {
+               r.primal_[0] = l.primal_[0];
+            }
+            if(l.primal_[1] < l.dim2()) {
+               r.primal_[2] = l.primal_[1];
+            }
+
+         } else
+         if(I1 == 1 && I2 == 2) {
+
+            if(l.primal_[0] < l.dim1()) {
+               r.primal_[1] = l.primal_[0];
+            }
+            if(l.primal_[1] < l.dim2()) {
+               r.primal_[2] = l.primal_[1];
+            }
+
+
+         } else {
+            assert(false);
+         }
+      }
+
+      template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+      void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_var left_begin, const sat_var right_begin) const
+      {
+         if(I1 == 0 && I2 == 1) {
+
+            for(INDEX x1=0; x1<l.dim1(); ++x1) {
+               for(INDEX x2=0; x2<l.dim2(); ++x2) {
+                  const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim2() + x2;
+                  const auto right_var = right_begin + x1*l.dim2() + x2;
+                  make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+               }
+            }
+
+         } else
             if(I1 == 0 && I2 == 2) {
 
-               if(l.primal_[0] < l.dim1()) {
-                  r.primal_[0] = l.primal_[0];
-               }
-               if(l.primal_[1] < l.dim2()) {
-                  r.primal_[2] = l.primal_[1];
+               for(INDEX x1=0; x1<l.dim1(); ++x1) {
+                  for(INDEX x2=0; x2<l.dim2(); ++x2) {
+                     const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim2() + x2;
+                     const auto right_var = right_begin + r.dim1()*r.dim2() + x1*l.dim2() + x2;
+                     make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+                  }
                }
 
             } else
-            if(I1 == 1 && I2 == 2) {
+               if(I1 == 1 && I2 == 2) {
 
-               if(l.primal_[0] < l.dim1()) {
-                  r.primal_[1] = l.primal_[0];
-               }
-               if(l.primal_[1] < l.dim2()) {
-                  r.primal_[2] = l.primal_[1];
-               }
+                  for(INDEX x1=0; x1<l.dim1(); ++x1) {
+                     for(INDEX x2=0; x2<l.dim2(); ++x2) {
+                        const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim2() + x2;
+                        const auto right_var = right_begin + r.dim1()*r.dim2() + r.dim1()*r.dim3() + x1*l.dim2() + x2;
+                        make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+             }
+          }
 
+       } else {
+          assert(false); // not possible
+       }
+    }
 
-            } else {
-               assert(false);
-            }
-         }
 
   private:
     template<typename LEFT_FACTOR, typename G2>
@@ -481,45 +522,7 @@ namespace LP_MP {
        }
     }
 
-    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
-    {
-       assert(false);
-       if(I1 == 0 && I2 == 1) {
-
-          for(INDEX x1=0; x1<l.dim1(); ++x1) {
-             for(INDEX x2=0; x2<l.dim2(); ++x2) {
-                const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim1() + x2;
-                const auto right_var = right_begin + x1*l.dim1() + x2;
-                make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
-             }
-          }
-
-       } else
-       if(I1 == 0 && I2 == 2) {
-
-          for(INDEX x1=0; x1<l.dim1(); ++x1) {
-             for(INDEX x2=0; x2<l.dim2(); ++x2) {
-                const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim1() + x2;
-                const auto right_var = right_begin + r.dim1()*r.dim2() + x1*l.dim1() + x2;
-                make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
-             }
-          }
-
-       } else
-       if(I1 == 1 && I2 == 2) {
-
-          for(INDEX x1=0; x1<l.dim1(); ++x1) {
-             for(INDEX x2=0; x2<l.dim2(); ++x2) {
-                const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim1() + x2;
-                const auto right_var = right_begin + r.dim1()*r.dim2() + r.dim1()*r.dim3() + x1*l.dim1() + x2;
-                make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
-             }
-          }
-
-       }
-    }
-
+    
   };
 
 

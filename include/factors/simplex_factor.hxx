@@ -133,7 +133,13 @@ public:
       return lb;
    }
 
-   REAL EvaluatePrimal() const { assert(primal_ < size()); return (*this)[primal_]; }
+   REAL EvaluatePrimal() const 
+   { 
+      if(primal_ >= size()) {
+         return std::numeric_limits<REAL>::infinity();
+      }
+      return (*this)[primal_]; 
+   }
    void MaximizePotentialAndComputePrimal() 
    {
       if(primal_ >= size()) {
@@ -262,6 +268,9 @@ public:
       primal_[1] = dim2();
    }
    REAL EvaluatePrimal() const { 
+      if(primal_[0] >= dim1() || primal_[1] >= dim2()) {
+         return std::numeric_limits<REAL>::infinity();
+      }
       assert(primal_[0] < dim1());
       assert(primal_[1] < dim2());
       const REAL val = (*this)(primal_[0], primal_[1]); 
@@ -437,7 +446,9 @@ public:
 
    REAL EvaluatePrimal() const
    {
-      assert(primal_[0] < dim1_ && primal_[1] < dim2_ && primal_[2] < dim3_);
+      if(primal_[0] >= dim1_ || primal_[1] >= dim2_ || primal_[2] >= dim3_) {
+         return std::numeric_limits<REAL>::infinity();
+      }
       //assert((*this)(primal_[0], primal_[1], primal_[2]) < std::numeric_limits<REAL>::infinity());
       return (*this)(primal_[0], primal_[1], primal_[2]);
    }
@@ -544,9 +555,12 @@ public:
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
-      assert(false);
-      auto vars = create_sat_variables(s, dim1()*dim2() + dim1()*dim3() + dim2()*dim3() + size());
-      auto triplet_var_begin = vars[dim1()*dim2() + dim1()*dim3() + dim2()*dim3()];
+      //auto vars = create_sat_variables(s, dim1()*dim2() + dim1()*dim3() + dim2()*dim3() + dim1()*dim2()*dim3());
+      auto vars_12 = create_sat_variables(s, dim1()*dim2());
+      auto vars_13 = create_sat_variables(s, dim1()*dim3());
+      auto vars_23 = create_sat_variables(s, dim2()*dim3());
+      auto vars_123 = create_sat_variables(s, dim1()*dim2()*dim3());
+      //auto triplet_var_begin = vars[dim1()*dim2() + dim1()*dim3() + dim2()*dim3()];
 
       std::vector<sat_var> tmp_vars;
       tmp_vars.reserve(std::max({dim1()*dim2(), dim1()*dim3(), dim2()*dim3()}));
@@ -554,34 +568,32 @@ public:
       for(INDEX x1=0; x1<dim1(); ++x1) {
          for(INDEX x2=0; x2<dim2(); ++x2) {
             for(INDEX x3=0; x3<dim3(); ++x3) {
-               tmp_vars.push_back(triplet_var_begin + x1*dim2()*dim3() + x2*dim3() + x3);
+               tmp_vars.push_back(vars_123[x1*dim2()*dim3() + x2*dim3() + x3]);
             }
             auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-            make_sat_var_equal(s, to_literal(c), to_literal(vars[x1*dim2() + x2]));
+            make_sat_var_equal(s, to_literal(c), to_literal(vars_12[x1*dim2() + x2]));
             tmp_vars.clear();
          }
       }
 
-      const INDEX pairwise_var_begin_13 = vars[dim1()*dim2()];
       for(INDEX x1=0; x1<dim1(); ++x1) {
          for(INDEX x3=0; x3<dim3(); ++x3) {
             for(INDEX x2=0; x2<dim2(); ++x2) {
-               tmp_vars.push_back(triplet_var_begin + x1*dim2()*dim3() + x2*dim3() + x3);
+               tmp_vars.push_back(vars_123[x1*dim2()*dim3() + x2*dim3() + x3]);
             }
             auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-            make_sat_var_equal(s, to_literal(c), to_literal(pairwise_var_begin_13 + x1*dim3() + x3));
+            make_sat_var_equal(s, to_literal(c), to_literal(vars_13[x1*dim3() + x3]));
             tmp_vars.clear();
          }
       }
 
-      const INDEX pairwise_var_begin_23 = pairwise_var_begin_13 + dim1()*dim3(); 
       for(INDEX x2=0; x2<dim2(); ++x2) {
          for(INDEX x3=0; x3<dim3(); ++x3) {
             for(INDEX x1=0; x1<dim1(); ++x1) {
-               tmp_vars.push_back(triplet_var_begin + x1*dim2()*dim3() + x2*dim3() + x3);
+               tmp_vars.push_back(vars_123[x1*dim2()*dim3() + x2*dim3() + x3]);
             }
             auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-            make_sat_var_equal(s, to_literal(c), to_literal(pairwise_var_begin_23 + x2*dim3() + x3));
+            make_sat_var_equal(s, to_literal(c), to_literal(vars_23[x2*dim3() + x3]));
             tmp_vars.clear();
          }
       }

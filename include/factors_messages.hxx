@@ -1183,6 +1183,7 @@ public:
       static_if<can_construct_sat_clauses()>([&](auto f) {
             f(msg_op_).construct_sat_clauses(s, *leftFactor_->GetFactor(), *rightFactor_->GetFactor(), left_var, right_var);
             });
+      static_assert(can_construct_sat_clauses(),"");
       if(!can_construct_sat_clauses()) {
          assert(false);
       }
@@ -1503,6 +1504,7 @@ public:
 #ifdef LP_MP_PARALLEL
      std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
 #endif
+
      ReceiveMessages(omega);
      MaximizePotential();
      static_if<can_reduce_sat()>([&](auto f) {

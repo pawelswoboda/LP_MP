@@ -66,9 +66,9 @@ namespace LP_MP{
 
     // tightening
     typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_DT, 4> EmptyTripletFactor;
-    typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 15> PairwiseTriplet12MessageContainer;
-    typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 16> PairwiseTriplet13MessageContainer;
-    typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 17> PairwiseTriplet23MessageContainer;
+    typedef MessageContainer<PairwiseTripletMessage<0,1,MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 15> PairwiseTriplet12MessageContainer;
+    typedef MessageContainer<PairwiseTripletMessage<0,2,MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 16> PairwiseTriplet13MessageContainer;
+    typedef MessageContainer<PairwiseTripletMessage<1,2,MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 17> PairwiseTriplet23MessageContainer;
 
     using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer, dt_sequential_pairwise_factor, EmptyTripletFactor >;
     using MessageList = meta::list<

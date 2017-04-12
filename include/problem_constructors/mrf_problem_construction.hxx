@@ -421,6 +421,7 @@ public:
       const INDEX factor23Id = this->pairwiseMap_.find(std::make_tuple(var2,var3))->second;
 
       TripletFactorContainer* t = new TripletFactorContainer(this->GetNumberOfLabels(var1), this->GetNumberOfLabels(var2), this->GetNumberOfLabels(var3));
+      this->lp_->AddFactor(t);
       tripletFactor_.push_back(t);
       tripletIndices_.push_back(std::make_tuple(var1,var2,var3));
       const INDEX factorId = tripletFactor_.size()-1;
@@ -428,9 +429,7 @@ public:
 
       LinkPairwiseTripletFactor<PairwiseTripletMessage12Container>(factor12Id,factorId);
       LinkPairwiseTripletFactor<PairwiseTripletMessage13Container>(factor13Id,factorId);
-      LinkPairwiseTripletFactor<PairwiseTripletMessage23Container>(factor23Id,factorId);
-
-      this->lp_->AddFactor(t);
+      LinkPairwiseTripletFactor<PairwiseTripletMessage23Container>(factor23Id,factorId); 
 
       //this->lp_->ForwardPassFactorRelation(this->GetPairwiseFactor(factor12Id),t);
       //this->lp_->ForwardPassFactorRelation(this->GetPairwiseFactor(factor13Id),t);

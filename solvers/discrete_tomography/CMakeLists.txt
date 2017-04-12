@@ -1,6 +1,6 @@
 
 add_executable(discrete_tomography discrete_tomography.cpp  ${headers} ${sources})
-target_link_libraries(discrete_tomography m stdc++ pthread)
+target_link_libraries(discrete_tomography m stdc++ pthread lgl) # strictly, lgl should not be needed
 
 if(WITH_SAT_BASED_ROUNDING)
    add_executable(discrete_tomography_sat discrete_tomography_sat.cpp  ${headers} ${sources})
