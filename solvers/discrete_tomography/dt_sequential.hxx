@@ -694,7 +694,7 @@ public:
 
    //template<typename LEFT_FACTOR, typename G3>
    //void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-      //std::cout << "pairwise to sum pairwise weight = " << omega << "\n";
+   //   //std::cout << "pairwise to sum pairwise weight = " << omega << "\n";
    //   MakeLeftFactorUniform(f_left, msg, 1.0*omega);
    //}
 
@@ -1008,7 +1008,7 @@ public:
    template<typename LEFT_FACTOR, typename MSG>
    void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega)
    {
-      tensor<REAL> msgs(f_left.no_labels(), f_left.prev_sum_size(), f_left.next_sum_size(), std::numeric_limits<REAL>::infinity());
+      tensor3<REAL> msgs(f_left.no_labels(), f_left.prev_sum_size(), f_left.next_sum_size(), std::numeric_limits<REAL>::infinity());
       f_left.for_each_label_sum([&msgs, &f_left](const INDEX x1, const INDEX x2, const INDEX left_sum, const INDEX right_sum, const INDEX sum) {
             msgs(x2, left_sum, right_sum) = std::min( msgs(x2, left_sum, right_sum), f_left.eval(x1,x2,left_sum, right_sum, sum) );
       });
@@ -1028,6 +1028,7 @@ public:
    template<typename LEFT_FACTOR, typename MSG>
    void RepamLeft(LEFT_FACTOR& f_left, const MSG& msg)
    {
+      /*
       assert(msg.dim1() == f_left.no_labels());
       assert(msg.dim2() == f_left.next_sum_size());
       for(INDEX x=0; x<f_left.no_labels(); ++x) {
@@ -1037,6 +1038,7 @@ public:
             }
          }
       }
+      */
    }
 
    template<typename RIGHT_FACTOR, typename MSG>

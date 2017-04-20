@@ -366,8 +366,19 @@ public:
    {
       assert(summationCost.size() > 0);
       const INDEX max_sum = std::max(noLabels_,INDEX(summationCost.size()));
+
       auto* f = AddProjection(projectionVar.begin(), projectionVar.end(), max_sum, tree);
       f->GetFactor()->summation_cost(summationCost.begin(), summationCost.end());
+
+      /*
+      {
+         auto projection_var_reverse = projectionVar;
+         std::reverse(projection_var_reverse.begin(), projection_var_reverse.end());
+         auto* f_reverse = AddProjection(projection_var_reverse.begin(), projection_var_reverse.end(), max_sum, tree);
+         f_reverse->GetFactor()->summation_cost(summationCost.begin(), summationCost.end());
+      }
+      */ 
+
       return f;
    }
 
@@ -414,7 +425,6 @@ public:
             lp_->AddFactorRelation(f_l, f);
             lp_->AddFactorRelation(f, f_r);
          } else {
-            assert(false); // not tested yet
             lp_->AddFactorRelation(f, f_l);
             lp_->AddFactorRelation(f_r, f);
          }
@@ -434,7 +444,6 @@ public:
          }
 
          auto* p = mrf_constructor_.GetPairwiseFactor(std::min(*(it-1), *it), std::max(*(it-1), *it));
-         assert(!transpose);
          auto* m_c = new SUM_PAIRWISE_PAIRWISE_MESSAGE(transpose, p, f);
          lp_->AddMessage(m_c);
 

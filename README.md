@@ -14,11 +14,13 @@ We provide solvers for the following optimization problems:
 * **Multi-label discrete tomography**, with input accpeted in a custom uai format (text).
 <!---* **Tracking by detection** for some cell-tracking problems, with input in a custom text format.-->
 
+<!---*
 Additionally, interfaces to the (I)LP-solvers [gurobi](http://www.gurobi.com) and [cplex](http://www.ibm.com/software/integration/optimization/cplex-optimizer/) are available for solving the above optimization problems. In this case the message passing solvers can act as pre-solvers and initial bound providers, improving performance of the subsequent optimization performed by the LP-solvers.
+-->
 
 Parallel optimization can be enabled in cmake by setting `LP_MP_PARALLEL` to `ON`.
 
-<!--SAT-based rounding can be enabled for some problems by setting `WITH_SAT_BASED_ROUNDING` to `ON`.-->
+SAT-based rounding can be enabled for some problems by setting `WITH_SAT_BASED_ROUNDING` to `ON`.
 
 A large number of datasets can be automatically downloaded for evaluating solvers.
 
