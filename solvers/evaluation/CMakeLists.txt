@@ -38,14 +38,19 @@ if(BUILD_GRAPH_MATCHING_EVALUATION)
 endif()
 
 if(BUILD_DISCRETE_TOMOGRAPHY_EVALUATION)
-   add_executable(discrete_tomography_eval discrete_tomography_eval.cpp ${headers} ${sources})
-   target_link_libraries(discrete_tomography_eval m stdc++ pthread pq pqxx ${HDF5_LIBRARIES})# ${GUROBI_LIBRARIES})
+   if(WITH_SAT_BASED_ROUNDING) 
+      add_executable(discrete_tomography_eval_sat discrete_tomography_eval_sat.cpp ${headers} ${sources})
+      target_link_libraries(discrete_tomography_eval_sat pthread m stdc++ lgl sqlite3)
+   endif()
+
+   #add_executable(discrete_tomography_eval discrete_tomography_eval.cpp ${headers} ${sources})
+   #target_link_libraries(discrete_tomography_eval m stdc++ pthread pq pqxx ${HDF5_LIBRARIES})# ${GUROBI_LIBRARIES})
 
    #target_compile_definitions(discrete_tomography_eval PUBLIC -DUSE_GUROBI)
    #target_include_directories(discrete_tomography_eval PUBLIC ${GUROBI_INCLUDE_DIR})
 
-   message("Download discrete tomography datasets")
-   set(DT_DIRECTORY "discrete_tomography_datasets")
+   #message("Download discrete tomography datasets")
+   #set(DT_DIRECTORY "discrete_tomography_datasets")
 
-   DOWNLOAD_AND_UNZIP("https://datarep.app.ist.ac.at/46/1/discrete_tomography_synthetic.zip" "${DT_DIRECTORY}/discrete_tomography_synthetic.zip" "${DT_DIRECTORY}/")
+   #DOWNLOAD_AND_UNZIP("https://datarep.app.ist.ac.at/46/1/discrete_tomography_synthetic.zip" "${DT_DIRECTORY}/discrete_tomography_synthetic.zip" "${DT_DIRECTORY}/")
 endif()

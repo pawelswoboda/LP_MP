@@ -407,15 +407,33 @@ public:
          auto* m_r = new SUM_UNARY_MESSAGE_RIGHT(f_r, f);
          lp_->AddMessage(m_r);
 
+         const bool transpose = *(it-1) > *it;
+
+         // interleave dt factors reparametrization with unary/pairwise factor reparametrization
+         if(!transpose) {
+            lp_->AddFactorRelation(f_l, f);
+            lp_->AddFactorRelation(f, f_r);
+         } else {
+            assert(false); // not tested yet
+            lp_->AddFactorRelation(f, f_l);
+            lp_->AddFactorRelation(f_r, f);
+         }
+
          if(f_prev != nullptr) {
             auto* m = new SUM_PAIRWISE_MESSAGE(f_prev,f);
             lp_->AddMessage(m);
 
-            lp_->AddFactorRelation(f_prev, f);
+            // reparametrize dt factors only after unary/pairwise ones
+            //lp_->AddFactorRelation(f_prev, f);
+         } else {
+            // reparametrize dt factors only after unary/pairwise ones
+            for(auto it_tmp=projection_var_begin; it_tmp!=projection_var_end; ++it_tmp) {
+               auto* u = mrf_constructor_.GetUnaryFactor(*it_tmp);
+               //lp_->AddFactorRelation(u, f);
+            }
          }
 
          auto* p = mrf_constructor_.GetPairwiseFactor(std::min(*(it-1), *it), std::max(*(it-1), *it));
-         const bool transpose = *(it-1) > *it;
          assert(!transpose);
          auto* m_c = new SUM_PAIRWISE_PAIRWISE_MESSAGE(transpose, p, f);
          lp_->AddMessage(m_c);
@@ -427,23 +445,6 @@ public:
             tree->AddMessage( m_r, Chirality::left );
          }
          */
-
-         // this only works for non-transposed
-         if(!transpose) {
-            //lp_->AddFactorRelation(f_l, f);
-            //lp_->AddFactorRelation(f,f_r);
-            //lp_->ForwardPassFactorRelation(f_p,p);
-            //lp_->BackwardPassFactorRelation(f_p,p);
-            //lp_->ForwardPassFactorRelation(p,f_p);
-            //lp_->BackwardPassFactorRelation(p,f_p);
-         } else {
-            assert(false);
-            exit(1);
-            //lp_->AddFactorRelation(f_p,f_prev);
-            //lp_->AddFactorRelation(f,f_p);
-            //lp_->AddFactorRelation(mrf_constructor_.GetUnaryFactor(*it), f_p);
-            //lp_->AddFactorRelation(f_p, mrf_constructor_.GetUnaryFactor(*(it-1)));
-         }
 
          f_prev = f;
          prev_sum_size = sum_size;

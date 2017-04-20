@@ -118,13 +118,12 @@ public:
          if(!output_file.is_open()) {
             throw std::runtime_error("could not open file " + outputFile_);
          }
-         assert(false); // conert to pointer below
 
-         for_each_tuple(this->problemConstructor_, [&output_file,this](auto& l) {
-            using pc_type = typename std::remove_reference<decltype(l)>::type;
-            static_if<SolverType::CanWritePrimalIntoFile<pc_type>()>([&](auto f) {
-                  f(l).WritePrimal(output_file);
-            });
+         for_each_tuple(this->problemConstructor_, [this,&output_file](auto* l) {
+               using pc_type = typename std::remove_pointer<decltype(l)>::type;
+               static_if<SolverType::CanWritePrimalIntoFile<pc_type>()>([&](auto f) {
+                     f(*l).WritePrimal(output_file);
+               });
          }); 
       }
    }

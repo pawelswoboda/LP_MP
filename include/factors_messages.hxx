@@ -1418,12 +1418,14 @@ public:
 
    void UpdateFactor(const weight_vector& omega) final
    {
+      assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
+      assert(std::distance(omega.begin(), omega.end()) == no_send_messages());
 #ifdef LP_MP_PARALLEL
-     std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
+      std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
 #endif
-     ReceiveMessages(omega);
-     MaximizePotential();
-     SendMessages(omega);
+      ReceiveMessages(omega);
+      MaximizePotential();
+      SendMessages(omega);
    }
 
    // do zrobienia: possibly also check if method present
@@ -1637,6 +1639,21 @@ public:
       return noMessages;
    }
 
+   // counts number of messages for which messages are sent
+   INDEX no_send_messages() const final
+   {
+      INDEX no_calls = 0;
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_calls](auto l) {
+            constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+            if(FactorContainerType::CanCallSendMessages(l) ||
+                  FactorContainerType::CanCallSendMessage(l)) {
+               no_calls += std::get<n>(msg_).size();
+            }
+            } );
+      return no_calls;
+   }
+
+   // as above, but if batch messages sending is enabled, such messages are counted only once.
    INDEX no_send_messages_calls() const 
    {
       INDEX no_calls = 0;

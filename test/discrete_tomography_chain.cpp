@@ -40,7 +40,7 @@ TEST_CASE("discrete tomography single chain", "[dt chain]") {
    options[1] = "-i";
    options[2] = "";
    options[3] = "--maxIter";
-   options[4] = "100";
+   options[4] = "1000";
 
    MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> s(5,options);
 

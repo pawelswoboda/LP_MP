@@ -44,7 +44,7 @@ namespace LP_MP {
    constexpr SIGNED_INDEX variableMessageSize = -1;
 
    // do zrobienia: maybe put this into LP_MP.h
-   enum class LPReparametrizationMode {Anisotropic, Uniform, DampedUniform, Undefined};
+   enum class LPReparametrizationMode {Anisotropic, Uniform, DampedUniform, Mixed, Undefined};
 
    inline LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
    {
@@ -57,6 +57,8 @@ namespace LP_MP {
          return LPReparametrizationMode::Uniform;
       } else if(s == "damped_uniform") {
          return LPReparametrizationMode::DampedUniform;
+      } else if(s == "mixed") {
+         return LPReparametrizationMode::Mixed;
       } else {
          throw std::runtime_error("reparametrization mode " + s + " unknown");
       }
@@ -94,14 +96,6 @@ namespace LP_MP {
          }
          return hash; 
       }
-
-      // obsolete
-      /*
-      static auto array2 = [](const std::array<INDEX,2> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1]); };
-      static auto array3 = [](const std::array<INDEX,3> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2]); };
-      static auto array4 = [](const std::array<INDEX,4> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3]); };
-      static auto array5 = [](const std::array<INDEX,5> x) { return std::hash<INDEX>()(x[0])^std::hash<INDEX>()(x[1])^std::hash<INDEX>()(x[2])^std::hash<INDEX>()(x[3])^std::hash<INDEX>()(x[4]); };
-      */
    }
 
    REAL normalize(const REAL x) {
