@@ -1,6 +1,12 @@
+
 #include "multicut.h"
 #include "visitors/standard_visitor.hxx"
 using namespace LP_MP;
-using FMC = FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>;
-LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR(FMC, MulticutTextInput::ParseProblem<FMC>, StandardTighteningVisitor);
+int main(int argc, char* argv[])
 
+{
+ProblemConstructorRoundingSolver<Solver<FMC_MULTICUT<MessageSendingType::SRMP>,LP,StandardTighteningVisitor>> solver(argc,argv);
+solver.ReadProblem(MulticutTextInput::ParseProblem<Solver<FMC_MULTICUT<MessageSendingType::SRMP>,LP,StandardTighteningVisitor>>);
+return solver.Solve();
+
+}

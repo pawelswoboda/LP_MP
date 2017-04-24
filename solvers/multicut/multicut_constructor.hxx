@@ -1577,7 +1577,7 @@ public:
    }
 private:
 
-   std::unordered_map<std::array<INDEX,5>, odd_bicycle_3_wheel_factor_container*,decltype(hash::array5)> odd_bicycle_3_wheel_factors_;
+   std::unordered_map<std::array<INDEX,5>, odd_bicycle_3_wheel_factor_container*> odd_bicycle_3_wheel_factors_;
 
    //std::unordered_map<std::vector<std::tuple<INDEX,INDEX,typename BaseConstructor::odd_3_wheel_factor_container*>>> odd_3_wheel_factor_by_indices_; // if odd 3 wheel factor with indices (i1,i2,i3,i4) exists, then (i1,i2,i3,i4) will be in the hash indexed by all two-subsets of the indices.
 
