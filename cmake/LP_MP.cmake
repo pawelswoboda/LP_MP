@@ -15,16 +15,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
    add_definitions(-march=native)
 endif()
 
-#set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-#set(BUILD_SHARED_LIBRARIES OFF)
-#set(CMAKE_EXE_LINKER_FLAG "-static")
-
-# Vc for SIMD
-#find_package(Vc 1.2.0 REQUIRED PATHS "${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/Vc_Project/cmake" "${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Vc_Project/cmake")
-#include_directories(${Vc_INCLUDE_DIR}) 
-#add_definitions(${Vc_DEFINITIONS})
-#link_directories(${Vc_LIB_DIR})
-
 # automatically downloaded repositories
 # can this possibly be done in one place only, i.e. in the superbuild?
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/meta_Project/include")
@@ -76,6 +66,10 @@ if(WITH_CPLEX)
    find_package(Cplex REQUIRED)
    add_definitions(-DWITH_CPLEX)
 endif(WITH_CPLEX)
+
+if(WITH_SAT_BASED_ROUNDING)
+   add_definitions(-DWITH_SAT)
+endif()
 
 # Parallelisation support
 if(PARALLEL_OPTIMIZATION)

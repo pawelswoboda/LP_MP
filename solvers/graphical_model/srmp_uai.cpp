@@ -1,5 +1,11 @@
+
 #include "graphical_model.h"
 #include "visitors/standard_visitor.hxx"
-using FMC_INST = FMC_SRMP;
-LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR(FMC_INST, (UaiMrfInput::ParseProblem<FMC_INST,0>), StandardVisitor);
+int main(int argc, char* argv[])
 
+{
+MpRoundingSolver<Solver<FMC_SRMP,LP,StandardTighteningVisitor>> solver(argc,argv);
+solver.ReadProblem(UaiMrfInput::ParseProblem<Solver<FMC_SRMP,LP,StandardTighteningVisitor>>);
+return solver.Solve();
+
+}

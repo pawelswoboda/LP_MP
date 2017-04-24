@@ -120,9 +120,13 @@ public:
    }
 
    REAL eval(const INDEX x1, const INDEX x2, const INDEX sum) const {
-      assert(x1 < no_labels() && x2 < no_labels() && sum < prev_sum_size() && sum+x1 < next_sum_size());
+      assert(x1 < no_labels());
+      assert(x2 < no_labels());
+      assert(sum < prev_sum_size());
+      assert(sum+x1 < next_sum_size());
       return prev_(x1,sum) + reg_(x1,x2) + next_(x2, sum+x1);
    }
+
    REAL LowerBound() const {
       REAL min_value = std::numeric_limits<REAL>::infinity();
       for_each_label_sum([&](INDEX x1, INDEX x2, INDEX sum) { min_value = std::min(min_value, eval(x1,x2,sum)); });
@@ -130,16 +134,63 @@ public:
    }
 
    REAL EvaluatePrimal() const {
-      if( !(state_[0] < no_labels() && state_[1] < no_labels()) ) {
+      if(!primal_valid()) { 
          return std::numeric_limits<REAL>::infinity();
+      } else {
+         return eval(state_[0], state_[1], sum_[0]);
       }
-      if( !(sum_[0] + state_[0] == sum_[1]) ) {
-         return std::numeric_limits<REAL>::infinity();
+   }
+
+   void MaximizePotentialAndComputePrimal()
+   {
+      if(state_[0] < no_labels()) { assert(sum_[0] < prev_sum_size()); }
+      if(state_[1] < no_labels()) { assert(sum_[1] < next_sum_size()); }
+
+      if(state_[0] == no_primal_decision && state_[1] == no_primal_decision) { // find locally best solution
+         REAL min = std::numeric_limits<REAL>::infinity();
+         for_each_label_sum([this, &min](const INDEX x1, const INDEX x2, const INDEX sum) {
+               if(min > eval(x1,x2,sum)) {
+               min = eval(x1,x2,sum);
+               state_[0] = x1;
+               state_[1] = x2;
+               sum_[0] = sum;
+               sum_[1] = sum + x1;
+               }
+         });
+      } else if(state_[0] == no_primal_decision) {
+         REAL min = std::numeric_limits<REAL>::infinity();
+         const INDEX start_label = sum_[1] > prev_sum_size()-1 ? sum_[1] - (prev_sum_size()-1) : 0; // must be at least so that sum_[0] is smaller than prev_sum_size()
+         const INDEX end_label = std::min(no_labels(), sum_[1]+1); // i.e. one past last label
+         assert(start_label < end_label);
+         for(INDEX x1=start_label; x1<end_label; ++x1) {
+            if(min > eval(x1,state_[1], sum_[1] - x1)) {
+               min = eval(x1,state_[1], sum_[1] - x1);
+               state_[0] = x1;
+               sum_[0] = sum_[1] - x1;
+            }
+         } 
+      } else if(state_[1] == no_primal_decision) {
+         REAL min = std::numeric_limits<REAL>::infinity();
+         for(INDEX x2=0; x2<std::min(no_labels(), next_sum_size() - state_[0]); ++x2) {
+            if(min > eval(state_[0], x2, sum_[0])) {
+               min = eval(state_[0], x2, sum_[0]);
+               state_[1] = x2;
+               sum_[1] = sum_[0] + state_[0];
+            }
+         } 
       }
-      if( !(sum_[0] < prev_sum_size() && sum_[1] < next_sum_size()) ) {
-         return std::numeric_limits<REAL>::infinity();
-      }
-      return eval(state_[0], state_[1], sum_[0]);
+
+      assert(primal_valid());
+   }
+
+   bool primal_valid() const
+   {
+      if(!(state_[0] < no_labels())) { return false; }
+      if(!(state_[1] < no_labels())) { return false; }
+      if(!(sum_[0] < prev_sum_size())) { return false; }
+      if(!(sum_[1] < next_sum_size())) { return false; }
+      if(!(sum_[0] + state_[0] == sum_[1])) { return false; }
+      return true;
    }
 
    void marginalize_pairwise(matrix<REAL>& msg) const {
@@ -364,6 +415,31 @@ public:
       }
    } 
 
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+   {
+      if(l.state_[1] < l.no_labels()) {
+         if(l.state_[1] != r.state_[0]) {
+            r.state_[0] = l.state_[1];
+            r.sum_[0] = l.sum_[1];
+            return true;
+         }
+      }
+      return false;
+   }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
+   {
+      if(r.state_[0] < r.no_labels()) {
+         if(l.state_[1] != r.state_[0]) {
+            l.state_[1] = r.state_[0];
+            l.sum_[1] = r.sum_[0]; 
+            return true;
+         }
+      }
+      return false;
+   }
 };
 
 // message from mrf unary to sequential pairwise factor

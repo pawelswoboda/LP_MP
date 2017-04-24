@@ -811,7 +811,7 @@ namespace UaiMrfInput {
       return read_suc;
    }
 
-   template<typename SOLVER, INDEX PROBLEM_CONSTRUCTOR_NO>
+   template<typename SOLVER>
    bool ParseProblem(const std::string& filename, SOLVER& s)
    {
       std::cout << "parsing " << filename << "\n";
@@ -819,7 +819,7 @@ namespace UaiMrfInput {
       MrfInput input;
       bool read_suc = problem.parse< grammar, action >(input);
       if(read_suc) {
-         auto& mrf_constructor = s.template GetProblemConstructor<PROBLEM_CONSTRUCTOR_NO>();
+         auto& mrf_constructor = s.template GetProblemConstructor<0>();
          build_mrf(mrf_constructor, input);
       }
       return read_suc;

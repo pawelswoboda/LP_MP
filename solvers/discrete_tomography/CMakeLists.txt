@@ -58,4 +58,4 @@ endif()
 
 
 add_executable(discrete_tomography_fw discrete_tomography_fw.cpp ${headers} ${sources})
-target_link_libraries(discrete_tomography_fw m stdc++ pthread SVM)
+target_link_libraries(discrete_tomography_fw m stdc++ pthread SVM lgl)

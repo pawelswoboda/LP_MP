@@ -212,10 +212,10 @@ namespace LP_MP {
       else if(gm[f].numberOfVariables()==2){
          const INDEX i = gm.variableOfFactor(f,0);
          const INDEX j = gm.variableOfFactor(f,1);
-         std::vector<REAL> pairwiseCost(gm[f].size());
+         matrix<REAL> pairwiseCost(gm[f].numberOfLabels(0), gm[f].numberOfLabels(1));//gm[f].size());
          for(INDEX l1=0; l1<gm[f].numberOfLabels(0); ++l1){
             for(INDEX l2=0; l2<gm[f].numberOfLabels(1); ++l2){
-               pairwiseCost[l1 + l2*gm[f].numberOfLabels(0)] = gm[f](std::array<INDEX,2>({l1,l2}).begin()); 
+               pairwiseCost(l1, l2) = gm[f](std::array<INDEX,2>({l1,l2}).begin()); 
             }
          }
          mrf.AddPairwiseFactor(i,j,pairwiseCost);

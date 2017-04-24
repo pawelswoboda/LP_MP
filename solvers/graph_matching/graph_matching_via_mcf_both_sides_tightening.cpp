@@ -1,4 +1,11 @@
+
 #include "graph_matching.h"
 #include "visitors/standard_visitor.hxx"
-using FMC_INST = FMC_MCF_T<PairwiseConstruction::BothSides>;
-LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_MP_ROUNDING(FMC_INST, TorresaniEtAlInput::ParseProblemMCF<FMC_INST>, StandardTighteningVisitor);
+int main(int argc, char* argv[])
+
+{
+MpRoundingSolver<Solver<FMC_MCF_T<PairwiseConstruction::BothSides>,LP,StandardTighteningVisitor>> solver(argc,argv);
+solver.ReadProblem(TorresaniEtAlInput::ParseProblemMCF<Solver<FMC_MCF_T<PairwiseConstruction::BothSides>,LP,StandardTighteningVisitor>>);
+return solver.Solve();
+
+}

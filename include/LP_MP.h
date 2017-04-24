@@ -893,6 +893,29 @@ public:
          Chirality c = std::get<1>(*it);
          m->track_solution_down(c);
       } 
+
+      // check if primal cost is equal to lower bound
+      assert(std::abs(lower_bound() - primal_cost()) <= eps);
+   }
+
+   REAL primal_cost() const
+   {
+      REAL cost = 0.0;
+      for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
+         auto* m = std::get<0>(*it);
+         Chirality c = std::get<1>(*it);
+         if(c == Chirality::right) {
+            cost += m->GetLeftFactorTypeAdapter()->EvaluatePrimal(); 
+         } else {
+            cost += m->GetRightFactorTypeAdapter()->EvaluatePrimal();
+         }
+      }
+      if(std::get<1>(tree_messages_.back()) == Chirality::right) {
+         cost += std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->EvaluatePrimal();
+      } else {
+         cost += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->EvaluatePrimal(); 
+      }
+      return cost;
    }
 
    REAL lower_bound() const 
@@ -901,11 +924,10 @@ public:
       for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
          auto* m = std::get<0>(*it);
          Chirality c = std::get<1>(*it);
-         assert(false); // why is m and c not used?
-         if(std::get<1>(tree_messages_.back()) == Chirality::right) {
-            lb += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->LowerBound(); 
+         if(c == Chirality::right) {
+            lb += m->GetLeftFactorTypeAdapter()->LowerBound(); 
          } else {
-            lb += std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->LowerBound();
+            lb += m->GetRightFactorTypeAdapter()->LowerBound();
          }
       }
       if(std::get<1>(tree_messages_.back()) == Chirality::right) {
@@ -913,8 +935,7 @@ public:
       } else {
          lb += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->LowerBound(); 
       }
-      return lb;
-      
+      return lb; 
    }
 
    template<typename FACTOR_TYPE>

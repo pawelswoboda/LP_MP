@@ -17,6 +17,7 @@
 
 namespace LP_MP {
 
+   static char * default_solver_options[5] { "", "-i", "", "--maxIter", "1000" };
 
 // class containing the LP, problem constructor list, input function and visitor
 // binds together problem constructors and solver and organizes input/output
@@ -29,6 +30,10 @@ public:
    using FMC = FACTOR_MESSAGE_CONNECTION;
    using SolverType = Solver<FMC,LP_TYPE,VISITOR>;
    using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
+
+   // default parameters
+
+   Solver() : Solver(5, default_solver_options, ProblemDecompositionList{}) {}
 
    Solver(int argc, char** argv) : Solver(argc, argv, ProblemDecompositionList{}) {}
 
@@ -662,7 +667,7 @@ int main(int argc, char* argv[]) \
 using namespace LP_MP; \
 int main(int argc, char* argv[]) \
 { \
-   MpRoundingSolver<FMC,LP,VISITOR> solver(argc,argv); \
+   MpRoundingSolver<Solver<FMC,LP,VISITOR>> solver(argc,argv); \
    solver.ReadProblem(PARSE_PROBLEM_FUNCTION); \
    return solver.Solve(); \
 }

@@ -18,6 +18,8 @@ namespace LP_MP {
   template<typename T>
   using sat_vec = std::vector<T>;
 
+#ifdef WITH_SAT
+
   sat_literal to_literal(const sat_var v) 
   {
     return v+1;
@@ -156,6 +158,9 @@ namespace LP_MP {
        add_simplex_constraint_naive_sat(s, c_list.begin(), c_list.end());
     }
   } 
+
+#endif // WITH_SAT
+
 } // end namespace LP_MP
 
 #endif

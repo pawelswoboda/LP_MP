@@ -370,15 +370,6 @@ public:
       auto* f = AddProjection(projectionVar.begin(), projectionVar.end(), max_sum, tree);
       f->GetFactor()->summation_cost(summationCost.begin(), summationCost.end());
 
-      /*
-      {
-         auto projection_var_reverse = projectionVar;
-         std::reverse(projection_var_reverse.begin(), projection_var_reverse.end());
-         auto* f_reverse = AddProjection(projection_var_reverse.begin(), projection_var_reverse.end(), max_sum, tree);
-         f_reverse->GetFactor()->summation_cost(summationCost.begin(), summationCost.end());
-      }
-      */ 
-
       return f;
    }
 
@@ -433,6 +424,10 @@ public:
             auto* m = new SUM_PAIRWISE_MESSAGE(f_prev,f);
             lp_->AddMessage(m);
 
+            if(tree != nullptr) {
+               tree->AddMessage( m, Chirality::right );
+            }
+
             // reparametrize dt factors only after unary/pairwise ones
             //lp_->AddFactorRelation(f_prev, f);
          } else {
@@ -447,13 +442,6 @@ public:
          auto* m_c = new SUM_PAIRWISE_PAIRWISE_MESSAGE(transpose, p, f);
          lp_->AddMessage(m_c);
 
-         /*
-         assert(!transpose);
-         if(tree != nullptr) {
-            tree->AddMessage( m_l, Chirality::right );
-            tree->AddMessage( m_r, Chirality::left );
-         }
-         */
 
          f_prev = f;
          prev_sum_size = sum_size;

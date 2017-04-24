@@ -4,7 +4,9 @@
 #include "LP_MP.h"
 #include "memory_allocator.hxx"
 #include "vector.hxx"
+#ifdef WITH_SAT
 #include "sat_interface.hxx"
+#endif
 
 // Investigate contingency tables (Knuth) for more general tabular structures.
 
@@ -158,6 +160,7 @@ public:
    void primal(const INDEX p) { primal_ = p; }
 
 
+#ifdef WITH_SAT
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
@@ -185,6 +188,7 @@ public:
          }
       }
    }
+#endif
 
 private:
    INDEX primal_;
@@ -325,6 +329,7 @@ public:
    */
 
 
+#ifdef WITH_SAT
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
@@ -384,6 +389,7 @@ public:
          } 
       }
    }
+#endif
 
 
    //INDEX primal_[0], primal_[1]; // not so nice: make getters and setters!
@@ -552,6 +558,7 @@ public:
    }
 
 
+#ifdef WITH_SAT
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
@@ -639,6 +646,7 @@ public:
          }
       }
    }
+#endif
 
 
    std::array<INDEX,3> primal_;

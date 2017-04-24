@@ -1183,7 +1183,6 @@ public:
       static_if<can_construct_sat_clauses()>([&](auto f) {
             f(msg_op_).construct_sat_clauses(s, *leftFactor_->GetFactor(), *rightFactor_->GetFactor(), left_var, right_var);
             });
-      static_assert(can_construct_sat_clauses(),"");
       if(!can_construct_sat_clauses()) {
          assert(false);
       }
@@ -1257,6 +1256,9 @@ public:
          }).else_([&](auto) {
             static_if<MessageContainerType::CanComputeLeftFromRightPrimal()>([&](auto f) {
                   f(this)->ComputeLeftFromRightPrimal();
+                  static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f2) {
+                        f2(leftFactor_)->MaximizePotentialAndComputePrimal(); 
+                  });
             }).else_([&](auto) {
                assert(false);
             });
@@ -1285,6 +1287,9 @@ public:
          }).else_([&](auto) {
             static_if<MessageContainerType::CanComputeRightFromLeftPrimal()>([&](auto f) {
                   f(this)->ComputeRightFromLeftPrimal();
+                  static_if<RightFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f2) {
+                        f2(rightFactor_)->MaximizePotentialAndComputePrimal(); 
+                  });
             }).else_([&](auto) {
                assert(false);
             });
@@ -1985,7 +1990,6 @@ public:
   template<typename MESSAGE_TYPE>
   auto get_messages() const 
   {
-     std::cout << "message number = " << get_message_number<MESSAGE_TYPE>()  << "\n";
      return std::get< get_message_number<MESSAGE_TYPE>() >(msg_);
   }
    

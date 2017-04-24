@@ -21,7 +21,7 @@ target_link_libraries(convert_to_hdf5 m stdc++ pthread ${HDF5_LIBRARIES})
 foreach( source_file ${SOURCE_FILES} )
    string( REPLACE ".cpp" "" executable_file ${source_file} )
    add_executable( ${executable_file} ${source_file} ${headers} ${sources})
-   target_link_libraries( ${executable_file} m stdc++ pthread)
+   target_link_libraries( ${executable_file} m stdc++ pthread lgl)
 endforeach( source_file ${SOURCE_FILES} )
 
 if(WITH_GUROBI)
