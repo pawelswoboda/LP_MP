@@ -33,14 +33,14 @@ public:
 
    // default parameters
 
-   Solver() : Solver(5, default_solver_options, ProblemDecompositionList{}) {}
+   Solver() : Solver(5, default_solver_options) {}
 
    Solver(int argc, char** argv) : Solver(ProblemDecompositionList{}) 
    {
       cmd_.parse(argc,argv);
       Init_(); 
    }
-   Solver(const std::vector<std::string>& options) : Solver(ProblemDecompositionList{})
+   Solver(std::vector<std::string> options) : Solver(ProblemDecompositionList{})
    {
       cmd_.parse(options);
       Init_(); 
@@ -72,18 +72,7 @@ public:
       });
    }
 
-  TCLAP::CmdLine& get_cmd() { return cmd_; }
-
-   // needed, as more arguments could be passed to cmd_, and then we need to parse again
-   void Init(std::vector<std::string> arg)
-   { 
-      cmd_.parse(arg);
-      Init_();
-   }
-
-   void Init(int argc, char** argv)
-   {
-         }
+   TCLAP::CmdLine& get_cmd() { return cmd_; }
 
    void Init_()
    {
