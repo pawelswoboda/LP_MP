@@ -35,25 +35,33 @@ public:
 
    Solver() : Solver(5, default_solver_options, ProblemDecompositionList{}) {}
 
-   Solver(int argc, char** argv) : Solver(argc, argv, ProblemDecompositionList{}) {}
+   Solver(int argc, char** argv) : Solver(ProblemDecompositionList{}) 
+   {
+      cmd_.parse(argc,argv);
+      Init_(); 
+   }
+   Solver(const std::vector<std::string>& options) : Solver(ProblemDecompositionList{})
+   {
+      cmd_.parse(options);
+      Init_(); 
+   }
 
 private:
    template<typename... PROBLEM_CONSTRUCTORS>
-   Solver(int argc, char** argv, meta::list<PROBLEM_CONSTRUCTORS...>&& pc_list)
-     : cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
-     lp_(cmd_),
-     //problemConstructor_((sizeof(PROBLEM_CONSTRUCTORS), new PROBLEM_CONSTRUCTORS( *this ) )...), //(SolverType&)(*this))
-     // build the standard command line arguments
-     inputFileArg_("i","inputFile","file from which to read problem instance",false,"","file name",cmd_),
-     outputFileArg_("o","outputFile","file to write solution",false,"","file name",cmd_),
-     visitor_(cmd_)
-     {
+   Solver(meta::list<PROBLEM_CONSTRUCTORS...>&& pc_list)
+     :
+        cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
+        lp_(cmd_),
+        inputFileArg_("i","inputFile","file from which to read problem instance",false,"","file name",cmd_),
+        outputFileArg_("o","outputFile","file to write solution",false,"","file name",cmd_),
+        visitor_(cmd_)
+   {
       for_each_tuple(this->problemConstructor_, [this](auto& l) {
-            assert(l == nullptr);
-            l = new typename std::remove_pointer<typename std::remove_reference<decltype(l)>::type>::type(*this); // note: this is not so nice: if problem constructor needs other problem constructors, those must already be allocated, otherwise address is invalid. This is only a problem for circular references, though, otherwise order problem constructors accordingly. This should be resolved when std::tuple will be constructed without move and copy constructors.
-      });
-       Init(argc,argv);
-     }
+           assert(l == nullptr);
+           l = new typename std::remove_pointer<typename std::remove_reference<decltype(l)>::type>::type(*this); // note: this is not so nice: if problem constructor needs other problem constructors, those must already be allocated, otherwise address is invalid. This is only a problem for circular references, though, otherwise order problem constructors accordingly. This should be resolved when std::tuple will be constructed without move and copy constructors.
+      }); 
+   }
+
 public:
 
    ~Solver() 
@@ -75,9 +83,8 @@ public:
 
    void Init(int argc, char** argv)
    {
-      cmd_.parse(argc,argv);
-      Init_();
-   }
+         }
+
    void Init_()
    {
       try {  
