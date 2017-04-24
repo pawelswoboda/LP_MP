@@ -101,5 +101,5 @@ include_directories(lib)
 include_directories(.)
 add_subdirectory(solvers)
 add_subdirectory(lib)
-add_subdirectory(test)
+add_subdirectory(src)
 
