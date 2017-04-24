@@ -2,6 +2,7 @@
 #define LP_MP_MULTICUT_CONSTRUCTOR_HXX
 
 #include "LP_MP.h"
+#include "multicut.h"
 #include "lifted_multicut_factors_messages.hxx"
 
 #include "union_find.hxx"
