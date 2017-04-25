@@ -1,2 +1,4 @@
 add_subdirectory(test)
-add_subdirectory(python)
+if(BUILD_PYTHON)
+    add_subdirectory(python)
+endif()

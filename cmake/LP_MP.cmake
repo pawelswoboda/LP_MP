@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 2.8.12)
 set(LP_MP_VERSION_MAJOR 0)
 set(LP_MP_VERSION_MINOR 1)
 
-# C++11
+# C++14
 add_compile_options(-std=c++14)
 
 # compiler options
@@ -14,6 +14,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
    #add_definitions(-ffast-math -fno-finite-math-only) # adding only -ffast-math will result in infinity and nan not being checked (but e.g. graph matching and discrete tomography have infinite costs)
    add_definitions(-march=native)
 endif()
+
+option(BUILD_PYTHON OFF)
 
 # automatically downloaded repositories
 # can this possibly be done in one place only, i.e. in the superbuild?
@@ -43,6 +45,12 @@ link_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Lingeling_Proj
 
 # manually downloaded repositories of Kolmogorov's code. How to automate?
 #add_subdirectory(lib/MinCost)
+
+#-----------
+# pybindings
+#-----------
+include_directories( "${CMAKE_CURRENT_SOURCE_DIR}/external/pybind11/include")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/pybind11")
 
 
 # HDF5 for reading OpenGM and Andres models
@@ -99,6 +107,7 @@ file(GLOB_RECURSE headers include/*.hxx)
 include_directories(include)
 include_directories(lib)
 include_directories(.)
+
 add_subdirectory(solvers)
 add_subdirectory(lib)
 add_subdirectory(src)
