@@ -15,15 +15,15 @@ namespace LP_MP {
 
     struct MulticutOptions {
         MulticutOptions(
-            const size_t primalComputationInterval = 100,
-            const std::string & standardReparametrization = "anisotropic",
-            const std::string & roundingReparametrization = "damped_uniform",
-            const std::string & tightenReparametrization  = "damped_uniform",
-            const bool tighten = true,
-            const size_t tightenInterval = 100,
-            const size_t tightenIteration = 2,
-            const double tightenSlope = 0.05,
-            const double tightenConstraintsPercentage = 0.1
+            const size_t primalComputationInterval,
+            const std::string & standardReparametrization,
+            const std::string & roundingReparametrization,
+            const std::string & tightenReparametrization,
+            const bool tighten,
+            const size_t tightenInterval,
+            const size_t tightenIteration,
+            const double tightenSlope,
+            const double tightenConstraintsPercentage
         ) :
             primalComputationInterval_(primalComputationInterval),
             standardReparametrization_(standardReparametrization),
@@ -93,14 +93,53 @@ namespace LP_MP {
     void exportMulticutOptions(py::module pyModule) {
         py::class_<MulticutOptions>(pyModule, "MulticutOptions")
             .def(
-                py::init<const size_t, const std::string &, const std::string &, const std::string &,
-                         const bool, const size_t, const size_t, const double, const double>(),
-                py::arg("primalComputationInterval"), py::arg("standardReparametrization"), py::arg("roundingReparametrization"),
-                py::arg("tightenReparametrization"), py::arg("tighten"), py::arg("tightenInterval"),
-                py::arg("tightenIteration"), py::arg("tightenSlope"), py::arg("tightenConstraintsPercentage") 
+                py::init<
+                    size_t,
+                    std::string,
+                    std::string,
+                    std::string,
+                    bool,
+                    size_t,
+                    size_t,
+                    double,
+                    double
+                >(),
+                py::arg_t<size_t>("primalComputationInterval", 100), // check
+                py::arg_t<std::string>("standardReparametrization", "anisotropic"), // check
+                py::arg_t<std::string>("roundingReparametrization", "uniform"), // damped_uniform ?!
+                py::arg_t<std::string>("tightenReparametrization",  "uniform"), // dampeld_uniform ?!
+                py::arg_t<bool>("tighten", true),
+                py::arg_t<size_t>("tightenInterval", 100),
+                py::arg_t<size_t>("tightenIteration", 2),
+                py::arg_t<double>("tightenSlope", 0.05),
+                py::arg_t<double>("tightenConstraintsPercentage", 0.1) 
             )
+            .def("vec", &MulticutOptions::toOptionsVector)
         ;
     }
+       
+       //[--tightenSlope <positive real number smaller 1>] // check
+       //[--tightenMinDualImprovementInterval <positive integer>]
+       //[--tightenMinDualImprovement <positive real>]
+       //[--tightenConstraintsPercentage <positive real>]
+       //[--tightenConstraintsMax <positive integer>]
+       //[--tightenInterval <positive integer>] 
+       //[--tightenIteration <positive integer>]
+       //[--tightenReparametrization <(uniform|anisotropic)>]
+       //[--tighten]
+       //[--roundingReparametrization <{anisotropic|uniform}>]
+       //[--standardReparametrization <{anisotropic|uniform}>]
+       //[--minDualImprovementInterval <strictly positive integer>]
+       //[--minDualImprovement <positive real number>]
+       //[--lowerBoundComputationInterval <strictly positive integer>]
+       //[--primalComputationInterval <strictly positive integer>]
+       //[--timeout <strictly positive integer>] 
+       //[--maxMemory <positive integer>]
+       //[--maxIter <strictly positive integer>]
+       //[-o <file name>] 
+       //[-i <file name>] [--] [--version] [-h]
+
+
 
     template<typename LABEL_TYPE, typename WEIGHT_TYPE>
     void exportMulticutT(py::module & pyModule) {
