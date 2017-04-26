@@ -160,6 +160,7 @@ namespace LP_MP {
                     py::gil_scoped_release allowThreads;
                     SolverType solver(multicutOptions.toOptionsVector());
                     auto & multicutConstructor = solver.template GetProblemConstructor<0>();
+                    solver.Solve();
                     getEdgeLabeling(uvIds, multicutConstructor, edgeLabels);
                 }
                 return edgeLabels;

@@ -42,6 +42,7 @@ public:
    }
    Solver(std::vector<std::string> options) : Solver(ProblemDecompositionList{})
    {
+      //std::cout << "Here we are !" << std::endl;
       cmd_.parse(options);
       Init_(); 
    }
