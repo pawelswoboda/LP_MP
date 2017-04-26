@@ -12,6 +12,10 @@ namespace py = pybind11;
 namespace LP_MP {
     using FMC = FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>;
     using SolverType = ProblemConstructorRoundingSolver<Solver<FMC,LP,StandardTighteningVisitor>>;
+    
+    //*****************************
+    // multicut options
+    //*****************************
 
     struct MulticutOptions {
         MulticutOptions(
@@ -38,6 +42,7 @@ namespace LP_MP {
 
         std::vector<std::string> toOptionsVector() const {
             std::vector<std::string> options = {
+              "export_multicut",
               "-i", " ", // empty input file
               "--primalComputationInterval", std::to_string(primalComputationInterval_),
               "--standardReparametrization", standardReparametrization_,
@@ -64,7 +69,64 @@ namespace LP_MP {
         const double tightenSlope_;
         const double tightenConstraintsPercentage_;
     };
+    
+    //
+    // TODO these are all parameters, some of them should be exposed as well
+    // (max runtime, max memory )
+    //
+    //[--tightenSlope <positive real number smaller 1>] // check
+    //[--tightenMinDualImprovementInterval <positive integer>]
+    //[--tightenMinDualImprovement <positive real>]
+    //[--tightenConstraintsPercentage <positive real>]
+    //[--tightenConstraintsMax <positive integer>]
+    //[--tightenInterval <positive integer>] 
+    //[--tightenIteration <positive integer>]
+    //[--tightenReparametrization <(uniform|anisotropic)>]
+    //[--tighten]
+    //[--roundingReparametrization <{anisotropic|uniform}>]
+    //[--standardReparametrization <{anisotropic|uniform}>]
+    //[--minDualImprovementInterval <strictly positive integer>]
+    //[--minDualImprovement <positive real number>]
+    //[--lowerBoundComputationInterval <strictly positive integer>]
+    //[--primalComputationInterval <strictly positive integer>]
+    //[--timeout <strictly positive integer>] 
+    //[--maxMemory <positive integer>]
+    //[--maxIter <strictly positive integer>]
+    //[-o <file name>] 
+    //[-i <file name>] [--] [--version] [-h]
 
+    void exportMulticutOptions(py::module pyModule) {
+        py::class_<MulticutOptions>(pyModule, "MulticutOptions")
+            .def(
+                py::init<
+                    size_t,
+                    std::string,
+                    std::string,
+                    std::string,
+                    bool,
+                    size_t,
+                    size_t,
+                    double,
+                    double
+                >(),
+                py::arg_t<size_t>("primalComputationInterval", 100), // check
+                py::arg_t<std::string>("standardReparametrization", "anisotropic"), // check
+                py::arg_t<std::string>("roundingReparametrization", "damped_uniform"), // damped_uniform ?!
+                py::arg_t<std::string>("tightenReparametrization",  "damped_uniform"), // dampeld_uniform ?!
+                py::arg_t<bool>("tighten", true),
+                py::arg_t<size_t>("tightenInterval", 100),
+                py::arg_t<size_t>("tightenIteration", 2),
+                py::arg_t<double>("tightenSlope", 0.05),
+                py::arg_t<double>("tightenConstraintsPercentage", 0.1) 
+            )
+            .def("vec", &MulticutOptions::toOptionsVector)
+        ;
+    }
+
+    //*****************************
+    // multicut solver
+    //*****************************
+    
     template<typename LABEL_TYPE, typename WEIGHT_TYPE, typename MC_CONSTRUCTOR_TYPE>
     inline void constructMcProblem(
         const std::vector<std::pair<LABEL_TYPE,LABEL_TYPE>> & uvIds,
@@ -89,57 +151,8 @@ namespace LP_MP {
             edgeLabeling[i] = constructor.get_edge_label(uv.first, uv.second);
         }
     }
-
-    void exportMulticutOptions(py::module pyModule) {
-        py::class_<MulticutOptions>(pyModule, "MulticutOptions")
-            .def(
-                py::init<
-                    size_t,
-                    std::string,
-                    std::string,
-                    std::string,
-                    bool,
-                    size_t,
-                    size_t,
-                    double,
-                    double
-                >(),
-                py::arg_t<size_t>("primalComputationInterval", 100), // check
-                py::arg_t<std::string>("standardReparametrization", "anisotropic"), // check
-                py::arg_t<std::string>("roundingReparametrization", "uniform"), // damped_uniform ?!
-                py::arg_t<std::string>("tightenReparametrization",  "uniform"), // dampeld_uniform ?!
-                py::arg_t<bool>("tighten", true),
-                py::arg_t<size_t>("tightenInterval", 100),
-                py::arg_t<size_t>("tightenIteration", 2),
-                py::arg_t<double>("tightenSlope", 0.05),
-                py::arg_t<double>("tightenConstraintsPercentage", 0.1) 
-            )
-            .def("vec", &MulticutOptions::toOptionsVector)
-        ;
-    }
        
-       //[--tightenSlope <positive real number smaller 1>] // check
-       //[--tightenMinDualImprovementInterval <positive integer>]
-       //[--tightenMinDualImprovement <positive real>]
-       //[--tightenConstraintsPercentage <positive real>]
-       //[--tightenConstraintsMax <positive integer>]
-       //[--tightenInterval <positive integer>] 
-       //[--tightenIteration <positive integer>]
-       //[--tightenReparametrization <(uniform|anisotropic)>]
-       //[--tighten]
-       //[--roundingReparametrization <{anisotropic|uniform}>]
-       //[--standardReparametrization <{anisotropic|uniform}>]
-       //[--minDualImprovementInterval <strictly positive integer>]
-       //[--minDualImprovement <positive real number>]
-       //[--lowerBoundComputationInterval <strictly positive integer>]
-       //[--primalComputationInterval <strictly positive integer>]
-       //[--timeout <strictly positive integer>] 
-       //[--maxMemory <positive integer>]
-       //[--maxIter <strictly positive integer>]
-       //[-o <file name>] 
-       //[-i <file name>] [--] [--version] [-h]
-
-
+       
 
     template<typename LABEL_TYPE, typename WEIGHT_TYPE>
     void exportMulticutT(py::module & pyModule) {
@@ -160,6 +173,7 @@ namespace LP_MP {
                     py::gil_scoped_release allowThreads;
                     SolverType solver(multicutOptions.toOptionsVector());
                     auto & multicutConstructor = solver.template GetProblemConstructor<0>();
+                    constructMcProblem(uvIds, weights, multicutConstructor);
                     solver.Solve();
                     getEdgeLabeling(uvIds, multicutConstructor, edgeLabels);
                 }
