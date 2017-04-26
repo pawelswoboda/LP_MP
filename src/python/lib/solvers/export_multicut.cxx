@@ -57,6 +57,16 @@ namespace LP_MP {
                 options.push_back("--tighten");
             return options;
         }
+
+        size_t primalComputationInterval() const {return primalComputationInterval_;}
+        const std::string & standardReparametrization() const {return standardReparametrization_;}
+        const std::string & roundingReparametrization() const {return roundingReparametrization_;}
+        const std::string & tightenReparametrization() const {return tightenReparametrization_;}
+        bool tighten() const {return tighten_;}
+        size_t tightenInterval() const {return tightenInterval_;}
+        size_t tightenIteration() const {return tightenIteration_;}
+        double tightenSlope() const {return tightenSlope_;}
+        double tightenConstraintsPercentage() const {return tightenConstraintsPercentage_;}
         
     private:
         const size_t primalComputationInterval_;
@@ -119,7 +129,15 @@ namespace LP_MP {
                 py::arg_t<double>("tightenSlope", 0.05),
                 py::arg_t<double>("tightenConstraintsPercentage", 0.1) 
             )
-            .def("vec", &MulticutOptions::toOptionsVector)
+            .def_property_readonly("primalComputationInterval",&MulticutOptions::primalComputationInterval)
+            .def_property_readonly("standardReparametrization",&MulticutOptions::standardReparametrization)
+            .def_property_readonly("roundingReparametrization",&MulticutOptions::roundingReparametrization)
+            .def_property_readonly("tightenReparametrization",&MulticutOptions::tightenReparametrization)
+            .def_property_readonly("tighten",&MulticutOptions::tighten)
+            .def_property_readonly("tightenInterval",&MulticutOptions::tightenInterval)
+            .def_property_readonly("tightenIteration",&MulticutOptions::tightenIteration)
+            .def_property_readonly("tightenSlope",&MulticutOptions::tightenSlope)
+            .def_property_readonly("tightenConstraintsPercentage",&MulticutOptions::tightenConstraintsPercentage)
         ;
     }
 
