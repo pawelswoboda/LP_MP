@@ -382,7 +382,7 @@ public:
 
                if(CUT_TYPE == cut_type::multicut) {
                   const REAL lb = std::min(0.0, cost_ij) + std::min(0.0, cost_ik) + std::min(0.0, cost_jk);
-                  const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ij+cost_jk, cost_ij+cost_ik+cost_jk});
+                  const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ik+cost_jk, cost_ij+cost_ik+cost_jk});
                   assert(lb <= best_labeling+eps);
                   const REAL guaranteed_dual_increase = best_labeling - lb;
                   /*
@@ -397,7 +397,7 @@ public:
                   } 
                } else if(CUT_TYPE == cut_type::maxcut) {
                   const REAL lb = std::min(0.0, cost_ij) + std::min(0.0, cost_ik) + std::min(0.0, cost_jk);
-                  const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ij+cost_jk});
+                  const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ik+cost_jk});
                   assert(lb <= best_labeling+eps);
                   const REAL guaranteed_dual_increase = best_labeling - lb;
                   if(guaranteed_dual_increase > 0.0) {
@@ -412,6 +412,10 @@ public:
          }
       }
       std::sort(triplet_candidates.begin(), triplet_candidates.end(), [](auto& a, auto& b) { return std::get<3>(a) > std::get<3>(b); });
+
+      if(triplet_candidates.size() > 0) {
+         std::cout << "best triplet candidate in triplet search has guaranteed dual improvement " << std::get<3>(triplet_candidates[0]) << "\n";
+      }
 
       INDEX triplets_added = 0;
       for(const auto& triplet_candidate : triplet_candidates) {
@@ -668,6 +672,11 @@ public:
          }
          // sort by guaranteed increase in decreasing order
          std::sort(cycles.begin(), cycles.end(), [](const CycleType& i, const CycleType& j) { return std::get<0>(i) > std::get<0>(j); });
+
+         if(cycles.size() > 0) {
+            std::cout << "best triplet candidate in cycle search has guaranteed dual improvement " << std::get<0>(cycles[0]) << "\n";
+         }
+
          for(auto& cycle : cycles) {
             if(std::get<1>(cycle).size() > 2) {
                tripletsAdded += AddCycle(std::move(std::get<1>(cycle)));
@@ -1619,9 +1628,13 @@ public:
          multicut_added_ = true;
          for(INDEX i=0; i<mrf_constructor.GetNumberOfPairwiseFactors(); ++i) {
             auto vars = mrf_constructor.GetPairwiseVariables(i);
-            auto* f = mc_constructor.AddUnaryFactor(std::get<0>(vars), std::get<1>(vars), 0.0);
+            const INDEX i1 = std::get<0>(vars);
+            const INDEX i2 = std::get<1>(vars);
+            auto* f = mc_constructor.AddUnaryFactor(i1, i2, 0.0);
             auto* m = new typename FMC::multicut_edge_potts_message_container(f, mrf_constructor.GetPairwiseFactor(i)); 
             lp_->AddMessage(m); 
+            lp_->AddFactorRelation(mrf_constructor.GetUnaryFactor(i1), f);
+            lp_->AddFactorRelation(f, mrf_constructor.GetUnaryFactor(i2));
          }
 
          // the multicut constructor will not have done anything (no factors yet). Hence call it again from here

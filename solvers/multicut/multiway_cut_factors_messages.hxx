@@ -263,28 +263,23 @@ public:
        msg -= r.min_marginal_cut();
     }
     
-
   template<typename LEFT_FACTOR, typename MSG>
     void ReceiveMessageFromLeft(const LEFT_FACTOR& l, MSG& msg)
     {
        msg -= l[0];
     }
 
-  
   template<typename LEFT_FACTOR, typename MSG>
     void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
     {
       msg -= omega*l[0];
     }
     
-
   template<typename RIGHT_FACTOR, typename MSG>
     void SendMessageToLeft(const RIGHT_FACTOR& r, MSG& msg, const REAL omega)
     {
        msg -= omega*r.min_marginal_cut();
-    }
-
-
+    } 
 };
 
 } // end namespace LP_MP
