@@ -108,7 +108,7 @@ public:
    : PairwiseSimplexFactor(dim1,dim2)
    {
       for(INDEX x1=0; x1<this->dim1(); ++x1) {
-         for(INDEX x2=0; x1<this->dim1(); ++x1) {
+         for(INDEX x2=0; x2<this->dim2(); ++x2) {
             this->cost(x1,x2) = m(x1,x2);
          }
       }
@@ -202,36 +202,6 @@ public:
 
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_[0], primal_[1] ); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( cereal::binary_data( pairwise_, sizeof(REAL)*(size()+dim1()+dim2()) ) ); }
-
-   /*
-   void serialize_primal(bit_vector primal_bits) const
-   {
-      INDEX i=0;
-      for(INDEX x1=0; x1<dim1(); ++x1) {
-         for(INDEX x2=0; x2<dim2(); ++x2) {
-            primal_bits[i] = false;
-            if(primal_[0] == x1 && primal_[1] == x2) {
-               primal_bits[i] = true;
-            }
-            ++i;
-         } 
-      }
-   }
-
-   void deserialize_primal(bit_vector primal_bits) 
-   {
-      INDEX i=0;
-      for(INDEX x1=0; x1<dim1(); ++x1) {
-         for(INDEX x2=0; x2<dim2(); ++x2) {
-            if(primal_bits[i] == true) {
-               primal_[0] = x1;
-               primal_[1] = x2;
-            }
-            ++i;
-         } 
-      }
-   }
-   */
 
    template<typename VECTOR>
    void min_marginal_1(VECTOR& m) const
