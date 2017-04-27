@@ -31,7 +31,7 @@ public:
    MRFProblemConstructor(SOLVER& solver) : lp_(&solver.GetLP()) {}
 
    virtual void ConstructUnaryFactor(UnaryFactorType& u, const std::vector<REAL>& cost) = 0;
-   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const matrix<REAL>& cost, const INDEX leftDim, const INDEX rightDim) = 0;
+   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const INDEX leftDim, const INDEX rightDim) = 0;
    virtual RightMessageType ConstructRightUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
    virtual LeftMessageType ConstructLeftUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p) = 0;
 
@@ -68,17 +68,18 @@ public:
       }
       unaryFactor_[node_number] = u;
    }
-   PairwiseFactorContainer* AddPairwiseFactor(INDEX var1, INDEX var2, const matrix<REAL>& cost)
+   template<typename COST>
+   PairwiseFactorContainer* AddPairwiseFactor(INDEX var1, INDEX var2, const COST& cost)
    { 
       //if(var1 > var2) std::swap(var1,var2);
       assert(var1<var2);
       assert(!HasPairwiseFactor(var1,var2));
-      assert(cost.size() == GetNumberOfLabels(var1) * GetNumberOfLabels(var2));
+      //assert(cost.size() == GetNumberOfLabels(var1) * GetNumberOfLabels(var2));
       //assert(pairwiseMap_.find(std::make_tuple(var1,var2)) == pairwiseMap_.end());
       //PairwiseFactorContainer* p = new PairwiseFactorContainer(PairwiseFactor(cost), cost);
-      auto* p = new PairwiseFactorContainer(GetNumberOfLabels(var1), GetNumberOfLabels(var2));
+      auto* p = new PairwiseFactorContainer(GetNumberOfLabels(var1), GetNumberOfLabels(var2), cost);
       lp_->AddFactor(p);
-      ConstructPairwiseFactor(*(p->GetFactor()), cost, var1, var2);
+      ConstructPairwiseFactor(*(p->GetFactor()), var1, var2);
       pairwiseFactor_.push_back(p);
       pairwiseIndices_.push_back(std::make_tuple(var1,var2));
       const INDEX factorId = pairwiseFactor_.size()-1;
@@ -270,16 +271,7 @@ public:
       }
    }
 
-   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const matrix<REAL>& cost, const INDEX i1, const INDEX i2) 
-   { 
-      const INDEX dim1 = this->GetNumberOfLabels(i1);
-      const INDEX dim2 = this->GetNumberOfLabels(i2);
-      for(INDEX x1=0; x1<dim1; ++x1) {
-         for(INDEX x2=0; x2<dim2; ++x2) {
-            p.cost(x1,x2) = cost(x1,x2);
-         }
-      }
-   }
+   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const INDEX i1, const INDEX i2) {} // nothing needs to be done
 
    RightMessageType ConstructRightUnaryPairwiseMessage(UnaryFactorContainer* const right, PairwiseFactorContainer* const p)
    { 
@@ -323,7 +315,7 @@ public:
 
    void SetGraph(const std::vector<std::vector<INDEX>> graph) { graph_ = graph; }
 
-   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const matrix<REAL>& cost, const INDEX i1, const INDEX i2) 
+   virtual void ConstructPairwiseFactor(PairwiseFactorType& p, const INDEX i1, const INDEX i2) 
    { 
       assert(i1 < graph_.size()+1 && i2 < graph_.size()+1);
       assert(i1 < i2);
@@ -331,12 +323,6 @@ public:
       const INDEX dim1 = this->GetNumberOfLabels(i1);
       const INDEX dim2 = this->GetNumberOfLabels(i2);
       assert(dim1 == p.dim1() && dim2 == p.dim2());
-      assert(dim1 == cost.dim1() && dim2 == cost.dim2());
-      for(INDEX x1=0; x1<dim1; ++x1) {
-         for(INDEX x2=0; x2<dim2; ++x2) {
-            p.cost(x1,x2) = cost(x1,x2);
-         }
-      }
 
       if(i1 < graph_.size() && i2 < graph_.size()) {
          // put infinities on diagonal

@@ -17,113 +17,6 @@ namespace LP_MP {
 //      max_{z} z 
 //      s.t.    z <= repamPot[i]
 
-// do zrobienia: replace std::vector by dynamic vector that is not resizable and gets memory from factor allocator
-template<typename T = REAL> // artifact: do zrobienia: remove
-class SimplexFactor : public std::vector<REAL>
-{
-public:
-   using VECTOR = std::vector<REAL>;
-   SimplexFactor(const std::vector<REAL>& cost)
-      : VECTOR(cost.begin(), cost.end()) // better use iterators and allocator at same time
-   {}
-   SimplexFactor(const INDEX n)
-      : VECTOR(n,0.0)
-   {}
-
-   ~SimplexFactor()
-   {
-      std::cout << "do not use anymore\n";
-      throw std::runtime_error("do not use anymore");
-   }
-
-   void MaximizePotentialAndComputePrimal(typename PrimalSolutionStorage::Element primal) const
-   {
-      INDEX min_element;
-      REAL min_value = std::numeric_limits<REAL>::infinity();
-      for(INDEX i=0; i<this->size(); ++i) {
-         if(primal[i] == true) {
-            return;
-         } else if(primal[i] == false) {
-            // do nothing
-         } else {
-            assert(primal[i] == unknownState);
-            primal[i] = false;
-            if(min_value >= (*this)[i]) {
-               min_value = (*this)[i];
-               min_element = i;
-            }
-         }
-      }
-      assert(min_element < this->size());
-      primal[min_element] = true;
-   };
-
-   REAL LowerBound() const {
-      const REAL lb = *std::min_element(this->begin(), this->end());
-      assert(!std::isnan(lb) && std::isfinite(lb));
-      return lb;
-   }
-
-   // if there is exactly one unknownIndex (rest false), make it true
-   // if there is already one true index, make all other false
-   void PropagatePrimal(PrimalSolutionStorage::Element primal)
-   {
-      INDEX noTrue = 0;
-      INDEX noUnknown = 0;
-      INDEX unknownIndex;
-      for(INDEX i=0; i<this->size(); ++i) {
-         if(primal[i] == true) { 
-            ++noTrue;
-         }
-         if(primal[i] == unknownState) {
-            ++noUnknown;
-            unknownIndex = i;
-         }
-      }
-      if(noTrue == 0 && noUnknown == 1) {
-         primal[unknownIndex] = true;
-      } else if(noTrue == 1 && noUnknown > 0) {
-         for(INDEX i=0; i<this->size(); ++i) {
-            if(primal[i] == unknownState) {
-               primal[i] = false;
-            }
-         }
-      }
-   }
-
-   REAL EvaluatePrimal() const
-   {
-      assert(false);
-         return std::numeric_limits<REAL>::infinity();
-   }
-
-  //INDEX GetNumberOfAuxVariables() const { return 0; }
-
-  /*
-  void ReduceLp(LpInterfaceAdapter* lp) const {
-    REAL lb = LowerBound();
-    REAL epsi = lp->GetEpsilon();
-    for(INDEX i=0;i<this->size();i++){
-      if((*this)[i] >= lb + epsi){
-        lp->SetVariableBound(lp->GetVariable(i),0.0,0.0,false);
-      }
-    }
-  }
-  
-  void CreateConstraints(LpInterfaceAdapter* lp) const { 
-    LinExpr lhs = lp->CreateLinExpr();
-    for(INDEX i=0;i<lp->GetFactorSize();i++){
-      lhs += lp->GetVariable(i);
-    }
-    LinExpr rhs = lp->CreateLinExpr();
-    rhs += 1;
-    lp->addLinearEquality(lhs,rhs);
-  }
-  */
-  
-};
-
-   
 class UnarySimplexFactor : public vector<REAL> {
 public:
    UnarySimplexFactor(const std::vector<REAL>& cost) : vector<REAL>(cost.begin(), cost.end()) {}
@@ -209,6 +102,18 @@ public:
       left_msg_ = pairwise_ + dim1_*dim2_;
       right_msg_ = left_msg_ + dim1_;
    }
+
+   template<typename MATRIX>
+   PairwiseSimplexFactor(const INDEX dim1, const INDEX dim2, const MATRIX& m) 
+   : PairwiseSimplexFactor(dim1,dim2)
+   {
+      for(INDEX x1=0; x1<this->dim1(); ++x1) {
+         for(INDEX x2=0; x1<this->dim1(); ++x1) {
+            this->cost(x1,x2) = m(x1,x2);
+         }
+      }
+   }
+
    ~PairwiseSimplexFactor() {
       global_real_block_allocator.deallocate(pairwise_,1);
    }
@@ -261,8 +166,8 @@ public:
    INDEX dim2() const { return dim2_; }
      
    REAL& pairwise(const INDEX x1, const INDEX x2) { return pairwise_[x1*dim2_ + x2]; }
-   REAL& left(const INDEX x1) { return left_msg_[x1]; }
-   REAL& right(const INDEX x2) { return right_msg_[x2]; }
+   REAL& msg1(const INDEX x1) { return left_msg_[x1]; }
+   REAL& msg2(const INDEX x2) { return right_msg_[x2]; }
 
    INDEX size() const { return dim1_*dim2_; }
 
@@ -328,6 +233,29 @@ public:
    }
    */
 
+   template<typename VECTOR>
+   void min_marginal_1(VECTOR& m) const
+   {
+      assert(m.size() == dim1());
+      std::fill(m.begin(), m.end(), std::numeric_limits<REAL>::infinity());
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+          for(INDEX x2=0; x2<dim2(); ++x2) {
+             m[x1] = std::min(m[x1],(*this)(x1,x2));
+          }
+       } 
+   }
+
+   template<typename VECTOR>
+   void min_marginal_2(VECTOR& m) const
+   {
+      assert(m.size() == dim2());
+      std::fill(m.begin(), m.end(), std::numeric_limits<REAL>::infinity());
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+          for(INDEX x2=0; x2<dim2(); ++x2) {
+             m[x2] = std::min(m[x2],(*this)(x1,x2));
+          }
+       } 
+   }
 
 #ifdef WITH_SAT
    template<typename SAT_SOLVER>
@@ -391,14 +319,16 @@ public:
    }
 #endif
 
+   const std::array<INDEX,2>& primal() const { return primal_; }
+   std::array<INDEX,2>& primal() { return primal_; }
 
    //INDEX primal_[0], primal_[1]; // not so nice: make getters and setters!
-   std::array<INDEX,2> primal_;
 private:
    // those three pointers should lie contiguously in memory.
    REAL* pairwise_;
    REAL* left_msg_;
    REAL* right_msg_;
+   std::array<INDEX,2> primal_;
    const INDEX dim1_, dim2_;
 
 };
@@ -648,9 +578,11 @@ public:
    }
 #endif
 
+   const std::array<INDEX,3>& primal() const { return primal_; }
+   std::array<INDEX,3>& primal() { return primal_; }
 
-   std::array<INDEX,3> primal_;
 protected:
+   std::array<INDEX,3> primal_;
    const INDEX dim1_, dim2_, dim3_; // do zrobienia: possibly use 32 bit, for primal as well
    REAL *msg12_, *msg13_, *msg23_;
 };
@@ -732,6 +664,153 @@ public:
 };
 */
 
+class pairwise_potts_factor : public vector<REAL> {
+   template<typename MATRIX>
+   static bool is_potts(const MATRIX& c)
+   {
+      if(c.dim1() != c.dim2()) { return false; }
+      if(c.dim1() <= 1) { return false; }
+      for(INDEX x1=0; x1<c.dim1(); ++x1) {
+         for(INDEX x2=0; x2<c.dim2(); ++x2) {
+            if(x1 == x2) {
+              if(c(x1,x2) != 0.0) return false;
+            } else {
+               if(c(x1,x2) != c(0,1)) return false;
+            }
+         }
+      }
+      return true;
+   }
+public:
+   template<typename VEC>
+   pairwise_potts_factor(const INDEX dim1, const INDEX dim2, const VEC& cost)
+   : pairwise_potts_factor(dim1, cost(0,1))
+   {
+      assert(dim1 == dim2);
+      assert(is_potts(cost));
+   }
+
+   pairwise_potts_factor(const INDEX dim1, const INDEX dim2)
+      : pairwise_potts_factor(dim1, 0.0)
+   {
+      assert(dim1 == dim2);
+   }
+
+   pairwise_potts_factor(const INDEX dim1, const INDEX dim2, const REAL diff_cost)
+      : pairwise_potts_factor(dim1, diff_cost)
+   {
+      assert(dim1 == dim2); 
+   } 
+
+   pairwise_potts_factor(const INDEX dim, const REAL diff_cost)
+      : 
+         vector<REAL>(2*dim,0.0), // holds reparametrisation
+         diff_cost_(diff_cost) 
+   {}
+
+   REAL operator()(const INDEX x1, const INDEX x2) const
+   {
+      const REAL msg_val = msg1(x1) + msg2(x2);
+      const REAL potts_val = x1 != x2 ? diff_cost() : 0.0;
+      return msg_val + potts_val;
+   }
+
+   // min cost for same label and different label
+   std::array<REAL,2> min_values() const
+   {
+      const auto smallest2 = two_smallest_elements<REAL>(msg2_begin(), msg2_end());
+
+      REAL min_same_label = std::numeric_limits<REAL>::infinity();
+      REAL min_diff_label = std::numeric_limits<REAL>::infinity();
+      for(INDEX i=0; i<dim(); ++i) {
+         const REAL same_label = (*this)[i] + (*this)[i+dim()];
+         min_same_label = std::min(min_same_label, same_label);
+         const REAL diff_label = (*this)[i] + diff_cost() + ((*this)[i+dim()] == smallest2[0] ? smallest2[1] : smallest2[0]);
+         min_diff_label = std::min(min_diff_label, diff_label);
+      }
+      return {min_same_label, min_diff_label}; 
+   }
+
+   REAL LowerBound() const {
+      const auto v = min_values();
+      return std::min(v[0], v[1]);
+   }
+
+   REAL EvaluatePrimal() const
+   {
+      if(primal_[0] < dim() && primal_[1] < dim()) {
+         const REAL pairwise_cost = primal_[0] == primal_[1] ? 0.0 : diff_cost_;
+         const REAL msg_cost = (*this)[primal_[0]] + (*this)[primal_[1] + dim()];
+         return pairwise_cost + msg_cost; 
+      } else {
+         return std::numeric_limits<REAL>::infinity();
+      }
+   }
+
+   template<typename VECTOR>
+   void min_marginal_1(VECTOR& m) const
+   {
+      assert(m.size() == dim());
+
+      const auto smallest2 = two_smallest_elements<REAL>(msg2_begin(), msg2_end());
+
+      for(INDEX i=0; i<dim(); ++i) {
+         const REAL same_label = (*this)[i+dim()];
+         const REAL diff_label = diff_cost() + ((*this)[i+dim()] == smallest2[0] ? smallest2[1] : smallest2[0]);
+         m[i] = (*this)[i] + std::min(same_label, diff_label); 
+      } 
+   }
+
+   template<typename VECTOR>
+   void min_marginal_2(VECTOR& m) const
+   {
+      assert(m.size() == dim());
+
+      const auto smallest2 = two_smallest_elements<REAL>(msg1_begin(), msg1_end());
+
+      for(INDEX i=0; i<dim(); ++i) {
+         const REAL same_label = (*this)[i];
+         const REAL diff_label = diff_cost() + ((*this)[i] == smallest2[0] ? smallest2[1] : smallest2[0]);
+         m[i] = (*this)[i+dim()] + std::min(same_label, diff_label); 
+      } 
+   }
+
+   REAL min_marginal_cut() const
+   {
+      const auto v = min_values();
+      return v[1] - v[0];
+      //return v[0] - v[1];
+   }
+
+   INDEX dim() const { return this->size()/2; }
+   INDEX dim1() const { return dim(); }
+   INDEX dim2() const { return dim(); }
+
+   REAL* msg1_begin() const { return this->begin(); }
+   REAL* msg1_end() const { return this->begin() + dim(); }
+   REAL msg1(const INDEX x1) const { assert(x1 < dim()); return (*this)[x1]; }
+   REAL& msg1(const INDEX x1) { assert(x1 < dim()); return (*this)[x1]; }
+
+   REAL* msg2_begin() const { return this->begin() + dim(); }
+   REAL* msg2_end() const { return this->end(); }
+   REAL msg2(const INDEX x2) const { return (*this)[dim() + x2]; }
+   REAL& msg2(const INDEX x2) { return (*this)[dim() + x2]; }
+
+   REAL diff_cost() const { return diff_cost_; }
+   REAL& diff_cost() { return diff_cost_; }
+
+   void init_primal() { primal_[0] = std::numeric_limits<INDEX>::max(); primal_[1] = std::numeric_limits<INDEX>::max(); }
+   auto& primal() { return primal_; }
+   const auto& primal() const { return primal_; }
+
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector<REAL>*>(this), diff_cost_ ); }
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+
+protected:
+   REAL diff_cost_;
+   std::array<INDEX,2> primal_;
+
+};
 } // end namespace LP_MP
 
 #endif // LP_MP_SIMPLEX_FACTOR_HXX

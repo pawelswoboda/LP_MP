@@ -231,6 +231,64 @@ namespace LP_MP {
    return true;
    }
 
+   template<typename MRF_CONSTRUCTOR>
+   bool ParsePottsGM(const std::string filename, MRF_CONSTRUCTOR& mrf)
+   {
+   typedef double ValueType;
+   typedef size_t IndexType;
+   typedef size_t LabelType;
+   typedef opengm::Adder OperatorType;
+   typedef opengm::Minimizer AccumulatorType;
+   typedef opengm::DiscreteSpace<IndexType, LabelType> SpaceType;
+
+   // Set functions for graphical model
+   typedef opengm::meta::TypeListGenerator<
+      opengm::ExplicitFunction<ValueType, IndexType, LabelType>,
+      opengm::PottsFunction<ValueType, IndexType, LabelType>
+   >::type FunctionTypeList;
+
+
+   typedef opengm::GraphicalModel<
+      ValueType,
+      OperatorType,
+      FunctionTypeList,
+      SpaceType
+   > GmType;
+   
+
+   GmType gm; 
+   opengm::hdf5::load(gm, filename,"gm");
+
+   for(INDEX f=0; f<gm.numberOfFactors(); ++f){
+
+      if(gm[f].numberOfVariables()==0){
+         // ignore for now
+      }
+      else if(gm[f].numberOfVariables()==1){
+         const INDEX i = gm.variableOfFactor(f,0);
+         std::vector<REAL> unaryCost(gm[f].numberOfLabels(0));         
+         for(INDEX l=0; l<gm[f].numberOfLabels(0); ++l){
+            unaryCost[l] = gm[f](std::array<INDEX,1>({l}).begin()); 
+         } 
+         mrf.AddUnaryFactor(i,unaryCost);
+      } 
+      else if(gm[f].numberOfVariables()==2){
+         const INDEX i = gm.variableOfFactor(f,0);
+         const INDEX j = gm.variableOfFactor(f,1);
+         assert( gm[f](std::array<INDEX,2>({0,0}).begin()) == 0.0 );
+         const REAL diff_cost = gm[f](std::array<INDEX,2>({0,1}).begin());
+         mrf.AddPairwiseFactor(i,j,diff_cost);
+      }
+      else{
+         std::cout << "Factors of order higher than 2 are so far not supported !" <<std::endl;
+         return 1;
+      }
+
+   }
+
+
+   return true;
+   }
 
 } // end namespace LP_MP
 
