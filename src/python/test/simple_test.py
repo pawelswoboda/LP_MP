@@ -1,6 +1,7 @@
 # FIXME dirty hack
 import sys
-sys.path.append('/home/consti/Work/software/bld/LP_MP/python')
+#sys.path.append('/home/consti/Work/software/bld/LP_MP/python')
+sys.path.append('/home/constantin/Work/software/bld/LP_MP/python')
 # this assumes that lp_mp is in the python path
 import lp_mp
 

@@ -7,6 +7,7 @@ SET(SOURCE_FILES
    lifted_multicut_h5_grid.cpp
    potts_via_multiway_cut.cpp
    mc_test_simple.cpp
+   mc_bin.cpp
    )
 
 
