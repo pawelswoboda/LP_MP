@@ -1974,13 +1974,15 @@ public:
       assert(i1<i2);
       auto* f = MULTICUT_CONSTRUCTOR::AddUnaryFactor(i1,i2,cost);
       if(!addingTighteningEdges) {
-         baseEdges_.push_back({i1,i2,f});
+         baseEdges_.push_back({i1, i2, f});
+      } else { // all auxiliary edges may be regarded as lifted ones
+         AddLiftedUnaryFactor(i1, i2, cost);
       }
       return f;
    }
    typename MULTICUT_CONSTRUCTOR::UnaryFactorContainer* AddLiftedUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost)
    {
-      auto* f = MULTICUT_CONSTRUCTOR::AddUnaryFactor(i1,i2,cost);
+      auto* f = MULTICUT_CONSTRUCTOR::AddUnaryFactor(i1, i2, cost);
       liftedEdges_.push_back({i1,i2,f}); 
       return f;
    }
@@ -2309,8 +2311,65 @@ public:
       return true;
    }
 
+   void round()
+   {
+      std::cout << "compute lifted multicut primal with GAEC + KLj\n";
+      andres::graph::Graph<> originalGraph(this->noNodes_);
+      andres::graph::Graph<> liftedGraph(this->noNodes_);
+      std::vector<REAL> edgeValues;
+      edgeValues.reserve(baseEdges_.size() + liftedEdges_.size());
+
+      std::cout << "# base edges = " << baseEdges_.size() << ", # lifted edges = " << liftedEdges_.size() << "\n";
+      // do zrobienia: initalize the graph structures only once
+      for(const auto& e : baseEdges_) {
+         originalGraph.insertEdge(e.i, e.j);
+         liftedGraph.insertEdge(e.i,e.j);
+         edgeValues.push_back(e.f->GetFactor()->operator[](0));
+      }
+      for(const auto& e : liftedEdges_) {
+         liftedGraph.insertEdge(e.i, e.j);
+         edgeValues.push_back(e.f->GetFactor()->operator[](0));
+      }
+
+      primal_handle_ = std::async(std::launch::async, lifted_gaec_klj, std::move(originalGraph), std::move(liftedGraph), std::move(edgeValues));
+   }
+
+   static std::vector<char> lifted_gaec_klj(andres::graph::Graph<> original_graph, andres::graph::Graph<> lifted_graph, std::vector<REAL> edge_values)
+   {
+      std::vector<char> labeling(edge_values.size(),0);
+      if(original_graph.numberOfEdges() > 0) {
+         andres::graph::multicut_lifted::greedyAdditiveEdgeContraction(original_graph,lifted_graph,edge_values,labeling);
+         andres::graph::multicut_lifted::kernighanLin(original_graph,lifted_graph,edge_values,labeling,labeling);
+      }
+      return labeling;
+   }
+
+   // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
    void ComputePrimal()
-   {}
+   {
+      if(!primal_handle_.valid()) { 
+         round();
+         return;
+      }
+
+      const auto primal_state = primal_handle_.wait_for(std::chrono::seconds(0));
+
+      if(primal_state == std::future_status::deferred) {
+         assert(false); // this should not happen, we launch immediately!
+         throw std::runtime_error("asynchronuous primal multicut rounding was deferred, but this should not happen");
+      } else if(primal_state == std::future_status::ready) {
+
+         std::cout << "collect lifted multicut rounding result\n";
+         auto labeling = primal_handle_.get();
+         this->write_labeling_into_factors(labeling);
+
+         std::cout << "restart primal rounding\n";
+         round();
+
+      } else {
+         std::cout << "lifted multicut rounding is currently running.\n";
+      }
+   } 
 
    /* primals are different now!
    void ComputePrimal(PrimalSolutionStorage::Element primal) const
@@ -2391,6 +2450,8 @@ public:
    std::vector<std::vector<INDEX>> liftedEdgesLiftedMulticutFactors_;
 
    std::map<CutId,std::pair<LiftedMulticutCutFactorContainer*,std::vector<Edge>>> liftedMulticutFactors_;
+
+   decltype(std::async(std::launch::async, lifted_gaec_klj, andres::graph::Graph<>(0), andres::graph::Graph<>(0), std::vector<REAL>{})) primal_handle_;
 };
 
 } // end namespace LP_MP

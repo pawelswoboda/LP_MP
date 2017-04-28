@@ -192,9 +192,62 @@ struct FMC_MULTIWAY_CUT {
    using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
    using mrf = StandardMrfConstructor<FMC_MULTIWAY_CUT, 4, 5, 7, 8>;
    using multiway_cut_c = multiway_cut_constructor<FMC_MULTIWAY_CUT,0,1,9>;
-   //using multiway_cut_= multiway_cut_constructor<multicut_cow, 4,5, 7,8,9>;
    using ProblemDecompositionList = meta::list<multicut_cow, mrf, multiway_cut_c>; 
 };
+
+struct FMC_ASYMMETRIC_MULTIWAY_CUT {
+   constexpr static const char* name = "Asymmetric multiway cut with cycle and odd wheel constraints";
+
+   // multicut
+   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 0>;
+   using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 1>;
+   using odd_3_wheel_factor_container = FactorContainer<multicut_odd_3_wheel_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 2>;
+   using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_ASYMMETRIC_MULTIWAY_CUT, 3>;
+
+   using edge_triplet_message_0_container = MessageContainer<multicut_edge_triplet_message_0, 0, 1, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 0 >;
+   using edge_triplet_message_1_container = MessageContainer<multicut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 1 >;
+   using edge_triplet_message_2_container = MessageContainer<multicut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 2 >;
+
+   using triplet_odd_wheel_message_012 = MessageContainer<multicut_triplet_odd_3_wheel_message_012, 1, 2, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 3>;
+   using triplet_odd_wheel_message_013 = MessageContainer<multicut_triplet_odd_3_wheel_message_013, 1, 2, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 4>;
+   using triplet_odd_wheel_message_023 = MessageContainer<multicut_triplet_odd_3_wheel_message_023, 1, 2, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 5>;
+   using triplet_odd_wheel_message_123 = MessageContainer<multicut_triplet_odd_3_wheel_message_123, 1, 2, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 6>;
+
+   // mrf
+   using unary_factor_container = FactorContainer<UnarySimplexFactor, FMC_ASYMMETRIC_MULTIWAY_CUT, 4, true>;
+   using potts_factor_container = FactorContainer<amwc_pairwise_potts_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 5>;
+
+   using unary_pairwise_message_0_container = MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP,false,true>, 4, 5, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 7>;
+   using unary_pairwise_message_1_container = MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP,false,true>, 4, 5, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 8>;
+
+   // join multicut edge and Potts factor
+   using multicut_edge_potts_message_container = MessageContainer<multicut_edge_potts_message, 0, 5, atMostOneMessage, atMostOneMessage, FMC_ASYMMETRIC_MULTIWAY_CUT, 9>; 
+   // when we tighten, additional edges may not be connected to any MRF factor. Also, before we tighten we actually
+
+   using FactorList = meta::list< 
+      edge_factor_container,
+      triplet_factor_container,
+      odd_3_wheel_factor_container,
+      ConstantFactorContainer,
+
+      unary_factor_container,
+      potts_factor_container 
+         >;
+   using MessageList = meta::list<
+      edge_triplet_message_0_container, edge_triplet_message_1_container, edge_triplet_message_2_container,  
+      triplet_odd_wheel_message_012, triplet_odd_wheel_message_013, triplet_odd_wheel_message_023, triplet_odd_wheel_message_123,
+
+      unary_pairwise_message_0_container, unary_pairwise_message_1_container,
+      multicut_edge_potts_message_container 
+      >;
+
+   using multicut_c = MulticutConstructor<FMC_ASYMMETRIC_MULTIWAY_CUT,0,1, 0,1,2, 3>;
+   using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
+   using mrf = StandardMrfConstructor<FMC_ASYMMETRIC_MULTIWAY_CUT, 4, 5, 7, 8>;
+   using multiway_cut_c = multiway_cut_constructor<FMC_ASYMMETRIC_MULTIWAY_CUT,0,1,9>;
+   using ProblemDecompositionList = meta::list<multicut_cow, mrf, multiway_cut_c>; 
+};
+
 
 namespace MulticutOpenGmInput {
 

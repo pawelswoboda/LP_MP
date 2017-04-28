@@ -6,6 +6,7 @@
 #include "factors/simplex_factor.hxx"
 #include "vector.hxx"
 #include "help_functions.hxx"
+#include <bitset>
 
 namespace LP_MP {
 
@@ -280,6 +281,108 @@ public:
     {
        msg -= omega*r.min_marginal_cut();
     } 
+};
+
+class amwc_pairwise_potts_factor : public pairwise_potts_factor {
+public:
+   using pairwise_potts_factor::pairwise_potts_factor;
+
+   template<typename ITERATOR>
+   void set_internal_boundary(ITERATOR begin, ITERATOR end)
+   {
+      assert(std::distance(begin, end) <= A_.size());
+      for(INDEX i=0; i<std::distance(begin,end); ++i) {
+         if(*(begin+i)) {
+            A_[i] = true;
+         } else {
+            A_[i] = false;
+         }
+      }
+   }
+
+   REAL LowerBound() const
+   {
+      REAL lb = pairwise_potts_factor::LowerBound();
+      // additionaly go over all identity labelings and if internal boundaries are allowed, add boundary cost as well
+      for(INDEX i=0; i<this->dim(); ++i) {
+         if(A_[i]) {
+            lb = std::min(lb, this->msg1(i) + this->msg2(i) + this->diff_cost());
+         }
+         return lb;
+      }
+   }
+
+   REAL EvaluatePrimal() const
+   {
+      const INDEX x1 = this->primal()[0];
+      const INDEX x2 = this->primal()[1];
+      if(x1 != x2 && cut_) {
+         return std::numeric_limits<REAL>::infinity();
+      }
+      if(x1 == x2 && cut_ && !A_[x1]) {
+         return std::numeric_limits<REAL>::infinity();
+      }
+
+      REAL val = this->msg1(this->primal()[0]) + this->msg2(this->primal()[1]);
+      if(cut_) { val += diff_cost(); }
+      return val;
+   }
+
+   template<typename VECTOR>
+   void min_marginal_1(VECTOR& m) const
+   {
+      assert(m.size() == dim());
+
+      const auto smallest2 = two_smallest_elements<REAL>(msg2_begin(), msg2_end());
+
+      for(INDEX i=0; i<dim(); ++i) {
+         const REAL same_label = (*this)[i+dim()];
+         REAL diff_label = diff_cost() + ((*this)[i+dim()] == smallest2[0] ? smallest2[1] : smallest2[0]);
+         if(A_[i]) {
+            diff_label = std::min(diff_label, diff_cost() + same_label);
+         }
+         m[i] = (*this)[i] + std::min(same_label, diff_label); 
+      } 
+   }
+
+   template<typename VECTOR>
+   void min_marginal_2(VECTOR& m) const
+   {
+      assert(m.size() == dim());
+
+      const auto smallest2 = two_smallest_elements<REAL>(msg1_begin(), msg1_end());
+
+      for(INDEX i=0; i<dim(); ++i) {
+         const REAL same_label = (*this)[i];
+         REAL diff_label = diff_cost() + ((*this)[i] == smallest2[0] ? smallest2[1] : smallest2[0]);
+         if(A_[i]) {
+            diff_label = std::min(diff_label, diff_cost() + same_label);
+         }
+         m[i] = (*this)[i+dim()] + std::min(same_label, diff_label); 
+      } 
+   }
+
+   REAL min_marginal_cut() const
+   {
+      auto v = min_values();
+      for(INDEX i=0; i<this->dim(); ++i) {
+         if(A_[i]) {
+            v[1] = std::min(v[1], this->msg1(i) + this->msg2(i) + this->diff_cost());
+         }
+      }
+
+      return v[1] - v[0];
+   }
+
+   void init_primal() { pairwise_potts_factor::init_primal(); cut_ = false; }
+   auto& cut() { return cut_; }
+   const auto cut() const { return cut_; }
+
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { pairwise_potts_factor::serialize_primal(ar); ar( cut_ ); }
+
+private:
+   std::bitset<64> A_ = std::bitset<64>(false); // the classes which allow internal boundaries
+   bool cut_;
 };
 
 } // end namespace LP_MP
