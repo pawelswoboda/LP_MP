@@ -2,6 +2,7 @@ if(BUILD_TESTS)
    # tests that are compiled unconditionally
    SET(BASE_TEST_FILES 
       #simplex.cpp
+      potts_factor.cpp
       #simplex_marginalization.cpp
       #min_cost_flow.cpp
       #min_conv.cpp

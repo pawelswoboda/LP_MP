@@ -3,12 +3,15 @@
 
 #include "factors/labeling_list_factor.hxx"
 #include "multicut_factors_messages.hxx"
+#include "factors/simplex_factor.hxx"
 #include "vector.hxx"
 #include "help_functions.hxx"
 
 namespace LP_MP {
 
+ 
 // for each node v in the multicut graph, exactly one edge from the terminals must be non-cut
+// corresponds to unary factor in Potts MRF
 class one_terminal_edge_active_factor : public vector<REAL> {
 public:
    one_terminal_edge_active_factor(const INDEX no_edge) 
@@ -50,7 +53,8 @@ private:
    INDEX non_cut_edge_;
 };
 
-// message between edge and one_temrinal_edge_active_factor defined above
+// message between multicut edge and one_terminal_edge_active_factor defined above
+// to do: obsolete, remove
 class edge_terminal_constraint_message {
 public:
    edge_terminal_constraint_message(const INDEX idx) : right_index_(idx) {}
@@ -100,120 +104,83 @@ private:
    const INDEX right_index_; // entry in one_temrinal_edge_active_factor. first entry refers to multicut edge
 };
 
-// the convex hull of a given edge uv and all terminal edges tv and tu for t in T (the terminal node set)
-class multi_terminal_factor : public vector<REAL> {
+// the convex hull of a given edge uv and all terminal edges tv and tu for t in T (the terminal node set).
+// Corresponds to the pairwise factor in graphical models
+class multi_terminal_factor : public pairwise_potts_factor {
 public:
-  multi_terminal_factor(const INDEX T) : vector<REAL>(2*T+1) {} // vector stores cost of all terminal edges attached to u and v and of the edge uv
-
-  INDEX no_classes() const { return this->size()/2; }
-
-  // min cost for same label and different label
-  std::array<REAL,2> min_values() const
-  {
-    const REAL sum_u = std::accumulate(this->begin(), this->begin() + no_classes(), 0.0);
-    const REAL sum_v = std::accumulate(this->begin() + no_classes(), this->begin() + 2*no_classes(), 0.0);
-
-    // v holds the unary costs for one hot encoding (e.g. as in MRF)
-    vector<REAL> v(2*no_classes());
-    for(INDEX i=0; i<no_classes(); ++i) {
-      v[i] = sum_u - (*this)[i];
-    }
-    for(INDEX i=0; i<no_classes(); ++i) {
-      v[i+no_classes()] = sum_v - (*this)[i+no_classes()];
-    }
-    const auto smallest2 = two_smallest_elements<REAL>(v.begin() + no_classes(), v.begin() + 2*no_classes());
-
-    REAL min_same_label = std::numeric_limits<REAL>::infinity();
-    REAL min_diff_label = std::numeric_limits<REAL>::infinity();
-    for(INDEX i=0; i<no_classes(); ++i) {
-      const REAL same_label = v[i] + v[i+no_classes()];
-      min_same_label = std::min(min_same_label, same_label);
-      const REAL diff_label = v[i] + v[2*no_classes()] + v[i+no_classes()] == smallest2[0] ? smallest2[1] : smallest2[0];
-      min_diff_label = std::min(min_diff_label, diff_label);
-    }
-    return {min_same_label, min_diff_label}; 
-  }
+  multi_terminal_factor(const INDEX T) : pairwise_potts_factor(T, 0.0) {} 
 
   REAL LowerBound() const {
-    const auto v = min_values();
-    return std::min(v[0], v[1]);
+     cut_to_one_hot_encoding(msg1_begin(), msg1_end());
+     cut_to_one_hot_encoding(msg2_begin(), msg2_end());
+     const REAL lb = pairwise_potts_factor::LowerBound();
+     one_hot_to_cut_encoding(msg1_begin(), msg1_end());
+     one_hot_to_cut_encoding(msg2_begin(), msg2_end());
+     return lb;
   }
 
   REAL EvaluatePrimal() const 
   {
-    const REAL sum_u = std::accumulate(this->begin(), this->begin() + no_classes(), 0.0);
-    const REAL sum_v = std::accumulate(this->begin() + no_classes(), this->begin() + 2*no_classes(), 0.0);
+     if(this->primal_[0] < this->dim() && this->primal_[1] < this->dim()) {
+        const REAL sum_u = std::accumulate(this->msg1_begin(), this->msg1_end(), 0.0);
+        const REAL sum_v = std::accumulate(this->msg2_begin(), this->msg2_end(), 0.0);
 
-    const REAL local_costs = sum_u - (*this)[label_[0]] + sum_v - (*this)[no_classes() + label_[1]];
-    if(label_[0] == label_[1]) {
-      return local_costs;
-    } else {
-      return local_costs + (*this)[2*no_classes()];
-    }
+        const REAL local_costs = sum_u - *(this->msg1_begin() + primal_[0]) + sum_v - *(this->msg2_begin() + primal_[1]);
+        if(primal_[0] == primal_[1]) {
+           return local_costs;
+        } else {
+           return local_costs + this->diff_cost();
+        }
+     } else {
+        return std::numeric_limits<REAL>::infinity();
+     }
   }
 
   template<typename VECTOR>
   void min_marginal_1(VECTOR& m) const
   {
-    assert(m.size() == no_classes());
-    const REAL sum_u = std::accumulate(this->begin(), this->begin() + no_classes(), 0.0);
-    const REAL sum_v = std::accumulate(this->begin() + no_classes(), this->begin() + 2*no_classes(), 0.0);
-
-    // v holds the unary costs for one hot encoding (e.g. as in MRF)
-    vector<REAL> v(2*no_classes());
-    for(INDEX i=0; i<no_classes(); ++i) {
-      v[i] = sum_u - (*this)[i];
-    }
-    for(INDEX i=0; i<no_classes(); ++i) {
-      v[i+no_classes()] = sum_v - (*this)[i+no_classes()];
-    }
-    const auto smallest2 = two_smallest_elements<REAL>(v.begin() + no_classes(), v.begin() + 2*no_classes());
-
-    for(INDEX i=0; i<no_classes(); ++i) {
-      const REAL same_label = v[i+no_classes()];
-      const REAL diff_label = v[2*no_classes()] + v[i+no_classes()] == smallest2[0] ? smallest2[1] : smallest2[0];
-      m[i] = v[i] + std::min(same_label, diff_label); 
-    } 
-
-    // transform back from one hot encoding to all except one encoding
-    for(INDEX i=0; i<no_classes(); ++i) {
-
-    }
+     cut_to_one_hot_encoding(msg1_begin(), msg1_end());
+     cut_to_one_hot_encoding(msg2_begin(), msg2_end());
+     pairwise_potts_factor::min_marginal_1(m);
+     one_hot_to_cut_encoding(msg1_begin(), msg1_end());
+     one_hot_to_cut_encoding(msg2_begin(), msg2_end());
   }
 
   template<typename VECTOR>
   void min_marginal_2(VECTOR& m) const
   {
-    assert(m.size() == no_classes());
-    const REAL sum_u = std::accumulate(this->begin(), this->begin() + no_classes(), 0.0);
-    const REAL sum_v = std::accumulate(this->begin() + no_classes(), this->begin() + 2*no_classes(), 0.0);
+     cut_to_one_hot_encoding(msg1_begin(), msg1_end());
+     cut_to_one_hot_encoding(msg2_begin(), msg2_end());
+     pairwise_potts_factor::min_marginal_2(m);
+     one_hot_to_cut_encoding(msg1_begin(), msg1_end());
+     one_hot_to_cut_encoding(msg2_begin(), msg2_end());
+  }
 
-    // v holds the unary costs for one hot encoding (e.g. as in MRF)
-    vector<REAL> v(2*no_classes());
-    for(INDEX i=0; i<no_classes(); ++i) {
-      v[i] = sum_u - (*this)[i];
-    }
-    for(INDEX i=0; i<no_classes(); ++i) {
-      v[i+no_classes()] = sum_v - (*this)[i+no_classes()];
-    }
-    const auto smallest2 = two_smallest_elements<REAL>(v.begin(), v.begin() + no_classes());
-
-    for(INDEX i=0; i<no_classes(); ++i) {
-      const REAL same_label = v[i];
-      const REAL diff_label = v[2*no_classes()] + v[i] == smallest2[0] ? smallest2[1] : smallest2[0];
-      m[i] = v[i+no_classes()] + std::min(same_label, diff_label); 
-    } 
+  REAL min_marginal_cut() const
+  {
+     const auto m = this->min_values();
+     return m[1] - m[0];
   }
   
-  void init_primal() { label_[0] = std::numeric_limits<INDEX>::max(); label_[1] = std::numeric_limits<INDEX>::max(); }
-  auto& primal() { return label_; }
-  const auto& primal() const { return label_; }
+protected:
 
-  template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector<REAL>*>(this) ); }
-  template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( label_ ); }
+  // transform costs
+  template<typename ITERATOR>
+  static void cut_to_one_hot_encoding(ITERATOR begin, ITERATOR end)
+  {
+     const REAL sum = std::accumulate(begin, end, 0.0);
+     std::transform(begin, end, begin, [sum](const REAL x) { return sum - x; });
+     //for(; begin != end; ++begin) { *begin = sum - *begin; }
+  }
 
-private:
-  std::array<INDEX,2> label_;
+  template<typename ITERATOR>
+  static void one_hot_to_cut_encoding(ITERATOR begin, ITERATOR end)
+  {
+     const INDEX n = std::distance(begin, end);
+     assert(n > 1);
+     const REAL sum = std::accumulate(begin, end, 0.0);
+     std::transform(begin, end, begin, [n,sum](const REAL x) { return -x + sum/(REAL(n-1)); }); 
+  }
 };
 
 
@@ -236,12 +203,12 @@ public:
     void RepamRight(RIGHT_FACTOR& r, const MSG& msg)
     {  
       if(POSITION == 0) {
-        for(INDEX i=0; i<r.no_classes(); ++i) {
-          r[i] += msg[i];
+        for(INDEX i=0; i<r.dim(); ++i) {
+          *(r.msg1_begin() + i) += msg[i];
         }
       } else {
-        for(INDEX i=0; i<r.no_classes(); ++i) {
-          r[i + r.no_classes()] += msg[i];
+        for(INDEX i=0; i<r.dim(); ++i) {
+          *(r.msg2_begin() + i) += msg[i];
         }
       }
     }
@@ -250,11 +217,11 @@ public:
     void ReceiveMessageFromRight(const RIGHT_FACTOR& r, MSG& msg)
     {
       // perform fast belief propagation similary as for Potts MRF.
-      vector<REAL> m(r.no_classes());
+      vector<REAL> m(r.dim());
       if(POSITION == 0) {
         r.min_marginal_1(m);
       } else {
-        r.min_marginal_1(m); 
+        r.min_marginal_2(m); 
       }
       msg -= m;
     }
@@ -272,50 +239,48 @@ public:
     }
 };
 
-class multicut_edge_multi_terminal_message
+// do zrobienia> wypelnij tu
+// left factor is multicut edge, right one is multi_terminal_factor
+class multicut_edge_potts_message
 {
 public:
   template<typename LEFT_FACTOR, typename MSG>
     void RepamLeft(LEFT_FACTOR& l, const MSG& msg)
     {
-      l += msg;
-    }
-  template<typename RIGHT_FACTOR, typename MSG>
-    void RepamRight(RIGHT_FACTOR& r, const MSG& msg)
-    {  
-      r[r.no_classes()] += msg;
+      l[0] += msg;
     }
 
   template<typename RIGHT_FACTOR, typename MSG>
+    void RepamRight(RIGHT_FACTOR& r, const MSG& msg)
+    {  
+      r.diff_cost() += msg;
+    }
+
+  
+  template<typename RIGHT_FACTOR, typename MSG>
     void ReceiveMessageFromRight(const RIGHT_FACTOR& r, MSG& msg)
     {
-      // perform fast belief propagation similary as for Potts MRF.
+       msg -= r.min_marginal_cut();
+    }
+    
+  template<typename LEFT_FACTOR, typename MSG>
+    void ReceiveMessageFromLeft(const LEFT_FACTOR& l, MSG& msg)
+    {
+       msg -= l[0];
     }
 
   template<typename LEFT_FACTOR, typename MSG>
     void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
     {
-      msg -= omega*l;
+      msg -= omega*l[0];
     }
-
+    
+  template<typename RIGHT_FACTOR, typename MSG>
+    void SendMessageToLeft(const RIGHT_FACTOR& r, MSG& msg, const REAL omega)
+    {
+       msg -= omega*r.min_marginal_cut();
+    } 
 };
-
-
-// first edge is multicut edge, then come edges to terminal node
-// it is only required that whenever multicut edge is cut, then at least one terminal edge must be cut as well.
-using asymmetric_multiway_cut_triplet_labelings = labelings<
-  labeling<0,0,1>,
-  labeling<0,1,0>,
-  labeling<0,1,1>,
-  labeling<1,0,1>,
-  labeling<1,1,0>,
-  labeling<1,1,1>
-   >;
-
-using asymmetric_multiway_cut_triplet_factor = labeling_factor< asymmetric_multiway_cut_triplet_labelings, true >;
-using edge_asymmetric_multiway_cut_triplet_message_0 = labeling_message< multicut_edge_labelings, asymmetric_multiway_cut_triplet_labelings, 0 >;
-using edge_asymmetric_multiway_cut_triplet_message_1 = labeling_message< multicut_edge_labelings, asymmetric_multiway_cut_triplet_labelings, 1 >;
-using edge_asymmetric_multiway_cut_triplet_message_2 = labeling_message< multicut_edge_labelings, asymmetric_multiway_cut_triplet_labelings, 2 >;
 
 } // end namespace LP_MP
 
