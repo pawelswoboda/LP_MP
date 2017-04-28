@@ -10,7 +10,6 @@ def simple_multicut():
     weights = [.5 ,  .5   , .5  ,  .5   ]
 
     mc_opts = lp_mp.solvers.MulticutOptions()
-    print mc_opts.vec()
     edges = lp_mp.solvers.multicut(uv_ids, weights, mc_opts)
 
     assert len(edges) == len(weights)
