@@ -27,7 +27,8 @@ namespace LP_MP {
             const size_t tightenInterval,
             const size_t tightenIteration,
             const double tightenSlope,
-            const double tightenConstraintsPercentage
+            const double tightenConstraintsPercentage,
+            const size_t maxIter // default : 1000
         ) :
             primalComputationInterval_(primalComputationInterval),
             standardReparametrization_(standardReparametrization),
@@ -37,7 +38,8 @@ namespace LP_MP {
             tightenInterval_(tightenInterval),
             tightenIteration_(tightenIteration),
             tightenSlope_(tightenSlope),
-            tightenConstraintsPercentage_(tightenConstraintsPercentage)
+            tightenConstraintsPercentage_(tightenConstraintsPercentage),
+            maxIter_(maxIter)
         {}
 
         std::vector<std::string> toOptionsVector() const {
@@ -51,7 +53,8 @@ namespace LP_MP {
               "--tightenInterval",           std::to_string(tightenInterval_),
               "--tightenIteration",          std::to_string(tightenIteration_),
               "--tightenSlope",              std::to_string(tightenSlope_),
-              "--tightenConstraintsPercentage", std::to_string(tightenConstraintsPercentage_)
+              "--tightenConstraintsPercentage", std::to_string(tightenConstraintsPercentage_),
+              "--maxIter", std::to_string(maxIter_)
             };
             if(tighten_)
                 options.push_back("--tighten");
@@ -67,6 +70,7 @@ namespace LP_MP {
         size_t tightenIteration() const {return tightenIteration_;}
         double tightenSlope() const {return tightenSlope_;}
         double tightenConstraintsPercentage() const {return tightenConstraintsPercentage_;}
+        size_t maxIter() const {return maxIter_;}
         
     private:
         const size_t primalComputationInterval_;
@@ -78,6 +82,7 @@ namespace LP_MP {
         const size_t tightenIteration_;
         const double tightenSlope_;
         const double tightenConstraintsPercentage_;
+        const size_t maxIter_;
     };
     
     //
@@ -117,7 +122,8 @@ namespace LP_MP {
                     size_t,
                     size_t,
                     double,
-                    double
+                    double,
+                    size_t
                 >(),
                 py::arg_t<size_t>("primalComputationInterval", 100), // check
                 py::arg_t<std::string>("standardReparametrization", "anisotropic"), // check
@@ -127,7 +133,8 @@ namespace LP_MP {
                 py::arg_t<size_t>("tightenInterval", 100),
                 py::arg_t<size_t>("tightenIteration", 2),
                 py::arg_t<double>("tightenSlope", 0.05),
-                py::arg_t<double>("tightenConstraintsPercentage", 0.1) 
+                py::arg_t<double>("tightenConstraintsPercentage", 0.1),
+                py::arg_t<size_t>("maxIter", 1000) 
             )
             .def_property_readonly("primalComputationInterval",&MulticutOptions::primalComputationInterval)
             .def_property_readonly("standardReparametrization",&MulticutOptions::standardReparametrization)
@@ -138,6 +145,7 @@ namespace LP_MP {
             .def_property_readonly("tightenIteration",&MulticutOptions::tightenIteration)
             .def_property_readonly("tightenSlope",&MulticutOptions::tightenSlope)
             .def_property_readonly("tightenConstraintsPercentage",&MulticutOptions::tightenConstraintsPercentage)
+            .def_property_readonly("maxIter",&MulticutOptions::maxIter)
         ;
     }
 
