@@ -1,6 +1,11 @@
 LP_MP
 ========
 
+TODO !!!
+Make sure linker flags are set correctly for the py bindings
+!!!
+
+
 LP_MP is a C++ framework for developing scalable convergent message passing solvers for a wide range of LP-relaxations to discrete optimization problems.
 For a theoretical introduction to the techniques used and the class of problems that can be optimized see [here](https://arxiv.org/abs/1612.05460).
 
