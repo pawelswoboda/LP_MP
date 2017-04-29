@@ -28,7 +28,10 @@ namespace LP_MP {
             const size_t tightenIteration,
             const double tightenSlope,
             const double tightenConstraintsPercentage,
-            const size_t maxIter // default : 1000
+            const size_t maxIter,                    // default : 1000
+            const double minDualImprovement,         // default 0 -> not used
+            const size_t minDualImprovementInterval, // default 0 -> not used
+            const size_t timeout                     // default 0 -> not used
         ) :
             primalComputationInterval_(primalComputationInterval),
             standardReparametrization_(standardReparametrization),
@@ -39,7 +42,10 @@ namespace LP_MP {
             tightenIteration_(tightenIteration),
             tightenSlope_(tightenSlope),
             tightenConstraintsPercentage_(tightenConstraintsPercentage),
-            maxIter_(maxIter)
+            maxIter_(maxIter),
+            minDualImprovement_(minDualImprovement),
+            minDualImprovementInterval_(minDualImprovementInterval),
+            timeout_(timeout)
         {}
 
         std::vector<std::string> toOptionsVector() const {
@@ -54,10 +60,22 @@ namespace LP_MP {
               "--tightenIteration",          std::to_string(tightenIteration_),
               "--tightenSlope",              std::to_string(tightenSlope_),
               "--tightenConstraintsPercentage", std::to_string(tightenConstraintsPercentage_),
-              "--maxIter", std::to_string(maxIter_)
+              "--maxIter", std::to_string(maxIter_),
             };
             if(tighten_)
                 options.push_back("--tighten");
+            if(minDualImprovement_ > 0) {
+                options.push_back("--minDualImprovement");
+                options.push_back(std::to_string(minDualImprovement_));
+            }
+            if(minDualImprovementInterval_ > 0) {
+                options.push_back("--minDualImprovementInterval");
+                options.push_back(std::to_string(minDualImprovementInterval_));
+            }
+            if(timeout_ > 0) {
+                options.push_back("--timeout");
+                options.push_back(std::to_string(timeout_));
+            }
             return options;
         }
 
@@ -71,6 +89,9 @@ namespace LP_MP {
         double tightenSlope() const {return tightenSlope_;}
         double tightenConstraintsPercentage() const {return tightenConstraintsPercentage_;}
         size_t maxIter() const {return maxIter_;}
+        double minDualImprovement() const {return minDualImprovement_;}
+        size_t minDualImprovementInterval() const {return minDualImprovementInterval_;}
+        size_t timeout() const {return timeout_;}
         
     private:
         const size_t primalComputationInterval_;
@@ -83,6 +104,9 @@ namespace LP_MP {
         const double tightenSlope_;
         const double tightenConstraintsPercentage_;
         const size_t maxIter_;
+        const double minDualImprovement_;
+        const size_t minDualImprovementInterval_;
+        const size_t timeout_;
     };
     
     //
@@ -123,6 +147,9 @@ namespace LP_MP {
                     size_t,
                     double,
                     double,
+                    size_t,
+                    double,
+                    size_t,
                     size_t
                 >(),
                 py::arg_t<size_t>("primalComputationInterval", 100), // check
@@ -134,7 +161,10 @@ namespace LP_MP {
                 py::arg_t<size_t>("tightenIteration", 2),
                 py::arg_t<double>("tightenSlope", 0.05),
                 py::arg_t<double>("tightenConstraintsPercentage", 0.1),
-                py::arg_t<size_t>("maxIter", 1000) 
+                py::arg_t<size_t>("maxIter", 1000), 
+                py::arg_t<double>("minDualImprovement", 0.),
+                py::arg_t<size_t>("minDualImprovementInterval", 0),
+                py::arg_t<size_t>("timeout", 0) 
             )
             .def_property_readonly("primalComputationInterval",&MulticutOptions::primalComputationInterval)
             .def_property_readonly("standardReparametrization",&MulticutOptions::standardReparametrization)
@@ -146,6 +176,8 @@ namespace LP_MP {
             .def_property_readonly("tightenSlope",&MulticutOptions::tightenSlope)
             .def_property_readonly("tightenConstraintsPercentage",&MulticutOptions::tightenConstraintsPercentage)
             .def_property_readonly("maxIter",&MulticutOptions::maxIter)
+            .def_property_readonly("minDualImprovement",&MulticutOptions::minDualImprovement)
+            .def_property_readonly("timeout",&MulticutOptions::timeout)
         ;
     }
 
