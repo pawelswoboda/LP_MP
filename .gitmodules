@@ -1,3 +1,15 @@
 [submodule "external/pybind11"]
 	path = external/pybind11
 	url = https://github.com/pybind/pybind11.git
+[submodule "external/meta"]
+	path = external/meta
+	url = https://github.com/ericniebler/meta.git
+[submodule "external/tclap"]
+	path = external/tclap
+	url = https://github.com/eile/tclap.git
+[submodule "external/cereal"]
+	path = external/cereal
+	url = https://github.com/USCiLab/cereal.git
+[submodule "external/opengm"]
+	path = external/opengm
+	url = https://github.com/opengm/opengm.git

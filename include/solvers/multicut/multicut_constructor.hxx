@@ -750,7 +750,7 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
    void round()
    {
       std::cout << "compute multicut primal with GAEC + KLj\n";
-      andres::graph::Graph<> graph(noNodes_);
+      andres::graph::Graph<> graph(noNodes_); // would need nifty graph instead
       std::vector<REAL> edgeValues;
       edgeValues.reserve(unaryFactorsVector_.size());
 
@@ -758,10 +758,17 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
          graph.insertEdge(e.first[0], e.first[1]);
          edgeValues.push_back((*e.second->GetFactor())[0]);
       }
-
+      
+      // FIXME This is relevant!
+      // here we would need to hack in nifty
+      
       primal_handle_ = std::async(std::launch::async, gaec_klj, std::move(graph), std::move(edgeValues));
    }
 
+   // FIXME This is relevant!
+   // -> here the multicut for the primal solution is called
+   // -> this is where we would need to hack in nifty
+   
    static std::vector<char> gaec_klj(andres::graph::Graph<> g, std::vector<REAL> edge_values)
    {
       std::vector<char> labeling(g.numberOfEdges(), 0);
@@ -842,6 +849,8 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
 
 protected:
 
+   // FIXME This is relevant!
+   // here we would need to hack in nifty
    decltype(std::async(std::launch::async, gaec_klj, andres::graph::Graph<>(0), std::vector<REAL>{})) primal_handle_;
 
    //GlobalFactorContainer* globalFactor_;

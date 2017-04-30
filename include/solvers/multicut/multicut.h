@@ -55,6 +55,8 @@ struct FMC_MULTICUT {
    using ProblemDecompositionList = meta::list<multicut>;
 };
 
+// FIXME This is relevant!
+
 // It would be nice to be able to derive from FMC_MULTICUT. This is not possible due to deviating FMCs. Possibly parametrize above FMC with template
 template<MessageSendingType MESSAGE_SENDING>
 struct FMC_ODD_WHEEL_MULTICUT {
