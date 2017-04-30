@@ -1,5 +1,5 @@
 
-#include "multicut.h"
+#include "solvers/multicut/multicut.h"
 #include "visitors/standard_visitor.hxx"
 using namespace LP_MP;
 int main(int argc, char* argv[])

@@ -105,10 +105,9 @@ endif()
 
 file(GLOB_RECURSE headers include/*.hxx)
 include_directories(include)
+
+# TODO refactor this too !
 include_directories(lib)
-include_directories(.)
-
-add_subdirectory(solvers)
 add_subdirectory(lib)
-add_subdirectory(src)
 
+add_subdirectory(src)
