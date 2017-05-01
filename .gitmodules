@@ -13,3 +13,15 @@
 [submodule "external/opengm"]
 	path = external/opengm
 	url = https://github.com/opengm/opengm.git
+[submodule "external/cpp-sort"]
+	path = external/cpp-sort
+	url = https://github.com/Morwenn/cpp-sort.git
+[submodule "external/graph"]
+	path = external/graph
+	url = https://github.com/bjoern-andres/graph.git
+[submodule "external/Catch"]
+	path = external/Catch
+	url = https://github.com/philsquared/Catch.git
+[submodule "external/PEGTL"]
+	path = external/PEGTL
+	url = https://github.com/taocpp/PEGTL.git
