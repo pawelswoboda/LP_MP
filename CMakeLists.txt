@@ -50,10 +50,8 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/tclap/include")
 include(ExternalProject)
 ExternalProject_ADD(
    lingeling
-   #SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling-ala"
    URL "http://fmv.jku.at/lingeling/lingeling-bal-2293bef-151109.tar.gz"
    BUILD_IN_SOURCE 1
-   #BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/lingeling-ala"
    CONFIGURE_COMMAND "./configure.sh"
    BUILD_COMMAND "make"
    INSTALL_COMMAND ""

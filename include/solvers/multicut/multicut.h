@@ -35,6 +35,8 @@ namespace LP_MP {
 
 // do zrobienia: possibly rename unary to edge factor
 
+// FIXME This is relevant!
+
 template<MessageSendingType MESSAGE_SENDING>
 struct FMC_MULTICUT {
    constexpr static const char* name = "Multicut with cycle constraints";
@@ -54,8 +56,6 @@ struct FMC_MULTICUT {
    using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0,1,2,2>;
    using ProblemDecompositionList = meta::list<multicut>;
 };
-
-// FIXME This is relevant!
 
 // It would be nice to be able to derive from FMC_MULTICUT. This is not possible due to deviating FMCs. Possibly parametrize above FMC with template
 template<MessageSendingType MESSAGE_SENDING>

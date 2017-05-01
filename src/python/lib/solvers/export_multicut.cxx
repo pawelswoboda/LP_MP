@@ -10,7 +10,8 @@
 namespace py = pybind11;
 
 namespace LP_MP {
-    using FMC = FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>;
+    //using FMC = FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>;
+    using FMC = FMC_MULTICUT<MessageSendingType::SRMP>;
     using SolverType = ProblemConstructorRoundingSolver<Solver<FMC,LP,StandardTighteningVisitor>>;
     
     //*****************************
@@ -158,8 +159,8 @@ namespace LP_MP {
                 py::arg_t<std::string>("tightenReparametrization",  "damped_uniform"), // dampeld_uniform ?!
                 py::arg_t<bool>("tighten", true),
                 py::arg_t<size_t>("tightenInterval", 100),
-                py::arg_t<size_t>("tightenIteration", 2),
-                py::arg_t<double>("tightenSlope", 0.05),
+                py::arg_t<size_t>("tightenIteration", 10),
+                py::arg_t<double>("tightenSlope", 0.02),
                 py::arg_t<double>("tightenConstraintsPercentage", 0.1),
                 py::arg_t<size_t>("maxIter", 1000), 
                 py::arg_t<double>("minDualImprovement", 0.),

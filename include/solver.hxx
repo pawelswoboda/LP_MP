@@ -25,7 +25,7 @@ namespace LP_MP {
 
 // FIXME This is relevant!
 // -> in multicut we use:
-// Solver<FMC_ODD_WHEEL_MULTICUT,LP,StandardTighteningVisitor>
+// Solver<FMC_MULTICUT,LP,StandardTighteningVisitor>
 
 template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR>
 class Solver {
