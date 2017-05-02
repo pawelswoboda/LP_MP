@@ -9,6 +9,7 @@
 #include "graph.hxx"
 #include "max_flow.hxx"
 
+#include <fstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <queue>
@@ -24,6 +25,10 @@
 #include "andres/graph/multicut/greedy-additive.hxx"
 #include "andres/graph/multicut-lifted/kernighan-lin.hxx"
 #include "andres/graph/multicut-lifted/greedy-additive.hxx"
+
+// for debugging
+#include "andres/graph/hdf5/graph.hxx"
+
 
 
 namespace LP_MP {
@@ -758,6 +763,18 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
          graph.insertEdge(e.first[0], e.first[1]);
          edgeValues.push_back((*e.second->GetFactor())[0]);
       }
+        
+      // serialize the graph for debugging and exit
+      auto h5_handle = andres::graph::hdf5::createFile("./graph_tmp.h5");
+      andres::graph::hdf5::save(h5_handle, "graph", graph);
+      // serialize the weights to simple txt file
+      std::fstream fs;
+      fs.open("./edgevals_tmp.txt", std::fstream::out);
+      for(const auto edgeVal : edgeValues) {
+        fs << edgeVal << "\n";
+      }
+      fs.close();
+      exit(0);
       
       // FIXME This is relevant!
       // here we would need to hack in nifty
