@@ -765,16 +765,16 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
       }
         
       // serialize the graph for debugging and exit
-      auto h5_handle = andres::graph::hdf5::createFile("./graph_tmp.h5");
-      andres::graph::hdf5::save(h5_handle, "graph", graph);
-      // serialize the weights to simple txt file
-      std::fstream fs;
-      fs.open("./edgevals_tmp.txt", std::fstream::out);
-      for(const auto edgeVal : edgeValues) {
-        fs << edgeVal << "\n";
-      }
-      fs.close();
-      exit(0);
+      //auto h5_handle = andres::graph::hdf5::createFile("./graph_tmp.h5");
+      //andres::graph::hdf5::save(h5_handle, "graph", graph);
+      //// serialize the weights to simple txt file
+      //std::fstream fs;
+      //fs.open("./edgevals_tmp.txt", std::fstream::out);
+      //for(const auto edgeVal : edgeValues) {
+      //  fs << edgeVal << "\n";
+      //}
+      //fs.close();
+      //exit(0);
       
       // FIXME This is relevant!
       // here we would need to hack in nifty
