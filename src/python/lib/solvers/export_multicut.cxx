@@ -49,35 +49,52 @@ namespace LP_MP {
             timeout_(timeout)
         {}
 
+        // TODO expose min dual improvement
         std::vector<std::string> toOptionsVector() const {
+            
+            //std::vector<std::string> options = {
+            //  "export_multicut",
+            //  "-i", " ", // empty input file
+            //  "--primalComputationInterval", std::to_string(primalComputationInterval_),
+            //  "--standardReparametrization", standardReparametrization_,
+            //  "--roundingReparametrization", roundingReparametrization_,
+            //  "--tightenReparametrization",  tightenReparametrization_,
+            //  "--tightenInterval",           std::to_string(tightenInterval_),
+            //  "--tightenIteration",          std::to_string(tightenIteration_),
+            //  "--tightenSlope",              std::to_string(tightenSlope_),
+            //  "--tightenConstraintsPercentage", std::to_string(tightenConstraintsPercentage_),
+            //  "--maxIter", std::to_string(maxIter_),
+            //};
+            //if(tighten_)
+            //    options.push_back("--tighten");
+            //if(minDualImprovement_ > 0) {
+            //    options.push_back("--minDualImprovement");
+            //    options.push_back(std::to_string(minDualImprovement_));
+            //}
+            //if(minDualImprovementInterval_ > 0) {
+            //    options.push_back("--minDualImprovementInterval");
+            //    options.push_back(std::to_string(minDualImprovementInterval_));
+            //}
+            //if(timeout_ > 0) {
+            //    options.push_back("--timeout");
+            //    options.push_back(std::to_string(timeout_));
+            //}
+            //return options;
+            
             std::vector<std::string> options = {
-              "export_multicut",
-              "-i", " ", // empty input file
-              "--primalComputationInterval", std::to_string(primalComputationInterval_),
-              "--standardReparametrization", standardReparametrization_,
-              "--roundingReparametrization", roundingReparametrization_,
-              "--tightenReparametrization",  tightenReparametrization_,
-              "--tightenInterval",           std::to_string(tightenInterval_),
-              "--tightenIteration",          std::to_string(tightenIteration_),
-              "--tightenSlope",              std::to_string(tightenSlope_),
-              "--tightenConstraintsPercentage", std::to_string(tightenConstraintsPercentage_),
-              "--maxIter", std::to_string(maxIter_),
+                "export_multicut",
+                "-i", "",
+                "--tighten",
+                "--tightenReparametrization", "damped_uniform",
+                "--roundingReparametrization", "damped_uniform",
+                "--tightenIteration", "10",
+                "--tightenInterval", "100",
+                "--tightenSlope", "0.02",
+                "--tightenConstraintsPercentage", "0.1",
+                "--primalComputationInterval", "100",
+                "--maxIter", "1000"
             };
-            if(tighten_)
-                options.push_back("--tighten");
-            if(minDualImprovement_ > 0) {
-                options.push_back("--minDualImprovement");
-                options.push_back(std::to_string(minDualImprovement_));
-            }
-            if(minDualImprovementInterval_ > 0) {
-                options.push_back("--minDualImprovementInterval");
-                options.push_back(std::to_string(minDualImprovementInterval_));
-            }
-            if(timeout_ > 0) {
-                options.push_back("--timeout");
-                options.push_back(std::to_string(timeout_));
-            }
-            return options;
+        
         }
 
         size_t primalComputationInterval() const {return primalComputationInterval_;}
