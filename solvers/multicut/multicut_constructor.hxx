@@ -28,9 +28,6 @@
 
 namespace LP_MP {
 
-
-// hash function for maps used in constructors. Do zrobienia: define hash functions used somewhere globally in config.hxx
-
 enum class cut_type { multicut, maxcut };
 
 template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO,

@@ -1,5 +1,5 @@
-#ifndef LP_MP_LABELING_LIST_FACTOR
-#define LP_MP_LABELING_LIST_FACTOR
+#ifndef LP_MP_LABELING_LIST_FACTOR_HXX
+#define LP_MP_LABELING_LIST_FACTOR_HXX
 
 #include <array>
 #include "vector.hxx"
@@ -402,7 +402,6 @@ public:
 private:
 };
 
-
 } // end namespace LP_MP
 
-#endif //  LP_MP_LABELING_LIST_FACTOR
+#endif //  LP_MP_LABELING_LIST_FACTOR_HXX

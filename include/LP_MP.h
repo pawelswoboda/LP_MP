@@ -722,7 +722,7 @@ public:
            this->f_[i]->convert_primal(sat_, sat_var_[i]);
         }
         // to do: remove this
-        REAL primal_cost = this->EvaluatePrimal(this->f_.begin(), this->f_.end());
+        REAL primal_cost = this->EvaluatePrimal();
         std::cout << "sat solution cost = " << primal_cost << "\n";// ", sat threshold = " << th.th << "\n"; 
      } else {
         std::cout << "sat not feasible with current threshold\n"; // = " << th.th << "\n";
@@ -1198,14 +1198,14 @@ void LP::ComputeAnisotropicWeights(
    // 1) #{factors after current one, to which messages are sent from current factor}
    // 2) #{factors after current one, which receive messages from current one}
 //#ifdef LP_MP_PARALLEL
-//   std::unique_ptr<std::atomic<INDEX>[]> no_send_factors(new std::atomic<INDEX>[f_.size()]);
-//   std::fill(no_send_factors.get(), no_send_factors.get() + f_.size(), 0);
-//   std::unique_ptr<std::atomic<INDEX>[]> no_send_factors_later(new std::atomic<INDEX>[f_.size()]);
-//   std::fill(no_send_factors_later.get(), no_send_factors_later.get() + f_.size(), 0);
-//   std::unique_ptr<std::atomic<INDEX>[]> no_receiving_factors_later(new std::atomic<INDEX>[f_.size()]);
-//   std::fill(no_receiving_factors_later.get(), no_receiving_factors_later.get() + f_.size(), 0);
-//   std::unique_ptr<std::atomic<INDEX>[]> last_receiving_factor(new std::atomic<INDEX>[f_.size()]); // what is the last (in the order given by factor iterator) factor that receives a message?
-//   std::fill(last_receiving_factor.get(), last_receiving_factor.get() + f_.size(), 0);
+// std::atomic<INDEX>* no_send_factors = new std::atomic<INDEX>[f_.size()];
+//   std::fill(no_send_factors, no_send_factors + f_.size(), 0);
+//   std::atomic<INDEX>* no_send_factors_later = new std::atomic<INDEX>[f_.size()];
+//   std::fill(no_send_factors_later, no_send_factors_later + f_.size(), 0);
+//   std::atomic<INDEX>* no_receiving_factors_later = new std::atomic<INDEX>[f_.size()];
+//   std::fill(no_receiving_factors_later, no_receiving_factors_later + f_.size(), 0);
+//   std::atomic<INDEX>* last_receiving_factor = new std::atomic<INDEX>[f_.size()]; // what is the last (in the order given by factor iterator) factor that receives a message?
+//   std::fill(last_receiving_factor, last_receiving_factor + f_.size(), 0);
 //#else
    std::vector<INDEX> no_send_factors(f_.size(),0);
    std::vector<INDEX> no_send_factors_later(f_.size(),0);
