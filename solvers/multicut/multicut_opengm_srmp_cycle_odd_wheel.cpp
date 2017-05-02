@@ -5,7 +5,7 @@ using namespace LP_MP;
 int main(int argc, char* argv[])
 
 {
-ProblemConstructorRoundingSolver<Solver<FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>,LP,StandardTighteningVisitor>> solver(argc,argv);
+CombinedMPProblemConstructorRoundingSolver<Solver<FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>,LP,StandardTighteningVisitor>> solver(argc,argv);
 solver.ReadProblem(MulticutOpenGmInput::ParseProblem<Solver<FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>,LP,StandardTighteningVisitor>>);
 return solver.Solve();
 

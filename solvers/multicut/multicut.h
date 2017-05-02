@@ -40,7 +40,7 @@ struct FMC_MULTICUT {
    constexpr static const char* name = "Multicut with cycle constraints";
    //constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
-   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_MULTICUT, 0, true>;
+   using edge_factor_container = FactorContainer<rounding_multicut_edge_factor, FMC_MULTICUT, 0, true>;
    using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_MULTICUT, 1>;
    using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_MULTICUT, 2>;
 
@@ -63,7 +63,7 @@ struct FMC_ODD_WHEEL_MULTICUT {
    //typedef FactorContainer<MulticutUnaryFactor, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
    //typedef FactorContainer<MulticutTripletFactor, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
    //typedef FactorContainer<multicut_triplet_factor, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
-   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_ODD_WHEEL_MULTICUT, 0, true>;
+   using edge_factor_container = FactorContainer<rounding_multicut_edge_factor, FMC_ODD_WHEEL_MULTICUT, 0, true>;
    using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_ODD_WHEEL_MULTICUT, 1>;
    using odd_3_wheel_factor_container = FactorContainer<multicut_odd_3_wheel_factor, FMC_ODD_WHEEL_MULTICUT, 2>;
    using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_ODD_WHEEL_MULTICUT, 3>;
@@ -97,7 +97,7 @@ struct FMC_LIFTED_MULTICUT {
    constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
 
    // no rounding performed: do it via GAEC and K&L, called from problem constructor
-   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_LIFTED_MULTICUT, 0, true>;
+   using edge_factor_container = FactorContainer<rounding_multicut_edge_factor, FMC_LIFTED_MULTICUT, 0, true>;
    using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_LIFTED_MULTICUT, 1>;
    using cut_factor_container = FactorContainer<LiftedMulticutCutFactor, FMC_LIFTED_MULTICUT, 2>;
    using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_LIFTED_MULTICUT, 3>;
@@ -139,7 +139,7 @@ struct FMC_MULTIWAY_CUT {
    constexpr static const char* name = "Multiway cut with cycle and odd wheel constraints";
 
    // multicut
-   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_MULTIWAY_CUT, 0>;
+   using edge_factor_container = FactorContainer<rounding_multicut_edge_factor, FMC_MULTIWAY_CUT, 0>;
    using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_MULTIWAY_CUT, 1>;
    using odd_3_wheel_factor_container = FactorContainer<multicut_odd_3_wheel_factor, FMC_MULTIWAY_CUT, 2>;
    using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_MULTIWAY_CUT, 3>;
@@ -199,7 +199,7 @@ struct FMC_ASYMMETRIC_MULTIWAY_CUT {
    constexpr static const char* name = "Asymmetric multiway cut with cycle and odd wheel constraints";
 
    // multicut
-   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 0>;
+   using edge_factor_container = FactorContainer<rounding_multicut_edge_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 0>;
    using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 1>;
    using odd_3_wheel_factor_container = FactorContainer<multicut_odd_3_wheel_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 2>;
    using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_ASYMMETRIC_MULTIWAY_CUT, 3>;

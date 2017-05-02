@@ -48,7 +48,7 @@ file_name = [
       ]
 
 
-main_body = ["ProblemConstructorRoundingSolver<Solver<" + e[0] + ",LP,StandardTighteningVisitor>> solver(argc,argv);\nsolver.ReadProblem(" + e[1] + "<Solver<" + e[0] + ",LP,StandardTighteningVisitor>" + e[2] + ">);\nreturn solver.Solve();\n" for e in zip(FMC,parse_fun, parse_fun_param)]
+main_body = ["CombinedMPProblemConstructorRoundingSolver<Solver<" + e[0] + ",LP,StandardTighteningVisitor>> solver(argc,argv);\nsolver.ReadProblem(" + e[1] + "<Solver<" + e[0] + ",LP,StandardTighteningVisitor>" + e[2] + ">);\nreturn solver.Solve();\n" for e in zip(FMC,parse_fun, parse_fun_param)]
 #main_body = ["LP_MP_CONSTRUCT_SOLVER_WITH_INPUT_AND_VISITOR_MP_ROUNDING(" + e[0] + ",TorresaniEtAlInput::" + e[1] + "<" + e[0] + ">,StandardTighteningVisitor);" for e in zip(FMC,parse_fun)]
 
 for e in zip(main_body,file_name):

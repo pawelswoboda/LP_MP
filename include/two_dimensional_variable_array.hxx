@@ -105,6 +105,7 @@ public:
    struct iterator {
      void operator++() { ++x_; }
      iterator& operator+=(const INDEX i) { x_+=i; return *this; }
+     iterator operator+(const INDEX i) { iterator it({x_ + i}); return it; }
      ArrayAccessObject operator*() { return ArrayAccessObject(*x_,*(x_+1)); }
      T** x_; // pointer to current
    };
