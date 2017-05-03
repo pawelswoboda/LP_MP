@@ -26,6 +26,7 @@
 #include "andres/functional.hxx"
 #include "andres/graph/multicut-lifted/kernighan-lin.hxx"
 
+
 #include <iostream>
 #include <vector>
 
@@ -286,7 +287,14 @@ namespace MulticutOpenGmInput {
    }
 
    template<typename SOLVER>
-   bool ParseProblem(const std::string filename, SOLVER& pd)
+   bool ParseProblem(const std::string filename, SOLVER& s)
+   {
+      auto& mc = s.template GetProblemConstructor<0>();
+      return ParseMulticutOpenGM(filename, mc);
+   }
+
+   template<typename SOLVER>
+   bool ParseProblemOld(const std::string filename, SOLVER& pd)
    {
       //read with hdf5
       auto fileHandle = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);

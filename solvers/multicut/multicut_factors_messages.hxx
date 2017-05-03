@@ -3,11 +3,13 @@
 
 #include "LP_MP.h"
 #include "factors/labeling_list_factor.hxx"
+#include "graph.hxx"
+#include "union_find.hxx"
 
 namespace LP_MP {
 
 using multicut_edge_labelings = labelings< labeling<1> >;
-using multicut_edge_factor = labeling_factor< multicut_edge_labelings, true >;
+using multicut_edge_factor = labeling_factor< multicut_edge_labelings, true, true >;
 
 using multicut_triplet_labelings = labelings<
    labeling<0,1,1>,
@@ -17,9 +19,9 @@ using multicut_triplet_labelings = labelings<
       >;
 using multicut_triplet_factor = labeling_factor< multicut_triplet_labelings, true >;
 
-using multicut_edge_triplet_message_0 = labeling_message< multicut_edge_labelings, multicut_triplet_labelings, 0 >;
-using multicut_edge_triplet_message_1 = labeling_message< multicut_edge_labelings, multicut_triplet_labelings, 1 >;
-using multicut_edge_triplet_message_2 = labeling_message< multicut_edge_labelings, multicut_triplet_labelings, 2 >;
+using multicut_edge_triplet_message_0 = labeling_message< multicut_edge_factor, multicut_triplet_factor, 0 >;
+using multicut_edge_triplet_message_1 = labeling_message< multicut_edge_factor, multicut_triplet_factor, 1 >;
+using multicut_edge_triplet_message_2 = labeling_message< multicut_edge_factor, multicut_triplet_factor, 2 >;
 
 /*
 
@@ -58,10 +60,10 @@ using multicut_odd_3_wheel_labelings = labelings<
    >;
 using multicut_odd_3_wheel_factor = labeling_factor< multicut_odd_3_wheel_labelings, true >;
 
-using multicut_triplet_odd_3_wheel_message_012 = labeling_message< multicut_triplet_labelings, multicut_odd_3_wheel_labelings, 0,1,2>;
-using multicut_triplet_odd_3_wheel_message_013 = labeling_message< multicut_triplet_labelings, multicut_odd_3_wheel_labelings, 0,3,4>;
-using multicut_triplet_odd_3_wheel_message_023 = labeling_message< multicut_triplet_labelings, multicut_odd_3_wheel_labelings, 1,3,5>;
-using multicut_triplet_odd_3_wheel_message_123 = labeling_message< multicut_triplet_labelings, multicut_odd_3_wheel_labelings, 2,4,5>;
+using multicut_triplet_odd_3_wheel_message_012 = labeling_message< multicut_triplet_factor, multicut_odd_3_wheel_factor, 0,1,2>;
+using multicut_triplet_odd_3_wheel_message_013 = labeling_message< multicut_triplet_factor, multicut_odd_3_wheel_factor, 0,3,4>;
+using multicut_triplet_odd_3_wheel_message_023 = labeling_message< multicut_triplet_factor, multicut_odd_3_wheel_factor, 1,3,5>;
+using multicut_triplet_odd_3_wheel_message_123 = labeling_message< multicut_triplet_factor, multicut_odd_3_wheel_factor, 2,4,5>;
 
 /*
                        i1
@@ -167,20 +169,76 @@ using multicut_triplet_plus_spoke_cover_message = labeling_message< multicut_tri
 using multicut_triplet_plus_spoke_message = labeling_message< multicut_triplet_labelings, multicut_triplet_plus_spoke_labelings, 0,1,2 >;
 */
 
+// class for holding necessary information such that a given edge knows whether it can be locally set to 0 or 1 given partial labeling
+enum class multicut_possible_labels {arbitrary, cut, non_cut};
+class multicut_rounding {
+public:
+   multicut_rounding(const INDEX no_nodes, const INDEX no_arcs, const std::vector<INDEX>& no_outgoing_arcs) :
+      uf(no_nodes), g(no_nodes, no_arcs, no_outgoing_arcs), bfs(no_nodes)
+   {}
+
+   multicut_possible_labels possible_labels(const INDEX i, const INDEX j) 
+   {
+      if(uf.connected(i,j)) {
+         return multicut_possible_labels::non_cut;
+      } else if(bfs.path_exists(i,j,g)) { // check whether distance w.r.t. cut edges is 1 
+         return multicut_possible_labels::cut;
+      } else {
+         return multicut_possible_labels::arbitrary;
+      }
+   }
+
+   void set(const INDEX i, const INDEX j, const bool cut) 
+   {
+      if(cut) {
+         g.add_edge(i,j,1.0);
+      } else {
+         uf.merge(i,j);
+         g.add_edge(i,j,0.0);
+      } 
+   }
+   private:
+   UnionFind uf; // records whether two nodes are in the same component
+   Graph g;
+   multicut_path_search bfs; 
+};
+
 // multicut edge factor additionally holding pointer to edge value which it records when doing rounding. This will be the edge cost for the subsequent primal rounding with KL+j
 class rounding_multicut_edge_factor : public multicut_edge_factor 
 {
 public:
-   using multicut_edge_factor::multicut_edge_factor;
+   rounding_multicut_edge_factor(const INDEX _i, const INDEX _j) :
+      multicut_edge_factor(),
+      i(_i), j(_j), mc_rounding(nullptr)
+   {
+      assert(i < j);
+   }
+
+   void set_rounding(multicut_rounding* m)
+   {
+      mc_rounding = m;
+   }
 
    void MaximizePotentialAndComputePrimal()
    {
-      edge_val_ = (*this)[0]; 
+      auto r = mc_rounding->possible_labels(i,j);
+      if(r == multicut_possible_labels::cut) {
+         this->primal()[0] = true;
+      } else if(r == multicut_possible_labels::non_cut) {
+         this->primal()[0] = false;
+      } else {
+         assert(r == multicut_possible_labels::arbitrary);
+         this->primal()[0] =  (*this)[0] < 0 ? true : false;
+      }
+      mc_rounding->set(i,j,this->primal()[0]);
    }
 
-   REAL get_rounding_cost() const { return edge_val_; }
+   //REAL get_rounding_cost() const { return edge_val_; }
+   REAL get_rounding_cost() const { return (*this)[0]; }
 private:
-   REAL edge_val_; // record here edge value for rounding
+   multicut_rounding* mc_rounding;
+   const INDEX i;
+   const INDEX j;
 };
 
 } // end namespace LP_MP 

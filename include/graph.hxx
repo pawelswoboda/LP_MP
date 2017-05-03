@@ -115,15 +115,17 @@ namespace LP_MP {
 
    struct BfsData {
       struct Item { INDEX parent; REAL cost; INDEX flag; };
-      BfsData(const Graph& g) 
+      BfsData(const INDEX no_nodes)
       {
-         d.resize(g.size());
+         d.resize(no_nodes);
          for(INDEX i=0; i<d.size(); ++i) {
             d[i].flag = 0;
          }
          flag1 = 0;
-         flag2 = 1;
+         flag2 = 1; 
       }
+      BfsData(const Graph& g) : BfsData(g.size())
+      {}
       void Reset() 
       {
          visit.clear();
@@ -244,14 +246,84 @@ namespace LP_MP {
          return std::make_tuple(-std::numeric_limits<REAL>::infinity(),std::vector<INDEX>(0));
       }
 
-private:
+protected:
    std::vector<Item> d;
    std::deque<std::array<INDEX,2>> visit; // node number, distance from start or end 
    INDEX flag1, flag2;
 };
 
+// possible idea for faster search: order arcs so that those with cost 0 are inserted at the beginning, those with cost 1 at the end of each nodes arc list
+class multicut_path_search : public BfsData {
+public:
+   using BfsData::BfsData;
 
+   bool path_exists(const INDEX startNode, const INDEX endNode, Graph& g) // find path of length 1, where we assume that all edges have cost 0 or 1. We do not assume anymore that arcs are ordered with descending cost
+   {
+      Reset();
+      visit.push_back({startNode, 0});
+      Label1(startNode);
+      Parent(startNode) = startNode;
+      Cost(startNode) = 0;
+      visit.push_back({endNode, 0});
+      Label2(endNode);
+      Parent(endNode) = endNode;
+      Cost(endNode) = 0;
 
+      while(!visit.empty()) {
+         const INDEX i = visit.front()[0];
+         const INDEX distance = visit.front()[1];
+         visit.pop_front();
+
+         if(Labelled1(i)) {
+            for(auto* a=g[i].begin(); a!=g[i].end(); ++a) { 
+               auto* head = a->head;
+               const INDEX j = g[head];
+               const REAL cost_to_j = a->cost + Cost(i);
+
+               assert(cost_to_j == 0.0 || cost_to_j == 1.0 || cost_to_j == 2.0);
+               if(cost_to_j <= 1.0) {
+
+                  if(!Labelled(j)) {
+                     visit.push_back({j, distance+1});
+                     Parent(j) = i;
+                     Cost(j) = cost_to_j;
+                     Label1(j);
+                  } else if(Labelled2(j)) { // shortest path found
+                     if(cost_to_j + Cost(j) == 1.0) { return true; }
+                  } else if(Labelled1(j)) { // new shortest path found
+                     Cost(j) = std::min(Cost(j), cost_to_j); // should never occur: if there exists path of length 1, then a path of length 0 should not be possible. Larger values are not considered in any case.
+                  }
+               }
+            }
+         } else {
+            assert(Labelled2(i));
+            for(auto* a=g[i].begin(); a!=g[i].end(); ++a) { 
+               auto* head = a->head;
+               const INDEX j = g[head];
+               const REAL cost_to_j = a->cost + Cost(i);
+
+               assert(cost_to_j == 0.0 || cost_to_j == 1.0 || cost_to_j == 2.0);
+               if(cost_to_j <= 1.0) {
+
+                  if(!Labelled(j)) {
+                     visit.push_back({j, distance+1});
+                     Parent(j) = i;
+                     Cost(j) = cost_to_j;
+                     Label2(j);
+                  } else if(Labelled1(j)) { // shortest path found
+                     if(cost_to_j + Cost(j) == 1.0) { return true; }
+                  } else if(Labelled2(j)) {
+                     Cost(j) = std::min(Cost(j), cost_to_j); 
+                  }
+
+               }
+            }
+         }
+      }
+
+      return false;
+   } 
+};
 
 };
 

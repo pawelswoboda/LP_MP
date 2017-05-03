@@ -359,8 +359,10 @@ public:
   virtual void Iterate(LpControl c)
   {
     if(c.computePrimal) {
+      this->template GetProblemConstructor<0>().prepare_for_rounding();
       SOLVER::lp_.ComputeForwardPassAndPrimal(iter);
       this->RegisterPrimal();
+      this->template GetProblemConstructor<0>().prepare_for_rounding();
       SOLVER::lp_.ComputeBackwardPassAndPrimal(iter);
       this->RegisterPrimal();
     } else {

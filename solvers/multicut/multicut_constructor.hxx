@@ -69,7 +69,9 @@ public:
       noNodes_(o.noNodes_),
       constant_factor_(o.constant_factor_), 
       lp_(o.lp_) 
-   {}
+   {
+   
+   }
 
    ~MulticutConstructor()
    {
@@ -103,7 +105,7 @@ public:
       assert(i1 < i2);
       assert(!HasUnaryFactor(i1,i2));
       
-      auto* u = new UnaryFactorContainer();
+      auto* u = new UnaryFactorContainer(i1,i2);
       (*u->GetFactor())[0] = cost;
       lp_->AddFactor(u);
       auto it = unaryFactors_.insert(std::make_pair(std::array<INDEX,2>{i1,i2}, u)).first;
@@ -133,6 +135,35 @@ public:
       //logger->info() << "Add unary factor (" << i1 << "," << i2 << ") with cost = " << cost;
       return u;
    }
+
+   std::pair<std::vector<INDEX>, INDEX> compute_number_of_outgoing_arcs() const
+   {
+      // to do: parallelize
+      std::vector<INDEX> number_outgoing_arcs(noNodes_,0); // number of arcs outgoing arcs of each node
+      INDEX number_arcs_total = 0;
+      for(auto& it : unaryFactorsVector_) {
+         const INDEX i = std::get<0>(it.first);
+         const INDEX j = std::get<1>(it.first);
+         assert(i<j);
+
+         number_outgoing_arcs[i]++;
+         number_outgoing_arcs[j]++;
+         number_arcs_total += 2;
+      }
+
+      return std::move(std::make_pair(std::move(number_outgoing_arcs), number_arcs_total));
+   }
+   void prepare_for_rounding()
+   {
+      auto number_outgoing_arcs = compute_number_of_outgoing_arcs(); // this structure can be held over time by class and updated in AddUnaryFactor, it need not be recomputed.
+      auto* mc_rounding = new multicut_rounding(noNodes_, number_outgoing_arcs.second, number_outgoing_arcs.first); // do zrobienia: delete previous mc_rounding again
+
+#pragma omp parallel for schedule(guided)
+      for(INDEX i=0; i<unaryFactorsVector_.size(); ++i) {
+         unaryFactorsVector_[i].second->GetFactor()->set_rounding(mc_rounding);
+      }
+   }
+
    UnaryFactorContainer* GetUnaryFactor(const INDEX i1, const INDEX i2) const {
       assert(HasUnaryFactor(i1,i2));
       return unaryFactors_.find(std::array<INDEX,2>{i1,i2})->second;
@@ -380,7 +411,7 @@ public:
       // Sort the adjacency list, for fast intersections later
       auto adj_sort = [](const auto a, const auto b) { return std::get<0>(a) < std::get<0>(b); };
 
-#pragma omp parallel for 
+#pragma omp parallel for schedule(guided)
       for(int i=0; i < adjacency_list.size(); i++) {
          std::sort(adjacency_list[i].begin(), adjacency_list[i].end(), adj_sort);
       }
@@ -398,7 +429,7 @@ public:
       {
          std::vector<intersection_type> commonNodes(noNodes_);
          std::vector<std::tuple<INDEX,INDEX,INDEX,REAL>> triplet_candidates_per_thread;
-#pragma omp for 
+#pragma omp for schedule(guided)
          for(INDEX c=0; c<unaryFactorsVector_.size(); ++c) {
             const REAL cost_ij = (*unaryFactorsVector_[c].second->GetFactor())[0];
             const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
@@ -567,7 +598,7 @@ public:
          {
             std::vector<CycleType > cycles_local;
             BfsData mp2(g);
-#pragma for
+#pragma omp for schedule(guided)
             for(INDEX i=0; i<noNodes_; ++i) {
                if(!already_searched[i] && uf.thread_safe_connected(2*i, 2*i+1)) {
                   already_searched[i] = true;
@@ -679,7 +710,7 @@ public:
          {
             std::vector<CycleType > cycles_local;
             BfsData mp2(posEdgesGraph);
-#pragma for
+#pragma omp for schedule(guided)
             for(INDEX c=0; c<negative_edges.size(); ++c) {
                const INDEX i = std::get<0>(negative_edges[c]);
                const INDEX j = std::get<1>(negative_edges[c]);
@@ -1414,7 +1445,7 @@ public:
       }
 
       // Sort the adjacency list, for fast intersections later
-#pragma omp parallel
+#pragma omp parallel for schedule(guided)
       for(int i=0; i < adjacency_list.size(); i++) {
          std::sort(adjacency_list[i].begin(), adjacency_list[i].end());
       } 
@@ -1521,17 +1552,18 @@ public:
          const INDEX tripletsAdded = BaseConstructor::Tighten(maxCuttingPlanesToAdd);
          if(tripletsAdded > 0.1*maxCuttingPlanesToAdd) {
             return tripletsAdded;
-         } else {
-            const INDEX odd3WheelsAdded = FindOdd3Wheels(maxCuttingPlanesToAdd);
-            std::cout << "added " << odd3WheelsAdded << " by local odd 3 wheel search\n";
-            if(odd3WheelsAdded > 0.4*maxCuttingPlanesToAdd) {
-               return odd3WheelsAdded + tripletsAdded;
+         //} else {
+         //   const INDEX odd3WheelsAdded = FindOdd3Wheels(maxCuttingPlanesToAdd);
+         //   std::cout << "added " << odd3WheelsAdded << " by local odd 3 wheel search\n";
+         //   if(odd3WheelsAdded > 0.4*maxCuttingPlanesToAdd) {
+         //      return odd3WheelsAdded + tripletsAdded;
             } else {
                const INDEX oddWheelsAdded = FindOddWheels(maxCuttingPlanesToAdd);
                std::cout << "Added " << oddWheelsAdded << " factors for odd wheel constraints\n";
-               return oddWheelsAdded + odd3WheelsAdded + tripletsAdded;
+               return oddWheelsAdded + tripletsAdded;
+               //return oddWheelsAdded + odd3WheelsAdded + tripletsAdded;
             }
-         }
+         //}
       } else {
          return 0;
       }
@@ -1692,7 +1724,7 @@ public:
 #pragma omp parallel 
          {
             INDEX max_triplet_per_node_local = 0;
-#pragma omp for
+#pragma omp for schedule(guided)
             for(INDEX i=0; i<this->noNodes_; ++i) {
                std::sort(this->tripletByIndices_[i]->begin(), this->tripletByIndices_[i]->end(), sort_triplet_func);
                max_triplet_per_node_local = std::max(max_triplet_per_node_local, this->tripletByIndices_[i].size());  
@@ -1717,7 +1749,7 @@ public:
             };
             std::vector<bicycle_candidate> odd_bicycle_candidates_local;
 
-#pragma omp for
+#pragma omp for schedule(guided)
             for(INDEX e=0; e<this->unaryFactorsVector_.size(); ++e) {
                const INDEX i = std::get<0>(this->unaryFactorsVector_[e])[0];
                const INDEX j = std::get<0>(this->unaryFactorsVector_[e])[1];
