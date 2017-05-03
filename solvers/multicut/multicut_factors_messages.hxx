@@ -167,22 +167,6 @@ using multicut_triplet_plus_spoke_cover_message = labeling_message< multicut_tri
 using multicut_triplet_plus_spoke_message = labeling_message< multicut_triplet_labelings, multicut_triplet_plus_spoke_labelings, 0,1,2 >;
 */
 
-// multicut edge factor additionally holding pointer to edge value which it records when doing rounding. This will be the edge cost for the subsequent primal rounding with KL+j
-class rounding_multicut_edge_factor : public multicut_edge_factor 
-{
-public:
-   using multicut_edge_factor::multicut_edge_factor;
-
-   void MaximizePotentialAndComputePrimal()
-   {
-      edge_val_ = (*this)[0]; 
-   }
-
-   REAL get_rounding_cost() const { return edge_val_; }
-private:
-   REAL edge_val_; // record here edge value for rounding
-};
-
 } // end namespace LP_MP 
 
 #endif // LP_MP_MULTICUT_FACTORS_MESSAGES_HXX

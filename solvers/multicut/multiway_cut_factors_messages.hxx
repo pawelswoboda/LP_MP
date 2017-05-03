@@ -308,8 +308,8 @@ public:
          if(A_[i]) {
             lb = std::min(lb, this->msg1(i) + this->msg2(i) + this->diff_cost());
          }
-         return lb;
       }
+      return lb;
    }
 
    REAL EvaluatePrimal() const

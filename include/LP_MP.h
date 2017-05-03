@@ -1197,24 +1197,24 @@ void LP::ComputeAnisotropicWeights(
    // compute the following numbers: 
    // 1) #{factors after current one, to which messages are sent from current factor}
    // 2) #{factors after current one, which receive messages from current one}
-//#ifdef LP_MP_PARALLEL
-// std::atomic<INDEX>* no_send_factors = new std::atomic<INDEX>[f_.size()];
-//   std::fill(no_send_factors, no_send_factors + f_.size(), 0);
-//   std::atomic<INDEX>* no_send_factors_later = new std::atomic<INDEX>[f_.size()];
-//   std::fill(no_send_factors_later, no_send_factors_later + f_.size(), 0);
-//   std::atomic<INDEX>* no_receiving_factors_later = new std::atomic<INDEX>[f_.size()];
-//   std::fill(no_receiving_factors_later, no_receiving_factors_later + f_.size(), 0);
-//   std::atomic<INDEX>* last_receiving_factor = new std::atomic<INDEX>[f_.size()]; // what is the last (in the order given by factor iterator) factor that receives a message?
-//   std::fill(last_receiving_factor, last_receiving_factor + f_.size(), 0);
-//#else
+#ifdef LP_MP_PARALLEL
+   std::atomic<INDEX>* no_send_factors = new std::atomic<INDEX>[f_.size()];
+   std::fill(no_send_factors, no_send_factors + f_.size(), 0);
+   std::atomic<INDEX>* no_send_factors_later = new std::atomic<INDEX>[f_.size()];
+   std::fill(no_send_factors_later, no_send_factors_later + f_.size(), 0);
+   std::atomic<INDEX>* no_receiving_factors_later = new std::atomic<INDEX>[f_.size()];
+   std::fill(no_receiving_factors_later, no_receiving_factors_later + f_.size(), 0);
+   std::atomic<INDEX>* last_receiving_factor = new std::atomic<INDEX>[f_.size()]; // what is the last (in the order given by factor iterator) factor that receives a message?
+   std::fill(last_receiving_factor, last_receiving_factor + f_.size(), 0);
+#else
    std::vector<INDEX> no_send_factors(f_.size(),0);
    std::vector<INDEX> no_send_factors_later(f_.size(),0);
    std::vector<INDEX> no_receiving_factors_later(f_.size(),0);
    std::vector<INDEX> last_receiving_factor(f_.size(), 0);
-//#endif
+#endif
 
    // do zrobienia: if factor is not visited at all, then omega is not needed for that entry. We must filter out such entries still
-//#pragma omp parallel for schedule(guided)
+#pragma omp parallel for
    for(INDEX i=0; i<m_.size(); ++i) {
       auto* f_left = m_[i]->GetLeftFactor();
       const INDEX f_index_left = factor_address_to_index_[f_left];
@@ -1230,30 +1230,30 @@ void LP::ComputeAnisotropicWeights(
          if(index_left < index_right) {
             no_receiving_factors_later[index_left]++;
          }
-//#ifdef LP_MP_PARALLEL
-//         INDEX old_val = last_receiving_factor[index_left];
-//         const INDEX new_val = std::max(old_val, index_left);
-//         while(old_val < new_val && !last_receiving_factor[index_left].compare_exchange_weak(old_val, new_val)) ;
-//#else
+#ifdef LP_MP_PARALLEL
+         INDEX old_val = last_receiving_factor[index_left];
+         const INDEX new_val = std::max(old_val, index_right);
+         while(old_val < new_val && !last_receiving_factor[index_left].compare_exchange_weak(old_val, new_val)) ;
+#else
          last_receiving_factor[index_left] = std::max(last_receiving_factor[index_left], index_right);
-//#endif
+#endif
       }
 
       if(m_[i]->ReceivesMessageFromRight()) {
          if(index_left > index_right) {
             no_receiving_factors_later[index_right]++;
          }
-//#ifdef LP_MP_PARALLEL
-//         INDEX old_val = last_receiving_factor[index_right];
-//         const INDEX new_val = std::max(old_val, index_right);
-//         while(old_val < new_val && !last_receiving_factor[index_right].compare_exchange_weak(old_val, new_val)) ;
-//#else
+#ifdef LP_MP_PARALLEL
+         INDEX old_val = last_receiving_factor[index_right];
+         const INDEX new_val = std::max(old_val, index_left);
+         while(old_val < new_val && !last_receiving_factor[index_right].compare_exchange_weak(old_val, new_val)) ;
+#else
          last_receiving_factor[index_right] = std::max(last_receiving_factor[index_right], index_left);
-//#endif
+#endif
       }
    }
 
-//#pragma omp parallel for schedule(guided)
+#pragma omp parallel for
    for(INDEX i=0; i<m_.size(); ++i) {
       auto* f_left = m_[i]->GetLeftFactor();
       const INDEX f_index_left = factor_address_to_index_[f_left];
@@ -1328,6 +1328,12 @@ void LP::ComputeAnisotropicWeights(
       //const REAL omega_sum = std::accumulate(omega[i].begin(), omega[i].end(), 0.0); 
       assert(std::accumulate(omega[i].begin(), omega[i].end(), 0.0) <= 1.0 + eps);
    }
+#ifdef LP_MP_PARALLEL
+   delete[] no_send_factors;
+   delete[] no_send_factors_later;
+   delete[] no_receiving_factors_later;
+   delete[] last_receiving_factor; 
+#endif
 }
 
 // compute uniform weights so as to help decoding for obtaining primal solutions
@@ -1410,4 +1416,5 @@ void LP::ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR fa
 } // end namespace LP_MP
 
 #endif // LP_MP_MAIN
+
 

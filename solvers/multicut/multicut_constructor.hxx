@@ -380,7 +380,7 @@ public:
       // Sort the adjacency list, for fast intersections later
       auto adj_sort = [](const auto a, const auto b) { return std::get<0>(a) < std::get<0>(b); };
 
-#pragma omp parallel for 
+#pragma omp parallel for schedule(guided)
       for(int i=0; i < adjacency_list.size(); i++) {
          std::sort(adjacency_list[i].begin(), adjacency_list[i].end(), adj_sort);
       }
@@ -398,7 +398,7 @@ public:
       {
          std::vector<intersection_type> commonNodes(noNodes_);
          std::vector<std::tuple<INDEX,INDEX,INDEX,REAL>> triplet_candidates_per_thread;
-#pragma omp for 
+#pragma omp for  schedule(guided)
          for(INDEX c=0; c<unaryFactorsVector_.size(); ++c) {
             const REAL cost_ij = (*unaryFactorsVector_[c].second->GetFactor())[0];
             const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
@@ -567,7 +567,7 @@ public:
          {
             std::vector<CycleType > cycles_local;
             BfsData mp2(g);
-#pragma for
+#pragma omp for schedule(guided)
             for(INDEX i=0; i<noNodes_; ++i) {
                if(!already_searched[i] && uf.thread_safe_connected(2*i, 2*i+1)) {
                   already_searched[i] = true;
@@ -679,7 +679,7 @@ public:
          {
             std::vector<CycleType > cycles_local;
             BfsData mp2(posEdgesGraph);
-#pragma for
+#pragma omp for schedule(guided)
             for(INDEX c=0; c<negative_edges.size(); ++c) {
                const INDEX i = std::get<0>(negative_edges[c]);
                const INDEX j = std::get<1>(negative_edges[c]);
@@ -796,7 +796,7 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
 
       for(const auto& e : unaryFactorsVector_) {
          graph.insertEdge(e.first[0], e.first[1]);
-         edgeValues.push_back(e.second->GetFactor()->get_rounding_cost());
+         edgeValues.push_back(e.second->GetFactor()->operator[](0));
       }
 
       primal_handle_ = std::async(std::launch::async, gaec_klj, std::move(graph), std::move(edgeValues));
@@ -1414,7 +1414,7 @@ public:
       }
 
       // Sort the adjacency list, for fast intersections later
-#pragma omp parallel
+#pragma omp parallel for  schedule(guided)
       for(int i=0; i < adjacency_list.size(); i++) {
          std::sort(adjacency_list[i].begin(), adjacency_list[i].end());
       } 
@@ -1692,7 +1692,7 @@ public:
 #pragma omp parallel 
          {
             INDEX max_triplet_per_node_local = 0;
-#pragma omp for
+#pragma omp for schedule(guided)
             for(INDEX i=0; i<this->noNodes_; ++i) {
                std::sort(this->tripletByIndices_[i]->begin(), this->tripletByIndices_[i]->end(), sort_triplet_func);
                max_triplet_per_node_local = std::max(max_triplet_per_node_local, this->tripletByIndices_[i].size());  
@@ -1717,7 +1717,7 @@ public:
             };
             std::vector<bicycle_candidate> odd_bicycle_candidates_local;
 
-#pragma omp for
+#pragma omp for schedule(guided)
             for(INDEX e=0; e<this->unaryFactorsVector_.size(); ++e) {
                const INDEX i = std::get<0>(this->unaryFactorsVector_[e])[0];
                const INDEX j = std::get<0>(this->unaryFactorsVector_[e])[1];
