@@ -1220,7 +1220,6 @@ void LP::ComputeAnisotropicWeights(
       const INDEX f_index_left = factor_address_to_index_[f_left];
       const INDEX index_left = f_sorted_inverse[f_index_left];
       //assert(index_left == factorToIndex[f_left]);
-      //const INDEX index_left = factorToIndex[f_left];
       auto* f_right = m_[i]->GetRightFactor();
       const INDEX f_index_right = factor_address_to_index_[f_right];
       const INDEX index_right = f_sorted_inverse[f_index_right];
@@ -1279,11 +1278,13 @@ void LP::ComputeAnisotropicWeights(
    std::vector<INDEX> omega_size(f_.size());
    {
      INDEX c=0;
-     std::vector<std::vector<FactorTypeAdapter*> > fc = ComputeSendFactorConnection(factorIt,factorEndIt); // possibly not the most efficient way!
-     auto fcIt = fc.begin();
-     for(auto it=factorIt; it!=factorEndIt; ++it, ++fcIt) {
+     //std::vector<std::vector<FactorTypeAdapter*> > fc = ComputeSendFactorConnection(factorIt,factorEndIt); // possibly not the most efficient way!
+     //auto fcIt = fc.begin();
+     //for(auto it=factorIt; it!=factorEndIt; ++it, ++fcIt) {
+     for(auto it=factorIt; it!=factorEndIt; ++it) {
        if((*it)->FactorUpdated()) {
-         omega_size[c] = fcIt->size();
+         //omega_size[c] = fcIt->size();
+         omega_size[c] = (*it)->no_send_messages(); // fcIt->size();
          ++c;
        }
      }
@@ -1293,30 +1294,30 @@ void LP::ComputeAnisotropicWeights(
    omega = two_dim_variable_array<REAL>(omega_size);
 
    {
-     INDEX c=0;
-     for(auto it=factorIt; it!=factorEndIt; ++it) {
-       const INDEX i = std::distance(factorIt, it);
-       //assert(i == factorToIndex[*it]);
-       assert(i == f_sorted_inverse[ factor_address_to_index_[*it] ]);
-       if((*it)->FactorUpdated()) {
-         INDEX k=0;
-         for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
-           if(mIt.CanSendMessage()) {
-             auto* f_connected = mIt.GetConnectedFactor();
-             //const INDEX j = factorToIndex[ f_connected ];
-             const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
-             assert(i != j);
-             if(i<j || last_receiving_factor[j] > i) {
-                omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
-             } else {
-               omega[c][k] = 0.0;
-             } 
-           ++k;
-           }
+      INDEX c=0;
+      for(auto it=factorIt; it!=factorEndIt; ++it) {
+         const INDEX i = std::distance(factorIt, it);
+         //assert(i == factorToIndex[*it]);
+         assert(i == f_sorted_inverse[ factor_address_to_index_[*it] ]);
+         if((*it)->FactorUpdated()) {
+            INDEX k=0;
+            for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
+               if(mIt.CanSendMessage()) {
+                  auto* f_connected = mIt.GetConnectedFactor();
+                  //const INDEX j = factorToIndex[ f_connected ];
+                  const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
+                  assert(i != j);
+                  if(i<j || last_receiving_factor[j] > i) {
+                     omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                  } else {
+                     omega[c][k] = 0.0;
+                  } 
+                  ++k;
+               }
+            }
+            ++c;
          }
-         ++c;
-       }
-     }
+      }
    }
 
 

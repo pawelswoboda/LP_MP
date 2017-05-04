@@ -1721,7 +1721,7 @@ public:
             for(INDEX e=0; e<this->unaryFactorsVector_.size(); ++e) {
                const INDEX i = std::get<0>(this->unaryFactorsVector_[e])[0];
                const INDEX j = std::get<0>(this->unaryFactorsVector_[e])[1];
-               const REAL cost_ij = std::get<1>(this->unaryFactorsVector_[e])->GetFactor()[0];
+               const REAL cost_ij = std::get<1>(this->unaryFactorsVector_[e])->GetFactor()->operator[](0);
                if(cost_ij < 0) {
                   // find all edges uv such that there exist edges triplets iuv and juv. 
                   // this is done by sorting all triplets which have node i and node j, and intersecting the set

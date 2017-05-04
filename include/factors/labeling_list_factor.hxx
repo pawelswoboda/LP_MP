@@ -2,6 +2,7 @@
 #define LP_MP_LABELING_LIST_FACTOR_HXX
 
 #include <array>
+#include <bitset>
 #include "vector.hxx"
 #include "config.hxx"
 
@@ -41,14 +42,14 @@ struct labeling {
 
    template<INDEX I, INDEX... LABELS_REST>
    static typename std::enable_if<(I == sizeof...(LABELS)),bool>::type
-   matches_impl(const std::array<bool, sizeof...(LABELS)>& l)
+   matches_impl(const std::bitset< sizeof...(LABELS)>& l)
    {
       return true;
    }
 
    template<INDEX I, INDEX LABEL, INDEX... LABELS_REST>
    static typename std::enable_if<(I < sizeof...(LABELS)),bool>::type
-   matches_impl(const std::array<bool, sizeof...(LABELS)>& l)
+   matches_impl(const std::bitset< sizeof...(LABELS)>& l)
    {
       if(l[I] != LABEL) {
          return false;
@@ -57,7 +58,7 @@ struct labeling {
       }
    }
 
-   static bool matches(const std::array<bool, sizeof...(LABELS)>& l)
+   static bool matches(const std::bitset< sizeof...(LABELS)>& l)
    {
       return matches_impl<0, LABELS...>(l); 
    }
@@ -110,14 +111,14 @@ struct labelings
 
    template<INDEX I, typename... LABELINGS_REST>
    static typename std::enable_if<(I >= sizeof...(LABELINGS)), INDEX>::type
-   matching_labeling_impl(const std::array<bool, no_labels()>& l)
+   matching_labeling_impl(const std::bitset< no_labels()>& l)
    {
       return no_labelings();
    }
 
    template<INDEX I, typename LABELING, typename... LABELINGS_REST>
    static typename std::enable_if<(I < sizeof...(LABELINGS)), INDEX>::type
-   matching_labeling_impl(const std::array<bool, no_labels()>& l)
+   matching_labeling_impl(const std::bitset< no_labels()>& l)
    {
       if(LABELING::matches(l)) {
          return I;
@@ -126,7 +127,7 @@ struct labelings
       }
    }
 
-   static INDEX matching_labeling(const std::array<bool, no_labels()>& l)
+   static INDEX matching_labeling(const std::bitset< no_labels()>& l)
    {
       return matching_labeling_impl<0, LABELINGS...>(l); 
    }
@@ -198,7 +199,7 @@ public:
          return (*this)[labeling_no];
       }
       // check for zero labeling
-      if(has_implicit_origin() && std::count(primal_.begin(), primal_.end(), true) == 0) {
+      if(has_implicit_origin() && primal_.count() == 0) {
          return 0.0;
       }
       return std::numeric_limits<REAL>::infinity();
@@ -212,7 +213,7 @@ public:
    template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
 
 private:
-   std::array<bool,primal_size()> primal_;
+   std::bitset<primal_size()> primal_;
 };
 
 // we assume that LEFT_LABELING contains sublageings of RIGHT_LABELING, where we INDICES indicate i-th entry of LEFT_LABELING is mapped to INDICES[i]-th entry of right labeling
@@ -365,11 +366,11 @@ public:
 
    template<INDEX LEFT_INDEX, INDEX... RIGHT_INDICES_REST>
    typename std::enable_if<(LEFT_INDEX >= LEFT_LABELINGS::no_labels())>::type
-   compute_right_from_left_primal_impl(const std::array<bool,LEFT_LABELINGS::no_labels()>& l, std::array<bool, RIGHT_LABELINGS::no_labels()>& r)
+   compute_right_from_left_primal_impl(const std::bitset<LEFT_LABELINGS::no_labels()>& l, std::bitset< RIGHT_LABELINGS::no_labels()>& r)
    {}
    template<INDEX LEFT_INDEX, INDEX RIGHT_INDEX, INDEX... RIGHT_INDICES_REST>
    typename std::enable_if<(LEFT_INDEX < LEFT_LABELINGS::no_labels())>::type
-   compute_right_from_left_primal_impl(const std::array<bool,LEFT_LABELINGS::no_labels()>& l, std::array<bool, RIGHT_LABELINGS::no_labels()>& r)
+   compute_right_from_left_primal_impl(const std::bitset<LEFT_LABELINGS::no_labels()>& l, std::bitset< RIGHT_LABELINGS::no_labels()>& r)
    {
       r[RIGHT_INDEX] = l[LEFT_INDEX];
       compute_right_from_left_primal_impl<LEFT_INDEX+1, RIGHT_INDICES_REST...>(l,r); 
