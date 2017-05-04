@@ -1,7 +1,7 @@
 #include "solver.hxx"
 #include "visitors/standard_visitor.hxx"
 #include "solvers/multicut/multicut.h" // strangely this is needed by gcc to compile fine. Why?
-#include "moral_lineage_tracing.h"
+#include "solvers/moral_lineage_tracing/moral_lineage_tracing.h"
 
 using namespace LP_MP;
 

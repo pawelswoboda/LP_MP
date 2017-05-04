@@ -1,12 +1,12 @@
 #!/usr/bin/python
 
 preamble = """
-#include "graph_matching.h"
+#include "solvers/graph_matching/graph_matching.h"
 #include "visitors/standard_visitor.hxx"
 int main(int argc, char* argv[])
 """
 
-FMC = [ 
+FMC = [
       'FMC_MCF<PairwiseConstruction::Left>',
       'FMC_MCF<PairwiseConstruction::Right>',
       'FMC_MCF<PairwiseConstruction::BothSides>',

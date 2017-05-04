@@ -1,4 +1,4 @@
-#include "discrete_tomography.h"
+#include "solvers/discrete_tomography/discrete_tomography.h"
 #include "visitors/standard_visitor.hxx"
 using namespace LP_MP;
 using SolverType = Solver<FMC_DT,LP,StandardTighteningVisitor>;

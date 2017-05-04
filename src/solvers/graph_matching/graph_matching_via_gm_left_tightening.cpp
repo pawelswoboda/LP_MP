@@ -1,5 +1,5 @@
 
-#include "graph_matching.h"
+#include "solvers/graph_matching/graph_matching.h"
 #include "visitors/standard_visitor.hxx"
 int main(int argc, char* argv[])
 

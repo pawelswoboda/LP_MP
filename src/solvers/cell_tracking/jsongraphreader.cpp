@@ -1,4 +1,4 @@
-#include "json_graph_reader.h"
+#include "solvers/cell_tracking/json_graph_reader.h"
 #include <assert.h>
 #include <iostream>
 #include <fstream>

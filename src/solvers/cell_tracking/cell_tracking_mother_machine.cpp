@@ -1,5 +1,5 @@
 
-#include "cell_tracking.h"
+#include "solvers/cell_tracking/cell_tracking.h"
 #include "visitors/standard_visitor.hxx"
 using namespace LP_MP;
 int main(int argc, char* argv[])
