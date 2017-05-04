@@ -1529,7 +1529,7 @@ public:
       conditionally_init_primal(primal_access);
       if(CanComputePrimal()) { // do zrobienia: for now
          primal_access_ = primal_access;
-         if(CanReceiveRestrictedMessages()) {
+         if(CanReceiveRestrictedMessages() && CallsReceiveRestrictedMessages()) {
 
             // note: use better (fixed size buffer) for dual information and allocate memory on stack for this. How to estimate memory? Mock writing into buffer (possibly slow)? A hint function could be used too.
             std::stringstream dual;
@@ -1547,19 +1547,22 @@ public:
             cereal::BinaryInputArchive ar_out(dual);
             factor_.serialize_dual( ar_out );
 
+            ReceiveMessages(omega);
             MaximizePotential();
+            SendMessages(omega);
          } else {
+            ReceiveMessages(omega);
             MaximizePotentialAndComputePrimal();
+            SendMessages(omega);
          }
-         // now prapagate primal to adjacent factors
+         // now propagate primal to adjacent factors
          ComputePrimalThroughMessages();
       } else {
+         ReceiveMessages(omega);
          MaximizePotential();
-      } 
+         SendMessages(omega);
+      }  
 
-      ReceiveMessages(omega);
-      MaximizePotential();
-      SendMessages(omega);
    }
 
    void MaximizePotential()

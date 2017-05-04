@@ -1,5 +1,5 @@
-#ifndef LP_MP_MULTICUT_LIFTED_HXX
-#define LP_MP_MULTICUT_LIFTED_HXX
+#ifndef LP_MP_LIFTED_MULTICUT_FACTOR_MESSAGES_HXX
+#define LP_MP_LIFTED_MULTICUT_FACTOR_MESSAGES_HXX
 
 #include "LP_MP.h"
 #include "cereal/types/vector.hpp"
@@ -390,5 +390,5 @@ private:
 
 } // end namespace LP_MP
 
-#endif // LP_MP_MULTICUT_LIFTED_HXX
+#endif // LP_MP_LIFTED_MULTICUT_FACTOR_MESSAGES_HXX
 

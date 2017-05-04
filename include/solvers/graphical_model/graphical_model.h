@@ -49,9 +49,6 @@ struct FMC_SRMP_T { // equivalent to SRMP or TRWS
    typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_SRMP_T, 2> PairwiseTriplet12MessageContainer;
    typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_SRMP_T, 3> PairwiseTriplet13MessageContainer;
    typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_SRMP_T, 4> PairwiseTriplet23MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 2> PairwiseTriplet12MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 3> PairwiseTriplet13MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_SRMP_T, 4> PairwiseTriplet23MessageContainer;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor >;
    using MessageList = meta::list< UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer,

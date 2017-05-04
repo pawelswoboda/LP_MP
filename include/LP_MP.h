@@ -144,9 +144,11 @@ inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, 
 class LP {
 public:
    LP(TCLAP::CmdLine& cmd) 
-   {
-      std::cout << "kwaskwaskwas3\n";
-   }
+#ifdef LP_MP_PARALLEL
+      : num_lp_threads_arg_("","numLpThreads","number of threads for message passing, default = 1",false,1,&positiveIntegerConstraint,cmd)
+#endif
+   {}
+
    ~LP() 
    {
       for(INDEX i=0; i<m_.size(); i++) { delete m_[i]; }
@@ -154,7 +156,10 @@ public:
    }
 
    // make a deep copy of factors and messages. Adjust pointers to messages and factors
-   LP(const LP& o) 
+   LP(LP& o) // no const because of o.num_lp_threads_arg_.getValue() not being const!
+#ifdef LP_MP_PARALLEL
+      : num_lp_threads_arg_("","numLpThreads","number of threads for message passing, default = 1",false,o.num_lp_threads_arg_.getValue(),&positiveIntegerConstraint)
+#endif
    {
       f_.reserve(o.f_.size());
       assert(false);
@@ -294,6 +299,7 @@ public:
 
 
    void Begin(); // must be called after all messages and factors have been added
+
    void CalculatePrimalOffsets()
    {
       INDEX primalOffset = 0;
@@ -403,41 +409,56 @@ public:
    REAL LowerBound() const
    {
       REAL lb = 0.0;
-      for(auto fIt=f_.begin(); fIt!=f_.end(); fIt++) {
-         lb += (*fIt)->LowerBound();
-         assert( (*fIt)->LowerBound() > -10000000.0);
+#pragma omp parallel for reduction(+:lb)
+      for(INDEX i=0; i<f_.size(); ++i) {
+         lb += f_[i]->LowerBound();
+         assert( f_[i]->LowerBound() > -10000000.0);
          assert(std::isfinite(lb));
       }
       return lb;
    }
 
-   void InitializePrimalVector(PrimalSolutionStorage& p) { InitializePrimalVector(f_.begin(), f_.end(), p); }
-   template<typename FACTOR_ITERATOR>
-      void InitializePrimalVector(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PrimalSolutionStorage& v);
-   bool CheckPrimalConsistency() const
-   {
-      return CheckPrimalConsistency(f_.begin(), f_.end());
-   }
-   template<typename FACTOR_ITERATOR>
-      bool CheckPrimalConsistency(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt) const;
+   bool CheckPrimalConsistency() const;
 
    template<typename FACTOR_ITERATOR>
    REAL EvaluatePrimal(cereal::BinaryInputArchive& primal, FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end) // read in primal solution from primal archive and evaluate cost
    {
       assert(std::distance(factor_begin, factor_end) == f_.size());
-
+      assert(false); 
+      return 0.0;
    }
    REAL EvaluatePrimal() {
-      return EvaluatePrimal(f_.begin(), f_.end());
+      const bool consistent = CheckPrimalConsistency();
+      if(consistent == false) return std::numeric_limits<REAL>::infinity();
+
+      REAL cost = 0.0;
+#pragma omp parallel for reduction(+:cost)
+      for(INDEX i=0; i<f_.size(); ++i) {
+         cost += f_[i]->EvaluatePrimal();
+      }
+
+      std::cout << "primal cost = " << cost << "\n";
+
+      return cost;
    }
-   template<typename FACTOR_ITERATOR>
-   REAL EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt) const;
 
    void UpdateFactor(FactorTypeAdapter* f, const weight_vector& omega) // perform one block coordinate step for factor f
    {
       f->UpdateFactor(omega);
    }
    void ComputePass();
+
+   void ComputeForwardPass()
+   {
+      const auto omega = get_omega();
+      ComputePass(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin()); 
+   }
+   void ComputeBackwardPass()
+   {
+      const auto omega = get_omega();
+      ComputePass(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin());
+   }
+
 
    void ComputeForwardPassAndPrimal(const INDEX iteration)
    {
@@ -536,8 +557,13 @@ protected:
    std::vector<INDEX> f_sorted_; // sorted indices in factor vector f_ 
 
    LPReparametrizationMode repamMode_ = LPReparametrizationMode::Undefined;
+
+#ifdef LP_MP_PARALLEL
+   TCLAP::ValueArg<INDEX> num_lp_threads_arg_;
+#endif
 };
 
+/*
 template<typename BASE_LP_CLASS>
 class LP_concurrent : public BASE_LP_CLASS {
 public:
@@ -548,7 +574,9 @@ public:
   void Begin()
   {
     threads_ = decltype(threads_)(num_lp_threads_arg_.getValue());
-    std::cout << "number of threads = " << threads_.size() << "\n";
+#ifdef LP_MP_PARALLEL
+    omp_set_num_threads(num_lp_threads_arg_.getValue());
+#endif 
     BASE_LP_CLASS::Begin();
   }
 
@@ -562,7 +590,6 @@ public:
   template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
    void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
    {
-
      // idea for load-balancing: measure time a thread needs to finish. Adjust numbers of factors given to each thread based on this.
 
      auto worker = [this] (auto factor_begin, auto factor_end, auto omega_it, const INDEX allocator_index ) {
@@ -617,6 +644,7 @@ private:
 
   TCLAP::ValueArg<INDEX> num_lp_threads_arg_;
 };
+*/
 
 template<typename BASE_LP_CLASS>
 class LP_sat : public BASE_LP_CLASS
@@ -656,7 +684,6 @@ public:
 
   LP_sat(TCLAP::CmdLine& cmd) : BASE_LP_CLASS(cmd)
   {
-     std::cout << "kwaskwaskwas1\n";
      sat_ = lglinit();
      assert(sat_ != nullptr);
      //sat_.set_no_simplify(); // seems to make solver much faster
@@ -699,7 +726,7 @@ public:
            this->f_[i]->convert_primal(sat_, sat_var_[i]);
         }
         // to do: remove this
-        REAL primal_cost = this->EvaluatePrimal(this->f_.begin(), this->f_.end());
+        REAL primal_cost = this->EvaluatePrimal();
         std::cout << "sat solution cost = " << primal_cost << "\n";// ", sat threshold = " << th.th << "\n"; 
      } else {
         std::cout << "sat not feasible with current threshold\n"; // = " << th.th << "\n";
@@ -863,6 +890,24 @@ private:
    bool sat_dirty_ = false; // sat solver is run asynchronously. When factor graph changes, then sat solution cannot be read in anymore and has to be discarded. This flag signifies this case
 };
 
+// this class holds an object provided by the problem constructor and gives is to MaximizePotentialAndComputePrimal. This primal rounding object helps 
+template<typename BASE_LP_CLASS>
+class LP_interleaved_rounding : public BASE_LP_CLASS
+{
+public:
+   using LP_type = LP_sat<BASE_LP_CLASS>;
+   using LP_type::LP_type;
+
+   void ComputeForwardPassAndPrimal(const INDEX iteration)
+   {
+      const auto omega = this->get_omega();
+   }
+   void ComputeBackwardPassAndPrimal(const INDEX iteration)
+   {
+      const auto omega = this->get_omega(); 
+   }
+private:
+};
 
 
 // factors are arranged in trees.
@@ -986,6 +1031,11 @@ inline void LP::Begin()
 
    repamMode_ = LPReparametrizationMode::Undefined;
    assert(f_.size() > 1); // otherwise we need not perform optimization: Just MaximizePotential f_[0]
+
+#ifdef LP_MP_PARALLEL
+   omp_set_num_threads(num_lp_threads_arg_.getValue());
+   std::cout << "number of threads = " << num_lp_threads_arg_.getValue() << "\n";
+#endif
 }
 
 inline void LP::ComputePass()
@@ -993,17 +1043,21 @@ inline void LP::ComputePass()
    const auto omega = get_omega();
    assert(forwardUpdateOrdering_.size() == omega.forward.size());
    assert(forwardUpdateOrdering_.size() == omega.backward.size());
-   ComputePass(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin());
-   ComputePass(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin());
+   ComputeForwardPass();
+   ComputeBackwardPass();
 }
 
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
 void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
 {
    //assert(std::distance(factorItEnd, factorIt) == std::distance(omegaIt, omegaItEnd));
-   for(; factorIt!=factorItEnd; ++factorIt, ++omegaIt) {
-      UpdateFactor(*factorIt, *omegaIt);
+#pragma omp parallel for 
+   for(INDEX i=0; i<std::distance(factorIt, factorItEnd); ++i) {
+      UpdateFactor(*(factorIt + i), *(omegaIt + i));
    }
+   //for(; factorIt!=factorItEnd; ++factorIt, ++omegaIt) {
+   //   UpdateFactor(*factorIt, *omegaIt);
+   //}
 }
 
 inline void LP::ComputeAnisotropicWeights()
@@ -1059,35 +1113,20 @@ inline void LP::ComputeDampedUniformWeights()
 }
 
 // Here we check whether messages constraints are satisfied
-template<typename FACTOR_ITERATOR>
-bool LP::CheckPrimalConsistency(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt) const
+bool LP::CheckPrimalConsistency() const
 {
-   for(auto msgIt = m_.begin(); msgIt!=m_.end(); ++msgIt) {
-      if(!(*msgIt)->CheckPrimalConsistency()) {
-         std::cout << "message constraints are not fulfilled by primal solution\n";
-         return false;
+   volatile bool consistent=true;
+
+#pragma omp parallel for shared(consistent)
+   for(INDEX i=0; i<m_.size(); ++i) {
+      if(!consistent) continue;
+      if(!m_[i]->CheckPrimalConsistency()) {
+         consistent = false;
       }
    }
-   return true;
+   std::cout << "primal solution consistent: " << consistent << "\n";
+   return consistent;
 }
-
-template<typename FACTOR_ITERATOR>
-REAL LP::EvaluatePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt) const
-{
-   const bool consistent = CheckPrimalConsistency(factorIt, factorEndIt);
-   if(consistent == false) return std::numeric_limits<REAL>::infinity();
-
-   REAL cost = 0.0;
-   for(; factorIt!=factorEndIt; ++factorIt) {
-      cost += (*factorIt)->EvaluatePrimal();
-      if(cost == std::numeric_limits<REAL>::infinity()) {
-         break;
-      }
-   }
-   std::cout << "primal cost = " << cost << "\n";
-   return cost;
-}
-
 
 // write primal solutions in bounds [factorIndexBegin,factorIndexEnd) to filestream
 template<typename FACTOR_ITERATOR>
@@ -1162,30 +1201,29 @@ void LP::ComputeAnisotropicWeights(
    // compute the following numbers: 
    // 1) #{factors after current one, to which messages are sent from current factor}
    // 2) #{factors after current one, which receive messages from current one}
-//#ifdef LP_MP_PARALLEL
-//   std::unique_ptr<std::atomic<INDEX>[]> no_send_factors(new std::atomic<INDEX>[f_.size()]);
-//   std::fill(no_send_factors.get(), no_send_factors.get() + f_.size(), 0);
-//   std::unique_ptr<std::atomic<INDEX>[]> no_send_factors_later(new std::atomic<INDEX>[f_.size()]);
-//   std::fill(no_send_factors_later.get(), no_send_factors_later.get() + f_.size(), 0);
-//   std::unique_ptr<std::atomic<INDEX>[]> no_receiving_factors_later(new std::atomic<INDEX>[f_.size()]);
-//   std::fill(no_receiving_factors_later.get(), no_receiving_factors_later.get() + f_.size(), 0);
-//   std::unique_ptr<std::atomic<INDEX>[]> last_receiving_factor(new std::atomic<INDEX>[f_.size()]); // what is the last (in the order given by factor iterator) factor that receives a message?
-//   std::fill(last_receiving_factor.get(), last_receiving_factor.get() + f_.size(), 0);
-//#else
+#ifdef LP_MP_PARALLEL
+   std::atomic<INDEX>* no_send_factors = new std::atomic<INDEX>[f_.size()];
+   std::fill(no_send_factors, no_send_factors + f_.size(), 0);
+   std::atomic<INDEX>* no_send_factors_later = new std::atomic<INDEX>[f_.size()];
+   std::fill(no_send_factors_later, no_send_factors_later + f_.size(), 0);
+   std::atomic<INDEX>* no_receiving_factors_later = new std::atomic<INDEX>[f_.size()];
+   std::fill(no_receiving_factors_later, no_receiving_factors_later + f_.size(), 0);
+   std::atomic<INDEX>* last_receiving_factor = new std::atomic<INDEX>[f_.size()]; // what is the last (in the order given by factor iterator) factor that receives a message?
+   std::fill(last_receiving_factor, last_receiving_factor + f_.size(), 0);
+#else
    std::vector<INDEX> no_send_factors(f_.size(),0);
    std::vector<INDEX> no_send_factors_later(f_.size(),0);
    std::vector<INDEX> no_receiving_factors_later(f_.size(),0);
    std::vector<INDEX> last_receiving_factor(f_.size(), 0);
-//#endif
+#endif
 
    // do zrobienia: if factor is not visited at all, then omega is not needed for that entry. We must filter out such entries still
-//#pragma omp parallel for schedule(guided)
+#pragma omp parallel for
    for(INDEX i=0; i<m_.size(); ++i) {
       auto* f_left = m_[i]->GetLeftFactor();
       const INDEX f_index_left = factor_address_to_index_[f_left];
       const INDEX index_left = f_sorted_inverse[f_index_left];
       //assert(index_left == factorToIndex[f_left]);
-      //const INDEX index_left = factorToIndex[f_left];
       auto* f_right = m_[i]->GetRightFactor();
       const INDEX f_index_right = factor_address_to_index_[f_right];
       const INDEX index_right = f_sorted_inverse[f_index_right];
@@ -1195,30 +1233,30 @@ void LP::ComputeAnisotropicWeights(
          if(index_left < index_right) {
             no_receiving_factors_later[index_left]++;
          }
-//#ifdef LP_MP_PARALLEL
-//         INDEX old_val = last_receiving_factor[index_left];
-//         const INDEX new_val = std::max(old_val, index_left);
-//         while(old_val < new_val && !last_receiving_factor[index_left].compare_exchange_weak(old_val, new_val)) ;
-//#else
+#ifdef LP_MP_PARALLEL
+         INDEX old_val = last_receiving_factor[index_left];
+         const INDEX new_val = std::max(old_val, index_right);
+         while(old_val < new_val && !last_receiving_factor[index_left].compare_exchange_weak(old_val, new_val)) ;
+#else
          last_receiving_factor[index_left] = std::max(last_receiving_factor[index_left], index_right);
-//#endif
+#endif
       }
 
       if(m_[i]->ReceivesMessageFromRight()) {
          if(index_left > index_right) {
             no_receiving_factors_later[index_right]++;
          }
-//#ifdef LP_MP_PARALLEL
-//         INDEX old_val = last_receiving_factor[index_right];
-//         const INDEX new_val = std::max(old_val, index_right);
-//         while(old_val < new_val && !last_receiving_factor[index_right].compare_exchange_weak(old_val, new_val)) ;
-//#else
+#ifdef LP_MP_PARALLEL
+         INDEX old_val = last_receiving_factor[index_right];
+         const INDEX new_val = std::max(old_val, index_left);
+         while(old_val < new_val && !last_receiving_factor[index_right].compare_exchange_weak(old_val, new_val)) ;
+#else
          last_receiving_factor[index_right] = std::max(last_receiving_factor[index_right], index_left);
-//#endif
+#endif
       }
    }
 
-//#pragma omp parallel for schedule(guided)
+#pragma omp parallel for
    for(INDEX i=0; i<m_.size(); ++i) {
       auto* f_left = m_[i]->GetLeftFactor();
       const INDEX f_index_left = factor_address_to_index_[f_left];
@@ -1244,11 +1282,13 @@ void LP::ComputeAnisotropicWeights(
    std::vector<INDEX> omega_size(f_.size());
    {
      INDEX c=0;
-     std::vector<std::vector<FactorTypeAdapter*> > fc = ComputeSendFactorConnection(factorIt,factorEndIt); // possibly not the most efficient way!
-     auto fcIt = fc.begin();
-     for(auto it=factorIt; it!=factorEndIt; ++it, ++fcIt) {
+     //std::vector<std::vector<FactorTypeAdapter*> > fc = ComputeSendFactorConnection(factorIt,factorEndIt); // possibly not the most efficient way!
+     //auto fcIt = fc.begin();
+     //for(auto it=factorIt; it!=factorEndIt; ++it, ++fcIt) {
+     for(auto it=factorIt; it!=factorEndIt; ++it) {
        if((*it)->FactorUpdated()) {
-         omega_size[c] = fcIt->size();
+         //omega_size[c] = fcIt->size();
+         omega_size[c] = (*it)->no_send_messages(); // fcIt->size();
          ++c;
        }
      }
@@ -1258,30 +1298,30 @@ void LP::ComputeAnisotropicWeights(
    omega = two_dim_variable_array<REAL>(omega_size);
 
    {
-     INDEX c=0;
-     for(auto it=factorIt; it!=factorEndIt; ++it) {
-       const INDEX i = std::distance(factorIt, it);
-       //assert(i == factorToIndex[*it]);
-       assert(i == f_sorted_inverse[ factor_address_to_index_[*it] ]);
-       if((*it)->FactorUpdated()) {
-         INDEX k=0;
-         for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
-           if(mIt.CanSendMessage()) {
-             auto* f_connected = mIt.GetConnectedFactor();
-             //const INDEX j = factorToIndex[ f_connected ];
-             const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
-             assert(i != j);
-             if(i<j || last_receiving_factor[j] > i) {
-                omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
-             } else {
-               omega[c][k] = 0.0;
-             } 
-           ++k;
-           }
+      INDEX c=0;
+      for(auto it=factorIt; it!=factorEndIt; ++it) {
+         const INDEX i = std::distance(factorIt, it);
+         //assert(i == factorToIndex[*it]);
+         assert(i == f_sorted_inverse[ factor_address_to_index_[*it] ]);
+         if((*it)->FactorUpdated()) {
+            INDEX k=0;
+            for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
+               if(mIt.CanSendMessage()) {
+                  auto* f_connected = mIt.GetConnectedFactor();
+                  //const INDEX j = factorToIndex[ f_connected ];
+                  const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
+                  assert(i != j);
+                  if(i<j || last_receiving_factor[j] > i) {
+                     omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                  } else {
+                     omega[c][k] = 0.0;
+                  } 
+                  ++k;
+               }
+            }
+            ++c;
          }
-         ++c;
-       }
-     }
+      }
    }
 
 
@@ -1293,117 +1333,12 @@ void LP::ComputeAnisotropicWeights(
       //const REAL omega_sum = std::accumulate(omega[i].begin(), omega[i].end(), 0.0); 
       assert(std::accumulate(omega[i].begin(), omega[i].end(), 0.0) <= 1.0 + eps);
    }
-
-   // rewrite omega to be a fixed two dimensional array
-
-   //auto last_valid_omega = std::remove_if(omega.begin(), omega.end(), [&](auto& weights) { 
-   //      const INDEX i = &weights - &*omega.begin();
-   //      return !(*(factorIt+i))->FactorUpdated();
-   //      });
-   //omega.resize(std::distance(omega.begin(), last_valid_omega)); 
-   //omega.shrink_to_fit();
-
-   /*
-
-   assert(std::distance(factorIt,factorEndIt) == f_.size());
-   std::vector<std::vector<FactorTypeAdapter*> > fc = ComputeSendFactorConnection(factorIt, factorEndIt);
-   std::vector<std::vector<bool> > fcAccessedLater(f_.size());
-
-   auto fcIt = fc.begin();
-   auto factorItTmp = factorIt;
-   auto fcAccessedLaterIt = fcAccessedLater.begin();
-   for(; factorItTmp != factorEndIt; ++factorItTmp, ++fcAccessedLaterIt, ++fcIt) {
-
-      INDEX no_outgong_factors_later = 0;
-      INDEX no_outgong_factors_earlier = 0;
-      INDEX no_incoming_factors_later = 0;
-
-      assert(factorToIndex.find(*factorItTmp) != factorToIndex.end());
-      const INDEX index1 = factorToIndex[*factorItTmp];
-      assert(index1 == factorItTmp - factorIt);
-      //(*fcAccessedLaterIt).resize(fcIt->size(),false);
-      for(INDEX j=0; j<(*fcIt).size(); j++) {
-         const INDEX index2 = factorToIndex[ (*fcIt)[j] ];
-         if() {
-            if(index1 < index2) {
-               ++no_outgoing_factors_later;
-            } else {
-               ++no_outgoing_factors_earlier;
-            }
-         }
-         if( && index1 < index2) {
-            ++no_incoming_factors_later;
-         }
-         assert(factorToIndex.find((*fcIt)[j]) != factorToIndex.end());
-         //std:: cout << index2 << ", ";
-         bool intermedFactor = false;
-         // do zrobienia: this will take extremely long for factors connected to very many other factors.
-         
-         for(auto fIt2=fc[index2].begin(); fIt2!=fc[index2].end(); ++fIt2) { // note that this is extremely slow for min cost flow factor which is connected to all unary factors!
-            assert(factorToIndex.find(*fIt2) != factorToIndex.end());
-            const INDEX index3 = factorToIndex[*fIt2];
-            if(index1 < index3 && index1 != index3)
-               intermedFactor = true;
-         }
-         
-         if(index1 < index2 || intermedFactor == true) {
-         //if(index1 < index2 ) {
-            (*fcAccessedLaterIt)[j] = true;
-         }
-      }
-   }
-   
-   omega.clear();
-   omega.reserve(factorEndIt - factorIt);
-   if(m_.size() == 0) { 
-      std::cout << "no messages in problem\n"; 
-      //assert(false);
-      omega.resize(factorEndIt - factorIt);
-      return;
-   }
-
-   fcIt = fc.begin();
-   fcAccessedLaterIt = fcAccessedLater.begin();
-   for(;factorIt != factorEndIt; ++factorIt, ++fcIt, ++fcAccessedLaterIt) {
-      if((*factorIt)->FactorUpdated()) {
-         assert(fcIt->size() == fcAccessedLaterIt->size());
-         omega.push_back(std::vector<REAL>(fcIt->size(), 0.0));
-         INDEX noFactorsAccessedLater = 0;
-         for(INDEX j=0;j<fcIt->size(); j++) {
-            if((*fcAccessedLaterIt)[j]) {
-               noFactorsAccessedLater++;
-            }
-         }
-         //const INDEX numberActiveMessages = std::count(fcAccessedLaterIt->begin(), fcAccessedLaterIt->end(), true);
-
-         //const REAL weight = 1.0 / REAL(noFactorsAccessedLater);
-         //const REAL weight = 0.8*1.0 / REAL(noFactorsAccessedLater);
-         // do zrobienia: not the traditional way
-         const REAL weight = 1.0 / (std::max(REAL(noFactorsAccessedLater), REAL(fcAccessedLaterIt->size() - noFactorsAccessedLater)) );
-         //const REAL weight = 0.1; // 0.5 works well for pure assignment with equality messages
-         for(INDEX j=0; j<fcIt->size(); j++) {
-            if((*fcAccessedLaterIt)[j]) {
-               omega.back()[j] = weight; 
-            } else {
-               omega.back()[j] = 0.0;
-            }
-         }
-         assert( std::accumulate(omega.back().begin(), omega.back().end(),0.0) <= 1.0 + eps);
-      }
-   }
-  */
-   /*
-   for(INDEX i=0; i<omega.size(); ++i) {
-      for(INDEX j=0; j<omega[i].size(); ++j) {
-         std::cout << omega[i][j] << ", ";
-      }
-      if(omega[i].size() > 0) {
-         std::cout << "\n";
-      }
-   }
-   std::cout << "\n";
-   omega.shrink_to_fit();
-   */
+#ifdef LP_MP_PARALLEL
+   delete[] no_send_factors;
+   delete[] no_send_factors_later;
+   delete[] no_receiving_factors_later;
+   delete[] last_receiving_factor; 
+#endif
 }
 
 // compute uniform weights so as to help decoding for obtaining primal solutions
@@ -1435,6 +1370,7 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
       assert(omega[i].size() == omega_size[i]);
    }
 
+#pragma omp parallel for
    for(INDEX i=0; i<omega.size(); ++i) {
      for(INDEX j=0; j<omega_size[i]; ++j) {
        omega[i][j] = 1.0/REAL( omega_size[i] + leave_weight );
@@ -1451,6 +1387,7 @@ void LP::ComputeMixedWeights(
    omega = omega_anisotropic;
    
    assert(omega_damped_uniform.size() == omega.size());
+#pragma omp parallel for
    for(INDEX i=0; i<omega.size(); ++i) {
       assert(omega_damped_uniform[i].size() == omega[i].size());
       for(INDEX j=0; j<omega[i].size(); ++j) {
@@ -1462,17 +1399,11 @@ void LP::ComputeMixedWeights(
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
 void LP::ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, INDEX iteration)
 {
-   //assert(false); // initialize primal before going over it
-   for(auto factorItTmp = factorIt; factorItTmp!=factorEndIt; ++factorItTmp, ++omegaIt) {
-      UpdateFactorPrimal(*factorItTmp, *omegaIt, iteration);
+   //possibly do not use parallelization here
+#pragma omp parallel for 
+   for(INDEX i=0; i<std::distance(factorIt, factorEndIt); ++i) {
+      UpdateFactorPrimal(*(factorIt + i), *(omegaIt + i), iteration);
    }
-}
-
-template<typename FACTOR_ITERATOR>
-void LP::InitializePrimalVector(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, PrimalSolutionStorage& v)
-{
-   //v.Init(factorIt, factorEndIt);
-   v = PrimalSolutionStorage(factorIt, factorEndIt);
 }
 
 //inline const PrimalSolutionStorage& LP::GetBestPrimal() const
@@ -1490,4 +1421,5 @@ void LP::InitializePrimalVector(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR 
 } // end namespace LP_MP
 
 #endif // LP_MP_MAIN
+
 

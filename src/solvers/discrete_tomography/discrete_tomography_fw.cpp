@@ -98,6 +98,92 @@ int main()
 }
 */
 
+/*
+static LP_tree mrf_chain;
+static LP_tree dt_chain1;
+static LP_tree dt_chain2;
+int main()
+{ 
+   Solver<FMC_DT,LP,StandardVisitor> solver;
+   auto& mrf_constructor = solver.GetProblemConstructor<0>();
+   mrf_constructor.AddUnaryFactor({0,0,0});
+   mrf_constructor.AddUnaryFactor({0,0,0});
+   mrf_constructor.AddUnaryFactor({0,0,0});
+   mrf_constructor.AddEmptyPairwiseFactor(0,1);
+   mrf_constructor.AddEmptyPairwiseFactor(1,2);
+   auto* f_01_c = mrf_constructor.GetPairwiseFactor(0,1);
+   auto* f_12_c = mrf_constructor.GetPairwiseFactor(1,2);
+   auto* f_01 = f_01_c->GetFactor();
+   auto* f_12 = f_12_c->GetFactor();
+   for(INDEX i=0; i<2; ++i) {
+      for(INDEX j=0; j<2; ++j) {
+         if(i != j) {
+            (*f_01).cost(i,j) = 0.0;
+            (*f_12).cost(i,j) = 0.0;
+         } else {
+            assert((*f_01)(i,j) == 0.0);
+            assert((*f_12)(i,j) == 0.0);
+         }
+      }
+   }
+   mrf_chain = mrf_constructor.add_tree({mrf_constructor.GetUnaryFactor(0), mrf_constructor.GetUnaryFactor(1), mrf_constructor.GetUnaryFactor(2)}, {f_01_c, f_12_c});
+   
+   auto& dt_constructor = solver.GetProblemConstructor<1>();
+   dt_constructor.SetNumberOfLabels(3);
+   no_labels = 3;
+   const REAL scaling = 0.01;
+   dt_constructor.AddProjection({0,1,2}, {scaling*5.0, scaling*5.0, scaling*5.0, scaling*0.5}, &dt_chain1);
+   // get pairwise factors out of dt_chain 
+   auto pairwise1 = dt_chain1.get_factors<FMC_DT::dt_sequential_pairwise_factor>();
+   //std::reverse(pairwise1.begin(), pairwise1.end());
+   dt_constructor.AddProjection({0,1,2}, {scaling*10.0, scaling*2.0, scaling*3.0, scaling*4.0}, &dt_chain2);
+   auto pairwise2 = dt_chain2.get_factors<FMC_DT::dt_sequential_pairwise_factor>();
+   //std::reverse(pairwise2.begin(), pairwise2.end());
+
+   
+
+	SVM s (3*no_labels, 2, max_fn, copy_fn, compare_fn, dot_product_fn, nullptr, false);//int d, int n, MaxFn max_fn, CopyFn copy_fn, CompareFn compare_fn, DotProductFn dot_product_fn, DotProductKernelFn dot_product_kernel_fn, bool zero_lower_bound);
+	s.SetParams(lambda, mu / mu_SCALE, kappa / kappa_SCALE);
+   assert(mu/mu_SCALE == 1.0);
+
+   sub_problem sp1(dt_chain1, pairwise1);
+   sp1.sign = 1.0;
+   sub_problem sp2(dt_chain2, pairwise2);
+   sp2.sign = -1.0;
+
+   sp1.dt_chain.compute_subgradient();
+   sp2.dt_chain.compute_subgradient();
+   const double initial_lb = sp1.dt_chain.lower_bound() + sp2.dt_chain.lower_bound();
+
+   s.SetTerm(0, &sp1, 3*no_labels, 3*sizeof(INDEX), nullptr );
+   s.SetTerm(1, &sp2, 3*no_labels, 3*sizeof(INDEX), nullptr );
+
+	s.options.gap_threshold = 0.000001;
+	s.options.iter_max = 100;
+
+   double* w = s.Solve();
+
+   std::cout << "\n\nsolution = ";
+   for(INDEX i=0; i<9; ++i) {
+      std::cout << w[i] << ",";
+   }
+   std::cout << "\n\n";
+
+   //solver.Solve();
+   //std::cout << "message passing cost = " << solver.lower_bound() << "\n";
+
+   INDEX y[3];
+   const double lb = max_fn(w, y, 1.0, &sp1) + dot_product_fn(w,y,&sp1) + max_fn(w, y, 1.0, &sp2) + dot_product_fn(w,y,&sp2);
+   std::cout << "\n\nlower bound for original problem = " << -lb << "\n";
+   std::cout << "initial lower bound for original problem = " << initial_lb << "\n";
+   solver.Solve();
+   std::cout << "optimal lower bound for original problem = " << solver.lower_bound() << "\n";
+   return 0; 
+}
+*/
+
+
+
 #include "discrete_tomography.h"
 #include "visitors/standard_visitor.hxx"
 
@@ -241,92 +327,9 @@ static double dot_product_fn(double* wi, YPtr _y, TermData term_data)
    return v;
 }
 
-/*
-static LP_tree mrf_chain;
-static LP_tree dt_chain1;
-static LP_tree dt_chain2;
-int main()
-{ 
-   Solver<FMC_DT,LP,StandardVisitor> solver;
-   auto& mrf_constructor = solver.GetProblemConstructor<0>();
-   mrf_constructor.AddUnaryFactor({0,0,0});
-   mrf_constructor.AddUnaryFactor({0,0,0});
-   mrf_constructor.AddUnaryFactor({0,0,0});
-   mrf_constructor.AddEmptyPairwiseFactor(0,1);
-   mrf_constructor.AddEmptyPairwiseFactor(1,2);
-   auto* f_01_c = mrf_constructor.GetPairwiseFactor(0,1);
-   auto* f_12_c = mrf_constructor.GetPairwiseFactor(1,2);
-   auto* f_01 = f_01_c->GetFactor();
-   auto* f_12 = f_12_c->GetFactor();
-   for(INDEX i=0; i<2; ++i) {
-      for(INDEX j=0; j<2; ++j) {
-         if(i != j) {
-            (*f_01).cost(i,j) = 0.0;
-            (*f_12).cost(i,j) = 0.0;
-         } else {
-            assert((*f_01)(i,j) == 0.0);
-            assert((*f_12)(i,j) == 0.0);
-         }
-      }
-   }
-   mrf_chain = mrf_constructor.add_tree({mrf_constructor.GetUnaryFactor(0), mrf_constructor.GetUnaryFactor(1), mrf_constructor.GetUnaryFactor(2)}, {f_01_c, f_12_c});
-   
-   auto& dt_constructor = solver.GetProblemConstructor<1>();
-   dt_constructor.SetNumberOfLabels(3);
-   no_labels = 3;
-   const REAL scaling = 0.01;
-   dt_constructor.AddProjection({0,1,2}, {scaling*5.0, scaling*5.0, scaling*5.0, scaling*0.5}, &dt_chain1);
-   // get pairwise factors out of dt_chain 
-   auto pairwise1 = dt_chain1.get_factors<FMC_DT::dt_sequential_pairwise_factor>();
-   //std::reverse(pairwise1.begin(), pairwise1.end());
-   dt_constructor.AddProjection({0,1,2}, {scaling*10.0, scaling*2.0, scaling*3.0, scaling*4.0}, &dt_chain2);
-   auto pairwise2 = dt_chain2.get_factors<FMC_DT::dt_sequential_pairwise_factor>();
-   //std::reverse(pairwise2.begin(), pairwise2.end());
-
-   
-
-	SVM s (3*no_labels, 2, max_fn, copy_fn, compare_fn, dot_product_fn, nullptr, false);//int d, int n, MaxFn max_fn, CopyFn copy_fn, CompareFn compare_fn, DotProductFn dot_product_fn, DotProductKernelFn dot_product_kernel_fn, bool zero_lower_bound);
-	s.SetParams(lambda, mu / mu_SCALE, kappa / kappa_SCALE);
-   assert(mu/mu_SCALE == 1.0);
-
-   sub_problem sp1(dt_chain1, pairwise1);
-   sp1.sign = 1.0;
-   sub_problem sp2(dt_chain2, pairwise2);
-   sp2.sign = -1.0;
-
-   sp1.dt_chain.compute_subgradient();
-   sp2.dt_chain.compute_subgradient();
-   const double initial_lb = sp1.dt_chain.lower_bound() + sp2.dt_chain.lower_bound();
-
-   s.SetTerm(0, &sp1, 3*no_labels, 3*sizeof(INDEX), nullptr );
-   s.SetTerm(1, &sp2, 3*no_labels, 3*sizeof(INDEX), nullptr );
-
-	s.options.gap_threshold = 0.000001;
-	s.options.iter_max = 100;
-
-   double* w = s.Solve();
-
-   std::cout << "\n\nsolution = ";
-   for(INDEX i=0; i<9; ++i) {
-      std::cout << w[i] << ",";
-   }
-   std::cout << "\n\n";
-
-   //solver.Solve();
-   //std::cout << "message passing cost = " << solver.lower_bound() << "\n";
-
-   INDEX y[3];
-   const double lb = max_fn(w, y, 1.0, &sp1) + dot_product_fn(w,y,&sp1) + max_fn(w, y, 1.0, &sp2) + dot_product_fn(w,y,&sp2);
-   std::cout << "\n\nlower bound for original problem = " << -lb << "\n";
-   std::cout << "initial lower bound for original problem = " << initial_lb << "\n";
-   solver.Solve();
-   std::cout << "optimal lower bound for original problem = " << solver.lower_bound() << "\n";
-   return 0; 
-}
-*/
 int main(int argc, char**argv)
 {
-   const REAL scaling = 1.0;
+   const REAL scaling = 0.1;
    std::string filename(argv[1]);
    MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
 
@@ -356,7 +359,6 @@ int main(int argc, char**argv)
    assert(p.projectionVar.size() == p.projectionCost.size());
    std::vector<sub_problem*> sp_vec;
    for(INDEX i=0; i<p.projectionVar.size(); ++i) {
-      solver.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i]);
       LP_tree t;
       solver.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i], &t);
       auto pairwise = t.get_factors<FMC_DT::dt_sequential_pairwise_factor>();
@@ -371,12 +373,12 @@ int main(int argc, char**argv)
 
       sp->unaries = p.projectionVar[i];
 
-      s->SetTerm(i, sp, mrf.GetNumberOfVariables()*no_labels, mrf.GetNumberOfVariables()*sizeof(INDEX), nullptr );
+      s->SetTerm(i, sp, mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
       sp_vec.push_back(sp);
    }
 
    s->options.gap_threshold = 0.01;
-	s->options.iter_max = 50;
+	s->options.iter_max = 1000;
 
    // push pairwise into dt factors
    for(INDEX i=0; i<mrf.GetNumberOfPairwiseFactors(); ++i) {
