@@ -58,6 +58,10 @@ struct KlRounder {
       return labeling;
 
     }
+
+    static std::string name() {
+        return "KlRounder";
+    }
 };
 
 // do zrobienia: possibly rename unary to edge factor
