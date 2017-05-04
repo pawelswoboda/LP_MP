@@ -24,7 +24,7 @@ matrix:
 before_install:
   - sudo apt-get update -qq
 script:
-  - cmake .
+  - cmake -DWITH_SAT_BASED_ROUNDING=ON -DBUILD_TESTS=ON .
   - make
   - cd test && ctest
 
