@@ -9,7 +9,6 @@ SET(BASE_TEST_FILES
    #shortest_path.cpp
    #cycle_inequalities.cpp
    discrete_tomography_chain.cpp
-   simple_test.cxx
    )
 enable_testing()
 

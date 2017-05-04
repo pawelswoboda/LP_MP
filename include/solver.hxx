@@ -23,10 +23,6 @@ namespace LP_MP {
 // binds together problem constructors and solver and organizes input/output
 // base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
 
-// FIXME This is relevant!
-// -> in multicut we use:
-// Solver<FMC_MULTICUT,LP,StandardTighteningVisitor>
-
 template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR>
 class Solver {
 
@@ -378,9 +374,6 @@ private:
    INDEX iter = 0;
 };
 
-// FIXME This is relevant!
-// -> in multicut we use:
-// Solver<FMC_ODD_WHEEL_MULTICUT,LP,StandardTighteningVisitor> as template
 
 // rounding based on primal heuristics provided by problem constructor
 template<typename SOLVER>

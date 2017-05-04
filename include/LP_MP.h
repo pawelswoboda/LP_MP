@@ -137,10 +137,6 @@ inline MessageIterator FactorTypeAdapter::begin() { return MessageIterator(this,
 inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, GetNoMessages()); }
 
 
-//FIXME This is relevant!
-// Used in multicut
-// Seems to be the working horse...
-
 class LP {
 public:
    LP(TCLAP::CmdLine& cmd) 
