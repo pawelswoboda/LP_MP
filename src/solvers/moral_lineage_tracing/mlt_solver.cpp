@@ -1,5 +1,6 @@
 #include "solver.hxx"
 #include "visitors/standard_visitor.hxx"
+#include "solvers/multicut/multicut.h" // strangely this is needed by gcc to compile fine. Why?
 #include "moral_lineage_tracing.h"
 
 using namespace LP_MP;
@@ -11,4 +12,5 @@ int main(int argc, char** argv)
 	SolverType s(argc,argv);
 	s.ReadProblem(mlt_input::ParseProblem<SolverType>);
 	s.Solve();
+   return 0;
 }

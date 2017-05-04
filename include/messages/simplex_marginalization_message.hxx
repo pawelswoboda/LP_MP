@@ -15,6 +15,7 @@ namespace LP_MP {
   class UnaryPairwiseMessageLeft {
     public:
       UnaryPairwiseMessageLeft(const INDEX i1, const INDEX i2) : i1_(i1), i2_(i2) {} // the pairwise factor size
+       /*
       // standard functions which take all possible arguments, to be replaced with minimal ones
       template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>
         typename std::enable_if<ENABLE,void>::type
@@ -40,6 +41,7 @@ namespace LP_MP {
         { 
           MinimizeRight(r,msg,omega); 
         }
+        */
 
       // for primal computation as in TRW-S, we need to compute restricted messages as well
       template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>
@@ -161,6 +163,7 @@ namespace LP_MP {
   class UnaryPairwiseMessageRight {
     public:
       UnaryPairwiseMessageRight(const INDEX i1, const INDEX i2) : i1_(i1), i2_(i2) {} // the pairwise factor size
+       /*
       // standard functions which take all possible arguments, to be replaced with minimal ones
       template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>
         typename std::enable_if<ENABLE,void>::type
@@ -186,6 +189,7 @@ namespace LP_MP {
         { 
           MinimizeRight(r,msg,omega); 
         }
+        */
 
       // for primal computation as in TRW-S, we need to compute restricted messages as well
       template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>

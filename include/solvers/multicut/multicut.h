@@ -1,14 +1,12 @@
-#ifndef LP_MP_MULTICUT_HXX
-#define LP_MP_MULTICUT_HXX
+#ifndef LP_MP_MULTICUT_H
+#define LP_MP_MULTICUT_H
 
 #include "LP_MP.h"
 #include "solver.hxx"
 #include "factors_messages.hxx"
 #include "multicut_factors_messages.hxx"
 #include "multiway_cut_factors_messages.hxx"
-#include "multicut_unary_factor.hxx"
 #include "multicut_triplet_factor.hxx"
-#include "multicut_odd_wheel.hxx"
 #include "factors/constant_factor.hxx"
 #include "lifted_multicut_factors_messages.hxx"
 #include "multicut_constructor.hxx"
@@ -62,9 +60,6 @@ template<MessageSendingType MESSAGE_SENDING>
 struct FMC_ODD_WHEEL_MULTICUT {
    constexpr static const char* name = "Multicut with cycle and odd wheel constraints";
 
-   //typedef FactorContainer<MulticutUnaryFactor, FMC_ODD_WHEEL_MULTICUT, 0, true> MulticutUnaryFactorContainer;
-   //typedef FactorContainer<MulticutTripletFactor, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletFactorContainer;
-   //typedef FactorContainer<multicut_triplet_factor, FMC_MULTICUT, 1> MulticutTripletFactorContainer;
    using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_ODD_WHEEL_MULTICUT, 0, true>;
    using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_ODD_WHEEL_MULTICUT, 1>;
    using odd_3_wheel_factor_container = FactorContainer<multicut_odd_3_wheel_factor, FMC_ODD_WHEEL_MULTICUT, 2>;
@@ -78,10 +73,6 @@ struct FMC_ODD_WHEEL_MULTICUT {
    using triplet_odd_wheel_message_013 = MessageContainer<multicut_triplet_odd_3_wheel_message_013, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 4>;
    using triplet_odd_wheel_message_023 = MessageContainer<multicut_triplet_odd_3_wheel_message_023, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 5>;
    using triplet_odd_wheel_message_123 = MessageContainer<multicut_triplet_odd_3_wheel_message_123, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 6>;
-
-   //typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_ODD_WHEEL_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
-   //typedef MessageContainer<MulticutTripletPlusSpokeMessage, 1, 2, variableMessageNumber, variableMessageNumber, FMC_ODD_WHEEL_MULTICUT, 1> MulticutTripletPlusSpokeMessageContainer;
-   //typedef MessageContainer<MulticutTripletPlusSpokeCoverMessage, 1, 2, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 2> MulticutTripletPlusSpokeCoverMessageContainer;
 
    using FactorList = meta::list< edge_factor_container, triplet_factor_container, odd_3_wheel_factor_container, ConstantFactorContainer>;
    using MessageList = meta::list<
@@ -108,13 +99,6 @@ struct FMC_LIFTED_MULTICUT {
    using edge_triplet_message_1_container = MessageContainer<multicut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_LIFTED_MULTICUT, 1 >;
    using edge_triplet_message_2_container = MessageContainer<multicut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_LIFTED_MULTICUT, 2 >;
 
-
-   //typedef FactorContainer<MulticutUnaryFactor, FMC_LIFTED_MULTICUT, 0> MulticutUnaryFactorContainer;
-   //typedef FactorContainer<MulticutTripletFactor, FMC_LIFTED_MULTICUT, 1> MulticutTripletFactorContainer;
-   //typedef FactorContainer<LiftedMulticutCutFactor, FMC_LIFTED_MULTICUT, 2> LiftedMulticutCutFactorContainer;
-   //using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_LIFTED_MULTICUT, 3>;
-
-   //typedef MessageContainer<MulticutUnaryTripletMessage<MESSAGE_SENDING>, 0, 1, variableMessageNumber, 3, FMC_LIFTED_MULTICUT, 0 > MulticutUnaryTripletMessageContainer;
    typedef MessageContainer<CutEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, FMC_LIFTED_MULTICUT, 3 > CutEdgeLiftedMulticutFactorMessageContainer;
    typedef MessageContainer<LiftedEdgeLiftedMulticutFactorMessage, 0, 2, variableMessageNumber, variableMessageNumber, FMC_LIFTED_MULTICUT, 4 > LiftedEdgeLiftedMulticutFactorMessageContainer;
 
@@ -162,13 +146,6 @@ struct FMC_MULTIWAY_CUT {
    using unary_pairwise_message_0_container = MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP,false,true>, 4, 5, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 7>;
    using unary_pairwise_message_1_container = MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP,false,true>, 4, 5, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 8>;
 
-   //using one_terminal_edge_active_factor_container = FactorContainer<one_terminal_edge_active_factor, FMC_MULTIWAY_CUT, 4, true>; 
-   //using multi_terminal_factor_container = FactorContainer<multi_terminal_factor, FMC_MULTIWAY_CUT, 5, true>;
-      
-   //using one_terminal_edge_active_message_container = MessageContainer<multicut_edge_multi_terminal_message, 0, 5, atMostOneMessage, variableMessageNumber, FMC_MULTIWAY_CUT, 7>;
-   //using at_most_one_active_multi_terminal_message_container_0 = MessageContainer<at_most_one_active_multi_terminal_message<0>, 4, 5, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 8>;
-   //using at_most_one_active_multi_terminal_message_container_1 = MessageContainer<at_most_one_active_multi_terminal_message<1>, 4, 5, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 9>;
-
    // join multicut edge and Potts factor
    using multicut_edge_potts_message_container = MessageContainer<multicut_edge_potts_message, 0, 5, atMostOneMessage, atMostOneMessage, FMC_MULTIWAY_CUT, 9>; 
    // when we tighten, additional edges may not be connected to any MRF factor. Also, before we tighten we actually
@@ -194,9 +171,62 @@ struct FMC_MULTIWAY_CUT {
    using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
    using mrf = StandardMrfConstructor<FMC_MULTIWAY_CUT, 4, 5, 7, 8>;
    using multiway_cut_c = multiway_cut_constructor<FMC_MULTIWAY_CUT,0,1,9>;
-   //using multiway_cut_= multiway_cut_constructor<multicut_cow, 4,5, 7,8,9>;
    using ProblemDecompositionList = meta::list<multicut_cow, mrf, multiway_cut_c>; 
 };
+
+struct FMC_ASYMMETRIC_MULTIWAY_CUT {
+   constexpr static const char* name = "Asymmetric multiway cut with cycle and odd wheel constraints";
+
+   // multicut
+   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 0>;
+   using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 1>;
+   using odd_3_wheel_factor_container = FactorContainer<multicut_odd_3_wheel_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 2>;
+   using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_ASYMMETRIC_MULTIWAY_CUT, 3>;
+
+   using edge_triplet_message_0_container = MessageContainer<multicut_edge_triplet_message_0, 0, 1, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 0 >;
+   using edge_triplet_message_1_container = MessageContainer<multicut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 1 >;
+   using edge_triplet_message_2_container = MessageContainer<multicut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 2 >;
+
+   using triplet_odd_wheel_message_012 = MessageContainer<multicut_triplet_odd_3_wheel_message_012, 1, 2, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 3>;
+   using triplet_odd_wheel_message_013 = MessageContainer<multicut_triplet_odd_3_wheel_message_013, 1, 2, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 4>;
+   using triplet_odd_wheel_message_023 = MessageContainer<multicut_triplet_odd_3_wheel_message_023, 1, 2, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 5>;
+   using triplet_odd_wheel_message_123 = MessageContainer<multicut_triplet_odd_3_wheel_message_123, 1, 2, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 6>;
+
+   // mrf
+   using unary_factor_container = FactorContainer<UnarySimplexFactor, FMC_ASYMMETRIC_MULTIWAY_CUT, 4, true>;
+   using potts_factor_container = FactorContainer<amwc_pairwise_potts_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 5>;
+
+   using unary_pairwise_message_0_container = MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP,false,true>, 4, 5, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 7>;
+   using unary_pairwise_message_1_container = MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP,false,true>, 4, 5, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 8>;
+
+   // join multicut edge and Potts factor
+   using multicut_edge_potts_message_container = MessageContainer<multicut_edge_potts_message, 0, 5, atMostOneMessage, atMostOneMessage, FMC_ASYMMETRIC_MULTIWAY_CUT, 9>; 
+   // when we tighten, additional edges may not be connected to any MRF factor. Also, before we tighten we actually
+
+   using FactorList = meta::list< 
+      edge_factor_container,
+      triplet_factor_container,
+      odd_3_wheel_factor_container,
+      ConstantFactorContainer,
+
+      unary_factor_container,
+      potts_factor_container 
+         >;
+   using MessageList = meta::list<
+      edge_triplet_message_0_container, edge_triplet_message_1_container, edge_triplet_message_2_container,  
+      triplet_odd_wheel_message_012, triplet_odd_wheel_message_013, triplet_odd_wheel_message_023, triplet_odd_wheel_message_123,
+
+      unary_pairwise_message_0_container, unary_pairwise_message_1_container,
+      multicut_edge_potts_message_container 
+      >;
+
+   using multicut_c = MulticutConstructor<FMC_ASYMMETRIC_MULTIWAY_CUT,0,1, 0,1,2, 3>;
+   using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
+   using mrf = StandardMrfConstructor<FMC_ASYMMETRIC_MULTIWAY_CUT, 4, 5, 7, 8>;
+   using multiway_cut_c = multiway_cut_constructor<FMC_ASYMMETRIC_MULTIWAY_CUT,0,1,9>;
+   using ProblemDecompositionList = meta::list<multicut_cow, mrf, multiway_cut_c>; 
+};
+
 
 namespace MulticutOpenGmInput {
 
@@ -258,7 +288,7 @@ namespace MulticutOpenGmInput {
    }
 
    template<typename SOLVER>
-   bool ParseProblem(const std::string filename, SOLVER& pd)
+   bool ParseProblemOld(const std::string filename, SOLVER& pd)
    {
       //read with hdf5
       auto fileHandle = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -330,6 +360,13 @@ namespace MulticutOpenGmInput {
    }
 
    // transform a Potts problem into a multiway cut one
+   template<typename SOLVER>
+   bool ParseProblem(const std::string filename, SOLVER& s)
+   {
+      auto& mc = s.template GetProblemConstructor<0>();
+      return ParseMulticutOpenGM(filename, mc);
+   }
+
    template<typename SOLVER>
    bool ParsePottsProblem(const std::string filename, SOLVER& pd)
    {
@@ -552,4 +589,4 @@ namespace MulticutH5Input {
 
 } // end namespace LP_MP
 
-#endif // LP_MP_MULTICUT_HXX
+#endif // LP_MP_MULTICUT_H
