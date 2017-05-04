@@ -18,13 +18,6 @@
 #include <omp.h>
 #endif
 
-#include "andres/graph/graph.hxx"
-#include "andres/graph/grid-graph.hxx"
-#include "andres/graph/multicut/kernighan-lin.hxx"
-#include "andres/graph/multicut/greedy-additive.hxx"
-#include "andres/graph/multicut-lifted/kernighan-lin.hxx"
-#include "andres/graph/multicut-lifted/greedy-additive.hxx"
-
 
 namespace LP_MP {
 
@@ -35,11 +28,16 @@ enum class cut_type { multicut, maxcut };
 
 template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO,
    INDEX UNARY_TRIPLET_MESSAGE_0_NO, INDEX UNARY_TRIPLET_MESSAGE_1_NO, INDEX UNARY_TRIPLET_MESSAGE_2_NO,
-   INDEX CONSTANT_FACTOR_NO, cut_type CUT_TYPE = cut_type::multicut>
+   INDEX CONSTANT_FACTOR_NO,
+   class ROUNDER,
+   cut_type CUT_TYPE = cut_type::multicut
+   >
 class MulticutConstructor {
 public:
-   using MulticutConstructorType = MulticutConstructor<FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_0_NO, UNARY_TRIPLET_MESSAGE_1_NO, UNARY_TRIPLET_MESSAGE_2_NO, CONSTANT_FACTOR_NO, CUT_TYPE>;
+   using MulticutConstructorType = MulticutConstructor<
+       FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_0_NO, UNARY_TRIPLET_MESSAGE_1_NO, UNARY_TRIPLET_MESSAGE_2_NO, CONSTANT_FACTOR_NO, ROUNDER, CUT_TYPE>;
    using FMC = FACTOR_MESSAGE_CONNECTION;
+   using GraphType = typename ROUNDER::GraphType;
 
    static constexpr INDEX unary_factor_no = UNARY_FACTOR_NO;
    static constexpr INDEX triplet_factor_no = TRIPLET_FACTOR_NO;
@@ -71,7 +69,8 @@ public:
       tripletFactors_(o.tripletFactors_),
       noNodes_(o.noNodes_),
       constant_factor_(o.constant_factor_), 
-      lp_(o.lp_) 
+      lp_(o.lp_),
+      rounder_()
    {}
 
    ~MulticutConstructor()
@@ -750,7 +749,7 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
    void round()
    {
       std::cout << "compute multicut primal with GAEC + KLj\n";
-      andres::graph::Graph<> graph(noNodes_); // would need nifty graph instead
+      GraphType graph(noNodes_); // would need nifty graph instead
       std::vector<REAL> edgeValues;
       edgeValues.reserve(unaryFactorsVector_.size());
 
@@ -758,25 +757,7 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
          graph.insertEdge(e.first[0], e.first[1]);
          edgeValues.push_back((*e.second->GetFactor())[0]);
       }
-      
-      // FIXME This is relevant!
-      // here we would need to hack in nifty
-      
-      primal_handle_ = std::async(std::launch::async, gaec_klj, std::move(graph), std::move(edgeValues));
-   }
-
-   // FIXME This is relevant!
-   // -> here the multicut for the primal solution is called
-   // -> this is where we would need to hack in nifty
-   
-   static std::vector<char> gaec_klj(andres::graph::Graph<> g, std::vector<REAL> edge_values)
-   {
-      std::vector<char> labeling(g.numberOfEdges(), 0);
-      if(g.numberOfEdges() > 0) {
-         andres::graph::multicut::greedyAdditiveEdgeContraction(g, edge_values, labeling);
-         andres::graph::multicut::kernighanLin(g, edge_values, labeling, labeling);
-      }
-      return labeling;
+      primal_handle_ = std::async(std::launch::async, rounder_, std::move(graph), std::move(edgeValues));
    }
 
    void write_labeling_into_factors(const std::vector<char>& labeling) {
@@ -814,7 +795,7 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
       }
    }
 
-   // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
+   // use the rounder to compute primal solution (default: GAEC and Kernighan&Lin algorithm of andres graph package)
    void ComputePrimal()
    {
       if(CUT_TYPE == cut_type::multicut) {
@@ -849,10 +830,6 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
 
 protected:
 
-   // FIXME This is relevant!
-   // here we would need to hack in nifty
-   decltype(std::async(std::launch::async, gaec_klj, andres::graph::Graph<>(0), std::vector<REAL>{})) primal_handle_;
-
    //GlobalFactorContainer* globalFactor_;
    // do zrobienia: replace this by unordered_map, provide hash function.
    // possibly dont do this, but use sorting to provide ordering for LP
@@ -875,6 +852,9 @@ protected:
    ConstantFactorContainer* constant_factor_;
 
    LP* lp_;
+   ROUNDER rounder_;
+
+   decltype(std::async(std::launch::async, rounder_, GraphType(0), std::vector<REAL>{})) primal_handle_;
 };
 
 

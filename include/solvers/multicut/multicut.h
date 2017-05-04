@@ -21,8 +21,13 @@
 
 #include "hdf5_routines.hxx"
 
+
 #include "andres/graph/graph.hxx"
 #include "andres/graph/grid-graph.hxx"
+
+#include "andres/graph/multicut/kernighan-lin.hxx"
+#include "andres/graph/multicut/greedy-additive.hxx"
+
 #include "andres/graph/hdf5/graph.hxx"
 #include "andres/graph/hdf5/grid-graph.hxx"
 #include "andres/functional.hxx"
@@ -33,11 +38,37 @@
 
 namespace LP_MP {
 
+// for now, we assume that the model is (re)-constructed each time the functor is called.
+// however it might be more efficient to construct the model once in the beginning and
+// then only change it according to the internal parametrization when the functor is called
+// in this case, the functor would need to have the model as internal state
+struct KlRounder {
+    
+    typedef andres::graph::Graph<> GraphType;
+
+    KlRounder()
+    {}
+
+    // TODO do we have to call by value here due to using async or could we also use a call by refernce?
+    std::vector<char> operator()(GraphType g, std::vector<REAL> edgeValues) {
+   
+      std::vector<char> labeling(g.numberOfEdges(), 0);
+      if(g.numberOfEdges() > 0) {
+         andres::graph::multicut::greedyAdditiveEdgeContraction(g, edgeValues, labeling);
+         andres::graph::multicut::kernighanLin(g, edgeValues, labeling, labeling);
+      }
+      return labeling;
+
+    }
+};
+
 // do zrobienia: possibly rename unary to edge factor
 
-// FIXME This is relevant!
+// having the rounder as template with default setting works for the to multicut factor messages,
+// but for some reason not for the lifted and multiway-cut factor messages (there having the default value does not work,
+// hence the type must be explicitly set in the cpps)
 
-template<MessageSendingType MESSAGE_SENDING>
+template<MessageSendingType MESSAGE_SENDING, class ROUNDER = KlRounder>
 struct FMC_MULTICUT {
    constexpr static const char* name = "Multicut with cycle constraints";
    //constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
@@ -53,12 +84,12 @@ struct FMC_MULTICUT {
    using FactorList = meta::list< edge_factor_container, triplet_factor_container, ConstantFactorContainer>;
    using MessageList = meta::list<edge_triplet_message_0_container,edge_triplet_message_1_container,edge_triplet_message_2_container>;
 
-   using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0,1,2,2>;
+   using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0,1,2,2,ROUNDER>;
    using ProblemDecompositionList = meta::list<multicut>;
 };
 
 // It would be nice to be able to derive from FMC_MULTICUT. This is not possible due to deviating FMCs. Possibly parametrize above FMC with template
-template<MessageSendingType MESSAGE_SENDING>
+template<MessageSendingType MESSAGE_SENDING, class ROUNDER = KlRounder>
 struct FMC_ODD_WHEEL_MULTICUT {
    constexpr static const char* name = "Multicut with cycle and odd wheel constraints";
 
@@ -89,11 +120,13 @@ struct FMC_ODD_WHEEL_MULTICUT {
       triplet_odd_wheel_message_012, triplet_odd_wheel_message_013, triplet_odd_wheel_message_023, triplet_odd_wheel_message_123 
       >;
 
-   using multicut_c = MulticutConstructor<FMC_ODD_WHEEL_MULTICUT,0,1, 0,1,2, 3>;
+   using multicut_c = MulticutConstructor<FMC_ODD_WHEEL_MULTICUT,0,1, 0,1,2, 3, ROUNDER>;
    using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
    using ProblemDecompositionList = meta::list<multicut_cow>;
 };
 
+// FIXME For some reason setting the ROUNDER to KlRounder as default value does not compile here
+template<class ROUNDER>
 struct FMC_LIFTED_MULTICUT {
    constexpr static const char* name = "Lifted Multicut with cycle constraints";
    constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
@@ -130,13 +163,15 @@ struct FMC_LIFTED_MULTICUT {
       LiftedEdgeLiftedMulticutFactorMessageContainer
          >;
 
-   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,1,2,3>;
+   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,1,2,3,ROUNDER>;
    using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,3,4>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 
 };
 
 // also only separate with violated cycles only in multiway cut
+// FIXME For some reason setting the ROUNDER to KlRounder as default value does not compile here
+template<class ROUNDER>
 struct FMC_MULTIWAY_CUT {
    constexpr static const char* name = "Multiway cut with cycle and odd wheel constraints";
 
@@ -190,7 +225,7 @@ struct FMC_MULTIWAY_CUT {
       multicut_edge_potts_message_container 
       >;
 
-   using multicut_c = MulticutConstructor<FMC_MULTIWAY_CUT,0,1, 0,1,2, 3>;
+   using multicut_c = MulticutConstructor<FMC_MULTIWAY_CUT,0,1, 0,1,2, 3, ROUNDER>;
    using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
    using mrf = StandardMrfConstructor<FMC_MULTIWAY_CUT, 4, 5, 7, 8>;
    using multiway_cut_c = multiway_cut_constructor<FMC_MULTIWAY_CUT,0,1,9>;

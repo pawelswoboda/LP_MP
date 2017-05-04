@@ -1,12 +1,11 @@
-
 #include "solvers/multicut/multicut.h"
 #include "visitors/standard_visitor.hxx"
 using namespace LP_MP;
+
 int main(int argc, char* argv[])
-
 {
-ProblemConstructorRoundingSolver<Solver<FMC_LIFTED_MULTICUT,LP,StandardTighteningVisitor>> solver(argc,argv);
-solver.ReadProblem(MulticutTextInput::ParseLiftedProblem<Solver<FMC_LIFTED_MULTICUT,LP,StandardTighteningVisitor>>);
-return solver.Solve();
-
+    using SolverType = Solver<FMC_LIFTED_MULTICUT<KlRounder>,LP,StandardTighteningVisitor>;
+    ProblemConstructorRoundingSolver<SolverType> solver(argc,argv);
+    solver.ReadProblem(MulticutTextInput::ParseLiftedProblem<SolverType>);
+    return solver.Solve();
 }

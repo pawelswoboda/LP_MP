@@ -94,6 +94,7 @@ namespace LP_MP {
                 "--primalComputationInterval", "100",
                 "--maxIter", "1000"
             };
+            return options;
         
         }
 

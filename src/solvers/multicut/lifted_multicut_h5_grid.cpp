@@ -5,8 +5,9 @@ using namespace LP_MP;
 int main(int argc, char* argv[])
 
 {
-ProblemConstructorRoundingSolver<Solver<FMC_LIFTED_MULTICUT,LP,StandardTighteningVisitor>> solver(argc,argv);
-solver.ReadProblem(MulticutH5Input::ParseLiftedProblem<Solver<FMC_LIFTED_MULTICUT,LP,StandardTighteningVisitor>,true>);
-return solver.Solve();
+    using SolverType = Solver<FMC_LIFTED_MULTICUT<KlRounder>,LP,StandardTighteningVisitor>;
+    ProblemConstructorRoundingSolver<SolverType> solver(argc,argv);
+    solver.ReadProblem(MulticutH5Input::ParseLiftedProblem<SolverType,true>);
+    return solver.Solve();
 
 }
