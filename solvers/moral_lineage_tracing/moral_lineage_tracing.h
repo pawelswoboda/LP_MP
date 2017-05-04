@@ -8,6 +8,9 @@
 #include "solvers/multicut/multicut_constructor.hxx"
 #include "solvers/multicut/lifted_multicut_factors_messages.hxx"
 #include "factors/constant_factor.hxx"
+#include "solvers/multicut/multicut_constructor.hxx"
+#include "solvers/multicut/multicut.h"
+
 #include "mlt_factors_messages.hxx"
 #include "mlt_constructor.hxx"
 

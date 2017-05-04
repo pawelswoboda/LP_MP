@@ -399,7 +399,6 @@ public:
                   f(*l).ComputePrimal();
             });
       });
-      this->RegisterPrimal();
    }
 
    virtual void PostIterate(LpControl c)
@@ -407,6 +406,7 @@ public:
       if(c.computePrimal) {
          // do zrobienia: possibly run this in own thread similar to lp solver
          ComputePrimal();
+         this->RegisterPrimal();
       }
       SOLVER::PostIterate(c);
    }
@@ -430,13 +430,20 @@ public:
    virtual void Iterate(LpControl c)
    {
       if(c.computePrimal) {
-         this->lp_.ComputeForwardPassAndPrimal(iter);
-         this->ComputePrimal();
          this->RegisterPrimal();
-
-         this->lp_.ComputeBackwardPassAndPrimal(iter);
-         this->ComputePrimal();
-         this->RegisterPrimal();
+         // alternatively  compute forward and backward based rounding
+         if(cur_primal_computation_direction_ == Direction::forward) {
+            std::cout << "compute primal for forward pass\n";
+            this->lp_.ComputeForwardPassAndPrimal(iter);
+            this->lp_.ComputeBackwardPass();
+            cur_primal_computation_direction_ = Direction::backward;
+         } else {
+            assert(cur_primal_computation_direction_ == Direction::backward);
+            std::cout << "compute primal for backward pass\n";
+            this->lp_.ComputeForwardPass();
+            this->lp_.ComputeBackwardPassAndPrimal(iter);
+            cur_primal_computation_direction_ = Direction::forward;
+         }
       } else {
          SOLVER::Iterate(c);
       }
@@ -445,6 +452,7 @@ public:
 
 private:
    INDEX iter = 0;
+   Direction cur_primal_computation_direction_ = Direction::forward; 
 };
 
 

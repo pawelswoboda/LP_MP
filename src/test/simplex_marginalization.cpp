@@ -1,7 +1,6 @@
 #include "catch.hpp"
 #include <vector>
 #include "factors/simplex_factor.hxx"
-#include "messages/message_loops.hxx"
 #include "messages/simplex_marginalization_message.hxx"
 
 using namespace LP_MP;
@@ -16,7 +15,7 @@ TEST_CASE( "unary/pairwise message", "[unary/pairwise message between simplex fa
    PairwiseSimplexFactor simplexPairwise(4,3);
    for(INDEX i=0; i<4; ++i) {
       for(INDEX j=0; j<3; ++j) {
-         simplexPairwise(i,j) = costPairwise[i*3 + j];
+         simplexPairwise.cost(i,j) = costPairwise[i*3 + j];
       }
    }
 
@@ -25,8 +24,8 @@ TEST_CASE( "unary/pairwise message", "[unary/pairwise message between simplex fa
 
    // must add operators -= and += to vector to support the below things
    SECTION( "marginalize pairwise right" ) {
-      vector marg(4,0.0);
-      rightMessage.ReceiveMessageFromRight(simplexPairwise, marg);
+      vector<REAL> marg(4,0.0);
+      leftMessage.ReceiveMessageFromRight(simplexPairwise, marg);
       REQUIRE(marg[0] == -0.05);
       REQUIRE(marg[1] == -0.001);
       REQUIRE(marg[2] ==  0.3);
@@ -34,8 +33,8 @@ TEST_CASE( "unary/pairwise message", "[unary/pairwise message between simplex fa
    }
 
    SECTION( "marginalize pairwise left" ) {
-      vector marg(3,0.0);
-      leftMessage.ReceiveMessageFromRight(simplexPairwise, marg);
+      vector<REAL> marg(3,0.0);
+      rightMessage.ReceiveMessageFromRight(simplexPairwise, marg);
       REQUIRE(marg[0] == 0.3);
       REQUIRE(marg[1] == 0.001);
       REQUIRE(marg[2] == 0.2);
