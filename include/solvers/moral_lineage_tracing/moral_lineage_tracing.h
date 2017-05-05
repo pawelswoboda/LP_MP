@@ -68,8 +68,8 @@ struct FMC_MLT {
 	>;
 
 	// input FMC struct, factor numbers, message numbers, constant factor
-	using mc_constructor = MulticutConstructor<FMC_MLT, 0, 1, 0, 1, 2, 5>;
-	using lifted_mc_constructor = LiftedMulticutConstructor<mc_constructor, 4, 10, 11>;
+	using mc_constructor = MulticutConstructor<FMC_MLT, 0, 1, 0, 1, 2, 5, KlRounder>;
+	using lifted_mc_constructor = LiftedMulticutConstructor<mc_constructor, 4, 10, 11, LiftedKlRounder>;
 	using mlt_constructor = MLT_constructor<lifted_mc_constructor, 2, 3, 3, 4, 5, 6, 7, 8, 9>;
 	using ProblemDecompositionList = meta::list<mlt_constructor>;
 };

@@ -3,7 +3,7 @@
 
 // #include "LP_MP.h"
 
-#include "../solvers/multicut/multicut_constructor.hxx"
+#include "solvers/multicut/multicut_constructor.hxx"
 
 #include <map>
 #include <array>
