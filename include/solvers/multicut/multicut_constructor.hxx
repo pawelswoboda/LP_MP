@@ -51,8 +51,9 @@ public:
    using edge_triplet_message_2_container = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_2_NO>::MessageContainerType;
 
    template<typename SOLVER>
-   MulticutConstructor(SOLVER& pd)
-   : lp_(&pd.GetLP())
+   MulticutConstructor(SOLVER& pd, const ROUNDER & rounder = ROUNDER() )
+   : lp_(&pd.GetLP()),
+   rounder_(rounder)
    //unaryFactors_(100,hash::array2),
    //tripletFactors_(100,hash::array3)
    {
@@ -61,6 +62,7 @@ public:
       constant_factor_ = new ConstantFactorContainer(0.0);
       pd.GetLP().AddFactor(constant_factor_);
    }
+   
    MulticutConstructor(const MulticutConstructorType& o)
       : unaryFactors_(o.unaryFactors_),
       unaryFactorsVector_(o.unaryFactorsVector_),
@@ -68,7 +70,7 @@ public:
       noNodes_(o.noNodes_),
       constant_factor_(o.constant_factor_), 
       lp_(o.lp_),
-      rounder_()
+      rounder_(o.rounder_)
    {}
 
    ~MulticutConstructor()
@@ -1834,7 +1836,8 @@ public:
    using CutId = std::vector<Edge>;
 
    template<typename SOLVER>
-   LiftedMulticutConstructor(SOLVER& pd) : MULTICUT_CONSTRUCTOR(pd) {}
+   LiftedMulticutConstructor(SOLVER& pd, const LIFTED_ROUNDER & liftedRounder = LIFTED_ROUNDER() ) 
+   : MULTICUT_CONSTRUCTOR(pd), liftedRounder_(liftedRounder) {}
 
    virtual typename MULTICUT_CONSTRUCTOR::UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost)
    {
@@ -2198,7 +2201,7 @@ public:
          edgeValues.push_back(e.f->GetFactor()->operator[](0));
       }
 
-      primal_handle_ = std::async(std::launch::async, lifted_rounder_, std::move(originalGraph), std::move(liftedGraph), std::move(edgeValues));
+      primal_handle_ = std::async(std::launch::async, liftedRounder_, std::move(originalGraph), std::move(liftedGraph), std::move(edgeValues));
    }
 
    // use the lifted rounder to compute primal solution (default: GAEC and Kernighan&Lin algorithm of andres graph package)
@@ -2245,9 +2248,9 @@ public:
 
    std::map<CutId,std::pair<LiftedMulticutCutFactorContainer*,std::vector<Edge>>> liftedMulticutFactors_;
 
-   LIFTED_ROUNDER lifted_rounder_;
+   LIFTED_ROUNDER liftedRounder_;
 
-   decltype(std::async(std::launch::async, lifted_rounder_, GraphType(0), GraphType(0), std::vector<REAL>{})) primal_handle_;
+   decltype(std::async(std::launch::async, liftedRounder_, GraphType(0), GraphType(0), std::vector<REAL>{})) primal_handle_;
 };
 
 } // end namespace LP_MP
