@@ -23,13 +23,14 @@
 #include "andres/graph/graph.hxx"
 #include "andres/graph/grid-graph.hxx"
 
-#include "andres/graph/multicut/kernighan-lin.hxx"
-#include "andres/graph/multicut/greedy-additive.hxx"
-
 #include "andres/graph/hdf5/graph.hxx"
 #include "andres/graph/hdf5/grid-graph.hxx"
 #include "andres/functional.hxx"
+
+#include "andres/graph/multicut/kernighan-lin.hxx"
+#include "andres/graph/multicut/greedy-additive.hxx"
 #include "andres/graph/multicut-lifted/kernighan-lin.hxx"
+#include "andres/graph/multicut-lifted/greedy-additive.hxx"
 
 #include <iostream>
 #include <vector>
@@ -61,6 +62,32 @@ struct KlRounder {
 
     static std::string name() {
         return "KlRounder";
+    }
+};
+
+struct LiftedKlRounder {
+
+    typedef andres::graph::Graph<> GraphType;
+
+    LiftedKlRounder()
+    {}
+
+    std::vector<char> operator()(
+            GraphType originalGraph,
+            GraphType liftedGraph,
+            std::vector<REAL> edgeValues) {
+        
+        std::vector<char> labeling(edgeValues.size());
+        if(originalGraph.numberOfEdges() > 0) {
+           andres::graph::multicut_lifted::greedyAdditiveEdgeContraction(originalGraph, liftedGraph, edgeValues, labeling);
+           andres::graph::multicut_lifted::kernighanLin(originalGraph, liftedGraph, edgeValues, labeling, labeling);
+        }
+        return labeling;
+    
+    }
+
+    static std::string name() {
+        return "LiftedKlRounder";
     }
 };
 
@@ -120,8 +147,8 @@ struct FMC_ODD_WHEEL_MULTICUT {
    using ProblemDecompositionList = meta::list<multicut_cow>;
 };
 
-// FIXME For some reason setting the ROUNDER to KlRounder as default value does not compile here
-template<class ROUNDER>
+
+template<class ROUNDER, class LIFTED_ROUNDER>
 struct FMC_LIFTED_MULTICUT {
    constexpr static const char* name = "Lifted Multicut with cycle constraints";
    constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
@@ -152,14 +179,13 @@ struct FMC_LIFTED_MULTICUT {
          >;
 
    using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,1,2,3,ROUNDER>;
-   using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,3,4>;
+   using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,3,4,LIFTED_ROUNDER>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
 
 };
 
 // also only separate with violated cycles only in multiway cut
-// FIXME For some reason setting the ROUNDER to KlRounder as default value does not compile here
-template<class ROUNDER>
+template<class ROUNDER = KlRounder>
 struct FMC_MULTIWAY_CUT {
    constexpr static const char* name = "Multiway cut with cycle and odd wheel constraints";
 
@@ -213,7 +239,7 @@ struct FMC_MULTIWAY_CUT {
    using ProblemDecompositionList = meta::list<multicut_cow, mrf, multiway_cut_c>; 
 };
 
-template<class ROUNDER>
+template<class ROUNDER = KlRounder>
 struct FMC_ASYMMETRIC_MULTIWAY_CUT {
    constexpr static const char* name = "Asymmetric multiway cut with cycle and odd wheel constraints";
 

@@ -19,11 +19,6 @@
 #include <omp.h>
 #endif
 
-// TODO expose lifted rounder as template similar to multicut rounder
-#include "andres/graph/graph.hxx"
-#include "andres/graph/multicut-lifted/kernighan-lin.hxx"
-#include "andres/graph/multicut-lifted/greedy-additive.hxx"
-
 
 namespace LP_MP {
 
@@ -1821,7 +1816,8 @@ private:
 template<
    class MULTICUT_CONSTRUCTOR,
    INDEX LIFTED_MULTIWAY_CUT_FACTOR_NO,
-   INDEX CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO, INDEX LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO
+   INDEX CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO, INDEX LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO,
+   class LIFTED_ROUNDER
    >
 class LiftedMulticutConstructor : public MULTICUT_CONSTRUCTOR {
 public:
@@ -1829,6 +1825,7 @@ public:
    using LiftedMulticutCutFactorContainer = meta::at_c<typename FMC::FactorList, LIFTED_MULTIWAY_CUT_FACTOR_NO>;
    using CutEdgeLiftedMulticutFactorMessageContainer = typename meta::at_c<typename FMC::MessageList, CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO>::MessageContainerType;
    using LiftedEdgeLiftedMulticutFactorMessageContainer = typename meta::at_c<typename FMC::MessageList, LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO>::MessageContainerType;
+   using GraphType = typename LIFTED_ROUNDER::GraphType;
 
    // do zrobienia: use this everywhere instead of std::array<INDEX,2>
    struct Edge : public std::array<INDEX,2> {
@@ -2184,8 +2181,8 @@ public:
    void round()
    {
       std::cout << "compute lifted multicut primal with GAEC + KLj\n";
-      andres::graph::Graph<> originalGraph(this->noNodes_);
-      andres::graph::Graph<> liftedGraph(this->noNodes_);
+      GraphType originalGraph(this->noNodes_);
+      GraphType liftedGraph(this->noNodes_);
       std::vector<REAL> edgeValues;
       edgeValues.reserve(baseEdges_.size() + liftedEdges_.size());
 
@@ -2201,20 +2198,10 @@ public:
          edgeValues.push_back(e.f->GetFactor()->operator[](0));
       }
 
-      primal_handle_ = std::async(std::launch::async, lifted_gaec_klj, std::move(originalGraph), std::move(liftedGraph), std::move(edgeValues));
+      primal_handle_ = std::async(std::launch::async, lifted_rounder_, std::move(originalGraph), std::move(liftedGraph), std::move(edgeValues));
    }
 
-   static std::vector<char> lifted_gaec_klj(andres::graph::Graph<> original_graph, andres::graph::Graph<> lifted_graph, std::vector<REAL> edge_values)
-   {
-      std::vector<char> labeling(edge_values.size(),0);
-      if(original_graph.numberOfEdges() > 0) {
-         andres::graph::multicut_lifted::greedyAdditiveEdgeContraction(original_graph,lifted_graph,edge_values,labeling);
-         andres::graph::multicut_lifted::kernighanLin(original_graph,lifted_graph,edge_values,labeling,labeling);
-      }
-      return labeling;
-   }
-
-   // use GAEC and Kernighan&Lin algorithm of andres graph package to compute primal solution
+   // use the lifted rounder to compute primal solution (default: GAEC and Kernighan&Lin algorithm of andres graph package)
    void ComputePrimal()
    {
       if(!primal_handle_.valid()) { 
@@ -2258,7 +2245,9 @@ public:
 
    std::map<CutId,std::pair<LiftedMulticutCutFactorContainer*,std::vector<Edge>>> liftedMulticutFactors_;
 
-   decltype(std::async(std::launch::async, lifted_gaec_klj, andres::graph::Graph<>(0), andres::graph::Graph<>(0), std::vector<REAL>{})) primal_handle_;
+   LIFTED_ROUNDER lifted_rounder_;
+
+   decltype(std::async(std::launch::async, lifted_rounder_, GraphType(0), GraphType(0), std::vector<REAL>{})) primal_handle_;
 };
 
 } // end namespace LP_MP
