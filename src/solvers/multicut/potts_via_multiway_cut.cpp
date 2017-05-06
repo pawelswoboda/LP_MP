@@ -4,7 +4,8 @@
 using namespace LP_MP;
 int main(int argc, char* argv[])
 {
-    using SolverType = Solver<FMC_MULTIWAY_CUT<>,LP,StandardTighteningVisitor>;
+    using Rounder = KlRounder;
+    using SolverType = Solver<FMC_MULTIWAY_CUT<Rounder>,LP,StandardTighteningVisitor,Rounder>;
     ProblemConstructorRoundingSolver<SolverType> solver(argc,argv);
     solver.ReadProblem(MulticutOpenGmInput::ParsePottsProblem<SolverType>);
     return solver.Solve();

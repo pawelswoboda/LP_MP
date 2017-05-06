@@ -11,8 +11,10 @@ namespace py = pybind11;
 
 namespace LP_MP {
     //using FMC = FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>;
-    using FMC = FMC_MULTICUT<MessageSendingType::SRMP>;
-    using SolverType = ProblemConstructorRoundingSolver<Solver<FMC,LP,StandardTighteningVisitor>>;
+    using Rounder = KlRounder;
+    using FMC = FMC_MULTICUT<MessageSendingType::SRMP,Rounder>;
+    using SolverBase = Solver<FMC,LP,StandardTighteningVisitor,Rounder>;
+    using SolverType = ProblemConstructorRoundingSolver<SolverBase>;
     
     //*****************************
     // multicut options
@@ -94,8 +96,10 @@ namespace LP_MP {
               "--tightenIteration",          std::to_string(tightenIteration_),
               "--tightenSlope",              std::to_string(tightenSlope_),
               "--tightenConstraintsPercentage", std::to_string(tightenConstraintsPercentage_),
-              "--maxIter", std::to_string(maxIter_),
-              "--numLpThreads", std::to_string(nThreads_)
+              "--maxIter", std::to_string(maxIter_)
+              #ifdef WITH_OPENMP
+              ,"--numLpThreads", std::to_string(nThreads_)
+              #endif
             };
             return options;
         

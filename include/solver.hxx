@@ -23,24 +23,34 @@ namespace LP_MP {
 // binds together problem constructors and solver and organizes input/output
 // base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
 
-template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR>
+// empty rounder that is used by default in Solver
+// if the rounder is not used / exposed
+struct EmptyRounder {
+    static std::string name() {
+        return "EmptyRounder";
+    }
+};
+
+template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR, typename ROUNDER = EmptyRounder()>
 class Solver {
 
 public:
    using FMC = FACTOR_MESSAGE_CONNECTION;
-   using SolverType = Solver<FMC,LP_TYPE,VISITOR>;
+   using SolverType = Solver<FMC,LP_TYPE,VISITOR,ROUNDER>;
    using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
+   using RounderType = ROUNDER;
 
+   // FIXME how does the constructor with default arguments work,
+   // if it does not call the private constructor?
    // default parameters
-
    Solver() : Solver(5, default_solver_options) {}
 
-   Solver(int argc, char** argv) : Solver(ProblemDecompositionList{}) 
+   Solver(int argc, char** argv, const RounderType & rounder = RounderType()) : Solver(ProblemDecompositionList{}, rounder) 
    {
       cmd_.parse(argc,argv);
       Init_(); 
    }
-   Solver(std::vector<std::string> options) : Solver(ProblemDecompositionList{})
+   Solver(std::vector<std::string> options, const RounderType & rounder = RounderType()) : Solver(ProblemDecompositionList{}, rounder)
    {
       //std::cout << "Here we are !" << std::endl;
       cmd_.parse(options);
@@ -49,13 +59,14 @@ public:
 
 private:
    template<typename... PROBLEM_CONSTRUCTORS>
-   Solver(meta::list<PROBLEM_CONSTRUCTORS...>&& pc_list)
+   Solver(meta::list<PROBLEM_CONSTRUCTORS...>&& pc_list, const RounderType & rounder)
      :
         cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
         lp_(cmd_),
         inputFileArg_("i","inputFile","file from which to read problem instance",false,"","file name",cmd_),
         outputFileArg_("o","outputFile","file to write solution",false,"","file name",cmd_),
-        visitor_(cmd_)
+        visitor_(cmd_),
+        rounder_(rounder)
    {
       for_each_tuple(this->problemConstructor_, [this](auto& l) {
            assert(l == nullptr);
@@ -318,7 +329,13 @@ public:
    REAL lower_bound() const { return lowerBound_; }
    REAL primal_cost() const { return bestPrimalCost_; }
 
+   virtual RounderType & GetRounder()
+   {
+     return rounder_;
+   }
+
 protected:
+
    TCLAP::CmdLine cmd_;
 
    LP_TYPE lp_;
@@ -348,6 +365,7 @@ protected:
    std::string solution_;
 
    VISITOR visitor_;
+   RounderType rounder_;
 };
 
 // local rounding interleaved with message passing 

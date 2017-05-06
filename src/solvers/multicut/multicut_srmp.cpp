@@ -5,8 +5,9 @@ using namespace LP_MP;
 int main(int argc, char* argv[])
 
 {
-ProblemConstructorRoundingSolver<Solver<FMC_MULTICUT<MessageSendingType::SRMP>,LP,StandardTighteningVisitor>> solver(argc,argv);
-solver.ReadProblem(MulticutTextInput::ParseProblem<Solver<FMC_MULTICUT<MessageSendingType::SRMP>,LP,StandardTighteningVisitor>>);
-return solver.Solve();
-
+    typedef KlRounder Rounder;
+    typedef Solver<FMC_MULTICUT<MessageSendingType::SRMP,Rounder>,LP,StandardTighteningVisitor,Rounder> SolverBase;
+    ProblemConstructorRoundingSolver<SolverBase> solver(argc,argv);
+    solver.ReadProblem(MulticutTextInput::ParseProblem<SolverBase>);
+    return solver.Solve();
 }

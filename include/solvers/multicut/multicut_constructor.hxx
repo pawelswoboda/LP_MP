@@ -27,15 +27,15 @@ enum class cut_type { multicut, maxcut };
 template<class FACTOR_MESSAGE_CONNECTION, INDEX UNARY_FACTOR_NO, INDEX TRIPLET_FACTOR_NO,
    INDEX UNARY_TRIPLET_MESSAGE_0_NO, INDEX UNARY_TRIPLET_MESSAGE_1_NO, INDEX UNARY_TRIPLET_MESSAGE_2_NO,
    INDEX CONSTANT_FACTOR_NO,
-   class ROUNDER,
    cut_type CUT_TYPE = cut_type::multicut
    >
 class MulticutConstructor {
 public:
    using MulticutConstructorType = MulticutConstructor<
-       FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_0_NO, UNARY_TRIPLET_MESSAGE_1_NO, UNARY_TRIPLET_MESSAGE_2_NO, CONSTANT_FACTOR_NO, ROUNDER, CUT_TYPE>;
+       FACTOR_MESSAGE_CONNECTION, UNARY_FACTOR_NO, TRIPLET_FACTOR_NO, UNARY_TRIPLET_MESSAGE_0_NO, UNARY_TRIPLET_MESSAGE_1_NO, UNARY_TRIPLET_MESSAGE_2_NO, CONSTANT_FACTOR_NO, CUT_TYPE>;
    using FMC = FACTOR_MESSAGE_CONNECTION;
-   using GraphType = typename ROUNDER::GraphType;
+   using RounderType = typename FMC::RounderType;
+   using GraphType   = typename RounderType::GraphType;
 
    static constexpr INDEX unary_factor_no = UNARY_FACTOR_NO;
    static constexpr INDEX triplet_factor_no = TRIPLET_FACTOR_NO;
@@ -51,9 +51,9 @@ public:
    using edge_triplet_message_2_container = typename meta::at_c<typename FMC::MessageList, UNARY_TRIPLET_MESSAGE_2_NO>::MessageContainerType;
 
    template<typename SOLVER>
-   MulticutConstructor(SOLVER& pd, const ROUNDER & rounder = ROUNDER() )
+   MulticutConstructor(SOLVER& pd)
    : lp_(&pd.GetLP()),
-   rounder_(rounder)
+   rounder_(pd.GetRounder())
    //unaryFactors_(100,hash::array2),
    //tripletFactors_(100,hash::array3)
    {
@@ -70,7 +70,7 @@ public:
       noNodes_(o.noNodes_),
       constant_factor_(o.constant_factor_), 
       lp_(o.lp_),
-      rounder_(o.rounder_)
+      rounder_(&o.rounder_)
    {}
 
    ~MulticutConstructor()
@@ -895,7 +895,7 @@ protected:
    ConstantFactorContainer* constant_factor_;
 
    LP* lp_;
-   ROUNDER rounder_;
+   RounderType& rounder_;
 
    decltype(std::async(std::launch::async, rounder_, GraphType(0), std::vector<REAL>{})) primal_handle_;
 };
@@ -1818,8 +1818,7 @@ private:
 template<
    class MULTICUT_CONSTRUCTOR,
    INDEX LIFTED_MULTIWAY_CUT_FACTOR_NO,
-   INDEX CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO, INDEX LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO,
-   class LIFTED_ROUNDER
+   INDEX CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO, INDEX LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO
    >
 class LiftedMulticutConstructor : public MULTICUT_CONSTRUCTOR {
 public:
@@ -1827,7 +1826,8 @@ public:
    using LiftedMulticutCutFactorContainer = meta::at_c<typename FMC::FactorList, LIFTED_MULTIWAY_CUT_FACTOR_NO>;
    using CutEdgeLiftedMulticutFactorMessageContainer = typename meta::at_c<typename FMC::MessageList, CUT_EDGE_LIFTED_MULTICUT_FACTOR_NO>::MessageContainerType;
    using LiftedEdgeLiftedMulticutFactorMessageContainer = typename meta::at_c<typename FMC::MessageList, LIFTED_EDGE_LIFTED_MULTICUT_FACTOR_NO>::MessageContainerType;
-   using GraphType = typename LIFTED_ROUNDER::GraphType;
+   using RounderType = typename FMC::RounderType;
+   using GraphType   = typename RounderType::GraphType;
 
    // do zrobienia: use this everywhere instead of std::array<INDEX,2>
    struct Edge : public std::array<INDEX,2> {
@@ -1836,8 +1836,8 @@ public:
    using CutId = std::vector<Edge>;
 
    template<typename SOLVER>
-   LiftedMulticutConstructor(SOLVER& pd, const LIFTED_ROUNDER & liftedRounder = LIFTED_ROUNDER() ) 
-   : MULTICUT_CONSTRUCTOR(pd), liftedRounder_(liftedRounder) {}
+   LiftedMulticutConstructor(SOLVER& pd) 
+   : MULTICUT_CONSTRUCTOR(pd), liftedRounder_(pd.GetRounder()) {}
 
    virtual typename MULTICUT_CONSTRUCTOR::UnaryFactorContainer* AddUnaryFactor(const INDEX i1, const INDEX i2, const REAL cost)
    {
@@ -2248,7 +2248,7 @@ public:
 
    std::map<CutId,std::pair<LiftedMulticutCutFactorContainer*,std::vector<Edge>>> liftedMulticutFactors_;
 
-   LIFTED_ROUNDER liftedRounder_;
+   RounderType& liftedRounder_;
 
    decltype(std::async(std::launch::async, liftedRounder_, GraphType(0), GraphType(0), std::vector<REAL>{})) primal_handle_;
 };

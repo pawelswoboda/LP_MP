@@ -85,6 +85,21 @@ struct LiftedKlRounder {
         return labeling;
     
     }
+    
+    // FIXME this is a bit hacky, but we need this overload, s.t. the MulticutConstructor can
+    // also be used with LiftedKlRounder
+    // TODO figure out if this is actually used for Multicut Rounding in the Lifted Multicut
+    // if not, change this to a dummy implementation
+    std::vector<char> operator()(GraphType g, std::vector<REAL> edgeValues) {
+   
+      std::vector<char> labeling(g.numberOfEdges(), 0);
+      if(g.numberOfEdges() > 0) {
+         andres::graph::multicut::greedyAdditiveEdgeContraction(g, edgeValues, labeling);
+         andres::graph::multicut::kernighanLin(g, edgeValues, labeling, labeling);
+      }
+      return labeling;
+
+    }
 
     static std::string name() {
         return "LiftedKlRounder";
@@ -97,7 +112,7 @@ struct LiftedKlRounder {
 // but for some reason not for the lifted and multiway-cut factor messages (there having the default value does not work,
 // hence the type must be explicitly set in the cpps)
 
-template<MessageSendingType MESSAGE_SENDING, class ROUNDER = KlRounder>
+template<MessageSendingType MESSAGE_SENDING, typename ROUNDER>
 struct FMC_MULTICUT {
    constexpr static const char* name = "Multicut with cycle constraints";
    //constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
@@ -113,12 +128,13 @@ struct FMC_MULTICUT {
    using FactorList = meta::list< edge_factor_container, triplet_factor_container, ConstantFactorContainer>;
    using MessageList = meta::list<edge_triplet_message_0_container,edge_triplet_message_1_container,edge_triplet_message_2_container>;
 
-   using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0,1,2,2,ROUNDER>;
+   using multicut = MulticutConstructor<FMC_MULTICUT,0,1,0,1,2,2>;
    using ProblemDecompositionList = meta::list<multicut>;
+   using RounderType = ROUNDER;
 };
 
 // It would be nice to be able to derive from FMC_MULTICUT. This is not possible due to deviating FMCs. Possibly parametrize above FMC with template
-template<MessageSendingType MESSAGE_SENDING, class ROUNDER = KlRounder>
+template<MessageSendingType MESSAGE_SENDING, class ROUNDER>
 struct FMC_ODD_WHEEL_MULTICUT {
    constexpr static const char* name = "Multicut with cycle and odd wheel constraints";
 
@@ -142,13 +158,14 @@ struct FMC_ODD_WHEEL_MULTICUT {
       triplet_odd_wheel_message_012, triplet_odd_wheel_message_013, triplet_odd_wheel_message_023, triplet_odd_wheel_message_123 
       >;
 
-   using multicut_c = MulticutConstructor<FMC_ODD_WHEEL_MULTICUT,0,1, 0,1,2, 3, ROUNDER>;
+   using multicut_c = MulticutConstructor<FMC_ODD_WHEEL_MULTICUT,0,1, 0,1,2, 3>;
    using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
    using ProblemDecompositionList = meta::list<multicut_cow>;
+   using RounderType = ROUNDER;
 };
 
 
-template<class ROUNDER, class LIFTED_ROUNDER>
+template <typename ROUNDER>
 struct FMC_LIFTED_MULTICUT {
    constexpr static const char* name = "Lifted Multicut with cycle constraints";
    constexpr static MessageSendingType MESSAGE_SENDING = MessageSendingType::SRMP;
@@ -178,14 +195,18 @@ struct FMC_LIFTED_MULTICUT {
       LiftedEdgeLiftedMulticutFactorMessageContainer
          >;
 
-   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,1,2,3,ROUNDER>;
-   using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,3,4,LIFTED_ROUNDER>;
+   // TODO is the (non-lifted) rounder actually used ?
+   // if yes, it should be included in the lifted rounder struct
+   using BaseMulticutConstructor = MulticutConstructor<FMC_LIFTED_MULTICUT,0,1,0,1,2,3>;
+   using LiftedMulticutConstructor = class LiftedMulticutConstructor<BaseMulticutConstructor,2,3,4>;
    using ProblemDecompositionList = meta::list<LiftedMulticutConstructor>;
+   using RounderType = ROUNDER;
 
 };
 
 // also only separate with violated cycles only in multiway cut
-template<class ROUNDER = KlRounder>
+// TODO Do we need a specific rounder here (kernighan lin)? 
+template <typename ROUNDER>
 struct FMC_MULTIWAY_CUT {
    constexpr static const char* name = "Multiway cut with cycle and odd wheel constraints";
 
@@ -232,14 +253,16 @@ struct FMC_MULTIWAY_CUT {
       multicut_edge_potts_message_container 
       >;
 
-   using multicut_c = MulticutConstructor<FMC_MULTIWAY_CUT,0,1, 0,1,2, 3, ROUNDER>;
+   using multicut_c = MulticutConstructor<FMC_MULTIWAY_CUT,0,1, 0,1,2, 3>;
    using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
    using mrf = StandardMrfConstructor<FMC_MULTIWAY_CUT, 4, 5, 7, 8>;
    using multiway_cut_c = multiway_cut_constructor<FMC_MULTIWAY_CUT,0,1,9>;
    using ProblemDecompositionList = meta::list<multicut_cow, mrf, multiway_cut_c>; 
+   using RounderType = ROUNDER;
 };
 
-template<class ROUNDER = KlRounder>
+// TODO Do we need a specific rounder here (kerninghan lin)?
+template <typename ROUNDER>
 struct FMC_ASYMMETRIC_MULTIWAY_CUT {
    constexpr static const char* name = "Asymmetric multiway cut with cycle and odd wheel constraints";
 
@@ -286,11 +309,12 @@ struct FMC_ASYMMETRIC_MULTIWAY_CUT {
       multicut_edge_potts_message_container 
       >;
 
-   using multicut_c = MulticutConstructor<FMC_ASYMMETRIC_MULTIWAY_CUT,0,1, 0,1,2, 3, ROUNDER>;
+   using multicut_c = MulticutConstructor<FMC_ASYMMETRIC_MULTIWAY_CUT,0,1, 0,1,2, 3>;
    using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
    using mrf = StandardMrfConstructor<FMC_ASYMMETRIC_MULTIWAY_CUT, 4, 5, 7, 8>;
    using multiway_cut_c = multiway_cut_constructor<FMC_ASYMMETRIC_MULTIWAY_CUT,0,1,9>;
    using ProblemDecompositionList = meta::list<multicut_cow, mrf, multiway_cut_c>; 
+   using RounderType = ROUNDER;
 };
 
 
