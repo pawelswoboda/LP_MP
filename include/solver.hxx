@@ -26,12 +26,13 @@ namespace LP_MP {
 // empty rounder that is used by default in Solver
 // if the rounder is not used / exposed
 struct EmptyRounder {
+    EmptyRounder() {}
     static std::string name() {
         return "EmptyRounder";
     }
 };
 
-template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR, typename ROUNDER = EmptyRounder()>
+template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR, typename ROUNDER = EmptyRounder>
 class Solver {
 
 public:
