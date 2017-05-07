@@ -10,9 +10,11 @@
 namespace py = pybind11;
 
 namespace LP_MP {
-    //using FMC = FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>;
     using Rounder = KlRounder;
+    
     using FMC = FMC_MULTICUT<MessageSendingType::SRMP,Rounder>;
+    //using FMC = FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP,Rounder>;
+    
     using SolverBase = Solver<FMC,LP,StandardTighteningVisitor,Rounder>;
     using SolverType = ProblemConstructorRoundingSolver<SolverBase>;
     
@@ -53,37 +55,7 @@ namespace LP_MP {
             nThreads_(nThreads)
         {}
 
-        // TODO expose min dual improvement
         std::vector<std::string> toOptionsVector() const {
-            
-            //std::vector<std::string> options = {
-            //  "export_multicut",
-            //  "-i", " ", // empty input file
-            //  "--primalComputationInterval", std::to_string(primalComputationInterval_),
-            //  "--standardReparametrization", standardReparametrization_,
-            //  "--roundingReparametrization", roundingReparametrization_,
-            //  "--tightenReparametrization",  tightenReparametrization_,
-            //  "--tightenInterval",           std::to_string(tightenInterval_),
-            //  "--tightenIteration",          std::to_string(tightenIteration_),
-            //  "--tightenSlope",              std::to_string(tightenSlope_),
-            //  "--tightenConstraintsPercentage", std::to_string(tightenConstraintsPercentage_),
-            //  "--maxIter", std::to_string(maxIter_),
-            //};
-            //if(tighten_)
-            //    options.push_back("--tighten");
-            //if(minDualImprovement_ > 0) {
-            //    options.push_back("--minDualImprovement");
-            //    options.push_back(std::to_string(minDualImprovement_));
-            //}
-            //if(minDualImprovementInterval_ > 0) {
-            //    options.push_back("--minDualImprovementInterval");
-            //    options.push_back(std::to_string(minDualImprovementInterval_));
-            //}
-            //if(timeout_ > 0) {
-            //    options.push_back("--timeout");
-            //    options.push_back(std::to_string(timeout_));
-            //}
-            //return options;
             
             std::vector<std::string> options = {
               "export_multicut",
@@ -96,13 +68,26 @@ namespace LP_MP {
               "--tightenIteration",          std::to_string(tightenIteration_),
               "--tightenSlope",              std::to_string(tightenSlope_),
               "--tightenConstraintsPercentage", std::to_string(tightenConstraintsPercentage_),
-              "--maxIter", std::to_string(maxIter_)
+              "--maxIter", std::to_string(maxIter_),
               #ifdef WITH_OPENMP
               ,"--numLpThreads", std::to_string(nThreads_)
               #endif
             };
+            if(tighten_)
+                options.push_back("--tighten");
+            if(minDualImprovement_ > 0) {
+                options.push_back("--minDualImprovement");
+                options.push_back(std::to_string(minDualImprovement_));
+            }
+            if(minDualImprovementInterval_ > 0) {
+                options.push_back("--minDualImprovementInterval");
+                options.push_back(std::to_string(minDualImprovementInterval_));
+            }
+            if(timeout_ > 0) {
+                options.push_back("--timeout");
+                options.push_back(std::to_string(timeout_));
+            }
             return options;
-        
         }
 
         size_t primalComputationInterval() const {return primalComputationInterval_;}
