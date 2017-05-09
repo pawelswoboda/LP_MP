@@ -791,7 +791,6 @@ INDEX FindPositivePath(const GRAPH& g, BFS_STRUCT& mp, const REAL th, const INDE
 
    void round()
    {
-      std::cout << "compute multicut primal with GAEC + KLj\n";
       GraphType graph(noNodes_); // would need nifty graph instead
       std::vector<REAL> edgeValues;
       edgeValues.reserve(unaryFactorsVector_.size());
