@@ -86,19 +86,9 @@ struct LiftedKlRounder {
     
     }
     
-    // FIXME this is a bit hacky, but we need this overload, s.t. the MulticutConstructor can
-    // also be used with LiftedKlRounder
-    // TODO figure out if this is actually used for Multicut Rounding in the Lifted Multicut
-    // if not, change this to a dummy implementation
-    std::vector<char> operator()(GraphType g, std::vector<REAL> edgeValues) {
-   
-      std::vector<char> labeling(g.numberOfEdges(), 0);
-      if(g.numberOfEdges() > 0) {
-         andres::graph::multicut::greedyAdditiveEdgeContraction(g, edgeValues, labeling);
-         andres::graph::multicut::kernighanLin(g, edgeValues, labeling, labeling);
-      }
-      return labeling;
-
+    // dummy operator to compile with multicut constructor
+    std::vector<char> operator()(GraphType, std::vector<REAL>) {
+        return std::vector<char>();
     }
 
     static std::string name() {
