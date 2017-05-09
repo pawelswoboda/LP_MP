@@ -2183,7 +2183,6 @@ public:
 
    void round()
    {
-      std::cout << "compute lifted multicut primal with GAEC + KLj\n";
       GraphType originalGraph(this->noNodes_);
       GraphType liftedGraph(this->noNodes_);
       std::vector<REAL> edgeValues;
