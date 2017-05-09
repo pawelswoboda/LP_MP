@@ -12,8 +12,8 @@ namespace py = pybind11;
 namespace LP_MP {
     using Rounder = KlRounder;
     
-    using FMC = FMC_MULTICUT<MessageSendingType::SRMP,Rounder>;
-    //using FMC = FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP,Rounder>;
+    //using FMC = FMC_MULTICUT<MessageSendingType::SRMP,Rounder>;
+    using FMC = FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP,Rounder>;
     
     using SolverBase = Solver<FMC,LP,StandardTighteningVisitor,Rounder>;
     using SolverType = ProblemConstructorRoundingSolver<SolverBase>;
