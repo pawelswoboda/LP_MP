@@ -658,10 +658,7 @@ namespace MulticutH5Input {
       // transform to energy cost
       std::transform(edgeValues.begin(), edgeValues.end(), edgeValues.begin(), andres::NegativeLogProbabilityRatio<REAL,REAL>());
       assert(edgeValues.size() == liftedGraph.numberOfEdges());
-
-      // FIXME
-      // FIXME This looks wrong! Local and lifted edges should be different! 
-      // FIXME
+      
       for(std::size_t e=0; e<liftedGraph.numberOfEdges(); ++e) {
          auto i = liftedGraph.vertexOfEdge(e,0);
          auto j = liftedGraph.vertexOfEdge(e,1);
