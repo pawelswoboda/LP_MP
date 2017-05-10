@@ -193,8 +193,7 @@ int main()
 using namespace LP_MP;
 
 static INDEX no_labels;
-
-
+static INDEX no_vars;
 
 // YPtr is an array of ints holding the labeling of unaries
 // TermData holds an LP_tree with discrete tomography subproblems, the unary indices
@@ -214,11 +213,11 @@ struct sub_problem {
    }
 
 
-   template<SIGNED_INDEX add_sign = 1>
-   void add_weights(double* wi)
+   void add_weights(double* const wi, const REAL multiplier)
    {
       assert(this->no_unaries > 2);
-      const REAL mult = -REAL(add_sign)*this->sign; 
+      const REAL mult = multiplier*this->sign; 
+      //std::cout << add_sign << "," << mult << "\n";
       // first move the unary costs to the pairwise factors
       for(INDEX i=0; i<this->no_unaries-1; ++i) {
          auto* f = this->pairwise_factors[i]->GetFactor();
@@ -232,8 +231,8 @@ struct sub_problem {
       // last pairwise is reparametrized twice
       {
          auto* f = this->pairwise_factors[ this->no_unaries-2 ]->GetFactor();
-         for(INDEX x2=0; x2<no_labels; ++x2) {
-            for(INDEX x1=0; x1<no_labels; ++x1) {
+         for(INDEX x1=0; x1<no_labels; ++x1) {
+            for(INDEX x2=0; x2<no_labels; ++x2) {
                assert(!std::isnan(wi[this->unaries[this->no_unaries-1]*no_labels + x2]));
                (*f).reg(x1,x2) += mult*wi[this->unaries[this->no_unaries-1]*no_labels + x2];
             } 
@@ -248,12 +247,31 @@ struct sub_problem {
    REAL sign;
 };
 
+static double dot_product_fn(double* wi, YPtr _y, TermData term_data);
 double max_fn(double* wi, YPtr _y, double kappa, TermData term_data) // maximization oracle. Must copy argmax_y <a^{iy},[PAD(wi) kappa]> to y, and return the free term a^{iy}[d].
 {
-   assert(kappa == 1.0);
+   //assert(kappa == 1.0);
+   assert(kappa > 0.0);
+   if(kappa != 1.0) { std::cout << kappa << "\n"; }
+   assert(kappa > std::numeric_limits<double>::min());
+   assert(kappa < std::numeric_limits<double>::max());
    sub_problem* sp = (sub_problem*) term_data;
-   sp->add_weights<1>(wi);
-   const REAL sign = -sp->sign; // because we minimize, yet SVM wants to maximize
+
+   /*
+   std::cout << "\nvariables with sign " << sp->sign << " of " << sp << "\n";
+   for(INDEX i=0; i<sp->no_unaries-1; ++i) {
+      std::cout <<  "(" << sp->pairwise_factors[i]->GetFactor()->first_var_ << "," << sp->pairwise_factors[i]->GetFactor()->second_var_  << "), ";
+   }
+   std::cout << "\n"; 
+   std::cout << "double check: ";
+   for(INDEX i=0; i<sp->no_unaries; ++i) {
+      std::cout <<  sp->unaries[i] << ",";
+   }
+   std::cout << "\n"; 
+   */
+
+   sp->add_weights(wi, -1.0/kappa);
+   //const REAL sign = -sp->sign; // because we minimize, yet SVM wants to maximize
    //std::cout << "\ncompute subgradient on " << sp << "\n";
    //for(INDEX i=0; i<9; ++i) {
    //   std::cout << sign*wi[i] << ", ";
@@ -267,11 +285,18 @@ double max_fn(double* wi, YPtr _y, double kappa, TermData term_data) // maximiza
       y[i] = sp->pairwise_factors[i]->GetFactor()->state_[0]; 
    }
    y[sp->no_unaries-1] = sp->pairwise_factors[sp->no_unaries-2]->GetFactor()->state_[1];
+   for(INDEX i=0; i<sp->no_unaries; ++i) {
+      assert(y[i] < no_labels);
+   }
 
+
+   const REAL cost_test = -sp->dt_chain.lower_bound();
    // now remove the Lagrangean variables from unary factors again
-   sp->add_weights<-1>(wi);
+   sp->add_weights(wi, 1.0*kappa);
 
-   // free term is excluding wi
+   assert(std::abs(cost_test - (-sp->dt_chain.primal_cost() + dot_product_fn(wi, y, term_data))) <= eps);
+
+   // free term excluding wi
    const REAL cost = -sp->dt_chain.primal_cost()*kappa; // we minimize, but SVM expects maximization
    //std::cout << "cost without weights = " << -cost << ", ";
    //std::cout << "sol = ";
@@ -285,6 +310,7 @@ double max_fn(double* wi, YPtr _y, double kappa, TermData term_data) // maximiza
 static bool compare_fn(YPtr _y1, YPtr _y2, TermData term_data)
 {
    sub_problem* sp = (sub_problem*) term_data;
+   //return (!memcmp(_y1,_y2, sizeof(INDEX)*sp->no_unaries));
    INDEX* y1 = (INDEX*) _y1;
    INDEX* y2 = (INDEX*) _y2;
    for(INDEX i=0; i<sp->no_unaries; ++i) {
@@ -299,12 +325,15 @@ static void copy_fn(double* ai, YPtr _y, TermData term_data)
 {
    sub_problem* sp = (sub_problem*) term_data;
    const REAL sign = sp->sign;
+   assert(sign == 1.0 || sign == -1.0);
    //std::cout << "\ncopy fn on " << sp << "\n";
-   std::fill(ai, ai+no_labels*sp->no_unaries, 0.0);
+   std::fill(ai, ai+no_labels*no_vars, 0.0);
    INDEX* y = (INDEX*) _y;
    for(INDEX i=0; i<sp->no_unaries; ++i) {
-      INDEX label = y[i];
-      INDEX var = sp->unaries[i];
+      const INDEX label = y[i];
+      assert(label < no_labels);
+      const INDEX var = sp->unaries[i];
+      assert(var < no_vars);
       //std::cout << label << ", ";
       ai[var*no_labels + label] = sign*1.0;
    }
@@ -315,23 +344,36 @@ static double dot_product_fn(double* wi, YPtr _y, TermData term_data)
 {
    sub_problem* sp = (sub_problem*) term_data;
    const REAL sign = sp->sign;
+   assert(sign == 1.0 || sign == -1.0);
    //std::cout << "dot product on " << s << "\n";
    INDEX* y = (INDEX*) _y;
    double v = 0;
-   INDEX c=0;
+   //std::cout << sp->no_unaries << ": ";
    for(INDEX i=0; i<sp->no_unaries; ++i) {
-      INDEX label = y[i];
-      INDEX var = sp->unaries[i];
+      const INDEX label = y[i];
+      assert(label < no_labels);
+      const INDEX var = sp->unaries[i];
+      assert(var < no_vars);
       v += sign*wi[var*no_labels + label];
+      //std::cout << "(" << var << "," << label << "," << wi[var*no_labels + label] << ") ";
    }
+   //std::cout << "; " << v << "\n";
    return v;
 }
 
 int main(int argc, char**argv)
 {
-   const REAL scaling = 0.1;
    std::string filename(argv[1]);
-   MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
+
+   double scaling = 1.0;
+   if(argc > 2) {
+      scaling = std::stod(argv[2]);
+   }
+   std::cout << "scaling = " << scaling << "\n";
+
+
+   //MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
+   Solver<FMC_DT,LP,StandardVisitor> solver;
 
    pegtl::file_parser problem(filename);
 
@@ -345,6 +387,8 @@ int main(int argc, char**argv)
 
    solver.template GetProblemConstructor<1>().SetNumberOfLabels(mrfInput.cardinality_[0]);
    no_labels = mrfInput.cardinality_[0];
+   no_vars = mrf.GetNumberOfVariables();
+   std::cout << no_vars << ", " << no_labels << "\n";
 
    LP_MP::DiscreteTomographyTextInput::Projections p;
    ret = problem.parse< LP_MP::DiscreteTomographyTextInput::grammar, LP_MP::DiscreteTomographyTextInput::action>(p);
@@ -377,8 +421,8 @@ int main(int argc, char**argv)
       sp_vec.push_back(sp);
    }
 
-   s->options.gap_threshold = 0.01;
-	s->options.iter_max = 1000;
+   s->options.gap_threshold = 0.000001;
+	s->options.iter_max = 100;
 
    // push pairwise into dt factors
    for(INDEX i=0; i<mrf.GetNumberOfPairwiseFactors(); ++i) {
@@ -398,15 +442,34 @@ int main(int argc, char**argv)
 
    double* w = s->Solve();
 
-   std::cout << "final Lagrange mulp = ";
-   for(INDEX i=0; i<no_labels*mrf.GetNumberOfVariables(); ++i) {
-      std::cout << w[i] << ",";
+   //std::cout << "final Lagrange mulp = ";
+   //for(INDEX i=0; i<no_labels*mrf.GetNumberOfVariables(); ++i) {
+   //   std::cout << w[i] << ",";
+   //}
+   //std::cout << "\n";
+   //REAL mult_norm = 0.0;
+   //for(INDEX i=0; i<no_labels*mrf.GetNumberOfVariables(); ++i) {
+   //   mult_norm += w[i]*w[i];
+   //}
+   //std::cout << "Lagrange mult. norm = " << mult_norm << "\n";
+
+   for(INDEX iter=0; iter<40; ++iter) {
+      // put weights into trees
+      for(INDEX i=0; i<sp_vec.size(); ++i) {
+         sp_vec[i]->add_weights(w, -1.0);
+      }
+
+      delete s;
+      s = new SVM(mrf.GetNumberOfVariables()*no_labels, p.projectionVar.size(), max_fn, copy_fn, compare_fn, dot_product_fn, nullptr, false);
+      for(INDEX i=0; i<sp_vec.size(); ++i) {
+         s->SetTerm(i, sp_vec[i], mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
+      }
+      s->options.gap_threshold = 0.000001;
+      s->options.iter_max = 100;
+      w = s->Solve();
    }
-   std::cout << "\n";
-   // put weights into trees
-   for(INDEX i=0; i<sp_vec.size(); ++i) {
-      sp_vec[i]->add_weights<1>(w);
-   }
+
+
 
    //INDEX y[mrf.GetNumberOfVariables()];
    //double lb = 0.0;
@@ -417,7 +480,7 @@ int main(int argc, char**argv)
 
 
    solver.Solve();
-   std::cout << "optimal lower bound for original problem = " << solver.lower_bound() << "\n";
+   //std::cout << "optimal lower bound for original problem = " << solver.lower_bound() << "\n";
    delete s;
    return 0;
 }

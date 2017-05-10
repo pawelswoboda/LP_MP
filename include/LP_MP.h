@@ -344,7 +344,7 @@ public:
             update_ordering.push_back(f);
          }
       }
-      // check whether sorting was suffessful
+      // check whether sorting was successful
       /*
       std::map<FactorTypeAdapter*, INDEX> factorToIndexSorted;
       std::map<INDEX, FactorTypeAdapter*> indexToFactorSorted;
@@ -361,10 +361,17 @@ public:
       if(ordering_valid_) { return; }
       ordering_valid_ = true;
 
-      SortFactors(forward_pass_factor_rel_, forwardOrdering_, forwardUpdateOrdering_);
-      SortFactors(backward_pass_factor_rel_, backwardOrdering_, backwardUpdateOrdering_);
-      std::reverse(backwardOrdering_.begin(), backwardOrdering_.end());
-      std::reverse(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end());
+#pragma omp parallel sections
+      {
+#pragma omp section
+         SortFactors(forward_pass_factor_rel_, forwardOrdering_, forwardUpdateOrdering_);
+#pragma omp section
+         {
+            SortFactors(backward_pass_factor_rel_, backwardOrdering_, backwardUpdateOrdering_);
+            std::reverse(backwardOrdering_.begin(), backwardOrdering_.end());
+            std::reverse(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end());
+         }
+      }
    }
 
    template<typename FACTOR_ITERATOR>
@@ -391,14 +398,21 @@ public:
    void ComputeMixedWeights()
    {
       if(!omega_mixed_valid_) {
-         ComputeDampedUniformWeights();
-         ComputeAnisotropicWeights();
+#pragma omp parallel sections
+         {
+#pragma omp section
+            ComputeDampedUniformWeights();
+#pragma omp section
+            ComputeAnisotropicWeights();
+         }
          omega_mixed_valid_ = true;
-         auto forward = std::async(std::launch::async, [&](){  
-               ComputeMixedWeights(omegaForwardAnisotropic_, omegaForwardIsotropicDamped_, omegaForwardMixed_);
-               });
-         ComputeMixedWeights(omegaBackwardAnisotropic_, omegaBackwardIsotropicDamped_, omegaBackwardMixed_);
-         forward.wait();
+#pragma omp sections
+         {
+#pragma omp section
+            ComputeMixedWeights(omegaForwardAnisotropic_, omegaForwardIsotropicDamped_, omegaForwardMixed_);
+#pragma omp section
+            ComputeMixedWeights(omegaBackwardAnisotropic_, omegaBackwardIsotropicDamped_, omegaBackwardMixed_);
+         }
       }
    }
 
@@ -558,89 +572,6 @@ protected:
    TCLAP::ValueArg<INDEX> num_lp_threads_arg_;
 #endif
 };
-
-/*
-template<typename BASE_LP_CLASS>
-class LP_concurrent : public BASE_LP_CLASS {
-public:
-  LP_concurrent(TCLAP::CmdLine& cmd) 
-    : BASE_LP_CLASS(cmd),
-    num_lp_threads_arg_("","numLpThreads","number of threads for message passing, default = 1",false,1,&positiveIntegerConstraint,cmd)
-  {}
-  void Begin()
-  {
-    threads_ = decltype(threads_)(num_lp_threads_arg_.getValue());
-#ifdef LP_MP_PARALLEL
-    omp_set_num_threads(num_lp_threads_arg_.getValue());
-#endif 
-    BASE_LP_CLASS::Begin();
-  }
-
-  //LP_concurrent(const INDEX no_threads = std::thread::hardware_concurrency())
-  //  : threads_(no_threads)
-  //{
-  //  std::cout << "number of threads = " << threads_.size() << "\n";
-  //  assert(no_threads >= 1);
-  //}
-
-  template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
-   void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
-   {
-     // idea for load-balancing: measure time a thread needs to finish. Adjust numbers of factors given to each thread based on this.
-
-     auto worker = [this] (auto factor_begin, auto factor_end, auto omega_it, const INDEX allocator_index ) {
-       stack_allocator_index = allocator_index;
-       for(; factor_begin!=factor_end; ++factor_begin, ++omega_it) {
-         this->UpdateFactor(*factor_begin, *omega_it);
-       }
-     };
-
-     const int grainsize = std::distance(factorIt, factorItEnd) / threads_.size();
-
-     INDEX c=0;
-     for(auto it = std::begin(threads_); it != std::end(threads_) - 1; ++it) {
-       *it = std::thread(worker, factorIt, factorIt + grainsize, omegaIt, c%global_real_block_allocator_array.size());
-       factorIt += grainsize;
-       omegaIt += grainsize;
-       ++c;
-     }
-     threads_.back() = std::thread(worker, factorIt, factorItEnd, omegaIt, c%global_real_block_allocator_array.size());
-
-     for(auto&& i : threads_) {
-       i.join();
-     } 
-   }
-
-  void ComputePass()
-  {
-     const auto omega = this->get_omega();
-     this->ComputePass(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), omega.forward.begin());
-     this->ComputePass(this->backwardUpdateOrdering_.begin(), this->backwardUpdateOrdering_.end(), omega.backward.begin());
-  }
-
-private:
-
-  template<typename LAMBDA, typename FACTOR_ITERATOR>
-  void iterate_over_factors(LAMBDA& f, FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end)
-  {
-     const int grainsize = std::distance(factor_begin, factor_end) / threads_.size();
-
-     for(auto it = std::begin(threads_); it != std::end(threads_) - 1; ++it) {
-       *it = std::thread(f, factor_begin, factor_begin + grainsize);
-       factor_begin += grainsize;
-     }
-     threads_.back() = std::thread(f, factor_begin, factor_end);
-
-     for(auto&& i : threads_) {
-       i.join();
-     }
-  }
-
-  mutable std::vector<std::thread> threads_; // thread pool to be reused
-
-  TCLAP::ValueArg<INDEX> num_lp_threads_arg_;
-};
-*/
 
 template<typename BASE_LP_CLASS>
 class LP_sat : public BASE_LP_CLASS
@@ -886,26 +817,6 @@ private:
    bool sat_dirty_ = false; // sat solver is run asynchronously. When factor graph changes, then sat solution cannot be read in anymore and has to be discarded. This flag signifies this case
 };
 
-// this class holds an object provided by the problem constructor and gives is to MaximizePotentialAndComputePrimal. This primal rounding object helps 
-template<typename BASE_LP_CLASS>
-class LP_interleaved_rounding : public BASE_LP_CLASS
-{
-public:
-   using LP_type = LP_sat<BASE_LP_CLASS>;
-   using LP_type::LP_type;
-
-   void ComputeForwardPassAndPrimal(const INDEX iteration)
-   {
-      const auto omega = this->get_omega();
-   }
-   void ComputeBackwardPassAndPrimal(const INDEX iteration)
-   {
-      const auto omega = this->get_omega(); 
-   }
-private:
-};
-
-
 // factors are arranged in trees.
 class LP_tree
 {
@@ -1060,14 +971,13 @@ inline void LP::ComputeAnisotropicWeights()
 {
    if(!omega_anisotropic_valid_) {
       omega_anisotropic_valid_ = true;
-      auto forward = std::async(std::launch::async, [&](){  
-            ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_sorted_.begin(), f_sorted_.end(), omegaForwardAnisotropic_);
-      });
-      for(INDEX i=0; i<forwardOrdering_.size(); ++i) {
-         assert(forwardOrdering_[i] == *(backwardOrdering_.rbegin() + i));
+#pragma omp sections
+      {
+#pragma omp section
+         ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_sorted_.begin(), f_sorted_.end(), omegaForwardAnisotropic_);
+#pragma omp section
+         ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_sorted_.rbegin(), f_sorted_.rend(), omegaBackwardAnisotropic_);
       }
-      ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_sorted_.rbegin(), f_sorted_.rend(), omegaBackwardAnisotropic_);
-      forward.wait();
    }
 }
 
@@ -1075,43 +985,48 @@ inline void LP::ComputeUniformWeights()
 {
    if(!omega_isotropic_valid_) {
       omega_isotropic_valid_ = true;
-      auto forward = std::async(std::launch::async, [&](){  
-            ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropic_, 0.0);
-      });
+#pragma omp sections
+      {
+#pragma omp section
+         ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropic_, 0.0);
+#pragma omp section
+         ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropic_, 0.0);
+      }
+
       // only for now, need not generally hold true.
       for(INDEX i=0; i<forwardOrdering_.size(); ++i) {
          assert(forwardOrdering_[i] == *(backwardOrdering_.rbegin() + i));
       }
 
-      ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropic_, 0.0);
       assert(this->backwardUpdateOrdering_.size() == omegaBackwardIsotropic_.size());
       for(auto it = this->backwardUpdateOrdering_.begin(); it != this->backwardUpdateOrdering_.end(); ++it) {
          assert((*it)->no_send_messages() == omegaBackwardIsotropic_[ std::distance(this->backwardUpdateOrdering_.begin(), it) ].size());
       } 
 
-      forward.wait();
       for(auto it = this->forwardUpdateOrdering_.begin(); it != this->forwardUpdateOrdering_.end(); ++it) {
          assert((*it)->no_send_messages() == omegaForwardIsotropic_[ std::distance(this->forwardUpdateOrdering_.begin(), it) ].size());
       } 
-   };
+   }
 }
 
 inline void LP::ComputeDampedUniformWeights()
 {
    if(!omega_isotropic_damped_valid_) {
       omega_isotropic_damped_valid_ = true;
-      auto forward = std::async(std::launch::async, [&](){  
-            ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1.0);
-      });
-      ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropicDamped_, 1.0);
-      forward.wait();
-   };
+#pragma omp sections
+      {
+#pragma omp section
+         ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1.0);
+#pragma omp section
+         ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropicDamped_, 1.0);
+      }
+   }
 }
 
 // Here we check whether messages constraints are satisfied
 bool LP::CheckPrimalConsistency() const
 {
-   volatile bool consistent=true;
+   volatile bool consistent=true; // or use std::atomic<bool>?
 
 #pragma omp parallel for shared(consistent)
    for(INDEX i=0; i<m_.size(); ++i) {
@@ -1188,12 +1103,6 @@ void LP::ComputeAnisotropicWeights(
    assert(std::distance(factorIt,factorEndIt) == f_.size());
    assert(std::distance(factor_sort_begin, factor_sort_end) == f_.size());
 
-   
-   //std::map<FactorTypeAdapter*, INDEX> factorToIndex;
-   //std::map<INDEX, FactorTypeAdapter*> indexToFactor;
-   //BuildIndexMaps(factorIt, factorEndIt, factorToIndex, indexToFactor);
-   
-
    // compute the following numbers: 
    // 1) #{factors after current one, to which messages are sent from current factor}
    // 2) #{factors after current one, which receive messages from current one}
@@ -1219,11 +1128,9 @@ void LP::ComputeAnisotropicWeights(
       auto* f_left = m_[i]->GetLeftFactor();
       const INDEX f_index_left = factor_address_to_index_[f_left];
       const INDEX index_left = f_sorted_inverse[f_index_left];
-      //assert(index_left == factorToIndex[f_left]);
       auto* f_right = m_[i]->GetRightFactor();
       const INDEX f_index_right = factor_address_to_index_[f_right];
       const INDEX index_right = f_sorted_inverse[f_index_right];
-      //assert(index_right == factorToIndex[f_right]);
       
       if(m_[i]->ReceivesMessageFromLeft()) {
          if(index_left < index_right) {
@@ -1278,13 +1185,9 @@ void LP::ComputeAnisotropicWeights(
    std::vector<INDEX> omega_size(f_.size());
    {
      INDEX c=0;
-     //std::vector<std::vector<FactorTypeAdapter*> > fc = ComputeSendFactorConnection(factorIt,factorEndIt); // possibly not the most efficient way!
-     //auto fcIt = fc.begin();
-     //for(auto it=factorIt; it!=factorEndIt; ++it, ++fcIt) {
      for(auto it=factorIt; it!=factorEndIt; ++it) {
        if((*it)->FactorUpdated()) {
-         //omega_size[c] = fcIt->size();
-         omega_size[c] = (*it)->no_send_messages(); // fcIt->size();
+         omega_size[c] = (*it)->no_send_messages();
          ++c;
        }
      }
@@ -1297,14 +1200,12 @@ void LP::ComputeAnisotropicWeights(
       INDEX c=0;
       for(auto it=factorIt; it!=factorEndIt; ++it) {
          const INDEX i = std::distance(factorIt, it);
-         //assert(i == factorToIndex[*it]);
          assert(i == f_sorted_inverse[ factor_address_to_index_[*it] ]);
          if((*it)->FactorUpdated()) {
             INDEX k=0;
             for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
                if(mIt.CanSendMessage()) {
                   auto* f_connected = mIt.GetConnectedFactor();
-                  //const INDEX j = factorToIndex[ f_connected ];
                   const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
                   assert(i != j);
                   if(i<j || last_receiving_factor[j] > i) {
@@ -1345,15 +1246,12 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
 {
    assert(leave_weight >= 0.0 && leave_weight <= 1.0);
    assert(factorEndIt - factorIt == f_.size());
-   //std::vector<std::vector<FactorTypeAdapter*> > fc = ComputeSendFactorConnection(factorIt,factorEndIt);
-   //assert(f_.size() == fc.size());
 
    std::vector<INDEX> omega_size(std::distance(factorIt, factorEndIt),0);
-   //auto fcIt = fc.begin();
    INDEX c=0;
-   for(; factorIt != factorEndIt; ++factorIt) { // ++fcIt) {
+   for(; factorIt != factorEndIt; ++factorIt) {
       if((*factorIt)->FactorUpdated()) {
-        omega_size[c] = (*factorIt)->no_send_messages(); // fcIt->size();
+        omega_size[c] = (*factorIt)->no_send_messages();
         ++c;
       }
    }
@@ -1401,17 +1299,6 @@ void LP::ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR fa
       UpdateFactorPrimal(*(factorIt + i), *(omegaIt + i), iteration);
    }
 }
-
-//inline const PrimalSolutionStorage& LP::GetBestPrimal() const
-//{
-//   if(bestForwardPrimalCost_ < bestBackwardPrimalCost_) {
-//      return bestForwardPrimal_;
-//   } else {
-//      return bestBackwardPrimal_;
-//   }
-//}
-
-
 
 
 } // end namespace LP_MP
