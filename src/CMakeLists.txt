@@ -1,4 +1,5 @@
 add_subdirectory(solvers) # TODO flag for building solvers ?
+add_subdirectory(external_lib)
 if(BUILD_TESTS)
     add_subdirectory(test)
 endif()

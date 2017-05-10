@@ -44,9 +44,9 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/PEGTL")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/graph/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/cereal/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/tclap/include")
-# TODO this seems to be a pretty old version, if the license permits it make a new upload ?! however, this seems to be compatible with the one that was downloaded before
+#include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling-ala")
 
-# download and build lingeling
+# TODO this seems to be a pretty old version, if the license permits it make a new upload ?! however, this seems to be compatible with the one that was downloaded before
 include(ExternalProject)
 ExternalProject_ADD(
    lingeling

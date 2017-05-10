@@ -14,6 +14,7 @@ def multicutMp( uvIds,
         tightenConstraintsPercentage = 0.05,
         maxIter                   = 1000,
         minDualImprovement        = 0,
+        minDualImprovementInterval= 0,
         timeout                   = 0,
         nThreads                  = 1
     ):
@@ -30,6 +31,7 @@ def multicutMp( uvIds,
     mc_opts.tightenConstraintsPercentage = tightenConstraintsPercentage
     mc_opts.maxIter                   = maxIter
     mc_opts.minDualImprovement        = minDualImprovement
+    mc_opts.minDualImprovementInterval= minDualImprovementInterval
     mc_opts.timeout                   = timeout
     mc_opts.nThreads                  = nThreads
 
