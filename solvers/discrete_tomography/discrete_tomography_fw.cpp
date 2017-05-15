@@ -250,7 +250,7 @@ struct sub_problem {
 static double dot_product_fn(double* wi, YPtr _y, TermData term_data);
 double max_fn(double* wi, YPtr _y, double kappa, TermData term_data) // maximization oracle. Must copy argmax_y <a^{iy},[PAD(wi) kappa]> to y, and return the free term a^{iy}[d].
 {
-   //assert(kappa == 1.0);
+   assert(kappa == 1.0);
    assert(kappa > 0.0);
    if(kappa != 1.0) { std::cout << kappa << "\n"; }
    assert(kappa > std::numeric_limits<double>::min());
@@ -372,8 +372,8 @@ int main(int argc, char**argv)
    std::cout << "scaling = " << scaling << "\n";
 
 
-   //MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
-   Solver<FMC_DT,LP,StandardVisitor> solver;
+   MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
+   //Solver<FMC_DT,LP,StandardVisitor> solver;
 
    pegtl::file_parser problem(filename);
 
@@ -461,6 +461,7 @@ int main(int argc, char**argv)
 
       delete s;
       s = new SVM(mrf.GetNumberOfVariables()*no_labels, p.projectionVar.size(), max_fn, copy_fn, compare_fn, dot_product_fn, nullptr, false);
+      s->SetParams(lambda, mu / mu_SCALE, kappa / kappa_SCALE);
       for(INDEX i=0; i<sp_vec.size(); ++i) {
          s->SetTerm(i, sp_vec[i], mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
       }

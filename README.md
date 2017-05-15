@@ -1,13 +1,19 @@
 LP_MP
 ========
 
-LP_MP is a C++ framework for developing scalable convergent message passing solvers for a wide range of LP-relaxations to discrete optimization problems.
+LP_MP is a C++ framework for developing scalable monotonuously improving dual block coordinate ascent (also known as message passing) solvers for a wide range of LP-relaxations to discrete optimization problems.
 For a theoretical introduction to the techniques used and the class of problems that can be optimized see [here](https://arxiv.org/abs/1612.05460).
 
 ## Solvers
 We provide solvers for the following optimization problems:
 * **Discrete graphical models**: message passing as done by TRWS, SRMP or MPLP, input in opengm (hdf5) or [uai](http://www.cs.huji.ac.il/project/PASCAL/fileFormat.php) format (text). Tightening with [frustrated cycles](http://cs.nyu.edu/~dsontag/papers/sontag_uai12.pdf) is also supported.
-* **Multicut**, (also known as correlation clustering) with cycle<!--, odd wheel and odd bicycle wheel --> and odd wheel inequality separation, input in opengm, a custom format used by [Andres' graph package](https://github.com/bjoern-andres/graph) (both hdf5) and a simple text format. Primal solutions are obtained with the efficient [Kernighan&Lin algorithm](https://github.com/bjoern-andres/graph).
+<!---
+* **Maximum Cut** with cycle and odd bicycle wheel inequality separation. 
+Quadratic unconstrained binary programs (QUBO) can automatically be converted to max-cut and then solved.
+Input for max-cut and QUBO is in [text format](https://github.com/MQLib/MQLib/tree/master/bin). 
+Primal solutions can be rounded with the [MQLib](https://github.com/MQLib/MQLib) library of max-cut and QUBO heuristics.
+-->
+* **Multicut**, (also known as correlation clustering) with cycle, odd wheel and odd bicycle wheel inequality separation, input in opengm, a custom format used by [Andres' graph package](https://github.com/bjoern-andres/graph) (both hdf5) and a simple text format. Primal solutions are obtained with the efficient [Kernighan&Lin algorithm](https://github.com/bjoern-andres/graph).
 * **Lifted multicut**, which additionally has lifted edges consituting soft connectivity priors. Input formats, inequalities and primal heuristic are similar to multicut.
 <!---* **(Asymmetric) Multiway cut with input in the opengm format. -->
 * **Graph matching**, input accepted in the format as used by the [dual decomposition graph matching solver of Vladimir Kolmogorov](http://pub.ist.ac.at/~vnk/software/GraphMatching-v1.02.src.zip) or in a custom uai format (both text).

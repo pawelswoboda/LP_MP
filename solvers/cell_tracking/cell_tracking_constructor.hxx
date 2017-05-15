@@ -10,8 +10,8 @@
 
 namespace LP_MP {
 
-template<typename DETECTION_FACTOR_CONTAINER, typename AT_MOST_ONE_CELL_FACTOR_CONTAINER,// typename TRANSITION_FACTOR_CONTAINER, typename SPLIT_FACTOR_CONTAINER,
-         typename TRANSITION_MESSAGE_CONTAINER, typename AT_MOST_ONE_CELL_MESSAGE_CONTAINER>//, typename OUTGOING_EDGES_MESSAGE_CONTAINER, typename INCOMING_EDGES_MESSAGE_CONTAINER, typename TRANSITION_SPLIT_MESSAGE_OUT_CONTAINER, typename TRANSITION_SPLIT_MESSAGE_IN_CONTAINER>
+template<typename DETECTION_FACTOR_CONTAINER, typename AT_MOST_ONE_CELL_FACTOR_CONTAINER,
+         typename TRANSITION_MESSAGE_CONTAINER, typename AT_MOST_ONE_CELL_MESSAGE_CONTAINER>
 class cell_tracking_constructor {
 public:
   using CONSTRUCTOR = cell_tracking_constructor<DETECTION_FACTOR_CONTAINER, AT_MOST_ONE_CELL_FACTOR_CONTAINER, TRANSITION_MESSAGE_CONTAINER, AT_MOST_ONE_CELL_MESSAGE_CONTAINER>;
@@ -192,7 +192,7 @@ public:
   } 
 };
 
-namespace cell_tracking_parser {
+namespace cell_tracking_parser_mother_machine {
 
    // import basic parsers
    using Parsing::opt_whitespace;
@@ -490,7 +490,311 @@ namespace cell_tracking_parser {
 
       return read_suc;
    }
-} // end namespace cell_tracking_parser
+} // end namespace cell_tracking_parser_mother_machine
+
+
+/*
+namespace cell_tracking_parser_2d {
+
+   // import basic parsers
+   using Parsing::opt_whitespace;
+   using Parsing::mand_whitespace;
+   using Parsing::opt_invisible;
+   using Parsing::mand_invisible;
+   using Parsing::positive_integer;
+   using Parsing::real_number;
+
+   struct my_eolf : pegtl::sor<pegtl::eol, pegtl::eof> {}; // do zrobienia: revert to usual pegtl::eolf
+   struct comment_line : pegtl::seq< opt_whitespace, pegtl::sor< pegtl::seq< pegtl::string<'#'>, pegtl::until<my_eolf> >, my_eolf> > {};
+   
+   // H timestep hypothesis_id {detection cost} (x_coord, lower coord) 
+   struct cell_detection_hypothesis : pegtl::seq< positive_integer, mand_whitespace, positive_integer, mand_whitespace, real_number, opt_whitespace, pegtl::string<'('>, opt_whitespace, real_number, opt_whitespace, pegtl::string<','>, opt_whitespace, real_number, opt_whitespace, pegtl::string<')'> > {};
+   struct cell_detection_hypothesis_line : pegtl::seq< pegtl::string<'H'>, opt_whitespace, cell_detection_hypothesis, opt_whitespace, my_eolf > {};
+   
+   // appearance cost: timestep hypothesis_id cost
+   struct appearance_cost : pegtl::seq< pegtl::string<'A','P','P'>, mand_whitespace, positive_integer
+   // EC hyp_no1 + hyp_no2 ... <= 1
+   struct exclusion : pegtl::seq< positive_integer, pegtl::star< pegtl::seq< opt_whitespace, pegtl::string<'+'>, opt_whitespace, positive_integer> > > {};
+   struct exclusion_line : pegtl::seq< pegtl::string<'E','C'>, opt_whitespace, exclusion, opt_whitespace, pegtl::string<'<','='>, opt_whitespace, pegtl::string<'1'>, opt_whitespace, my_eolf> {};
+   // timestep 1, first hypothesis id, timestep 1, second hypothesis id, cost
+   struct mapping : pegtl::seq< positive_integer, mand_whitespace, positive_integer, mand_whitespace, positive_integer, mand_whitespace, positive_integer, mand_whitespace, real_number > {}; 
+   struct mapping_line : pegtl::seq< pegtl::string<'M','A'>, opt_whitespace, mapping, opt_whitespace, my_eolf> {};
+   // timestep 1, left hypothesis id, timestep 2, two right hypothesis ids, cost
+   struct division : pegtl::seq< positive_integer, mand_whitespace, positive_integer, mand_whitespace, positive_integer, mand_whitespace, positive_integer, mand_whitespace, positive_integer, mand_whitespace, real_number > {}; 
+   struct division_line : pegtl::seq< pegtl::string<'D','A'>, opt_whitespace, division, opt_whitespace, my_eolf> {};
+
+   struct grammar : pegtl::seq< pegtl::star<pegtl::sor<
+                    comment_line,
+                    timestep_line, 
+                    cell_detection_hypothesis_line,
+                    exclusion_line,
+                    mapping_line,
+                    division_line
+                    >>> {};
+
+   struct input {
+     // we must go through all cell mappings (cell transitions) to count the number of outgoing and incoming messages. Only then can we allocate cell detection hypothesis, as they need to know these numbers.
+     std::vector<std::vector<std::tuple<REAL,REAL,INDEX,INDEX,REAL,REAL>>> cell_detection_stat_; // detection cost, exit cost,  # incoming edges, # outgoing edges, ( lower_boundary, upper_boundary ) <= last two only for mother machine
+     std::vector<std::tuple<INDEX,INDEX,INDEX,REAL>> transitions_; // timestep, outgoing, incoming cell, cost
+     std::vector<std::tuple<INDEX,INDEX,INDEX,INDEX,REAL>> divisions_; // timestep, outgoing, incoming1, incoming2, cost
+     std::vector<std::vector<std::vector<INDEX>>> exclusions_; // timestep, {hyp_1, ..., hyp_n}
+     bool eof = false;
+   };
+
+   template< typename Rule >
+     struct action
+     : pegtl::nothing< Rule > {};
+
+   template<> struct action< pegtl::eof > {
+     template<typename INPUT>
+     static void apply(const INPUT & in, input& i)
+     {
+       //std::cout << "kwaskwas\n";
+       i.eof = true;
+     }
+   };
+
+   template<> struct action< timestep > {
+     template<typename INPUT>
+     static void apply(const INPUT & in, input& i)
+     {
+       const INDEX timestep = std::stoul(in.string());
+       assert(i.cell_detection_stat_.size() == timestep);
+       i.cell_detection_stat_.push_back({});
+       i.exclusions_.push_back({});
+     }
+   };
+
+   template<> struct action< cell_detection_hypothesis > {
+     template<typename INPUT>
+     static void apply(const INPUT & in, input& i)
+     {
+       std::stringstream s(in.string());
+       INDEX number; s >> number;
+       assert(number == i.cell_detection_stat_.back().size());
+       INDEX hypothesis_id; s >> hypothesis_id; // this number is not used
+       REAL detection_cost; s >> detection_cost;
+       REAL exit_cost; s >> exit_cost;
+       char opening_bracket; s >> opening_bracket; assert(opening_bracket == '(');
+       REAL upper_boundary; s >> upper_boundary;
+       char comma; s >> comma; assert(comma == ',');
+       REAL lower_boundary; s >> lower_boundary;
+       char closing_bracket; s >> closing_bracket; assert(closing_bracket == ')');
+       assert(upper_boundary < lower_boundary );
+
+       i.cell_detection_stat_.back().push_back(std::make_tuple(detection_cost,exit_cost,0,0, upper_boundary, lower_boundary));
+       //std::cout << "H: " << number << ", " << detection_cost << std::endl;
+     }
+   };
+
+   template<> struct action< exclusion > {
+     template<typename INPUT>
+     static void apply(const INPUT & in, input& i)
+     {
+       std::stringstream s(in.string());
+       std::vector<INDEX> idx;
+       INDEX number; s >> number; idx.push_back(number);
+       //std::cout << "E: " << number << ", ";
+       char plus;
+       while(s >> plus) {
+         assert(plus == '+');
+         INDEX number; s >> number; idx.push_back(number); 
+         //std::cout << number << ", ";
+       }
+       i.exclusions_.back().push_back(idx);
+       //std::cout << " <= 1; " << i.exclusions_.size() << "\n";
+     }
+   };
+
+   template<> struct action< mapping > {
+     template<typename INPUT>
+     static void apply(const INPUT & in, input& i)
+     {
+       std::stringstream s(in.string());
+       INDEX timestep_prev; s >> timestep_prev;
+       INDEX cell_prev; s >> cell_prev;
+       INDEX timestep_next; s >> timestep_next;
+       INDEX cell_next; s >> cell_next;
+       REAL cost; s >> cost;
+
+       assert(timestep_prev+1 == timestep_next);
+       assert(timestep_next < i.cell_detection_stat_.size());
+       assert(cell_prev < i.cell_detection_stat_[timestep_prev].size());
+       assert(cell_next < i.cell_detection_stat_[timestep_next].size());
+
+       std::get<3>(i.cell_detection_stat_[timestep_prev][cell_prev])++;
+       std::get<2>(i.cell_detection_stat_[timestep_next][cell_next])++;
+
+       i.transitions_.push_back( std::make_tuple(timestep_prev, cell_prev, cell_next, cost));
+
+       //std::cout << "mapping: t = " << timestep_prev << ", h1 = " << cell_prev << ", h2 = " << cell_next << ", cost = " << cost << "\n";
+     }
+   };
+
+   template<> struct action< division > {
+     template<typename INPUT>
+     static void apply(const INPUT & in, input& i)
+     {
+       std::stringstream s(in.string());
+       INDEX timestep_prev; s >> timestep_prev;
+       INDEX cell_prev; s >> cell_prev;
+       INDEX timestep_next; s >> timestep_next;
+       INDEX cell_next_1; s >> cell_next_1;
+       INDEX cell_next_2; s >> cell_next_2;
+       REAL cost; s >> cost;
+
+       assert(timestep_prev+1 == timestep_next);
+       assert(cell_next_1 != cell_next_2);
+       assert(timestep_next < i.cell_detection_stat_.size());
+       assert(cell_prev < i.cell_detection_stat_[timestep_prev].size());
+       assert(cell_next_1 < i.cell_detection_stat_[timestep_next].size());
+       assert(cell_next_2 < i.cell_detection_stat_[timestep_next].size());
+
+       std::get<3>(i.cell_detection_stat_[timestep_prev][cell_prev])++;
+       std::get<2>(i.cell_detection_stat_[timestep_next][cell_next_1])++;
+       std::get<2>(i.cell_detection_stat_[timestep_next][cell_next_2])++;
+
+       i.divisions_.push_back( std::make_tuple(timestep_prev, cell_prev, cell_next_1, cell_next_2, cost));
+       //std::cout << "division: t = " << timestep_prev << ", h1 = " << cell_prev << ", h1,1 = " << cell_next_1 << ", h2,2 = " << cell_next_2 << ", cost = " << cost << "\n";
+     }
+   };
+
+
+   bool read_input(const std::string& filename, input& i)
+   {
+      std::cout << "parsing " << filename << "\n";
+      pegtl::file_parser problem(filename);
+      const bool success = problem.parse< grammar, action >(i); 
+      //assert(i.eof);
+      return success;
+   }
+
+   template<typename SOLVER>
+   void construct_tracking_problem(input& i, SOLVER& s)
+   {
+      auto& cell_tracking_constructor = s.template GetProblemConstructor<0>();
+      auto& lp = s.GetLP();
+
+      //std::cout << "exclusion constraints disabled\n";
+      cell_tracking_constructor.set_number_of_timesteps( i.cell_detection_stat_.size() );
+      for(INDEX t=0; t<i.cell_detection_stat_.size(); ++t) {
+        for(INDEX n=0; n<i.cell_detection_stat_[t].size(); ++n) {
+          const REAL detection_cost = std::get<0>(i.cell_detection_stat_[t][n]);
+          const REAL exit_cost = std::get<1>(i.cell_detection_stat_[t][n]);
+          const INDEX no_incoming_edges = std::get<2>(i.cell_detection_stat_[t][n]);
+          const INDEX no_outgoing_edges = std::get<3>(i.cell_detection_stat_[t][n]);
+
+          //assert(t != i.cell_detection_stat_.size()-1 || exit_cost == 0.0);
+          cell_tracking_constructor.add_detection_hypothesis( lp, t, n, detection_cost, no_incoming_edges, no_outgoing_edges, exit_cost );
+        }
+        for(const auto& detections : i.exclusions_[t]) {
+          cell_tracking_constructor.add_exclusion_constraint(lp, t, detections ); 
+        }
+        // check whether all cell hypotheses are covered by exclusion constraints (must be valid for mother machine)
+        //std::vector<INDEX> all_indices;
+        //for(const auto& detections : i.exclusions_[t]) {
+        //  all_indices.insert(all_indices.end(), detections.begin(), detections.end());
+        //}
+        //std::sort(all_indices.begin(), all_indices.end());
+        //all_indices.erase( std::unique( all_indices.begin(), all_indices.end()), all_indices.end() );
+        //assert(all_indices.size() == i.cell_detection_stat_[t].size());
+        
+      }
+
+      auto tc = cell_tracking_constructor.init_transition_counter();
+      for(auto& t : i.transitions_) {
+        const INDEX timestep = std::get<0>(t);
+        const INDEX prev_cell = std::get<1>(t);
+        const INDEX next_cell = std::get<2>(t);
+        const REAL cost = std::get<3>(t);
+        cell_tracking_constructor.add_cell_transition( lp, timestep, prev_cell, next_cell, cost, tc );
+      }
+      for(auto& t : i.divisions_) {
+        const INDEX timestep = std::get<0>(t);
+        const INDEX prev_cell = std::get<1>(t);
+        const INDEX next_cell_1 = std::get<2>(t);
+        const INDEX next_cell_2 = std::get<3>(t);
+        const REAL cost = std::get<4>(t);
+        cell_tracking_constructor.add_cell_division( lp, timestep, prev_cell, next_cell_1, next_cell_2, cost, tc );
+      }
+      for(INDEX t=0; t<i.cell_detection_stat_.size(); ++t) {
+        for(INDEX j=0; j<i.cell_detection_stat_[t].size(); ++j) {
+          assert( std::get<2>(i.cell_detection_stat_[t][j]) == tc[t][j][0] );
+          assert( std::get<3>(i.cell_detection_stat_[t][j]) == tc[t][j][1] );
+        }
+      }
+   }
+
+   // we assume problem with single constructor
+   template<typename SOLVER>
+   bool ParseProblem(const std::string& filename, SOLVER& s)
+   {
+     input i;
+     const bool read_suc = read_input(filename, i);
+     construct_tracking_problem(i, s);
+     return read_suc;
+   }
+
+   template<typename SOLVER>
+   bool ParseProblemMotherMachine(const std::string& filename, SOLVER& s)
+   {
+     input i;
+     const bool read_suc = read_input(filename, i);
+     construct_tracking_problem(i, s);
+
+      auto& cell_tracking_constructor = s.template GetProblemConstructor<0>();
+      // add exit constraints based on positions of cell detection hypotheses
+      // coordinates are in format (upper,lower) with upper < lower (hence coordinates are inverted!)
+      //std::cout << "Exit constraints disabled\n";
+      for(INDEX t=0; t<i.cell_detection_stat_.size(); ++t) {
+        // possibly better: if there exists cell strictly between i and j, then no exit constraint needs to be added
+        for(INDEX d1=0; d1<i.cell_detection_stat_[t].size(); ++d1) {
+          for(INDEX d2=d1+1; d2<i.cell_detection_stat_[t].size(); ++d2) {
+            auto upper_bound_d1 = std::get<4>(i.cell_detection_stat_[t][d1]);
+            auto lower_bound_d1 = std::get<5>(i.cell_detection_stat_[t][d1]);
+            auto upper_bound_d2 = std::get<4>(i.cell_detection_stat_[t][d2]);
+            auto lower_bound_d2 = std::get<5>(i.cell_detection_stat_[t][d2]);
+            assert(upper_bound_d1 < lower_bound_d1);
+            assert(upper_bound_d2 < lower_bound_d2);
+            //std::cout << "t=" << t << ", H1=" << d1 << "(" << lower_bound_d1 << "," << upper_bound_d1 << "), H2=" << d2 << "(" << lower_bound_d2 << "," << upper_bound_d2 << ")\n";
+            if(upper_bound_d1 > lower_bound_d2) {
+              cell_tracking_constructor.add_exit_constraint(s.GetLP(), t,d1,d2);
+            }
+            if(upper_bound_d2 > lower_bound_d1) {
+              cell_tracking_constructor.add_exit_constraint(s.GetLP(), t,d2,d1);
+            }
+          }
+        } 
+      }
+
+    INDEX max_out_degree = 0;
+    INDEX max_in_degree = 0;
+    INDEX sum_out_degree = 0;
+    INDEX sum_in_degree = 0;
+    INDEX no_factors = 0;
+    for(auto& d : i.cell_detection_stat_) {
+      for(auto& f : d) {
+        max_out_degree = std::max(max_out_degree, std::get<2>(f));
+        max_in_degree = std::max(max_in_degree, std::get<3>(f));
+
+        sum_out_degree += std::get<2>(f);
+        sum_in_degree += std::get<3>(f);
+        if(std::get<2>(f) > 0 || std::get<3>(f) > 0) no_factors++;
+      }
+    }
+    std::cout << "maximum out-degree of detection factors = " << max_out_degree << "\n";
+    std::cout << "maximum in-degree of detection factors = " << max_in_degree << "\n";
+
+    std::cout << "average out-degree of detection factors = " << REAL(sum_out_degree)/REAL(no_factors) << "\n";
+    std::cout << "average in-degree of detection factors = " << REAL(sum_in_degree)/REAL(no_factors) << "\n";
+
+      return read_suc;
+   }
+} // end namespace cell_tracking_parser_2d
+*/
+
+
+
 
 } // end namespace LP_MP
 

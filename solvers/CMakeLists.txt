@@ -6,6 +6,10 @@ if(BUILD_MULTICUT)
    add_subdirectory(multicut)
 endif()
 
+if(BUILD_MAX_CUT)
+   add_subdirectory(max_cut)
+endif()
+
 if(BUILD_GRAPHICAL_MODEL)
    add_subdirectory(graphical_model)
 endif()

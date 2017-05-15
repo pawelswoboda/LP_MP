@@ -7,6 +7,7 @@ OPTION(BUILD_GRAPH_MATCHING "Build graph matching" ON)
 OPTION(BUILD_GRAPH_MATCHING_EVALUATION "Build graph matching evaluation" OFF)
 OPTION(BUILD_MULTICUT "Build multicut" ON)
 OPTION(BUILD_MULTICUT_EVALUATION "Build multicut evaluation" OFF)
+OPTION(BUILD_MAX_CUT "Build max-cut" ON)
 OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" ON)
 OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" ON)
 OPTION(BUILD_CELL_TRACKING "Build cell tracking solver" OFF)
@@ -17,6 +18,8 @@ OPTION(WITH_GUROBI "LP interface to gurobi" OFF)
 OPTION(WITH_CPLEX "LP interface to Cplex" OFF)
 OPTION(WITH_SAT_BASED_ROUNDING "Use the glucose SAT solver to decode a primal solution based on reparametrization" OFF)
 OPTION(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
+
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/MQLib")
 
 if(DOWNLOAD_DEPENDENCIES)
    # download external projects here 
