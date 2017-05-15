@@ -1,0 +1,6 @@
+[submodule "external/MQLib"]
+	path = external/MQLib
+	url = https://github.com/MQLib/MQLib.git
+[submodule "DebugClang/external/MQLib"]
+	path = DebugClang/external/MQLib
+	url = git://github.com/MQLib/MQLib.git
