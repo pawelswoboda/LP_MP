@@ -137,10 +137,12 @@ namespace max_cut_simple_text_format {
    struct init_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace, positive_integer, opt_whitespace> {};
    // ${node 1} ${node 2} ${cost}
    struct edge_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace, positive_integer, opt_whitespace, real_number, opt_whitespace> {};
+   struct comment_line : pegtl::seq< opt_whitespace, pegtl::sor< pegtl::seq< pegtl::string<'#'>, pegtl::until<pegtl::eolf> >, pegtl::eolf> > {};
 
    struct grammar : pegtl::must<
+                    pegtl::star<comment_line>,
                     init_line, pegtl::eol,
-                    pegtl::star<edge_line, pegtl::eolf>
+                    pegtl::star<pegtl::sor<comment_line, pegtl::seq<edge_line, pegtl::eolf>> >
                     > {};
 
    struct input {
@@ -193,6 +195,7 @@ namespace max_cut_simple_text_format {
       }
    }
 
+   // we assume that the problem is a minimization one
    template<typename CONSTRUCTOR>
    void construct_QUBO_problem(CONSTRUCTOR& c, const input& ipt)
    {
@@ -206,7 +209,7 @@ namespace max_cut_simple_text_format {
          const REAL cost = std::get<2>(edge);
 
          if(i == j) {
-            additional_edges[i-1] += cost/2.0;
+            additional_edges[i-1] += cost;
             sum += cost;
          } else {
             const REAL cost = std::get<2>(edge);

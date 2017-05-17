@@ -26,6 +26,7 @@
 #include "andres/graph/multicut-lifted/kernighan-lin.hxx"
 #include "andres/graph/multicut-lifted/greedy-additive.hxx"
 
+#include "heuristics/maxcut/burer2002.h"
 
 namespace LP_MP {
 
@@ -277,7 +278,7 @@ public:
    {
       if(number_of_edges() > 2) {
          std::cout << "Search for violated triplet constraints\n";
-         INDEX triplets_added = FindViolatedTriplets(max_factors_to_add);
+         INDEX triplets_added = find_violated_triplets(max_factors_to_add);
          std::cout << "Added " << triplets_added << " triplet(s) out of " <<  max_factors_to_add << " by searching for triplets\n"; 
          if(triplets_added < 0.6*max_factors_to_add) {
             std::cout << "Additionally search via shortest paths for violated constraints\n";
@@ -343,7 +344,7 @@ public:
    };
 
    // search for violated triplets, e.g. triplets with one negative edge and two positive ones.
-   INDEX FindViolatedTriplets(const INDEX max_triplets_to_add)
+   INDEX find_violated_triplets(const INDEX max_triplets_to_add)
    {
       std::vector<INDEX> adjacency_list_count(noNodes_,0);
       // first determine size for adjacency_list
@@ -419,7 +420,7 @@ public:
                      const REAL gdi3 = std::min({ c[0], c[1], -c[2] });
                      const REAL guaranteed_dual_increase = std::max({ gdi1, gdi2, gdi3 });
                      */
-                  if(guaranteed_dual_increase > 0.0) {
+                  if(guaranteed_dual_increase > eps) {
                      triplet_candidates_per_thread.push_back({std::array<INDEX,3>({i,j,k}), guaranteed_dual_increase});
                   } 
                } else if(CUT_TYPE == cut_type::maxcut) {
@@ -427,7 +428,7 @@ public:
                   const REAL best_labeling = std::min({0.0, cost_ij+cost_ik, cost_ij+cost_jk, cost_ik+cost_jk});
                   assert(lb <= best_labeling+eps);
                   const REAL guaranteed_dual_increase = best_labeling - lb;
-                  if(guaranteed_dual_increase > 0.0) {
+                  if(guaranteed_dual_increase > eps) {
                      triplet_candidates_per_thread.push_back({std::array<INDEX,3>({i,j,k}), guaranteed_dual_increase});
                   } 
                }
@@ -520,11 +521,11 @@ public:
          const REAL v = std::get<2>(it);
          assert(i<j);
          if(v > 0.0) {
-            g.add_edge(2*i,2*j,v);
-            g.add_edge(2*i+1,2*j+1,v);
+            g.add_edge(2*i, 2*j, v);
+            g.add_edge(2*i+1, 2*j+1, v);
          } else if(v < 0.0) {
-            g.add_edge(2*i,2*j+1,-v);
-            g.add_edge(2*i+1,2*j,-v);
+            g.add_edge(2*i, 2*j+1, -v);
+            g.add_edge(2*i+1, 2*j, -v);
          }
       }
       g.sort();
@@ -535,15 +536,13 @@ public:
       auto merge_edges = [&uf](const INDEX i, const INDEX j, const REAL v) {
          assert(v != 0.0);
          if(v > 0.0) {
-            uf.merge(2*i,2*j);
-            uf.merge(2*i+1,2*j+1);
+            uf.merge(2*i, 2*j);
+            uf.merge(2*i+1, 2*j+1);
          } else if(v < 0.0) {
-            uf.merge(2*i,2*j+1);
-            uf.merge(2*i+1,2*j); 
+            uf.merge(2*i, 2*j+1);
+            uf.merge(2*i+1, 2*j); 
          }
       };
-
-      INDEX triplets_added = 0;
 
       INDEX e=0;
       REAL initial_th;
@@ -560,6 +559,8 @@ public:
 
       bool zero_th_iteration = true;
       std::vector<bool> already_searched(noNodes_, false);
+      INDEX triplets_added = 0;
+
       for(REAL th=0.5*initial_th; th>=eps || zero_th_iteration; th*=0.1) {
          if(th < eps) {
             if(triplets_added <= 0.01*max_triplets_to_add) {
@@ -579,14 +580,11 @@ public:
                merge_edges(i,j,v); 
             }
          }
-         //using CycleType = std::tuple<REAL, std::vector<INDEX>>;
-         //std::vector<CycleType > cycles;
          std::vector<triplet_candidate> triplet_candidates;
 
 #pragma omp parallel 
          {
             std::vector<triplet_candidate> triplet_candidates_local;
-            //std::vector<CycleType > cycles_local;
             BfsData mp2(g);
 #pragma omp for schedule(guided) nowait
             for(INDEX i=0; i<noNodes_; ++i) {
@@ -627,7 +625,6 @@ public:
             std::cout << "best triplet candidate in triplet search has guaranteed dual improvement " << triplet_candidates[0].cost << "\n";
          }
 
-         INDEX triplets_added = 0;
          for(const auto& triplet_candidate : triplet_candidates) {
             const INDEX i = triplet_candidate.nodes[0];
             const INDEX j = triplet_candidate.nodes[1];
@@ -699,6 +696,7 @@ public:
       INDEX triplets_added = 0;
       const REAL initial_th = 0.6*std::min(-std::get<2>(negative_edges[0]), pos_th);
       bool zero_th_iteration = true;
+
       for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) {
          if(th < eps) {
             if(triplets_added <= 0.01*max_triplets_to_add) {
@@ -762,7 +760,6 @@ public:
             std::cout << "best triplet candidate in triplet search has guaranteed dual improvement " << triplet_candidates[0].cost << "\n";
          }
 
-         INDEX triplets_added = 0;
          for(const auto& triplet_candidate : triplet_candidates) {
             const INDEX i = triplet_candidate.nodes[0];
             const INDEX j = triplet_candidate.nodes[1];
@@ -819,36 +816,54 @@ public:
 
          std::vector<bool> node_label(this->noNodes_);
          std::vector<bool> node_labelled(this->noNodes_, false);
+         std::queue<INDEX> node_queue;
+
          std::vector<INDEX> arc_count(this->noNodes_, 0);
          for(INDEX e=0; e<unaryFactorsVector_.size(); ++e) {
             const INDEX i = std::get<0>(unaryFactorsVector_[e])[0];
+            const INDEX j = std::get<0>(unaryFactorsVector_[e])[1];
             arc_count[i]++;
+            arc_count[j]++;
          }
          two_dim_variable_array<std::tuple<INDEX, bool>> forward_arcs(arc_count);
          std::fill(arc_count.begin(), arc_count.end(), 0);
          for(INDEX e=0; e<unaryFactorsVector_.size(); ++e) {
-            const INDEX i = std::get<0>(unaryFactorsVector_[e])[0];
-            const INDEX j = std::get<0>(unaryFactorsVector_[e])[1];
-            const bool edge_cut = std::get<1>(unaryFactorsVector_[e])->GetFactor()->primal()[0];
+            const INDEX i = unaryFactorsVector_[e].first[0];
+            const INDEX j = unaryFactorsVector_[e].first[1];
+            assert(i<j);
+            const bool edge_cut = unaryFactorsVector_[e].second->GetFactor()->primal()[0];
             forward_arcs[i][ arc_count[i] ] = std::make_tuple(j, edge_cut); 
             arc_count[i]++; 
+            forward_arcs[j][ arc_count[j] ] = std::make_tuple(i, edge_cut); 
+            arc_count[j]++; 
          }
-         // do a breadth first search
+         for(INDEX i=0; i<this->noNodes_; ++i) {
+            assert(arc_count[i] == forward_arcs[i].size());
+         }
+
+         // do a depth first search
          for(INDEX i=0; i<this->noNodes_; ++i) {
             if(node_labelled[i] == false) {
                node_labelled[i] = true;
                node_label[i] = false;
-            }
-            for(auto it=forward_arcs[i].begin(); it!=forward_arcs[i].end(); ++it) {
-               const INDEX j = std::get<0>(*it);
-               const bool edge_cut = std::get<1>(*it);
-               if(node_labelled[j] == false) {
-                  node_labelled[j] = true;
-                  node_label[j] = edge_cut ? ~node_label[i] : node_label[i];
-               } else {
-                  if(!(node_label[j] == edge_cut ? ~node_label[i] : node_label[i])) {
-                     std::cout << "solution infeasible\n";
-                     return false;
+               node_queue.push(i);
+               while(!node_queue.empty()) {
+                  const INDEX i = node_queue.back();
+                  node_queue.pop();
+                  for(auto it=forward_arcs[i].begin(); it!=forward_arcs[i].end(); ++it) {
+                     const INDEX j = std::get<0>(*it);
+                     const bool edge_cut = std::get<1>(*it);
+                     const bool label_j = edge_cut ? !node_label[i] : node_label[i];
+                     if(node_labelled[j] == false) {
+                        node_labelled[j] = true;
+                        node_queue.push(j);
+                        node_label[j] = label_j;
+                     } else {
+                        if(node_label[j] != label_j) {
+                           std::cout << "solution infeasible\n";
+                           return false;
+                        }
+                     }
                   }
                }
             }
@@ -948,8 +963,35 @@ public:
          } else {
             std::cout << "multicut rounding is currently running.\n";
          }
+
       } else if(CUT_TYPE == cut_type::maxcut) {
+         
+         std::cout << "use Burer's heuristic to compute max-cut\n";
          //assert(false); // use heuristics from MQlib
+         std::vector<Instance::InstanceTuple> edge_list;
+         edge_list.reserve(unaryFactorsVector_.size());
+         for(INDEX e=0; e<unaryFactorsVector_.size(); ++e) {
+            const INDEX i = unaryFactorsVector_[e].first[0];
+            const INDEX j = unaryFactorsVector_[e].first[1];
+            assert(i<j);
+            const REAL cost_ij = unaryFactorsVector_[e].second->GetFactor()->operator[](0);
+            edge_list.push_back(Instance::InstanceTuple(std::make_pair(i+1, j+1), -cost_ij));
+         }
+
+         MaxCutInstance mi(edge_list, this->noNodes_);
+         Burer2002 heur(mi, 1.0, false, NULL);
+         const MaxCutSimpleSolution& mc_sol = heur.get_best_solution();
+         const std::vector<int>& solution = mc_sol.get_assignments();
+         std::cout << "write solution back\n";
+         for(INDEX e=0; e<unaryFactorsVector_.size(); ++e) {
+            const INDEX i = unaryFactorsVector_[e].first[0];
+            const INDEX j = unaryFactorsVector_[e].first[1];
+            auto* f = unaryFactorsVector_[e].second; 
+            const bool edge_cut = (solution[i] != solution[j]);
+            f->GetFactor()->primal()[0] = edge_cut;
+            f->ComputePrimalThroughMessages(); 
+         }
+
       } else {
          assert(false);
       } 
@@ -1790,7 +1832,7 @@ public:
 
       // find all triangles ijk
 
-      // find all edges uv such that there exist edges triplets iuv and juv. 
+      // find all edges uv such that there exist edge triplets iuv and juv. 
       // this is done by sorting all triplets which have node i and node j, and intersecting the set
       auto intersects_iter_end = set_intersection_merge(
             connected_triplets[i].begin(), connected_triplets[i].end(),
@@ -1800,6 +1842,7 @@ public:
       for(auto n=common_edges.begin(); n != intersects_iter_end; ++n) {
          const INDEX u = std::get<0>(*n);
          const INDEX v = std::get<1>(*n);
+         assert(u < v);
          const auto& iuv = std::get<2>(*n)->GetFactor();
          const auto& juv = std::get<3>(*n)->GetFactor();
 

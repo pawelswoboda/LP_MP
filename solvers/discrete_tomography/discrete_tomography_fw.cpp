@@ -372,8 +372,8 @@ int main(int argc, char**argv)
    std::cout << "scaling = " << scaling << "\n";
 
 
-   MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
-   //Solver<FMC_DT,LP,StandardVisitor> solver;
+   //MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
+   Solver<FMC_DT,LP,StandardVisitor> solver;
 
    pegtl::file_parser problem(filename);
 

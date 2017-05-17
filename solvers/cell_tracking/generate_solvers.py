@@ -9,17 +9,21 @@ int main(int argc, char* argv[])
 
 FMC = [ 
       'FMC_CELL_TRACKING_MOTHER_MACHINE',
-      'FMC_CONSERVATION_TRACKING'
+      'FMC_CONSERVATION_TRACKING',
+      'FMC_CELL_TRACKING'
       ]
 
 parse_fun = [
-      'cell_tracking_parser::ParseProblemMotherMachine',
-      'conservation_tracking_parser::ParseProblem'
+      'cell_tracking_parser_mother_machine::ParseProblemMotherMachine',
+      'conservation_tracking_parser::ParseProblem',
+      'cell_tracking_parser_2d::ParseProblem'
+
       ]
 
 file_name = [
       'cell_tracking_mother_machine.cpp',
-      'conservation_tracking.cpp'
+      'conservation_tracking.cpp',
+      'cell_tracking.cpp'
       ]
 
 

@@ -28,14 +28,12 @@ public:
   constexpr static INDEX no_primal_decision = std::numeric_limits<INDEX>::max();
   constexpr static INDEX no_edge_taken = std::numeric_limits<INDEX>::max()-1;
 
-  detection_factor(const INDEX no_incoming_edges, const INDEX no_outgoing_edges, const REAL detection_cost, bool can_exit = true)
+  detection_factor(const INDEX no_incoming_edges, const INDEX no_outgoing_edges, const REAL detection_cost)
     : no_incoming_edges_(no_incoming_edges),
-    no_outgoing_edges_(no_outgoing_edges+can_exit) // the last outgoing edge is the exit one (when exit is possible)
+    no_outgoing_edges_(no_outgoing_edges)
   {
     assert(no_incoming_edges > 0);
     assert(no_outgoing_edges > 0);
-    assert(can_exit == true); // true for mother machine only
-    assert(no_outgoing_edges+can_exit == no_outgoing_edges + 1);
     pot_ = global_real_block_allocator_array[stack_allocator_index].allocate(size());
     assert(pot_ != nullptr);
     std::fill(pot_+1, pot_ + size(), 0.0);
@@ -1026,7 +1024,6 @@ public:
   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
   static void SendMessagesToRight(const LEFT_FACTOR& l, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
   {
-    std::cout << "kwas2\n";
     const REAL delta = l.cost_of_detection();
     assert(!std::isnan(delta));
 
@@ -1123,7 +1120,6 @@ public:
       return false;
     }
     if(l.detection_active()) {
-      assert(r.primal_ == at_most_one_cell_factor_index_);
       return (r.primal_ == at_most_one_cell_factor_index_);
     } else {
       return (r.primal_ != at_most_one_cell_factor_index_);
