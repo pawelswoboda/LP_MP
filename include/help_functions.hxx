@@ -79,10 +79,10 @@ std::vector<T> GetSubVector(const std::vector<T>& v, const std::vector<size_t>& 
    return subVec;
 }
 
-template<class T>
-bool HasUniqueValues(const std::vector<T>& v)
+template<class VECTOR>
+bool HasUniqueValues(const VECTOR& v)
 {
-   std::set<T> values;
+   std::set<typename VECTOR::value_type> values;
    for(size_t i=0; i<v.size(); i++) {
       if(values.find( v[i] ) != values.end()) return false;
       else values.insert( v[i] );
@@ -172,6 +172,33 @@ std::vector<INDEX> ComputePermutation(const VECTOR& v1, const VECTOR& v2)
    }
    return perm;
 }
+
+
+template<
+class InputIt1, class InputIt2, class OutputIt, class Compare, class Merge >
+   static OutputIt set_intersection_merge
+(
+ InputIt1 first1, InputIt1 last1,
+ InputIt2 first2, InputIt2 last2,
+ OutputIt d_first, Compare comp, Merge merge
+ )
+{
+   while (first1 != last1 && first2 != last2)
+   {
+      if (comp(*first1, *first2))
+         ++first1;
+      else
+      {
+         if (!comp(*first2, *first1))
+            *d_first++ = merge(*first1++, *first2);
+         ++first2;
+      }
+   }
+   return d_first;
+}
+
+
+
 
 } // end namespace LP_MP
 

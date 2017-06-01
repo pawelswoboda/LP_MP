@@ -398,7 +398,7 @@ public:
          const INDEX next_var = *(it);
          const INDEX sum_size = std::min(i*(noLabels_-1)+1, max_sum); 
 
-         auto* f = new SUM_PAIRWISE_FACTOR(noLabels_, prev_sum_size, sum_size);
+         auto* f = new SUM_PAIRWISE_FACTOR(noLabels_, prev_sum_size, sum_size, prev_var, next_var);
          lp_->AddFactor(f);
 
          auto* f_l = mrf_constructor_.GetUnaryFactor(*(it-1));
