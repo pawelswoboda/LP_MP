@@ -42,15 +42,14 @@ namespace LP_MP {
 // then only change it according to the internal parametrization when the functor is called
 // in this case, the functor would need to have the model as internal state
 struct KlRounder {
-    
+
     typedef andres::graph::Graph<> GraphType;
 
     KlRounder()
     {}
 
-    // TODO do we have to call by value here due to using async or could we also use a call by refernce?
+    // call by rvalue refernce due to async call with std::move
     virtual std::vector<char> operator()(GraphType && g, std::vector<REAL> && edgeValues) {
-   
       std::cout << "compute multicut primal with GAEC + KLj\n";
       std::vector<char> labeling(g.numberOfEdges(), 0);
       if(g.numberOfEdges() > 0) {
@@ -73,11 +72,12 @@ struct LiftedKlRounder {
     LiftedKlRounder()
     {}
 
+    // call by rvalue refernce due to async call with std::move
     virtual std::vector<char> operator()(
             GraphType && originalGraph,
             GraphType && liftedGraph,
             std::vector<REAL> && edgeValues) {
-        
+
       std::cout << "compute lifted multicut primal with GAEC + KLj\n";
         std::vector<char> labeling(edgeValues.size());
         if(originalGraph.numberOfEdges() > 0) {
@@ -85,11 +85,11 @@ struct LiftedKlRounder {
            andres::graph::multicut_lifted::kernighanLin(originalGraph, liftedGraph, edgeValues, labeling, labeling);
         }
         return labeling;
-    
+
     }
-    
+
     // dummy operator to compile with multicut constructor
-    virtual std::vector<char> operator()(GraphType, std::vector<REAL>) {
+    virtual std::vector<char> operator()(GraphType &&, std::vector<REAL> &&) {
         return std::vector<char>();
     }
 
@@ -134,7 +134,7 @@ struct FMC_ODD_WHEEL_MULTICUT {
    using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_ODD_WHEEL_MULTICUT, 1>;
    using odd_3_wheel_factor_container = FactorContainer<multicut_odd_3_wheel_factor, FMC_ODD_WHEEL_MULTICUT, 2>;
    using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_ODD_WHEEL_MULTICUT, 3>;
-      
+
    using edge_triplet_message_0_container = MessageContainer<multicut_edge_triplet_message_0, 0, 1, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 0 >;
    using edge_triplet_message_1_container = MessageContainer<multicut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 1 >;
    using edge_triplet_message_2_container = MessageContainer<multicut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_ODD_WHEEL_MULTICUT, 2 >;
@@ -153,6 +153,56 @@ struct FMC_ODD_WHEEL_MULTICUT {
    using multicut_c = MulticutConstructor<FMC_ODD_WHEEL_MULTICUT,0,1, 0,1,2, 3>;
    using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
    using ProblemDecompositionList = meta::list<multicut_cow>;
+   using RounderType = ROUNDER;
+};
+
+template <typename ROUNDER>
+struct FMC_ODD_BICYCLE_WHEEL_MULTICUT {
+   constexpr static const char* name = "Multicut with cycle, odd wheel and odd bicycle wheel constraints";
+
+   using edge_factor_container = FactorContainer<multicut_edge_factor, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 0>;
+   using triplet_factor_container = FactorContainer<multicut_triplet_factor, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 1>;
+   using odd_3_wheel_factor_container = FactorContainer<multicut_odd_3_wheel_factor, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 2>;
+   using odd_bicycle_3_wheel_factor_container = FactorContainer<multicut_odd_bicycle_3_wheel_factor, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 3>;
+   using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 4>;
+
+   using edge_triplet_message_0_container = MessageContainer<multicut_edge_triplet_message_0, 0, 1, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 0 >;
+   using edge_triplet_message_1_container = MessageContainer<multicut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 1 >;
+   using edge_triplet_message_2_container = MessageContainer<multicut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 2 >;
+
+   using triplet_odd_wheel_message_012 = MessageContainer<multicut_triplet_odd_3_wheel_message_012, 1, 2, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 3>;
+   using triplet_odd_wheel_message_013 = MessageContainer<multicut_triplet_odd_3_wheel_message_013, 1, 2, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 4>;
+   using triplet_odd_wheel_message_023 = MessageContainer<multicut_triplet_odd_3_wheel_message_023, 1, 2, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 5>;
+   using triplet_odd_wheel_message_123 = MessageContainer<multicut_triplet_odd_3_wheel_message_123, 1, 2, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 6>;
+
+   using odd_3_wheel_odd_bicycle_wheel_message_0123 = MessageContainer<multicut_odd_3_wheel_odd_bicycle_message_0123, 2, 3, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 7>;
+   using odd_3_wheel_odd_bicycle_wheel_message_0124 = MessageContainer<multicut_odd_3_wheel_odd_bicycle_message_0124, 2, 3, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 8>;
+   using odd_3_wheel_odd_bicycle_wheel_message_0134 = MessageContainer<multicut_odd_3_wheel_odd_bicycle_message_0134, 2, 3, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 9>;
+   using odd_3_wheel_odd_bicycle_wheel_message_0234 = MessageContainer<multicut_odd_3_wheel_odd_bicycle_message_0234, 2, 3, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 10>;
+   using odd_3_wheel_odd_bicycle_wheel_message_1234 = MessageContainer<multicut_odd_3_wheel_odd_bicycle_message_1234, 2, 3, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MULTICUT, 11>;
+
+   using FactorList = meta::list< edge_factor_container, triplet_factor_container, odd_3_wheel_factor_container, odd_bicycle_3_wheel_factor_container, ConstantFactorContainer>;
+   using MessageList = meta::list<
+      edge_triplet_message_0_container,
+      edge_triplet_message_1_container,
+      edge_triplet_message_2_container,  
+
+      triplet_odd_wheel_message_012, 
+      triplet_odd_wheel_message_013,
+      triplet_odd_wheel_message_023,
+      triplet_odd_wheel_message_123,
+      
+      odd_3_wheel_odd_bicycle_wheel_message_0123,
+      odd_3_wheel_odd_bicycle_wheel_message_0124,
+      odd_3_wheel_odd_bicycle_wheel_message_0134,
+      odd_3_wheel_odd_bicycle_wheel_message_0234,
+      odd_3_wheel_odd_bicycle_wheel_message_1234
+      >;
+
+   using multicut_c = MulticutConstructor<FMC_ODD_BICYCLE_WHEEL_MULTICUT,0,1, 0,1,2, 4>;
+   using multicut_cow = MulticutOddWheelConstructor<multicut_c,2, 3,4,5,6>;
+   using multicut_cowobw = multicut_odd_bicycle_wheel_constructor<multicut_cow, 3, 7,8,9,10,11>;
+   using ProblemDecompositionList = meta::list<multicut_cowobw>;
    using RounderType = ROUNDER;
 };
 

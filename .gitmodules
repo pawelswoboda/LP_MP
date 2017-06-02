@@ -25,3 +25,6 @@
 [submodule "external/PEGTL"]
 	path = external/PEGTL
 	url = https://github.com/taocpp/PEGTL.git
+[submodule "external/lingeling-ala"]
+	path = external/lingeling-ala
+	url = https://github.com/msoos/lingeling-ala.git

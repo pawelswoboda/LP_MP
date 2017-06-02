@@ -8,6 +8,7 @@
 
 
 // to do: make _impl functions private
+// make functions static whenever they can be
 
 namespace LP_MP {
 
@@ -311,6 +312,9 @@ public:
      for(auto& v : msg_val) {
         v -= min_of_labels_not_taken;
      }
+     for(INDEX i=0; i<msg_val.size(); ++i) {
+        assert(!std::isnan(msg_val[i]));
+     }
   }
 
    template<typename RIGHT_FACTOR, typename MSG, INDEX I, typename... RIGHT_LABELINGS_REST>
@@ -336,7 +340,15 @@ public:
    {
       // msg has dimension equal to number of left labelings;
       // go over all right labelings, find corresponding left labeling (if there is any) and if so, add msg value
+      for(INDEX i=0; i<LEFT_LABELINGS::no_labelings(); ++i) {
+         assert(!std::isnan(msg[i]));
+         assert(std::isfinite(msg[i]));
+      } 
       repam_right_impl<RIGHT_FACTOR, MSG, 0>(r, msg, RIGHT_LABELINGS{}); 
+      for(INDEX i=0; i<r.size(); ++i) {
+         assert(!std::isnan(r[i]));
+         assert(std::isfinite(r[i]));
+      }
    }
 
    template<typename RIGHT_FACTOR, typename MSG>
@@ -354,13 +366,18 @@ public:
    void RepamLeft(LEFT_FACTOR& l, const MSG& msg)
    {
       for(INDEX i=0; i<LEFT_LABELINGS::no_labelings(); ++i) {
+         assert(std::isfinite(msg[i]));
+         assert(!std::isnan(msg[i]));
          l[i] += msg[i];
+         assert(!std::isnan(l[i]));
+         assert(std::isfinite(l[i]));
       }
    }
 
    template<typename LEFT_FACTOR, typename MSG>
    void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
    {
+      for(INDEX i=0; i<l.size(); ++i) { assert(!std::isnan(l[i])); }
       msg -= omega*l;
    }
 

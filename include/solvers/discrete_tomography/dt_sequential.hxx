@@ -81,10 +81,11 @@ class dt_sum_state_pairwise_factor {
 public:
    constexpr static INDEX no_primal_decision = std::numeric_limits<INDEX>::max();
 
-   dt_sum_state_pairwise_factor(const INDEX no_labels, const INDEX prev_sum_size, const INDEX next_sum_size) 
+   dt_sum_state_pairwise_factor(const INDEX no_labels, const INDEX prev_sum_size, const INDEX next_sum_size, INDEX first_var, INDEX second_var) 
       : prev_(no_labels, prev_sum_size, 0.0),
       next_(no_labels, next_sum_size, 0.0),
       reg_(no_labels, no_labels, 0.0)
+        ,first_var_(first_var), second_var_(second_var)
    {
       assert(this->prev_sum_size() <= this->next_sum_size());
       assert(this->next_sum_size() <= this->prev_sum_size() + this->no_labels());
@@ -327,6 +328,9 @@ public:
 
    std::array<INDEX,2> state_;
    std::array<INDEX,2> sum_; // both sums are not strictly needed, they help however in labeling
+
+   const INDEX first_var_;
+   const INDEX second_var_;
 private:
    matrix<REAL> prev_; // first dimension is state, second one is sum
    matrix<REAL> next_; // first dimension is state, second one is sum

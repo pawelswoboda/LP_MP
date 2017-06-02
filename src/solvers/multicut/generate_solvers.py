@@ -11,6 +11,7 @@ FMC = [
       'FMC_MULTICUT<MessageSendingType::SRMP>',
       'FMC_MULTICUT<MessageSendingType::SRMP>',
       'FMC_ODD_WHEEL_MULTICUT<MessageSendingType::SRMP>',
+      'FMC_ODD_BICYCLE_WHEEL_MULTICUT',
       'FMC_LIFTED_MULTICUT',
       'FMC_LIFTED_MULTICUT',
       'FMC_LIFTED_MULTICUT',
@@ -19,6 +20,7 @@ FMC = [
 
 parse_fun = [
       'MulticutTextInput::ParseProblem',
+      'MulticutOpenGmInput::ParseProblem',
       'MulticutOpenGmInput::ParseProblem',
       'MulticutOpenGmInput::ParseProblem',
       'MulticutTextInput::ParseLiftedProblem',
@@ -32,6 +34,7 @@ parse_fun_param = [
       '',
       '',
       '',
+      '',
       ',false',
       ',true',
       ''
@@ -41,6 +44,7 @@ file_name = [
       'multicut_srmp.cpp',
       'multicut_opengm_srmp_cycle.cpp',
       'multicut_opengm_srmp_cycle_odd_wheel.cpp',
+      'multicut_opengm_srmp_cycle_odd_wheel_odd_bicycle_wheel.cpp',
       'lifted_multicut_text.cpp',
       'lifted_multicut_h5.cpp',
       'lifted_multicut_h5_grid.cpp',

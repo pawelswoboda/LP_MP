@@ -2,6 +2,7 @@ SET(SOURCE_FILES
    multicut_srmp.cpp 
    multicut_opengm_srmp_cycle.cpp 
    multicut_opengm_srmp_cycle_odd_wheel.cpp
+   multicut_opengm_srmp_cycle_odd_wheel_odd_bicycle_wheel.cpp
    lifted_multicut_text.cpp
    lifted_multicut_h5.cpp
    lifted_multicut_h5_grid.cpp
