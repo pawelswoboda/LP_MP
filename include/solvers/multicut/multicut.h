@@ -49,7 +49,7 @@ struct KlRounder {
     {}
 
     // TODO do we have to call by value here due to using async or could we also use a call by refernce?
-    virtual std::vector<char> operator()(GraphType g, std::vector<REAL> edgeValues) {
+    virtual std::vector<char> operator()(GraphType && g, std::vector<REAL> && edgeValues) {
    
       std::cout << "compute multicut primal with GAEC + KLj\n";
       std::vector<char> labeling(g.numberOfEdges(), 0);
@@ -74,9 +74,9 @@ struct LiftedKlRounder {
     {}
 
     virtual std::vector<char> operator()(
-            GraphType originalGraph,
-            GraphType liftedGraph,
-            std::vector<REAL> edgeValues) {
+            GraphType && originalGraph,
+            GraphType && liftedGraph,
+            std::vector<REAL> && edgeValues) {
         
       std::cout << "compute lifted multicut primal with GAEC + KLj\n";
         std::vector<char> labeling(edgeValues.size());
