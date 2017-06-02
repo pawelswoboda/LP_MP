@@ -488,10 +488,10 @@ template<typename T>
 //#pragma omp critical (mem_allocation)
 		{
 			clean_garbage();
-      std::cout << "no buffers = " << buffers.size() << "\n";
-			printf("peak mem usage: %lli Mb ", big_size(mem_peak_reserved() / (1 << 20)));
-			printf(" / %i allocations, ", alloc_count);
-			printf("at exit: %lli B\n", big_size(mem_used()));
+            //std::cout << "no buffers = " << buffers.size() << "\n";
+			//printf("peak mem usage: %lli Mb ", big_size(mem_peak_reserved() / (1 << 20)));
+			//printf(" / %i allocations, ", alloc_count);
+			//printf("at exit: %lli B\n", big_size(mem_used()));
 			//assert(buffers.empty() && spare.empty());
 			if (spare.allocated()){
 				int * p = spare.cap_beg();
