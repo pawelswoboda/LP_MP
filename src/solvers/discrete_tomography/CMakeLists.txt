@@ -17,6 +17,7 @@ if(WITH_GUROBI)
         foreach( source_file ${SOURCE_FILES} )
                 string( REPLACE ".cpp" "" executable_file ${source_file} )
                 add_executable( ${executable_file} ${source_file} ${headers} ${sources})
+                add_dependencies( ${executable_file} all_solvers)
                 target_link_libraries( ${executable_file} m stdc++ pthread ${GUROBI_LIBRARIES})
 
                 target_compile_definitions(${executable_file} PUBLIC -DUSE_GUROBI)
@@ -28,6 +29,7 @@ endif()
 
 if(WITH_LOCALSOLVER)
   add_executable(discrete_tomography_localsolver discrete_tomography_localsolver.cpp  ${headers} ${sources})
+  add_dependencies(discrete_tomography_localsolver all_solvers)
   target_link_libraries(discrete_tomography_localsolver m stdc++ pthread ${LOCALSOLVER_LIB})
 
   target_compile_definitions(discrete_tomography_localsolver PUBLIC -DUSE_LOCALSOLVER)
