@@ -27,48 +27,46 @@ namespace LP_MP{
   struct FMC_DT {
     static constexpr char* name = "Discrete Tomography with MRF and Counting Factors";
 
-    typedef FactorContainer<UnarySimplexFactor, FMC_DT, 0, false> UnaryFactor;
-    typedef FactorContainer<PairwiseSimplexFactor, FMC_DT, 1> PairwiseFactor;
-    typedef FactorContainer<DiscreteTomographyFactorCounting2, FMC_DT, 2> DiscreteTomographyCountingFactorContainer;
+    using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_DT, 0, false>;
+    using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_DT, 1>;
+    using DiscreteTomographyCountingFactorContainer = FactorContainer<DiscreteTomographyFactorCounting2, FMC_DT, 2>;
     //using dt_sequential_factor = FactorContainer<dt_sum_state_factor, FMC_DT, 3>;
     using dt_sequential_pairwise_factor = FactorContainer<dt_sum_state_pairwise_factor, FMC_DT, 3>;
    
     // do zrobienia: possibly try out MPLP as well
-    typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_DT, 0 > UnaryPairwiseMessageLeftContainer;
-    typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_DT, 1 > UnaryPairwiseMessageRightContainer;
+    using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 0 >;
+    using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 1 >;
     
-    typedef MessageContainer<DiscreteTomographyMessageCounting2, 2, 2, atMostTwoMessages, atMostTwoMessages, FMC_DT, 2>
-      DiscreteTomographyCountingMessageLeft;
-    typedef MessageContainer<DiscreteTomographyMessageCounting2, 2, 2, atMostOneMessage, atMostOneMessage, FMC_DT, 3>
-      DiscreteTomographyCountingMessageRight;
+    using DiscreteTomographyCountingMessageLeft = MessageContainer<DiscreteTomographyMessageCounting2, 2, 2, message_passing_schedule::left, atMostTwoMessages, atMostTwoMessages, FMC_DT, 2>;
+    using DiscreteTomographyCountingMessageRight = MessageContainer<DiscreteTomographyMessageCounting2, 2, 2, message_passing_schedule::left, atMostOneMessage, atMostOneMessage, FMC_DT, 3>;
 
     // connect counting factors with pairwise ones
-    using pairwise_to_center_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise2<CountingPairwiseMessageType::center>, 1, 2, variableMessageNumber, 1, FMC_DT, 4>;
-    using pairwise_to_left_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise2<CountingPairwiseMessageType::left>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 5>;
-    using pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise2<CountingPairwiseMessageType::right>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 6>;
+    using pairwise_to_center_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise2<CountingPairwiseMessageType::center>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 4>;
+    using pairwise_to_left_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise2<CountingPairwiseMessageType::left>, 1, 2, message_passing_schedule::left, variableMessageNumber, atMostOneMessage, FMC_DT, 5>;
+    using pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise2<CountingPairwiseMessageType::right>, 1, 2, message_passing_schedule::left, variableMessageNumber, atMostOneMessage, FMC_DT, 6>;
 
-    using left_pairwise_to_left_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::left,Chirality::left>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 7>;
-    using right_pairwise_to_left_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::left,Chirality::right>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 8>;
-    using left_pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::right,Chirality::left>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 9>;
-    using right_pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::right,Chirality::right>, 1, 2, variableMessageNumber, atMostOneMessage, FMC_DT, 10>;
+    using left_pairwise_to_left_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::left,Chirality::left>, 1, 2, message_passing_schedule::left, variableMessageNumber, atMostOneMessage, FMC_DT, 7>;
+    using right_pairwise_to_left_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::left,Chirality::right>, 1, 2, message_passing_schedule::left, variableMessageNumber, atMostOneMessage, FMC_DT, 8>;
+    using left_pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::right,Chirality::left>, 1, 2, message_passing_schedule::left, variableMessageNumber, atMostOneMessage, FMC_DT, 9>;
+    using right_pairwise_to_right_counting = MessageContainer<DiscreteTomographyMessageCountingPairwise3<Chirality::right,Chirality::right>, 1, 2, message_passing_schedule::left, variableMessageNumber, atMostOneMessage, FMC_DT, 10>;
 
     // connect sequential dt factors
-    using dt_sequential_message = MessageContainer<dt_pairwise_message, 3, 3, atMostOneMessage, atMostOneMessage, FMC_DT, 11>;
+    using dt_sequential_message = MessageContainer<dt_pairwise_message, 3, 3, message_passing_schedule::left, atMostOneMessage, atMostOneMessage, FMC_DT, 11>;
     //using dt_sequential_message_left = MessageContainer<dt_sum_pairwise_message<Chirality::left>, 3,4, atMostOneMessage, atMostOneMessage, FMC_DT, 11>;
     //using dt_sequential_message_right = MessageContainer<dt_sum_pairwise_message<Chirality::right>, 3,4, atMostOneMessage, atMostOneMessage, FMC_DT, 12>;
-    using dt_sequential_recursive_message_left = MessageContainer<dt_sum_counting_message<Chirality::left>, 3,2, atMostOneMessage, atMostOneMessage, FMC_DT, 12>;
-    using dt_sequential_recursive_message_right = MessageContainer<dt_sum_counting_message<Chirality::right>, 3,2, atMostOneMessage, atMostOneMessage, FMC_DT, 13>;
-    using dt_pairwise_pairwise_message = MessageContainer<dt_sum_pairwise_pairwise_message, 1, 3, variableMessageNumber, atMostOneMessage, FMC_DT, 14>;
-    using dt_sum_unary_message_left = MessageContainer<dt_sum_unary_message<Chirality::left>, 0, 3, variableMessageNumber, 1, FMC_DT, 18>;
-    using dt_sum_unary_message_right = MessageContainer<dt_sum_unary_message<Chirality::right>, 0, 3, variableMessageNumber, 1, FMC_DT, 19>;
+    using dt_sequential_recursive_message_left = MessageContainer<dt_sum_counting_message<Chirality::left>, 3,2, message_passing_schedule::left, atMostOneMessage, atMostOneMessage, FMC_DT, 12>;
+    using dt_sequential_recursive_message_right = MessageContainer<dt_sum_counting_message<Chirality::right>, 3,2, message_passing_schedule::left, atMostOneMessage, atMostOneMessage, FMC_DT, 13>;
+    using dt_pairwise_pairwise_message = MessageContainer<dt_sum_pairwise_pairwise_message, 1, 3, message_passing_schedule::left, variableMessageNumber, atMostOneMessage, FMC_DT, 14>;
+    using dt_sum_unary_message_left = MessageContainer<dt_sum_unary_message<Chirality::left>, 0, 3, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 18>;
+    using dt_sum_unary_message_right = MessageContainer<dt_sum_unary_message<Chirality::right>, 0, 3, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 19>;
 
     //using dt_unary_sum_message_container = MessageContainer<dt_unary_sum_message, 0, 3, variableMessageNumber, 1, FMC_DT, 19>;
 
     // tightening
-    typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_DT, 4> EmptyTripletFactor;
-    typedef MessageContainer<PairwiseTripletMessage<0,1,MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 15> PairwiseTriplet12MessageContainer;
-    typedef MessageContainer<PairwiseTripletMessage<0,2,MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 16> PairwiseTriplet13MessageContainer;
-    typedef MessageContainer<PairwiseTripletMessage<1,2,MessageSendingType::SRMP>, 1, 4, variableMessageNumber, 1, FMC_DT, 17> PairwiseTriplet23MessageContainer;
+    using EmptyTripletFactor = FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_DT, 4>;
+    using PairwiseTriplet12MessageContainer = MessageContainer<PairwiseTripletMessage<0,1>, 1, 4, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 15>;
+    using PairwiseTriplet13MessageContainer = MessageContainer<PairwiseTripletMessage<0,2>, 1, 4, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 16>;
+    using PairwiseTriplet23MessageContainer = MessageContainer<PairwiseTripletMessage<1,2>, 1, 4, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 17>;
 
     using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer, dt_sequential_pairwise_factor, EmptyTripletFactor >;
     using MessageList = meta::list<
@@ -132,14 +130,14 @@ namespace LP_MP{
   struct FMC_DT_NAIVE {
     static constexpr char* name = "Discrete Tomography, naive LP model";
 
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 0, false> UnaryFactor;
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 1> PairwiseFactor;
-    typedef FactorContainer<DiscreteTomographyFactorCountingNaive, ExplicitRepamStorage, FMC_DT_NAIVE, 2> DiscreteTomographyCountingFactorContainer;
+    using FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 0, false> UnaryFactor;
+    using FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 1> PairwiseFactor;
+    using FactorContainer<DiscreteTomographyFactorCountingNaive, ExplicitRepamStorage, FMC_DT_NAIVE, 2> DiscreteTomographyCountingFactorContainer;
    
-    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_NAIVE, 0 > UnaryPairwiseMessageLeft;
-    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_NAIVE, 1 > UnaryPairwiseMessageRight;
+    using MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_NAIVE, 0 > UnaryPairwiseMessageLeft;
+    using MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_NAIVE, 1 > UnaryPairwiseMessageRight;
     
-    typedef MessageContainer<DiscreteTomographyUnaryToFactorCountingNaiveMessage, 0, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT_NAIVE, 2>
+    using MessageContainer<DiscreteTomographyUnaryToFactorCountingNaiveMessage, 0, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT_NAIVE, 2>
       DiscreteTomographyCountingMessage;
 
     using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer >;
@@ -158,29 +156,29 @@ namespace LP_MP{
   struct FMC_DT_COMBINED {
     static constexpr char* name = "Discrete Tomography, naive LP and tight model combined";
 
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_COMBINED, 0, true> UnaryFactor;
-    typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_COMBINED, 1> PairwiseFactor;
-    typedef FactorContainer<DiscreteTomographyFactorCounting, ExplicitRepamStorage, FMC_DT_COMBINED, 2> DiscreteTomographyCountingFactorContainer;
+    using FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_COMBINED, 0, true> UnaryFactor;
+    using FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_COMBINED, 1> PairwiseFactor;
+    using FactorContainer<DiscreteTomographyFactorCounting, ExplicitRepamStorage, FMC_DT_COMBINED, 2> DiscreteTomographyCountingFactorContainer;
    
-    typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 0 > UnaryPairwiseMessageLeft;
-    typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 1 > UnaryPairwiseMessageRight;
+    using MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 0 > UnaryPairwiseMessageLeft;
+    using MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 1 > UnaryPairwiseMessageRight;
     
-    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::left>, 2, 2, atMostOneMessage, atMostOneMessage, variableMessageSize, FMC_DT_COMBINED, 2>
+    using MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::left>, 2, 2, atMostOneMessage, atMostOneMessage, variableMessageSize, FMC_DT_COMBINED, 2>
       DiscreteTomographyCountingMessageLeft;
-    typedef MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::right>, 2, 2, atMostOneMessage, atMostOneMessage, variableMessageSize, FMC_DT_COMBINED, 3>
+    using MessageContainer<DiscreteTomographyMessageCounting<DIRECTION::right>, 2, 2, atMostOneMessage, atMostOneMessage, variableMessageSize, FMC_DT_COMBINED, 3>
       DiscreteTomographyCountingMessageRight;
-    typedef MessageContainer<DiscreteTomographyMessageCountingPairwise, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 4>
+    using MessageContainer<DiscreteTomographyMessageCountingPairwise, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 4>
       DiscreteTomographyCountingPairwiseMessageContainer;
 
    // tightening
-   typedef FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_COMBINED, 3> EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 5> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 6> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 7> PairwiseTriplet23MessageContainer;
+   using FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_COMBINED, 3> EmptyTripletFactor;
+   using MessageContainer<PairwiseTriplet12Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 5> PairwiseTriplet12MessageContainer;
+   using MessageContainer<PairwiseTriplet13Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 6> PairwiseTriplet13MessageContainer;
+   using MessageContainer<PairwiseTriplet23Message, 1, 3, variableMessageNumber, 1, variableMessageSize, FMC_DT_COMBINED, 7> PairwiseTriplet23MessageContainer;
 
    // naive factors
-   typedef FactorContainer<DiscreteTomographyFactorCountingNaive, ExplicitRepamStorage, FMC_DT_COMBINED, 4> DiscreteTomographyCountingFactorNaiveContainer;
-   typedef MessageContainer<DiscreteTomographyUnaryToFactorCountingNaiveMessage, 0, 4, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT_COMBINED, 8>
+   using FactorContainer<DiscreteTomographyFactorCountingNaive, ExplicitRepamStorage, FMC_DT_COMBINED, 4> DiscreteTomographyCountingFactorNaiveContainer;
+   using MessageContainer<DiscreteTomographyUnaryToFactorCountingNaiveMessage, 0, 4, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT_COMBINED, 8>
       DiscreteTomographyCountingNaiveMessage;
 
     using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer, EmptyTripletFactor, DiscreteTomographyCountingFactorNaiveContainer >;

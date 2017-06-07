@@ -55,7 +55,7 @@ public:
     lp.AddFactor(f);
     detection_factors_[timestep][hypothesis_id] = f;
     //std::cout << "Added ";
-    //std::cout << "H: " << timestep << ", " << hypothesis_id <<  "," << no_incoming_edges << "," << no_outgoing_edges << ", " << detection_cost << std::endl;
+    std::cout << "H: " << timestep << ", " << hypothesis_id <<  "," << no_incoming_edges << "," << no_outgoing_edges << ", " << detection_cost << ", " << appearance_cost << ", " << disappearance_cost << std::endl;
     return f; 
   }
 
@@ -100,25 +100,27 @@ public:
 
     auto* e = new AT_MOST_ONE_CELL_FACTOR_CONTAINER(size);
     lp.AddFactor(e);
-    //std::cout << "Added Excusion for time " << timestep << ": ";
+    std::cout << "Added Excusion ";
     INDEX msg_idx = 0;
     for(INDEX i=0; i<conflict_set.size(); ++i) {
-      //std::cout << conflict_set[i] << ", ";
       const INDEX timestep = conflict_set[i][0];
       const INDEX hypothesis_id = conflict_set[i][1];
+      std::cout << timestep << "," << hypothesis_id << " + ";
       if(detection_factors_[timestep][hypothesis_id] != nullptr) {
         auto* m = new AT_MOST_ONE_CELL_MESSAGE_CONTAINER(msg_idx, detection_factors_[ timestep ][ hypothesis_id ], e);
         ++msg_idx;
         lp.AddMessage(m); 
       }
     }
-    //std::cout << std::endl;
+    std::cout << std::endl;
     return e; 
   }
 
   template<typename LP_TYPE>
   void add_cell_transition(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next, const INDEX next_cell, const REAL cost, transition_count& tc) 
   {
+    assert(timestep_prev + 1 == timestep_next);
+
     auto* out_cell_factor = detection_factors_[timestep_prev][prev_cell];
     const INDEX outgoing_edge_index  = tc[timestep_prev][prev_cell][1];
     assert( out_cell_factor->GetFactor()->outgoing(outgoing_edge_index) == 0.0 );
@@ -437,7 +439,7 @@ namespace cell_tracking_parser_mother_machine {
         const INDEX prev_cell = std::get<1>(t);
         const INDEX next_cell = std::get<2>(t);
         const REAL cost = std::get<3>(t);
-        cell_tracking_constructor.add_cell_transition( lp, timestep, prev_cell, next_cell, cost, tc );
+        cell_tracking_constructor.add_cell_transition( lp, timestep, prev_cell, timestep + 1, next_cell, cost, tc );
       }
       for(auto& t : i.divisions_) {
         const INDEX timestep = std::get<0>(t);
@@ -445,7 +447,7 @@ namespace cell_tracking_parser_mother_machine {
         const INDEX next_cell_1 = std::get<2>(t);
         const INDEX next_cell_2 = std::get<3>(t);
         const REAL cost = std::get<4>(t);
-        cell_tracking_constructor.add_cell_division( lp, timestep, prev_cell, next_cell_1, next_cell_2, cost, tc );
+        cell_tracking_constructor.add_cell_division( lp, timestep, prev_cell, timestep+1, next_cell_1, timestep+1, next_cell_2, cost, tc );
       }
       for(INDEX t=0; t<i.cell_detection_stat_.size(); ++t) {
         for(INDEX j=0; j<i.cell_detection_stat_[t].size(); ++j) {
@@ -545,7 +547,7 @@ namespace cell_tracking_parser_2d {
    struct appearance_line : pegtl::seq< pegtl::string<'A','P','P'>, mand_whitespace, appearance, opt_whitespace, my_eolf > {};
    // disappearance cost: timestep hypothesis_id cost
    struct disappearance : pegtl::seq<positive_integer, mand_whitespace, positive_integer, mand_whitespace, real_number > {};
-   struct disappearance_line : pegtl::seq< pegtl::string<'D','I','S','A','P','P'>, mand_whitespace, appearance, opt_whitespace, my_eolf > {};
+   struct disappearance_line : pegtl::seq< pegtl::string<'D','I','S','A','P','P'>, mand_whitespace, disappearance, opt_whitespace, my_eolf > {};
    // CONFSET timestep_1 hyp_no1 + timestep hyp_no2 ... <= 1
    struct conflict : pegtl::seq< positive_integer, mand_whitespace, positive_integer, pegtl::star< pegtl::seq< opt_whitespace, pegtl::string<'+'>, opt_whitespace, positive_integer, mand_whitespace, positive_integer> > > {};
    struct conflict_line : pegtl::seq< pegtl::string<'C','O','N','F','S','E','T'>, opt_whitespace, conflict, opt_whitespace, pegtl::string<'<','='>, opt_whitespace, pegtl::string<'1'>, opt_whitespace, my_eolf> {};
@@ -622,6 +624,7 @@ namespace cell_tracking_parser_2d {
          INDEX hypothesis_id; s >> hypothesis_id;
          REAL cost; s >> cost;
          std::get<1>(i.cell_detection_stat[timestep][hypothesis_id]) = cost;
+         std::cout << "APP " << timestep << " " << hypothesis_id << " " << cost << "\n";
        }
    };
 
@@ -634,6 +637,7 @@ namespace cell_tracking_parser_2d {
          INDEX hypothesis_id; s >> hypothesis_id;
          REAL cost; s >> cost;
          std::get<2>(i.cell_detection_stat[timestep][hypothesis_id]) = cost;
+         std::cout << "DISAPP " << timestep << " " << hypothesis_id << " " << cost << "\n";
        }
    };
 

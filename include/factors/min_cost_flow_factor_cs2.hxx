@@ -4,13 +4,14 @@
 //#include "mcmf.hxx"
 #include "lib/MinCost/MinCost.h"
 #include "config.hxx"
+#include "cereal/types/vector.hpp"
 
 //do zrobienia: remove again
 //#include <ilcplex/ilocplex.h>
 
 namespace LP_MP {
 
-enum class MessagePassingType {SRMP,HUNGARIAN}; // to distinguish between hungarian bp and our variant
+//enum class MessagePassingType {SRMP,HUNGARIAN}; // to distinguish between hungarian bp and our variant
 
 // mcf holds reverse copies of edges. arcs are ordered lexicographically by (tail,node).
 // this creates problems for some applications, where only one direction of arcs is needed, but it may be advantageous for other applications.
@@ -187,6 +188,46 @@ public:
       assert(i<no_binary_edges_);
       return minCostFlow_->GetCost(i);
    }
+
+   class WriteBackProxy {
+      public:
+      WriteBackProxy(const INDEX i, MinCostFlowSolverType* mcf) 
+         : i_(i),
+         minCostFlow_(mcf)
+      {
+         assert(i < minCostFlow_->GetEdgeNum());
+      }
+      WriteBackProxy operator=(const REAL x) {
+         assert(std::isfinite(x));
+         minCostFlow_->SetCost(i_, x);
+         return *this;
+      }
+      operator REAL() const { 
+         return minCostFlow_->GetCost(i_);
+      }
+
+      // when we write to the mcf factor, the cost of the reverse arc is also modified
+      // do zrobienia: introduce function for changing cost by constant
+      WriteBackProxy operator+=(const REAL x) {
+         minCostFlow_->UpdateCost(i_, x);
+         return *this;
+      }
+
+      WriteBackProxy operator-=(const REAL x) {
+         minCostFlow_->UpdateCost(i_, -x);
+         return *this;
+      }
+
+      private:
+      const INDEX i_;
+      MinCostFlowSolverType* minCostFlow_;
+   };
+
+   WriteBackProxy operator[](const INDEX i) 
+   {
+      return WriteBackProxy(i, minCostFlow_);
+   }
+
 
    // for the SendMessages update step, compute maximal cost change such that current labeling stays optimal
    // do zrobienia: is possibly an array with different values from which to compute the maximal perturbation
@@ -462,7 +503,7 @@ private:
 
 // used in graph matching via mcf. 
 // do zrobienia: rename
-template<INDEX COVERING_FACTOR, MessagePassingType MPT> // COVERING_FACTOR specifies how often an mcf edge is covered at most. Usually, either one or two
+template<INDEX COVERING_FACTOR> // COVERING_FACTOR specifies how often an mcf edge is covered at most. Usually, either one or two
 class UnaryToAssignmentMessageCS2 {
 // right factor is MinCostFlowFactor describing an 1:1 assignment as constructed above
 // left factors are the left and right simplex corresponding to it. 
@@ -478,7 +519,7 @@ public:
    }
 
    template<typename LEFT_POT, typename MSG_ARRAY>
-   void MakeLeftFactorUniform(const LEFT_POT& leftPot, MSG_ARRAY& msg, const REAL omega = 1.0) 
+   void send_message_to_right(const LEFT_POT& leftPot, MSG_ARRAY& msg, const REAL omega) 
    {
       assert(leftPot.size() == edges_.size());
 
@@ -487,20 +528,13 @@ public:
       }
    }
 
-   // for hungarian bp, we do not invoke this function
-   template<typename LEFT_FACTOR, typename LEFT_REPAM, typename MSG, bool ENABLE = MPT==MessagePassingType::SRMP >
-   typename std::enable_if<ENABLE,void>::type
-   SendMessageToRight(LEFT_FACTOR* l, const LEFT_REPAM& leftRepam, MSG& msg, const REAL omega)
+   // currently this function must be present, although SendMessagesToLeft is called
+   template<typename RIGHT_POT, typename MSG_ARRAY>
+   void send_message_to_left(const RIGHT_POT& r, MSG_ARRAY& msg, const REAL omega) 
    {
-      MakeLeftFactorUniform(leftRepam, msg, omega);
+      assert(false);
    }
-   
-   template<typename LEFT_FACTOR, typename G1, typename G2>
-   void ReceiveMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg)
-   {
-      //assert(leftPot.size() == no_arcs_);
-      MakeLeftFactorUniform(leftPot, msg);
-   }
+
 
    // for hungarian BP
    template<typename LEFT_FACTOR, typename G1, typename G2>
@@ -533,6 +567,7 @@ public:
    //   }
    //}
 
+   // to do: update this, remove RIGHT_REPAM
    template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
    static void
    SendMessagesToLeft(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& rightRepam, MSG_ARRAY msg_begin, const MSG_ARRAY msg_end, ITERATOR omegaIt)
@@ -598,9 +633,8 @@ public:
       }
    }
 
-   template<bool ENABLE = (MPT == MessagePassingType::HUNGARIAN), typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   typename std::enable_if<ENABLE,void>::type
-   ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
    {
       for(INDEX i=0; i<edges_.size(); ++i) {
          if(r.primal_[ edges_[i] ] > 0) {
@@ -609,9 +643,8 @@ public:
       }
    }
 
-   template<bool ENABLE = (MPT == MessagePassingType::SRMP), typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   typename std::enable_if<ENABLE,void>::type
-   ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
    {
       for(INDEX e=0; e<edges_.size(); ++e) {
          if(l.primal() == e) {

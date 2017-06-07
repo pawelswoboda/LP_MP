@@ -11,7 +11,7 @@
 namespace LP_MP {
 
 // specialized messages between UnarySimplexFactor and PairwiseSimplexFactor
-  template<MessageSendingType TYPE,  bool PROPAGATE_PRIMAL_TO_LEFT = false, bool PROPAGATE_PRIMAL_TO_RIGHT = false, bool SUPPORT_INFINITY = true> 
+  template<bool PROPAGATE_PRIMAL_TO_LEFT = false, bool PROPAGATE_PRIMAL_TO_RIGHT = false, bool SUPPORT_INFINITY = true> 
   class UnaryPairwiseMessageLeft {
     public:
       UnaryPairwiseMessageLeft(const INDEX i1, const INDEX i2) : i1_(i1), i2_(i2) {} // the pairwise factor size
@@ -44,9 +44,8 @@ namespace LP_MP {
         */
 
       // for primal computation as in TRW-S, we need to compute restricted messages as well
-      template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>
-        typename std::enable_if<ENABLE,void>::type
-        ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
+      template<typename RIGHT_FACTOR, typename G2>
+        void ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
         {
            // we assume that only r.right_primal was assigned, r.left_primal not
            //assert(r.primal_[0] == i1_);
@@ -97,10 +96,8 @@ namespace LP_MP {
        assert(!std::isnan(r.msg1(dim)));
     }
 
-    template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    //typename std::enable_if<ENABLE,void>::type
-    void
-    ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
        assert(l.primal() < i1_);
        //assert(r.primal_[0] == i1_);
@@ -139,27 +136,27 @@ namespace LP_MP {
     }
  
 
-  private:
     template<typename LEFT_FACTOR, typename G2>
-    void MaximizeLeft(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
+    void send_message_to_right(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
     {
       for(INDEX x1=0; x1<i1_; ++x1) {
         msg[x1] -= omega*l[x1];
       }
     }
     template<typename RIGHT_FACTOR, typename G2>
-    void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
+    void send_message_to_left(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
     {
        vector<REAL> msgs(i1_,std::numeric_limits<REAL>::infinity());
        r.min_marginal_1(msgs);
        msg -= omega*msgs;
     }
 
+  private:
     const INDEX i1_,i2_;
   };
 
 
-  template<MessageSendingType TYPE,  bool PROPAGATE_PRIMAL_TO_LEFT = false, bool PROPAGATE_PRIMAL_TO_RIGHT = false, bool SUPPORT_INFINITY = true> 
+  template<bool PROPAGATE_PRIMAL_TO_LEFT = false, bool PROPAGATE_PRIMAL_TO_RIGHT = false, bool SUPPORT_INFINITY = true> 
   class UnaryPairwiseMessageRight {
     public:
       UnaryPairwiseMessageRight(const INDEX i1, const INDEX i2) : i1_(i1), i2_(i2) {} // the pairwise factor size
@@ -192,9 +189,8 @@ namespace LP_MP {
         */
 
       // for primal computation as in TRW-S, we need to compute restricted messages as well
-      template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>
-        typename std::enable_if<ENABLE,void>::type
-        ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
+      template<typename RIGHT_FACTOR, typename G2>
+        void ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
         {
            //assert(r.primal_[1] == i1_);
            if(r.primal()[0] < i1_ && r.primal()[1] >= i2_) {
@@ -244,10 +240,8 @@ namespace LP_MP {
        assert(!std::isnan(r.msg2(dim)));
     }
 
-    template<bool ENABLE = TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    //typename std::enable_if<ENABLE,void>::type
-    void
-    ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
     {
        assert(l.primal() < i2_);
        //assert(r.primal_[1] == i2_);
@@ -285,26 +279,26 @@ namespace LP_MP {
     }
  
 
-  private:
     template<typename LEFT_FACTOR, typename G2>
-    void MaximizeLeft(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
+    void send_message_to_right(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
     {
       for(INDEX x2=0; x2<i2_; ++x2) {
         msg[x2] -= omega*l[x2];
       }
     }
     template<typename RIGHT_FACTOR, typename G2>
-    void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
+    void send_message_to_left(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
     {
        vector<REAL> msgs(i2_, std::numeric_limits<REAL>::infinity());//std::vector<REAL, stack_allocator<REAL>>;
        r.min_marginal_2(msgs);
        msg -= omega*msgs;
     }
 
+  private:
     const INDEX i1_,i2_; // do zrobienia: these values are not needed, as they can be obtained from the factors whenever they are used
   };
 
-  template<INDEX I1, INDEX I2, MessageSendingType MESSAGE_SENDING_TYPE>
+  template<INDEX I1, INDEX I2>
   class PairwiseTripletMessage {
      public:
       PairwiseTripletMessage() {} 
@@ -313,36 +307,9 @@ namespace LP_MP {
          static_assert(I1 < I2 && I2 < 3,""); 
       } 
 
-      // standard functions which take all possible arguments, to be replaced with minimal ones
-      template<typename RIGHT_FACTOR, typename G2, bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::SRMP>
-        typename std::enable_if<ENABLE,void>::type
-        ReceiveMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
-        {
-          MinimizeRight(r,msg); 
-        }
-      template<typename LEFT_FACTOR, typename G2, bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::MPLP>
-        typename std::enable_if<ENABLE,void>::type 
-        ReceiveMessageFromLeft(const LEFT_FACTOR& l, G2& msg) 
-        { 
-          MaximizeLeft(l,msg); 
-        }
-      template<typename LEFT_FACTOR, typename G3, bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::SRMP>
-        typename std::enable_if<ENABLE,void>::type
-        SendMessageToRight(const LEFT_FACTOR& l, G3& msg, const REAL omega)
-        { 
-          MaximizeLeft(l,msg,omega); 
-        }
-      template<typename RIGHT_FACTOR, typename G3, bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::MPLP>
-        typename std::enable_if<ENABLE,void>::type
-        SendMessageToLeft(const RIGHT_FACTOR& r, G3& msg, const REAL omega) 
-        { 
-          MinimizeRight(r,msg,omega); 
-        }
-
       // for primal computation as in TRW-S, we need to compute restricted messages as well
-      template<typename RIGHT_FACTOR, typename G2, bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::SRMP>
-        typename std::enable_if<ENABLE,void>::type
-        ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
+      template<typename RIGHT_FACTOR, typename G2>
+        void ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
         {
            throw std::runtime_error("rounding on pairwise factors is not currently supported");
            assert(false);
@@ -394,10 +361,8 @@ namespace LP_MP {
          }
       }
 
-      template<bool ENABLE = MESSAGE_SENDING_TYPE == MessageSendingType::SRMP, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-      //typename std::enable_if<ENABLE,void>::type
-      void
-      ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+      template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+      void ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
       {
          if(I1 == 0 && I2 == 1) {
 
@@ -475,14 +440,13 @@ namespace LP_MP {
     }
 
 
-  private:
     template<typename LEFT_FACTOR, typename G2>
-    void MaximizeLeft(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
+    void send_message_to_right(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
     {
        msg -= omega*l;
     }
     template<typename RIGHT_FACTOR, typename G2>
-    void MinimizeRight(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
+    void send_message_to_left(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
     {
        if(I1 == 0 && I2 == 1) {
 
@@ -545,9 +509,8 @@ class PairwiseTripletMessage12 {
         }
 
       // for primal computation as in TRW-S, we need to compute restricted messages as well
-      template<typename RIGHT_FACTOR, typename G2, bool ENABLE = TYPE == MessageSendingType::SRMP>
-        typename std::enable_if<ENABLE,void>::type
-        ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
+      template<typename RIGHT_FACTOR, typename G2>
+        void ReceiveRestrictedMessageFromRight(const RIGHT_FACTOR& r, G2& msg, typename PrimalSolutionStorage::Element rightPrimal) 
         {
            throw std::runtime_error("rounding on pairwise factors is not ucrrently supported");
            assert(false);

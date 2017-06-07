@@ -967,20 +967,20 @@ public:
       } else if(CUT_TYPE == cut_type::maxcut) {
          
          std::cout << "use Burer's heuristic to compute max-cut\n";
-         //assert(false); // use heuristics from MQlib
-         std::vector<Instance::InstanceTuple> edge_list;
+         // use heuristics from MQlib
+         std::vector<mqlib::Instance::InstanceTuple> edge_list;
          edge_list.reserve(unaryFactorsVector_.size());
          for(INDEX e=0; e<unaryFactorsVector_.size(); ++e) {
             const INDEX i = unaryFactorsVector_[e].first[0];
             const INDEX j = unaryFactorsVector_[e].first[1];
             assert(i<j);
             const REAL cost_ij = unaryFactorsVector_[e].second->GetFactor()->operator[](0);
-            edge_list.push_back(Instance::InstanceTuple(std::make_pair(i+1, j+1), -cost_ij));
+            edge_list.push_back(mqlib::Instance::InstanceTuple(std::make_pair(i+1, j+1), -cost_ij));
          }
 
-         MaxCutInstance mi(edge_list, this->noNodes_);
-         Burer2002 heur(mi, 1.0, false, NULL);
-         const MaxCutSimpleSolution& mc_sol = heur.get_best_solution();
+         mqlib::MaxCutInstance mi(edge_list, this->noNodes_);
+         mqlib::Burer2002 heur(mi, 1.0, false, NULL);
+         const mqlib::MaxCutSimpleSolution& mc_sol = heur.get_best_solution();
          const std::vector<int>& solution = mc_sol.get_assignments();
          std::cout << "write solution back\n";
          for(INDEX e=0; e<unaryFactorsVector_.size(); ++e) {

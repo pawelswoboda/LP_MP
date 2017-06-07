@@ -19,28 +19,8 @@ public:
       assert(transpose == false);
    }
 
-   template<typename RIGHT_FACTOR, typename G2>
-   void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 1.0);
-   }
-
-   //template<typename RIGHT_FACTOR, typename G2>
-   //void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-   //   MakeRightFactorUniform(f_right, msg, omega);
-   //}
-
-   template<typename LEFT_FACTOR, typename G3>
-   void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-      MakeLeftFactorUniform(f_left, msg, omega);
-   }
-
-   //template<typename LEFT_FACTOR, typename G3>
-   //void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-   //   MakeLeftFactorUniform(f_left, msg, 1.0);
-   //}
-
    template<typename LEFT_FACTOR, typename MSG>
-   void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega){
+   void send_message_to_right(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega){
       //std::cout << "\nbefore:\n";
       for(INDEX x1=0; x1<f_left.dim1(); ++x1) {
          for(INDEX x2=0; x2<f_left.dim2(); ++x2) {
@@ -60,7 +40,7 @@ public:
    }
 
    template<typename RIGHT_FACTOR, typename MSG>
-   void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
+   void send_message_to_left(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
       if(TYPE == CountingPairwiseMessageType::center) {
          matrix<REAL> msg_tmp(f_right.no_center_left_labels(), f_right.no_center_right_labels());
          f_right.MessageCalculation_Reg(msg_tmp);
@@ -166,29 +146,8 @@ public:
       static_assert(DIRECTION == Chirality::left || DIRECTION == Chirality::right,"");
    }
 
-   template<typename RIGHT_FACTOR, typename G2>
-   void ReceiveMessageFromRight(const RIGHT_FACTOR& f_right, G2& msg){
-      MakeRightFactorUniform(f_right, msg, 1.0);
-   }
-
-   //template<typename RIGHT_FACTOR, typename G2>
-   //void SendMessageToLeft(const RIGHT_FACTOR& f_right, G2& msg, const REAL omega){
-   //   MakeRightFactorUniform(f_right, msg, omega);
-   //}
-
-   template<typename LEFT_FACTOR, typename G3>
-   void SendMessageToRight(const LEFT_FACTOR& f_left, G3& msg, const REAL omega){
-      MakeLeftFactorUniform(f_left, msg, omega);
-   }
-
-   //template<typename LEFT_FACTOR, typename G3>
-   //void ReceiveMessageFromLeft(const LEFT_FACTOR& f_left, G3& msg){
-   //   MakeLeftFactorUniform(f_left, msg, 1.0);
-   //}
-
-
    template<typename LEFT_FACTOR, typename MSG>
-   void MakeLeftFactorUniform(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega){
+   void send_message_to_right(const LEFT_FACTOR& f_left, MSG& msg, const REAL omega){
       msg -= omega*f_left;
       //for(INDEX x1=0;x1<f_left.dim1();x1++){
       //   for(INDEX x2=0;x2<f_left.dim2();x2++){
@@ -199,7 +158,7 @@ public:
 
 
    template<typename RIGHT_FACTOR, typename MSG>
-   void MakeRightFactorUniform(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
+   void send_message_to_left(const RIGHT_FACTOR& f_right, MSG& msg, const REAL omega){
       std::array<INDEX,3> dim;
       if(COUNTING_FACTOR == Chirality::left) {
          dim = {f_right.no_left_labels(), f_right.no_center_left_labels(), f_right.left_sum_size()};

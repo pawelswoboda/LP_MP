@@ -237,7 +237,7 @@ public:
 
    void init_primal() {}
    template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<repam_storage*>(this) ); ar( maxCutEdgeVal_, cutEdgeContrib_, liftedEdgeContrib_, liftedEdgeForcedContrib_ ); } 
-   template<typename ARCHIVE> void primal_serialize(ARCHIVE& ar) { ar( primal_ ); }
+   template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
 
 private:
    std::vector<bool> primal_;
@@ -261,15 +261,13 @@ public:
    constexpr static INDEX size() { return 1; }
 
    template<typename RIGHT_FACTOR, typename G2>
-   void
-   ReceiveMessageFromRight(const RIGHT_FACTOR& r, G2& msg) 
+   void send_message_to_left(const RIGHT_FACTOR& r, G2& msg, const REAL omega) 
    {
-      msg[0] -= r.CutEdgeBreakpoint(i_);
+      msg[0] -= omega*r.CutEdgeBreakpoint(i_);
    }
 
    template<typename LEFT_FACTOR, typename G3>
-   void
-   SendMessageToRight(const LEFT_FACTOR& l, G3& msg, const REAL omega)
+   void send_message_to_right(const LEFT_FACTOR& l, G3& msg, const REAL omega)
    {
       msg[0] -= omega*l[0];
    }
@@ -333,21 +331,18 @@ public:
 
    constexpr static INDEX size() { return 1; }
 
-   template<typename RIGHT_FACTOR, typename G1, typename G2>
-   void
-   ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg) 
+   template<typename RIGHT_FACTOR, typename MSG>
+   void send_message_to_left(const RIGHT_FACTOR& r, MSG& msg, const REAL omega) 
    {
-      assert(msg.size() == 1);
-      msg[0] -= r->LiftedEdgeBreakpoint(rightPot,i_);
+      //assert(msg.size() == 1);
+      msg[0] -= omega*r.LiftedEdgeBreakpoint(i_);
    }
 
-   template<typename LEFT_FACTOR, typename G1, typename G3>
-   void
-   SendMessageToRight(LEFT_FACTOR* const l, const G1& leftPot, G3& msg, const REAL omega)
+   template<typename LEFT_FACTOR, typename MSG>
+   void send_message_to_right(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
    {
-      assert(msg.size() == 1);
-      assert(leftPot.size() == 1);
-      msg[0] -= omega*leftPot[0];
+      //assert(msg.size() == 1);
+      msg[0] -= omega*l[0];
    }
 
    template<typename G>
@@ -368,11 +363,11 @@ public:
       repamPot.update_lifted_edge_contrib(i_, msg);
       return;
 
-      repamPot.GetFactor()->LiftedEdgeContrib() -= std::min(0.0,repamPot[i_]);
-      repamPot.GetFactor()->LiftedEdgeForcedContrib() -= std::max(0.0,repamPot[i_]);
+      repamPot.LiftedEdgeContrib() -= std::min(0.0,repamPot[i_]);
+      repamPot.LiftedEdgeForcedContrib() -= std::max(0.0,repamPot[i_]);
       repamPot[i_] += msg; 
-      repamPot.GetFactor()->LiftedEdgeContrib() += std::min(0.0,repamPot[i_]);
-      repamPot.GetFactor()->LiftedEdgeForcedContrib() += std::max(0.0,repamPot[i_]);
+      repamPot.LiftedEdgeContrib() += std::min(0.0,repamPot[i_]);
+      repamPot.LiftedEdgeForcedContrib() += std::max(0.0,repamPot[i_]);
    }
 
     template<typename LEFT_FACTOR, typename RIGHT_FACTOR>

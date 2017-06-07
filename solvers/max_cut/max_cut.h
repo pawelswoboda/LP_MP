@@ -22,9 +22,9 @@ struct FMC_CYCLE_MAX_CUT {
    using max_cut_triplet_factor_container = FactorContainer<max_cut_triplet_factor, FMC_CYCLE_MAX_CUT, 1>;
    using ConstantFactorContainer = FactorContainer<ConstantFactor, FMC_CYCLE_MAX_CUT, 2>;
       
-   using max_cut_edge_triplet_message_0_container = MessageContainer<max_cut_edge_triplet_message_0, 0, 1, variableMessageNumber, 1, FMC_CYCLE_MAX_CUT, 0>;
-   using max_cut_edge_triplet_message_1_container = MessageContainer<max_cut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_CYCLE_MAX_CUT, 1>;
-   using max_cut_edge_triplet_message_2_container = MessageContainer<max_cut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_CYCLE_MAX_CUT, 2>;
+   using max_cut_edge_triplet_message_0_container = MessageContainer<max_cut_edge_triplet_message_0, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_CYCLE_MAX_CUT, 0>;
+   using max_cut_edge_triplet_message_1_container = MessageContainer<max_cut_edge_triplet_message_1, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_CYCLE_MAX_CUT, 1>;
+   using max_cut_edge_triplet_message_2_container = MessageContainer<max_cut_edge_triplet_message_2, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_CYCLE_MAX_CUT, 2>;
 
    using FactorList = meta::list< 
       max_cut_edge_factor_container,
@@ -52,20 +52,20 @@ struct FMC_ODD_BICYCLE_WHEEL_MAX_CUT {
    using five_clique_factor_container = FactorContainer<max_cut_5_clique_factor, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 3>;
    using constant_factor_container = FactorContainer<ConstantFactor, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 4>;
       
-   using edge_triplet_message_0_container = MessageContainer<max_cut_edge_triplet_message_0, 0, 1, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 0>;
-   using edge_triplet_message_1_container = MessageContainer<max_cut_edge_triplet_message_1, 0, 1, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 1>;
-   using edge_triplet_message_2_container = MessageContainer<max_cut_edge_triplet_message_2, 0, 1, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 2>;
+   using edge_triplet_message_0_container = MessageContainer<max_cut_edge_triplet_message_0, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 0>;
+   using edge_triplet_message_1_container = MessageContainer<max_cut_edge_triplet_message_1, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 1>;
+   using edge_triplet_message_2_container = MessageContainer<max_cut_edge_triplet_message_2, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 2>;
 
-   using triplet_4_clique_message_012_container = MessageContainer<max_cut_triplet_4_clique_message_012, 1, 2, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 3>;
-   using triplet_4_clique_message_013_container = MessageContainer<max_cut_triplet_4_clique_message_013, 1, 2, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 4>;
-   using triplet_4_clique_message_023_container = MessageContainer<max_cut_triplet_4_clique_message_023, 1, 2, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 5>;
-   using triplet_4_clique_message_123_container = MessageContainer<max_cut_triplet_4_clique_message_123, 1, 2, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 6>;
+   using triplet_4_clique_message_012_container = MessageContainer<max_cut_triplet_4_clique_message_012, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 3>;
+   using triplet_4_clique_message_013_container = MessageContainer<max_cut_triplet_4_clique_message_013, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 4>;
+   using triplet_4_clique_message_023_container = MessageContainer<max_cut_triplet_4_clique_message_023, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 5>;
+   using triplet_4_clique_message_123_container = MessageContainer<max_cut_triplet_4_clique_message_123, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 6>;
 
-   using four_five_clique_message_0123_container = MessageContainer<max_cut_4_5_clique_message_0123, 2, 3, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 7>;
-   using four_five_clique_message_0124_container = MessageContainer<max_cut_4_5_clique_message_0124, 2, 3, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 8>;
-   using four_five_clique_message_0134_container = MessageContainer<max_cut_4_5_clique_message_0134, 2, 3, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 9>;
-   using four_five_clique_message_0234_container = MessageContainer<max_cut_4_5_clique_message_0234, 2, 3, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 10>;
-   using four_five_clique_message_1234_container = MessageContainer<max_cut_4_5_clique_message_1234, 2, 3, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 11>;
+   using four_five_clique_message_0123_container = MessageContainer<max_cut_4_5_clique_message_0123, 2, 3, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 7>;
+   using four_five_clique_message_0124_container = MessageContainer<max_cut_4_5_clique_message_0124, 2, 3, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 8>;
+   using four_five_clique_message_0134_container = MessageContainer<max_cut_4_5_clique_message_0134, 2, 3, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 9>;
+   using four_five_clique_message_0234_container = MessageContainer<max_cut_4_5_clique_message_0234, 2, 3, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 10>;
+   using four_five_clique_message_1234_container = MessageContainer<max_cut_4_5_clique_message_1234, 2, 3, message_passing_schedule::left, variableMessageNumber, 1, FMC_ODD_BICYCLE_WHEEL_MAX_CUT, 11>;
 
    using FactorList = meta::list< 
       edge_factor_container,

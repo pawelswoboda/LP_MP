@@ -34,77 +34,77 @@ public:
 
    std::vector<triplet_candidate> search()
    {
-   // Initialize adjacency list (filled in later) TODO: only do this when needed
-   std::vector<std::vector<INDEX> > adjacency_list(gm_.GetNumberOfVariables());
+      // Initialize adjacency list (filled in later) TODO: only do this when needed
+      std::vector<std::vector<INDEX> > adjacency_list(gm_.GetNumberOfVariables());
 
-   // Construct adjacency list for the graph
-   // Iterate over all of the edges (we do this by looking at the edge intersection sets)
-   for(size_t factorId=0; factorId<gm_.GetNumberOfPairwiseFactors(); factorId++) {
-      auto vars = gm_.GetPairwiseVariables(factorId);
-      // Get the two nodes i & j
-      const size_t i=std::get<0>(vars);
-      const size_t j=std::get<1>(vars);
-      assert(i<j);
-      adjacency_list[i].push_back(j);
-      adjacency_list[j].push_back(i);
-   }
+      // Construct adjacency list for the graph
+      // Iterate over all of the edges (we do this by looking at the edge intersection sets)
+      for(size_t factorId=0; factorId<gm_.GetNumberOfPairwiseFactors(); factorId++) {
+         auto vars = gm_.GetPairwiseVariables(factorId);
+         // Get the two nodes i & j
+         const size_t i=std::get<0>(vars);
+         const size_t j=std::get<1>(vars);
+         assert(i<j);
+         adjacency_list[i].push_back(j);
+         adjacency_list[j].push_back(i);
+      }
 
-   // Sort the adjacency list, for fast intersections later
-#pragma omp parallel for
-   for(INDEX i=0; i < adjacency_list.size(); i++) {
-      std::sort(adjacency_list[i].begin(), adjacency_list[i].end());
-   }
+      // Sort the adjacency list, for fast intersections later
+#pragma omp parallel for schedule(guided)
+      for(INDEX i=0; i < adjacency_list.size(); i++) {
+         std::sort(adjacency_list[i].begin(), adjacency_list[i].end());
+      }
 
-  std::vector<triplet_candidate> triplet_candidates;
-  INDEX index=0;
-			
-  // Iterate over all of the edge intersection sets
+      std::vector<triplet_candidate> triplet_candidates;
+      INDEX index=0;
+
+      // Iterate over all of the edge intersection sets
 #pragma omp parallel 
-  {
-     std::vector<INDEX> commonNodes(gm_.GetNumberOfVariables()-1);
-     std::vector<triplet_candidate> triplet_candidates_local;
-#pragma omp for
-     for(size_t factorId=0; factorId<gm_.GetNumberOfPairwiseFactors(); factorId++) {
-        auto vars = gm_.GetPairwiseVariables(factorId);
-        const INDEX i=std::get<0>(vars);
-        const INDEX j=std::get<1>(vars);
-        const auto& factor_ij = *gm_.GetPairwiseFactor(i,j)->GetFactor();
-        const REAL lb_ij = factor_ij.LowerBound();
+      {
+         std::vector<INDEX> commonNodes(gm_.GetNumberOfVariables()-1);
+         std::vector<triplet_candidate> triplet_candidates_local;
+#pragma omp for schedule(guided)
+         for(size_t factorId=0; factorId<gm_.GetNumberOfPairwiseFactors(); factorId++) {
+            auto vars = gm_.GetPairwiseVariables(factorId);
+            const INDEX i=std::get<0>(vars);
+            const INDEX j=std::get<1>(vars);
+            const auto& factor_ij = *gm_.GetPairwiseFactor(i,j)->GetFactor();
+            const REAL lb_ij = factor_ij.LowerBound();
 
-        // Now find all neighbors of both i and j to see where the triangles are
-        auto intersects_iter_end = set_intersection(adjacency_list[i].begin(), adjacency_list[i].end(), adjacency_list[j].begin(), adjacency_list[j].end(), commonNodes.begin());
-        assert(adjacency_list[i].size() <= commonNodes.size() && adjacency_list[j].size() <= commonNodes.size());
+            // Now find all neighbors of both i and j to see where the triangles are
+            auto intersects_iter_end = set_intersection(adjacency_list[i].begin(), adjacency_list[i].end(), adjacency_list[j].begin(), adjacency_list[j].end(), commonNodes.begin());
+            assert(adjacency_list[i].size() <= commonNodes.size() && adjacency_list[j].size() <= commonNodes.size());
 
-        for(auto n=commonNodes.begin(); n != intersects_iter_end; ++n) {
-           INDEX k = *n;
+            for(auto n=commonNodes.begin(); n != intersects_iter_end; ++n) {
+               INDEX k = *n;
 
-           // Since a triplet shows up multiple times, we only consider it for the case when i<j<k 
-           if(!(j<k))
-              continue;
+               // Since a triplet shows up multiple times, we only consider it for the case when i<j<k 
+               if(!(j<k))
+                  continue;
 
-           const auto& factor_ik = *gm_.GetPairwiseFactor(i,k)->GetFactor();
-           const auto& factor_jk = *gm_.GetPairwiseFactor(j,k)->GetFactor();
-           const REAL boundIndep = lb_ij + factor_ik.LowerBound() + factor_jk.LowerBound();
-           const REAL boundCycle = minimizeTriangle(factor_ij, factor_ik, factor_jk);
+               const auto& factor_ik = *gm_.GetPairwiseFactor(i,k)->GetFactor();
+               const auto& factor_jk = *gm_.GetPairwiseFactor(j,k)->GetFactor();
+               const REAL boundIndep = lb_ij + factor_ik.LowerBound() + factor_jk.LowerBound();
+               const REAL boundCycle = minimizeTriangle(factor_ij, factor_ik, factor_jk);
 
-           const REAL bound = boundCycle - boundIndep; 
-           assert(bound >=  - eps);
-           if(bound > eps_) {
-              triplet_candidate t(i,j,k, bound);
-              triplet_candidates_local.push_back(t);
-           }
-        }
-     }
+               const REAL bound = boundCycle - boundIndep; 
+               assert(bound >=  - eps);
+               if(bound > eps_) {
+                  triplet_candidate t(i,j,k, bound);
+                  triplet_candidates_local.push_back(t);
+               }
+            }
+         }
 #pragma omp critical
-     {
-        triplet_candidates.insert(triplet_candidates.end(), triplet_candidates_local.begin(), triplet_candidates_local.end());
-     }
-  }
+         {
+            triplet_candidates.insert(triplet_candidates.end(), triplet_candidates_local.begin(), triplet_candidates_local.end());
+         }
+      }
 
-  std::sort(triplet_candidates.begin(), triplet_candidates.end());
+      std::sort(triplet_candidates.begin(), triplet_candidates.end());
 
-  return std::move(triplet_candidates);
-}
+      return std::move(triplet_candidates);
+   }
 
 protected:
    template<typename PAIRWISE_REPAM>
@@ -168,8 +168,12 @@ protected:
 
    template<typename PAIRWISE_REPAM, typename V>
    REAL compute_projection_weight_singleton_2(const PAIRWISE_REPAM& f, const std::vector<bool>& part_i, const INDEX x2, const V& row_minima);
+   template<typename PAIRWISE_REPAM>
+   REAL compute_projection_weight_singleton_2_enumerate(const PAIRWISE_REPAM& f, const std::vector<bool>& part_i, const INDEX x2);
    template<typename PAIRWISE_REPAM, typename V>
    REAL compute_projection_weight_singleton_1(const PAIRWISE_REPAM& f, const INDEX x1, const std::vector<bool>& part_j, const V& column_minima);
+   template<typename PAIRWISE_REPAM>
+   REAL compute_projection_weight_singleton_1_enumerate(const PAIRWISE_REPAM& f, const INDEX x1, const std::vector<bool>& part_j);
    template<typename PAIRWISE_REPAM>
    REAL compute_projection_weight_on_partitions(const PAIRWISE_REPAM& f, const std::vector<bool>& part_i, const std::vector<bool>& part_j);
 
@@ -271,16 +275,13 @@ k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::find_cycles(const IN
    INDEX e=0;
 
    auto merge_edge = [&uf](const INDEX m, const INDEX n, const REAL s) {
-      if(s < 0) {
+      assert(s != 0.0);
+      if(s < 0.0) {
         uf.merge(2*n,2*m);
-        uf.merge(2*m,2*n);
         uf.merge(2*n+1,2*m+1);
-        uf.merge(2*m+1,2*n+1); 
      } else {
         uf.merge(2*n,2*m+1);
-        uf.merge(2*m+1,2*n);
         uf.merge(2*n+1,2*m);
-        uf.merge(2*m,2*n+1); 
      }
    };
 
@@ -323,7 +324,7 @@ k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::find_cycles(const IN
       {
          std::vector<triplet_candidate> triplet_candidates_local;
          BfsData bfs(proj_graph_);
-#pragma omp for
+#pragma omp for schedule(guided)
          for(INDEX i=0; i<proj_graph_to_gm_node_.size(); ++i) {
             if(!already_searched[i] && uf.thread_safe_connected(2*i, 2*i+1)) {
                already_searched[i] = true;
@@ -477,7 +478,7 @@ k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::compute_partitions()
 #pragma omp parallel
    {
       auto partitions_local = partitions;
-#pragma omp for nowait
+#pragma omp for schedule(guided) nowait
       for(size_t factorId=0; factorId<gm_.GetNumberOfPairwiseFactors(); factorId++) {
          auto vars = gm_.GetPairwiseVariables(factorId);
          const auto& factor = *gm_.GetPairwiseFactor(factorId)->GetFactor();
@@ -503,7 +504,7 @@ k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::compute_partitions()
    }
 
    // remove duplicate partitions
-#pragma omp parallel for
+#pragma omp parallel for schedule(guided)
    for(INDEX i=0; i<partitions.size(); ++i) {
       std::sort(partitions[i].begin(), partitions[i].end());
       partitions[i].erase( unique( partitions[i].begin(), partitions[i].end() ), partitions[i].end() );
@@ -539,8 +540,34 @@ k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::compute_projection_w
          min_same_part = std::min(min_same_part, row_min);
       }
    }
-   return min_same_part - min_different_part;
+
+   assert(min_same_part - min_different_part == compute_projection_weight_singleton_2_enumerate(f, part_i, x2));
+
+   return min_same_part - min_different_part; 
 }
+
+template<typename MRF_CONSTRUCTOR, bool EXTENDED>
+template<typename PAIRWISE_REPAM>
+REAL 
+k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::compute_projection_weight_singleton_2_enumerate(const PAIRWISE_REPAM& f, const std::vector<bool>& part_i, const INDEX x2)
+{
+REAL min_same_part = std::numeric_limits<REAL>::infinity();
+   REAL min_different_part = std::numeric_limits<REAL>::infinity();
+   for(INDEX x1=0; x1<f.dim1(); ++x1) {
+      for(INDEX x2_iter=0; x2_iter<f.dim2(); ++x2_iter) {
+         const REAL val_xij = f(x1,x2_iter);
+         if(x2 == x2_iter) {
+            min_same_part = std::min(min_same_part, val_xij);
+         } else {
+            min_different_part = std::min(min_different_part, val_xij);
+         }
+      }
+   }
+   assert(min_same_part == min_same_part && min_different_part == min_different_part);
+
+   return min_same_part - min_different_part; 
+}
+
 
 template<typename MRF_CONSTRUCTOR, bool EXTENDED>
 template<typename PAIRWISE_REPAM, typename V>
@@ -566,6 +593,28 @@ k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::compute_projection_w
          min_different_part = std::min(min_different_part, column_min);
       } else {
          min_same_part = std::min(min_same_part, column_min);
+      }
+   }
+
+   assert(min_same_part - min_different_part == compute_projection_weight_singleton_1_enumerate(f,x1,part_j));
+   return min_same_part - min_different_part;
+}
+
+template<typename MRF_CONSTRUCTOR, bool EXTENDED>
+template<typename PAIRWISE_REPAM>
+REAL 
+k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::compute_projection_weight_singleton_1_enumerate(const PAIRWISE_REPAM& f, const INDEX x1, const std::vector<bool>& part_j)
+{
+   REAL min_same_part = std::numeric_limits<REAL>::infinity();
+   REAL min_different_part = std::numeric_limits<REAL>::infinity();
+   for(INDEX x1_iter=0; x1_iter<f.dim1(); ++x1_iter) {
+      for(INDEX x2=0; x2<f.dim2(); ++x2) {
+         const REAL val_xij = f(x1_iter,x2);
+         if(x1 == x1_iter) {
+            min_same_part = std::min(min_same_part, val_xij);
+         } else {
+            min_different_part = std::min(min_different_part, val_xij);
+         }
       }
    }
    return min_same_part - min_different_part;
@@ -641,7 +690,7 @@ k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::construct_projection
 #pragma omp parallel
    {
       auto projection_edges_local = projection_edges_;
-#pragma omp for
+#pragma omp for schedule(guided)
       for(size_t factorId=0; factorId<gm_.GetNumberOfPairwiseFactors(); factorId++) {
          // Get the two nodes i & j and the edge intersection set. Put in right order.
          const INDEX i = std::get<0>(gm_.GetPairwiseVariables(factorId));
@@ -728,30 +777,26 @@ k_ary_cycle_inequalities_search<MRF_CONSTRUCTOR, EXTENDED>::construct_projection
       no_outgoing_arcs[2*n+1]++;
    }
 
-      proj_graph_ = Graph(2*proj_graph_nodes, 4*projection_edges_.size(), no_outgoing_arcs);
-      for(const auto edge : projection_edges_) {
-         const INDEX m = std::get<0>(edge);
-         const INDEX n = std::get<1>(edge);
-         const REAL s = std::get<2>(edge);
-         if(s < 0) {
-            proj_graph_.add_arc(2*n,2*m,-s);
-            proj_graph_.add_arc(2*m,2*n,-s);
-            proj_graph_.add_arc(2*n+1,2*m+1,-s);
-            proj_graph_.add_arc(2*m+1,2*n+1,-s); 
-         } else {
-            proj_graph_.add_arc(2*n,2*m+1,s);
-            proj_graph_.add_arc(2*m+1,2*n,s);
-            proj_graph_.add_arc(2*n+1,2*m,s);
-            proj_graph_.add_arc(2*m,2*n+1,s); 
-         }
+   proj_graph_ = Graph(2*proj_graph_nodes, 4*projection_edges_.size(), no_outgoing_arcs);
+   for(const auto edge : projection_edges_) {
+      const INDEX m = std::get<0>(edge);
+      const INDEX n = std::get<1>(edge);
+      const REAL s = std::get<2>(edge);
+      if(s < 0.0) {
+         proj_graph_.add_edge(2*n, 2*m, -s);
+         proj_graph_.add_edge(2*n+1, 2*m+1, -s);
+      } else {
+         proj_graph_.add_edge(2*n, 2*m+1, s);
+         proj_graph_.add_edge(2*n+1, 2*m, s);
       }
-
-      proj_graph_.sort();
-
-      //assert(false); // should sorting be done on absolute value?
-      //std::sort(projection_edges_.begin(), projection_edges_.end(), [](auto a, auto b) { return std::get<2>(a) > std::get<2>(b); }); 
-      std::sort(projection_edges_.begin(), projection_edges_.end(), [](auto a, auto b) { return std::abs(std::get<2>(a)) > std::abs(std::get<2>(b)); }); 
    }
+
+   proj_graph_.sort();
+
+   //assert(false); // should sorting be done on absolute value?
+   //std::sort(projection_edges_.begin(), projection_edges_.end(), [](auto a, auto b) { return std::get<2>(a) > std::get<2>(b); }); 
+   std::sort(projection_edges_.begin(), projection_edges_.end(), [](auto a, auto b) { return std::abs(std::get<2>(a)) > std::abs(std::get<2>(b)); }); 
+}
 } // end namespace LP_MP
 
 #endif // LP_MP_CYCLE_INEQUALITIES_HXX

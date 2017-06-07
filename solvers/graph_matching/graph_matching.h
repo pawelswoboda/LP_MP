@@ -59,14 +59,14 @@ struct FMC_MP {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "AMP-B"
       : "unknown variant"));
       
-   typedef FactorContainer<UnarySimplexFactor, FMC_MP_PARAM, 0, true > UnaryFactor; // set to true if labeling by unaries is desired
-   typedef FactorContainer<PairwiseSimplexFactor, FMC_MP_PARAM, 1, false > PairwiseFactor;
+   using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_MP_PARAM, 0, true >; // set to true if labeling by unaries is desired
+   using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_MP_PARAM, 1, false >;
 
    constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::right : Chirality::left;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction>;
-   typedef MessageContainer<EqualityMessageType, 0, 0, variableMessageNumber, variableMessageNumber, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
-   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeftContainer;
-   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRightContainer;
+   using AssignmentConstraintMessage = MessageContainer<EqualityMessageType, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_MP_PARAM, 0 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 1 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 2 >;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor>;
    using MessageList = meta::list< AssignmentConstraintMessage, UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer>;//, UnaryMcfLabelingMessage >;
@@ -87,19 +87,19 @@ struct FMC_MP_T {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? "AMP-B-T"
       : "unknown variant"));
       
-   typedef FactorContainer<UnarySimplexFactor, FMC_MP_PARAM, 0, true > UnaryFactor; // set to true if labeling by unaries is desired
-   typedef FactorContainer<PairwiseSimplexFactor, FMC_MP_PARAM, 1, false > PairwiseFactor;
+   using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_MP_PARAM, 0, true >; // set to true if labeling by unaries is desired
+   using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_MP_PARAM, 1, false >;
 
    constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::right : Chirality::left;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction>;
-   typedef MessageContainer<EqualityMessageType, 0, 0, variableMessageNumber, variableMessageNumber, FMC_MP_PARAM, 0 > AssignmentConstraintMessage;
-   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 1 > UnaryPairwiseMessageLeftContainer;
-   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_MP_PARAM, 2 > UnaryPairwiseMessageRightContainer;
+   using AssignmentConstraintMessage = MessageContainer<EqualityMessageType, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_MP_PARAM, 0 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 1 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 2 >;
 
-   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_MP_PARAM, 2 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTripletMessage<0,1,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 3> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage<0,2,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 4> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage<1,2,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MP_PARAM, 5> PairwiseTriplet23MessageContainer;
+   using EmptyTripletFactor = FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_MP_PARAM, 2 >;
+   using PairwiseTriplet12MessageContainer = MessageContainer<PairwiseTripletMessage<0,1>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 3>;
+   using PairwiseTriplet13MessageContainer = MessageContainer<PairwiseTripletMessage<0,2>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 4>;
+   using PairwiseTriplet23MessageContainer = MessageContainer<PairwiseTripletMessage<1,2>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 5>;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor>;
    using MessageList = meta::list< 
@@ -138,21 +138,20 @@ struct FMC_MCF {
       
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
-   typedef FactorContainer<MinCostFlowFactorCS2, FMC_MCF_PARAM, 0, false > MinCostFlowAssignmentFactor;
-   typedef FactorContainer<UnarySimplexFactor, FMC_MCF_PARAM, 1, true > UnaryFactor;
-   typedef FactorContainer<PairwiseSimplexFactor, FMC_MCF_PARAM, 2 > PairwiseFactor;
+   using MinCostFlowAssignmentFactor = FactorContainer<MinCostFlowFactorCS2, FMC_MCF_PARAM, 0, false >;
+   using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_MCF_PARAM, 1, true >;
+   using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_MCF_PARAM, 2 >;
 
-   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
-   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRightContainer;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 1, 2,  message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 1 >;
    //typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
    //typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
-   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,MessagePassingType::SRMP>;
-   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor>;
+   using UnaryToAssignmentMessageContainer = MessageContainer<UnaryToAssignmentMessageType, 1, 0,  message_passing_schedule::left, 1, variableMessageNumber, FMC_MCF_PARAM, 2>;
 
    constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::left : Chirality::right;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction,false>;
-   typedef MessageContainer<EqualityMessageType, 1, 1, variableMessageNumber, variableMessageNumber, FMC_MCF_PARAM, 3 > AssignmentConstraintMessage;
-
+   using AssignmentConstraintMessage = MessageContainer<EqualityMessageType, 1, 1, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_MCF_PARAM, 3 >;  // message passign schedule should be none, as messages should not be sent at all, only receive restricted message should be called.
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor>;
    using MessageList = meta::list<
@@ -184,28 +183,23 @@ struct FMC_MCF_T {
       
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
-   typedef FactorContainer<MinCostFlowFactorCS2, FMC_MCF_PARAM, 0, false > MinCostFlowAssignmentFactor;
-   typedef FactorContainer<UnarySimplexFactor, FMC_MCF_PARAM, 1, true > UnaryFactor;
-   typedef FactorContainer<PairwiseSimplexFactor, FMC_MCF_PARAM, 2 > PairwiseFactor;
-   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_MCF_PARAM, 3 > EmptyTripletFactor;
+   using MinCostFlowAssignmentFactor = FactorContainer<MinCostFlowFactorCS2, FMC_MCF_PARAM, 0, false >;
+   using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_MCF_PARAM, 1, true >;
+   using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_MCF_PARAM, 2 >;
+   using EmptyTripletFactor = FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_MCF_PARAM, 3 >;
 
-   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
-   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRightContainer;
-   //typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
-   //typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
-   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,MessagePassingType::SRMP>;
-   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, FMC_MCF_PARAM, 2> UnaryToAssignmentMessageContainer;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 1 >;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor>;
+   using UnaryToAssignmentMessageContainer = MessageContainer<UnaryToAssignmentMessageType, 1, 0, message_passing_schedule::left, 1, variableMessageNumber, FMC_MCF_PARAM, 2>;
 
-   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_MCF_PARAM, 3> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_MCF_PARAM, 4> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_MCF_PARAM, 5> PairwiseTriplet23MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet12Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 3> PairwiseTriplet12MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet13Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 4> PairwiseTriplet13MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet23Message, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_MCF_PARAM, 5> PairwiseTriplet23MessageContainer;
+   using PairwiseTriplet12MessageContainer = MessageContainer<PairwiseTripletMessage<0,1>, 2, 3, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 3>;
+   using PairwiseTriplet13MessageContainer = MessageContainer<PairwiseTripletMessage<0,2>, 2, 3, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 4>;
+   using PairwiseTriplet23MessageContainer = MessageContainer<PairwiseTripletMessage<1,2>, 2, 3, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 5>;
 
    constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::left : Chirality::right;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction, false>;
-   typedef MessageContainer<EqualityMessageType, 1, 1, variableMessageNumber, variableMessageNumber, FMC_MCF_PARAM, 6 > AssignmentConstraintMessage;
+   using AssignmentConstraintMessage = MessageContainer<EqualityMessageType, 1, 1, message_passing_schedule::left, variableMessageNumber, variableMessageNumber, FMC_MCF_PARAM, 6 >;
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor, EmptyTripletFactor>;
    using MessageList = meta::list<
@@ -236,13 +230,11 @@ struct FMC_GM {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "GM-I"
       : "unknown variant");
       
-   typedef FactorContainer<UnarySimplexFactor, FMC_GM_PARAM, 0, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
-   typedef FactorContainer<PairwiseSimplexFactor, FMC_GM_PARAM, 1, false > PairwiseFactor;
+   using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_GM_PARAM, 0, true >; // make true, if primal rounding similar to TRW-S is required
+   using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_GM_PARAM, 1, false >;
 
-   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
-   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRightContainer;
-   //typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
-   //typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 1 >;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor>;//, McfLabelingFactor >;
    using MessageList = meta::list< UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer>;//, UnaryMcfLabelingMessage >;
@@ -262,22 +254,17 @@ struct FMC_GM_T {
       : (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Right ? "GM-I-T"
       : "unknown variant");
       
-   typedef FactorContainer<UnarySimplexFactor, FMC_GM_PARAM, 0, true > UnaryFactor; // make true, if primal rounding similar to TRW-S is required
-   typedef FactorContainer<PairwiseSimplexFactor, FMC_GM_PARAM, 1, false > PairwiseFactor;
+   using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_GM_PARAM, 0, true >; // make true, if primal rounding similar to TRW-S is required
+   using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_GM_PARAM, 1, false >;
 
-   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
-   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::SRMP>, 0, 1, variableMessageNumber, 1, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRightContainer;
-   //typedef MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 0 > UnaryPairwiseMessageLeft;
-   //typedef MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 1 > UnaryPairwiseMessageRight;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 1 >;
 
    // tightening
-   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_GM_PARAM, 2 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTripletMessage<0,1,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage<0,2,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage<1,2,MessageSendingType::SRMP>, 1, 2, variableMessageNumber, 1, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet12Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 2> PairwiseTriplet12MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet13Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 3> PairwiseTriplet13MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet23Message, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_GM_PARAM, 4> PairwiseTriplet23MessageContainer;
+   using EmptyTripletFactor = FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_GM_PARAM, 2 >;
+   using PairwiseTriplet12MessageContainer = MessageContainer<PairwiseTripletMessage<0,1>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 2>;
+   using PairwiseTriplet13MessageContainer = MessageContainer<PairwiseTripletMessage<0,2>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 3>;
+   using PairwiseTriplet23MessageContainer = MessageContainer<PairwiseTripletMessage<1,2>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 4>;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor, EmptyTripletFactor >;
    using MessageList = meta::list<
@@ -308,16 +295,14 @@ struct FMC_HUNGARIAN_BP {
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
    // rounding is done by the mcf factor
-   typedef FactorContainer<MinCostFlowFactorCS2, FMC_PARAM, 0, true > MinCostFlowAssignmentFactor;
-   typedef FactorContainer<UnarySimplexFactor, FMC_PARAM, 1, false > UnaryFactor;
-   typedef FactorContainer<PairwiseSimplexFactor, FMC_PARAM, 2 > PairwiseFactor;
+   using MinCostFlowAssignmentFactor = FactorContainer<MinCostFlowFactorCS2, FMC_PARAM, 0, true >;
+   using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_PARAM, 1, false >;
+   using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_PARAM, 2 >;
 
-   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::MPLP>, 1, 2, variableMessageNumber, 1, FMC_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
-   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::MPLP>, 1, 2, variableMessageNumber, 1, FMC_PARAM, 1 > UnaryPairwiseMessageRightContainer;
-   //typedef MessageContainer<LeftMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 0 > UnaryPairwiseMessageLeft;
-   //typedef MessageContainer<RightMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 1 > UnaryPairwiseMessageRight;
-   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,MessagePassingType::HUNGARIAN>;
-   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, FMC_PARAM, 2> UnaryToAssignmentMessageContainer;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 1 >;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor>;
+   using UnaryToAssignmentMessageContainer = MessageContainer<UnaryToAssignmentMessageType, 1, 0, message_passing_schedule::right, 1, variableMessageNumber, FMC_PARAM, 2>;
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor>;
    using MessageList = meta::list<
@@ -345,25 +330,20 @@ struct FMC_HUNGARIAN_BP_T {
    constexpr static INDEX McfCoveringFactor = PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides ? 2 : 1;
 
    // rounding is done by the mcf factor
-   typedef FactorContainer<MinCostFlowFactorCS2, FMC_PARAM, 0, true > MinCostFlowAssignmentFactor;
-   typedef FactorContainer<UnarySimplexFactor, FMC_PARAM, 1, false > UnaryFactor;
-   typedef FactorContainer<PairwiseSimplexFactor, FMC_PARAM, 2 > PairwiseFactor;
+   using MinCostFlowAssignmentFactor = FactorContainer<MinCostFlowFactorCS2, FMC_PARAM, 0, true >;
+   using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_PARAM, 1, false >;
+   using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_PARAM, 2 >;
 
-   typedef MessageContainer<UnaryPairwiseMessageLeft<MessageSendingType::MPLP>, 1, 2, variableMessageNumber, 1, FMC_PARAM, 0 > UnaryPairwiseMessageLeftContainer;
-   typedef MessageContainer<UnaryPairwiseMessageRight<MessageSendingType::MPLP>, 1, 2, variableMessageNumber, 1, FMC_PARAM, 1 > UnaryPairwiseMessageRightContainer;
-   //typedef MessageContainer<LeftMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 0 > UnaryPairwiseMessageLeft;
-   //typedef MessageContainer<RightMargMessageMPLP, 1, 2, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 1 > UnaryPairwiseMessageRight;
-   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor,MessagePassingType::HUNGARIAN>;
-   typedef MessageContainer<UnaryToAssignmentMessageType, 1, 0, 1, variableMessageNumber, FMC_PARAM, 2> UnaryToAssignmentMessageContainer;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 1 >;
+   using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor>;
+   using UnaryToAssignmentMessageContainer = MessageContainer<UnaryToAssignmentMessageType, 1, 0, message_passing_schedule::right, 1, variableMessageNumber, FMC_PARAM, 2>;
 
    // tightening
-   typedef FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_PARAM, 3 > EmptyTripletFactor;
-   typedef MessageContainer<PairwiseTripletMessage12<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_PARAM, 3> PairwiseTriplet12MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage13<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_PARAM, 4> PairwiseTriplet13MessageContainer;
-   typedef MessageContainer<PairwiseTripletMessage23<MessageSendingType::SRMP>, 2, 3, variableMessageNumber, 1, FMC_PARAM, 5> PairwiseTriplet23MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet12MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 3> PairwiseTriplet12MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet13MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 4> PairwiseTriplet13MessageContainer;
-   //typedef MessageContainer<PairwiseTriplet23MessageMPLP, 2, 3, variableMessageNumber, 1, variableMessageSize, FMC_PARAM, 5> PairwiseTriplet23MessageContainer;
+   using EmptyTripletFactor = FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_PARAM, 3 >;
+   using PairwiseTriplet12MessageContainer = MessageContainer<PairwiseTripletMessage<0,1>, 2, 3, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 3>;
+   using PairwiseTriplet13MessageContainer = MessageContainer<PairwiseTripletMessage<0,2>, 2, 3, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 4>;
+   using PairwiseTriplet23MessageContainer = MessageContainer<PairwiseTripletMessage<1,2>, 2, 3, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 5>;
 
    using FactorList = meta::list<MinCostFlowAssignmentFactor, UnaryFactor, PairwiseFactor, EmptyTripletFactor>;
    using MessageList = meta::list<

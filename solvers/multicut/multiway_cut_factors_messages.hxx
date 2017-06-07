@@ -71,21 +71,21 @@ public:
    }
 
    template<typename RIGHT_FACTOR, typename MSG>
-   void ReceiveMessageFromRight(const RIGHT_FACTOR& r, MSG& msg)
+   void send_message_to_left(const RIGHT_FACTOR& r, MSG& msg, const REAL omega)
    {
       const REAL sum = std::accumulate(r.begin(), r.end(), 0.0);
       const auto largest = two_largest_elements<REAL>(r.begin(), r.end());
       const REAL min_cost = sum - largest[0];
       const REAL second_min_cost = sum - largest[1];
       if(r[right_index_] == largest[0]) {
-         msg -= largest[0] - largest[1]; //min_cost - second_min_cost;
+         msg -= omega*(largest[0] - largest[1]); //min_cost - second_min_cost;
       } else {
-         msg -= r[right_index_] - largest[0];
+         msg -= omega*(r[right_index_] - largest[0]);
       } 
    }
 
    template<typename LEFT_FACTOR, typename MSG>
-   void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
+   void send_message_to_right(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
    {
       const REAL msg_val = omega*l[0];
       msg -= msg_val;
@@ -215,7 +215,7 @@ public:
     }
 
   template<typename RIGHT_FACTOR, typename MSG>
-    void ReceiveMessageFromRight(const RIGHT_FACTOR& r, MSG& msg)
+    void send_message_to_left(const RIGHT_FACTOR& r, MSG& msg)
     {
       // perform fast belief propagation similary as for Potts MRF.
       vector<REAL> m(r.dim());
@@ -228,7 +228,7 @@ public:
     }
 
   template<typename LEFT_FACTOR, typename MSG>
-    void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
+    void send_message_to_right(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
     {
       msg -= omega*l;
     }
@@ -258,26 +258,14 @@ public:
     }
 
   
-  template<typename RIGHT_FACTOR, typename MSG>
-    void ReceiveMessageFromRight(const RIGHT_FACTOR& r, MSG& msg)
-    {
-       msg -= r.min_marginal_cut();
-    }
-    
   template<typename LEFT_FACTOR, typename MSG>
-    void ReceiveMessageFromLeft(const LEFT_FACTOR& l, MSG& msg)
-    {
-       msg -= l[0];
-    }
-
-  template<typename LEFT_FACTOR, typename MSG>
-    void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
+    void send_message_to_right(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
     {
       msg -= omega*l[0];
     }
     
   template<typename RIGHT_FACTOR, typename MSG>
-    void SendMessageToLeft(const RIGHT_FACTOR& r, MSG& msg, const REAL omega)
+    void send_message_to_left(const RIGHT_FACTOR& r, MSG& msg, const REAL omega)
     {
        msg -= omega*r.min_marginal_cut();
     } 

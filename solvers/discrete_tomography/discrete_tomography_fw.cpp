@@ -250,9 +250,9 @@ struct sub_problem {
 static double dot_product_fn(double* wi, YPtr _y, TermData term_data);
 double max_fn(double* wi, YPtr _y, double kappa, TermData term_data) // maximization oracle. Must copy argmax_y <a^{iy},[PAD(wi) kappa]> to y, and return the free term a^{iy}[d].
 {
-   assert(kappa == 1.0);
+   //assert(kappa == 1.0);
    assert(kappa > 0.0);
-   if(kappa != 1.0) { std::cout << kappa << "\n"; }
+   //if(kappa != 1.0) { std::cout << kappa << "\n"; }
    assert(kappa > std::numeric_limits<double>::min());
    assert(kappa < std::numeric_limits<double>::max());
    sub_problem* sp = (sub_problem*) term_data;
@@ -292,9 +292,9 @@ double max_fn(double* wi, YPtr _y, double kappa, TermData term_data) // maximiza
 
    const REAL cost_test = -sp->dt_chain.lower_bound();
    // now remove the Lagrangean variables from unary factors again
-   sp->add_weights(wi, 1.0*kappa);
+   sp->add_weights(wi, 1.0/kappa);
 
-   assert(std::abs(cost_test - (-sp->dt_chain.primal_cost() + dot_product_fn(wi, y, term_data))) <= eps);
+   assert(std::abs(cost_test - (-sp->dt_chain.primal_cost() + 1.0/kappa*dot_product_fn(wi, y, term_data))) <= eps);
 
    // free term excluding wi
    const REAL cost = -sp->dt_chain.primal_cost()*kappa; // we minimize, but SVM expects maximization
@@ -461,7 +461,7 @@ int main(int argc, char**argv)
 
       delete s;
       s = new SVM(mrf.GetNumberOfVariables()*no_labels, p.projectionVar.size(), max_fn, copy_fn, compare_fn, dot_product_fn, nullptr, false);
-      s->SetParams(lambda, mu / mu_SCALE, kappa / kappa_SCALE);
+      s->SetParams(lambda/REAL(iter+2), mu / mu_SCALE, kappa / kappa_SCALE);
       for(INDEX i=0; i<sp_vec.size(); ++i) {
          s->SetTerm(i, sp_vec[i], mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
       }

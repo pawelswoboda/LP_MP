@@ -4,6 +4,7 @@
 #include "LP_MP.h"
 #include "memory_allocator.hxx"
 #include "vector.hxx"
+#include "cereal/types/array.hpp"
 #ifdef WITH_SAT
 #include "sat_interface.hxx"
 #endif

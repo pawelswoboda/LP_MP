@@ -66,6 +66,13 @@ public:
    virtual std::vector<REAL> GetReparametrizedPotential() const = 0;
    virtual void init_primal() = 0;
    virtual void MaximizePotentialAndComputePrimal() = 0;
+
+   // for reading out reparametrization/labeling out of factor
+   virtual void serialize_dual(cereal::BinaryOutputArchive& ar) = 0; 
+   virtual void serialize_primal(cereal::BinaryOutputArchive& ar) = 0; 
+   // for writing reparametrization/labeling into factor
+   virtual void serialize_dual(cereal::BinaryInputArchive& ar) = 0; 
+   virtual void serialize_primal(cereal::BinaryInputArchive& ar) = 0; 
    //virtual PrimalSolutionStorageAdapter* AllocatePrimalSolutionStorage() const = 0;
    //virtual bool CanComputePrimalSolution() const = 0;
    // the offset in the primal storage
@@ -293,6 +300,27 @@ public:
    void ForwardPassFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2) { set_flags_dirty(); assert(f1!=f2); forward_pass_factor_rel_.push_back({f1,f2}); }
    void BackwardPassFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2) { set_flags_dirty(); assert(f1!=f2); backward_pass_factor_rel_.push_back({f1,f2}); }
 
+   // initially select branching factor from among those that can be branched on at all.
+   FactorTypeAdapter* select_branching_factor()
+   {
+      assert(false);
+      return nullptr;
+   }
+   template<typename ITERATOR>
+   FactorTypeAdapter* select_branching_factor(ITERATOR factor_begin, ITERATOR factor_end)
+   {
+      // go over all given factors and select the one with largest difference between lower bound and primal cost;
+      FactorTypeAdapter* f;
+      REAL max_diff = -std::numeric_limits<REAL>::infinity();
+      for(; factor_begin!=factor_end; ++factor_begin) {
+         const REAL diff = (*factor_begin)->EvaluatePrimal() - factor_begin->LowerBound();
+         if(diff > max_diff) {
+            f = *factor_begin;
+            max_diff = diff;
+         } 
+      }
+      return f; 
+   }
 
    void Begin(); // must be called after all messages and factors have been added
 

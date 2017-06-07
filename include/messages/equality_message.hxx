@@ -18,9 +18,15 @@ public:
    {}
 
    template<typename G1, typename G2>
-   void MakeRightFactorUniform(const G1& rightPot, G2& msg, const REAL omega = 1.0);
+   void send_message_to_left(const G1& rightPot, G2& msg, const REAL omega)
+   {
+      MakeFactorUniform(rightPot, msg, omega);
+   }
    template<typename G1, typename G2>
-   void MakeLeftFactorUniform(const G1& leftPot, G2& msg, const REAL omega = 1.0);
+   void send_message_to_right(const G1& leftPot, G2& msg, const REAL omega)
+   {
+      MakeFactorUniform(leftPot, msg, omega);
+   }
 
    template<typename REPAM_ARRAY, typename MSG>
    void MakeFactorUniform(const REPAM_ARRAY& repamPot, MSG& msg, const INDEX var_idx, const REAL omega = 1.0)
@@ -36,20 +42,6 @@ public:
       }
 
       msg[0] -= omega*(repamPot[var_idx] - min_val);
-   }
-
-   template<typename RIGHT_FACTOR, typename G1, typename G2, bool ENABLE=COMPUTE_MESSAGES>
-   typename std::enable_if<ENABLE,void>::type
-   ReceiveMessageFromRight(RIGHT_FACTOR* const r, const G1& rightPot, G2& msg)
-   { 
-      MakeFactorUniform(rightPot, msg, rightVar_);
-   }
-
-   template<typename LEFT_FACTOR, typename G1, typename G2, bool ENABLE=COMPUTE_MESSAGES>
-   typename std::enable_if<ENABLE,void>::type
-   ReceiveMessageFromLeft(LEFT_FACTOR* l, const G1& leftPot, G2& msg)
-   { 
-      MakeFactorUniform(leftPot, msg, leftVar_);
    }
 
    template<typename RIGHT_FACTOR, typename G1>

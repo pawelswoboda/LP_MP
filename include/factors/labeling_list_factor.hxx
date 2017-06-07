@@ -5,6 +5,8 @@
 #include <bitset>
 #include "vector.hxx"
 #include "config.hxx"
+#include "cereal/types/bitset.hpp""
+#include "cereal/archives/binary.hpp"
 
 
 // to do: make _impl functions private
@@ -206,6 +208,31 @@ public:
       return std::numeric_limits<REAL>::infinity();
    }
 
+   // return two possible variable states
+   // branch on current primal vs. not current primal
+   void branch_left()
+   {
+      // set cost of label associated not with primal to infinity, i.e. current label should always be taken
+      const INDEX labeling_no = LABELINGS::matching_labeling(primal_);
+      assert(labeling_no < this->size());
+      for(INDEX i=0; i<this->size(); ++i) {
+         (*this)[i] = std::numeric_limits<REAL>::infinity(); 
+      }
+      // also the zero labeling must be forbidden. How to do? IMPLICIT_ORIGIN must be dropped for this.
+      assert(false);
+      assert(!has_implicit_origin());
+   }
+
+   void branch_right()
+   {
+      // set cost of primal label to infinity
+      assert(EvaluatePrimal() < std::numeric_limits<REAL>::infinity());
+      const INDEX labeling_no = LABELINGS::matching_labeling(primal_);
+      assert(labeling_no < this->size());
+      (*this)[labeling_no] = std::numeric_limits<REAL>::infinity();
+      assert(LowerBound() < std::numeric_limits<REAL>::infinity());
+   }
+
    auto& primal() { return primal_; }
    const auto& primal() const { return primal_; }
 
@@ -352,14 +379,13 @@ public:
    }
 
    template<typename RIGHT_FACTOR, typename MSG>
-   void ReceiveMessageFromRight(const RIGHT_FACTOR& r, MSG& msg)
+   void send_message_to_left(const RIGHT_FACTOR& r, MSG& msg, const REAL omega)
    {
       // msg has dimension equal to number of left labelings;
       // go over all right labelings. Then find left labeling corresponding to it, and compute minimum
-      msg_val_type msg_val; // additional last entry is minimum over unmatched right labelings
+      msg_val_type msg_val;
       compute_msg(msg_val, r);
-      //assert(false);
-      msg -= msg_val;
+      msg -= omega*msg_val;
    }
 
    template<typename LEFT_FACTOR, typename MSG>
@@ -375,7 +401,7 @@ public:
    }
 
    template<typename LEFT_FACTOR, typename MSG>
-   void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
+   void send_message_to_right(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
    {
       for(INDEX i=0; i<l.size(); ++i) { assert(!std::isnan(l[i])); }
       msg -= omega*l;

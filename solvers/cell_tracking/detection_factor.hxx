@@ -656,7 +656,7 @@ public:
   }
 
   template<typename RIGHT_FACTOR, typename G2>
-  void make_right_factor_uniform(RIGHT_FACTOR& r, G2& msg)
+  void send_message_to_left(RIGHT_FACTOR& r, G2& msg, const REAL omega)
   {
     REAL detection_outgoing_cost = r[0];
     if(r.no_outgoing_edges() > 0) {
@@ -678,14 +678,10 @@ public:
     }
     */
 
-    msg[0] -= std::min(detection_outgoing_cost + r.incoming(incoming_edge_index_) , 0.0)
-      - std::min(detection_outgoing_cost + min_incoming_val, 0.0); // or +- exchanged 
+    msg[0] -= omega*(std::min(detection_outgoing_cost + r.incoming(incoming_edge_index_) , 0.0)
+      - std::min(detection_outgoing_cost + min_incoming_val, 0.0)); // or +- exchanged 
   }
-  template<typename RIGHT_FACTOR, typename G2>
-  void ReceiveMessageFromRight(RIGHT_FACTOR& r, G2& msg)
-  { 
-    make_right_factor_uniform(r,msg);
-  }
+  
   template<typename RIGHT_FACTOR, typename G2>
   void ReceiveRestrictedMessageFromRight(RIGHT_FACTOR& r, G2& msg)
   { 
@@ -703,12 +699,12 @@ public:
       }
     } else { // no incoming edge has been picked yet.
       return;
-      make_right_factor_uniform(r,msg); 
+      //send_message_to_left(r,msg); 
     }
   }
 
   template<typename LEFT_FACTOR, typename G2>
-  void make_left_factor_uniform(LEFT_FACTOR& l, G2& msg)
+  void send_message_to_right(LEFT_FACTOR& l, G2& msg, const REAL omega)
   { 
     const REAL detection_incoming_cost = l[0] + *std::min_element(l.incoming_begin(), l.incoming_end());
 
@@ -737,15 +733,10 @@ public:
     }
     */
 
-    msg[0] -= std::min(detection_incoming_cost + l.outgoing(outgoing_edge_index_),  0.0)
-      - std::min(detection_incoming_cost + min_outgoing_val,  0.0);
+    msg[0] -= omega*(std::min(detection_incoming_cost + l.outgoing(outgoing_edge_index_),  0.0)
+      - std::min(detection_incoming_cost + min_outgoing_val,  0.0));
   }
 
-  template<typename LEFT_FACTOR, typename G2>
-  void ReceiveMessageFromLeft(LEFT_FACTOR& l, G2& msg)
-  {
-    make_left_factor_uniform(l,msg);
-  }
   template<typename LEFT_FACTOR, typename G2>
   void ReceiveRestrictedMessageFromLeft(LEFT_FACTOR& l, G2& msg)
   { 
@@ -759,7 +750,7 @@ public:
       }
     } else { // no incoming edge has been picked yet.
       return;
-      make_left_factor_uniform(l,msg); 
+      //send_message_to_right(l,msg); 
     }
   }
 
@@ -1015,12 +1006,6 @@ public:
     }
   }
 
-  template<typename LEFT_FACTOR, typename MSG>
-  void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
-  { 
-    make_left_factor_uniform(l, msg, omega);
-  }
-
   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
   static void SendMessagesToRight(const LEFT_FACTOR& l, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
   {
@@ -1032,12 +1017,6 @@ public:
     } 
   }
 
-
-  template<typename RIGHT_FACTOR, typename MSG>
-  void ReceiveMessageFromRight(RIGHT_FACTOR& r, MSG& msg) 
-  {
-    make_right_factor_uniform(r,msg); 
-  }
 
   template<typename RIGHT_FACTOR, typename MSG>
   void ReceiveRestrictedMessageFromRight(RIGHT_FACTOR& r, MSG& msg) 
@@ -1096,13 +1075,13 @@ public:
   */
 
   template<typename LEFT_FACTOR, typename G2>
-  void make_left_factor_uniform(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
+  void send_message_to_right(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
   {
     // make cost of detection same as cost of non-detection
     msg[0] -= omega*l.cost_of_detection();
   }
   template<typename RIGHT_FACTOR, typename G2>
-  void make_right_factor_uniform(RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
+  void send_message_to_left(RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
   {
     const REAL cur_detection_cost = r[at_most_one_cell_factor_index_];
     r[at_most_one_cell_factor_index_] = std::numeric_limits<REAL>::infinity();
@@ -1245,7 +1224,7 @@ public:
   }
 
   template<typename LEFT_FACTOR, typename MSG>
-  void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
+  void send_message_to_right(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
   { 
     REAL detection_incoming_cost = l[0];
     if(l.no_incoming_edges() > 0) {
@@ -1290,13 +1269,13 @@ public:
   }
 
   template<typename RIGHT_FACTOR, typename MSG>
-  void ReceiveMessageFromRight(const RIGHT_FACTOR& r, MSG& msg) 
+  void send_message_to_left(const RIGHT_FACTOR& r, MSG& msg, const REAL omega) 
   {
     assert(r.size() == 2);
     if(POSITION == exit_constraint_position::lower) {
-      msg[0] -= r[0] - std::min(0.0, r[1]);
+      msg[0] -= omega*(r[0] - std::min(0.0, r[1]));
     } else {
-      msg[0] -= r[1] - std::min(0.0, r[0]);
+      msg[0] -= omega*(r[1] - std::min(0.0, r[0]));
     }
   }
 

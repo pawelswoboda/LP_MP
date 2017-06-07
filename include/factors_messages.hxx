@@ -384,27 +384,33 @@ struct MessageContainerSelector {
                                          VariableSizeMessageContainer<MESSAGE_CONTAINER_TYPE,CHIRALITY> >::type >::type;
 };
 
-
+enum class message_passing_schedule {
+   left, // messages are received from left and sent by left
+   right, // messages are received from right and sent by right
+   full // messages are received and send in both directions
+};
 
 // Class holding message and left and right factor
 // do zrobienia: possibly replace {LEFT|RIGHT}_FACTOR_NO by their type
 template<typename MESSAGE_TYPE, 
-         INDEX LEFT_FACTOR_NO, INDEX RIGHT_FACTOR_NO, SIGNED_INDEX NO_OF_LEFT_FACTORS, SIGNED_INDEX NO_OF_RIGHT_FACTORS,
+         INDEX LEFT_FACTOR_NO, INDEX RIGHT_FACTOR_NO,
+         message_passing_schedule MPS,
+         SIGNED_INDEX NO_OF_LEFT_FACTORS, SIGNED_INDEX NO_OF_RIGHT_FACTORS,
          typename FACTOR_MESSAGE_TRAIT, 
          INDEX MESSAGE_NO
          >
 class MessageContainer : //public MessageStorageSelector<MESSAGE_SIZE,true>::type, 
                            public MessageTypeAdapter
                          // when NO_OF_LEFT_FACTORS is zero, we hold factors in linked list
-                         ,public next_left_message_container<MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>,NO_OF_LEFT_FACTORS == 0> 
-                         ,public next_right_message_container<MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>,NO_OF_RIGHT_FACTORS == 0>
+                         ,public next_left_message_container<MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>,NO_OF_LEFT_FACTORS == 0> 
+                         ,public next_right_message_container<MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>,NO_OF_RIGHT_FACTORS == 0>
 {
 public:
    using leftFactorNumber_t = std::integral_constant<INDEX, LEFT_FACTOR_NO>;
    static constexpr INDEX leftFactorNumber = LEFT_FACTOR_NO;
    static constexpr INDEX rightFactorNumber = RIGHT_FACTOR_NO;
 
-   using MessageContainerType = MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, FACTOR_MESSAGE_TRAIT, MESSAGE_NO>;
+   using MessageContainerType = MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, MPS, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, FACTOR_MESSAGE_TRAIT, MESSAGE_NO>;
    using MessageType = MESSAGE_TYPE;
    using next_left_message_container_type = next_left_message_container<MessageContainerType,NO_OF_LEFT_FACTORS == 0>;
    using next_right_message_container_type = next_right_message_container<MessageContainerType,NO_OF_RIGHT_FACTORS == 0>;
@@ -494,21 +500,56 @@ public:
       return m; 
    }
 
+   void send_message_to_left(const REAL omega = 1.0) 
+   {
+      send_message_to_left(rightFactor_->GetFactor(), omega);
+   }
+   void send_message_to_left(RightFactorType* r, const REAL omega)
+   {
+#ifdef LP_MP_PARALLEL
+     auto& mtx = GetLeftFactor()->mutex_;
+     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
+     if(lck.try_lock())
+#endif
+       msg_op_.send_message_to_left(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega); 
+   }
+
+   void send_message_to_right(const REAL omega = 1.0) 
+   {
+      send_message_to_right(leftFactor_->GetFactor(), omega);
+   }
+   void send_message_to_right(LeftFactorType* l, const REAL omega)
+   {
+#ifdef LP_MP_PARALLEL
+     auto& mtx = GetRightFactor()->mutex_;
+     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
+     if(lck.try_lock())
+#endif
+       msg_op_.send_message_to_right(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega); 
+
+   }
 
    constexpr static bool
    CanCallReceiveMessageFromRightContainer()
    { 
+      return MPS == message_passing_schedule::left || MPS==message_passing_schedule::full;
+      // obsolete
       return FunctionExistence::HasReceiveMessageFromRight<MessageType, void, 
       RightFactorType, MessageContainerType>(); 
    }
    void ReceiveMessageFromRightContainer()
    {
+      send_message_to_left();
+      return;
+      // obsolete
+      /*
 #ifdef LP_MP_PARALLEL
      auto& mtx = GetRightFactor()->mutex_;
      std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock()) 
 #endif
        msg_op_.ReceiveMessageFromRight(*rightFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::right>*>(this) ); 
+       */
    }
 
    constexpr static bool
@@ -526,17 +567,24 @@ public:
    constexpr static bool 
    CanCallReceiveMessageFromLeftContainer()
    { 
+      return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full;
+      // obsolete
       return FunctionExistence::HasReceiveMessageFromLeft<MessageType, void, 
       LeftFactorType, MessageContainerType>(); 
    }
    void ReceiveMessageFromLeftContainer()
    { 
+      send_message_to_right();
+      return;
+      // obsolete
+      /*
 #ifdef LP_MP_PARALLEL
      auto& mtx = GetLeftFactor()->mutex_;
      std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock())
 #endif
        msg_op_.ReceiveMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<MessageContainerView<Chirality::left>*>(this) ); 
+       */
    }
 
    constexpr static bool
@@ -555,35 +603,49 @@ public:
    constexpr static bool 
    CanCallSendMessageToRightContainer()
    { 
+      return MPS == message_passing_schedule::left || MPS == message_passing_schedule::full;
+      // obsolete
       return FunctionExistence::HasSendMessageToRight<MessageType, void, 
       LeftFactorType, MessageContainerType, REAL>(); 
    }
 
    void SendMessageToRightContainer(LeftFactorType* l, const REAL omega)
    {
+      send_message_to_right(l, omega);
+      return;
+      // obsolete
+      /*
 #ifdef LP_MP_PARALLEL
      auto& mtx = GetRightFactor()->mutex_;
      std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock())
 #endif
        msg_op_.SendMessageToRight(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega);
+       */
    }
 
    constexpr static bool
    CanCallSendMessageToLeftContainer()
    { 
+      return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full;
+      // obsolete
       return FunctionExistence::HasSendMessageToLeft<MessageType, void, 
       RightFactorType, MessageContainerType, REAL>(); 
    }
 
    void SendMessageToLeftContainer(RightFactorType* r, const REAL omega)
    {
+      send_message_to_left(r, omega);
+      return;
+      // obsolete
+      /*
 #ifdef LP_MP_PARALLEL
      auto& mtx = GetLeftFactor()->mutex_;
      std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock()) 
 #endif
       msg_op_.SendMessageToLeft(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega);
+      */
    }
 
    constexpr static bool CanCallSendMessagesToLeftContainer()
@@ -659,6 +721,7 @@ public:
      std::vector<bool>::iterator lock_it_;
    };
 
+   // rename to send_messages_to_left_container
    template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
    {
@@ -707,6 +770,7 @@ public:
       return FunctionExistence::HasSendMessagesToRight<MessageType, void, LeftFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, typename std::vector<REAL>::iterator>();
    }
 
+   // rename send_messages_to_right_container
    template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
    static void SendMessagesToRightContainer(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
    {
@@ -1144,12 +1208,16 @@ public:
    // for weight computations these functions are necessary
    virtual bool SendsMessageToLeft() const final
    {
+      return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full;
+      // obsolete
       return 
          this->CanCallSendMessagesToLeftContainer() || 
          this->CanCallSendMessageToLeftContainer();
    }
    virtual bool SendsMessageToRight() const final
    {
+      return MPS == message_passing_schedule::left || MPS == message_passing_schedule::full;
+      // obsolete
       return 
          this->CanCallSendMessagesToRightContainer() || 
          this->CanCallSendMessageToRightContainer();
@@ -1204,26 +1272,28 @@ public:
    {
       if(c == Chirality::right) { // right factor is top one
          leftFactor_->GetFactor()->init_primal();
-         static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
-               f(this)->ReceiveMessageFromLeftContainer();
-         }).else_([&](auto) {
-               static_if<MessageContainerType::CanCallSendMessageToRightContainer()>([&](auto f) {
-                        f(this)->SendMessageToRightContainer(leftFactor_->GetFactor(),1.0);
-               }).else_([](auto) {
-                  assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
-               });
-         });
+         this->send_message_to_right();
+         //static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
+         //      f(this)->ReceiveMessageFromLeftContainer();
+         //}).else_([&](auto) {
+         //      static_if<MessageContainerType::CanCallSendMessageToRightContainer()>([&](auto f) {
+         //               f(this)->SendMessageToRightContainer(leftFactor_->GetFactor(),1.0);
+         //      }).else_([](auto) {
+         //         assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
+         //      });
+         //});
       } else {
          rightFactor_->GetFactor()->init_primal();
-         static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
-               f(this)->ReceiveMessageFromRightContainer();
-         }).else_([&](auto) {
-               static_if<MessageContainerType::CanCallSendMessageToLeftContainer()>([&](auto f) {
-                        f(this)->SendMessageToLeftContainer(rightFactor_->GetFactor(),1.0);
-               }).else_([](auto) {
-                  assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
-               });
-         });
+         this->send_message_to_left();
+         //static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
+         //      f(this)->ReceiveMessageFromRightContainer();
+         //}).else_([&](auto) {
+         //      static_if<MessageContainerType::CanCallSendMessageToLeftContainer()>([&](auto f) {
+         //               f(this)->SendMessageToLeftContainer(rightFactor_->GetFactor(),1.0);
+         //      }).else_([](auto) {
+         //         assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
+         //      });
+         //});
       }
    }
 
@@ -1235,7 +1305,6 @@ public:
       // if this is not possible, we propagate primal labeling of upper to lower
       if(c == Chirality::right) { // right factor is upper
          static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromRightContainer()>([&](auto f) {
-                  std::stringstream ss;
                   // receive restricted messages 
                   std::stringstream dual;
                   cereal::BinaryOutputArchive ar_in(dual);
@@ -1307,7 +1376,7 @@ protected:
 
    // see notes on allocator in FactorContainer
    struct Allocator {
-      using type = MemoryPool<MessageContainerType,4096*sizeof(MessageContainerType)>; 
+      using type = MemoryPool<MessageContainerType,4096*(sizeof(MessageContainerType)+sizeof(void*))>; 
       static type& get() {
          static type allocator;
          return allocator;
@@ -1906,6 +1975,15 @@ public:
       ComputePrimalThroughMessages();
    }
 
+   virtual void serialize_dual(cereal::BinaryOutputArchive& ar) final
+   { factor_.serialize_dual(ar); }
+   virtual void serialize_primal(cereal::BinaryOutputArchive& ar) final
+   { factor_.serialize_primal(ar); } 
+   virtual void serialize_dual(cereal::BinaryInputArchive& ar) final
+   { factor_.serialize_dual(ar); }
+   virtual void serialize_primal(cereal::BinaryInputArchive& ar) final
+   { factor_.serialize_primal(ar); } 
+
       // do zrobienia: possibly do it with std::result_of
    //auto begin() -> decltype(std::declval<RepamStorageType>().begin()) { return RepamStorageType::begin(); }
    //auto end()   -> decltype(std::declval<RepamStorageType>().end()) { return RepamStorageType::end(); }
@@ -2021,7 +2099,7 @@ protected:
    // note: the below construction is not perfect when more than one solver is run simultaneously: The same allocator is used, yet the optimization problems are different + not thread safe.
    // -> investigate thread_local inline static! inline static however is only supported in C++17
    struct Allocator { // we enclose static allocator in nested class as only there (since C++11) we can access sizeof(FactorContainerType).
-      using type = MemoryPool<FactorContainerType,4096*sizeof(FactorContainerType)>; 
+      using type = MemoryPool<FactorContainerType,4096*(sizeof(FactorContainerType)+sizeof(void*))>; 
       static type& get() {
          static type allocator;
          return allocator;

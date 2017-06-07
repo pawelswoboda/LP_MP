@@ -16,8 +16,8 @@ struct FMC_CELL_TRACKING {
   using detection_factor_container = FactorContainer<detection_factor, FMC_CELL_TRACKING, 0, true>;
   using at_most_one_hypothesis_container = FactorContainer<at_most_one_cell_factor, FMC_CELL_TRACKING, 1, false>;
 
-  using transition_message_container = MessageContainer<transition_message, 0, 0, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING, 0>;
-  using at_most_one_cell_message_container = MessageContainer<at_most_one_cell_message, 0, 1, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING, 1>;
+  using transition_message_container = MessageContainer<transition_message, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING, 0>;
+  using at_most_one_cell_message_container = MessageContainer<at_most_one_cell_message, 0, 1, message_passing_schedule::left, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING, 1>;
 
   using FactorList = meta::list<detection_factor_container, at_most_one_hypothesis_container>;
   using MessageList = meta::list<transition_message_container, at_most_one_cell_message_container>;
@@ -37,10 +37,10 @@ struct FMC_CELL_TRACKING_MOTHER_MACHINE {
   using at_most_one_hypothesis_container = FactorContainer<at_most_one_cell_factor, FMC_CELL_TRACKING_MOTHER_MACHINE, 1, false>;
   using exit_constraint = FactorContainer<exit_constraint_factor, FMC_CELL_TRACKING_MOTHER_MACHINE, 2, false>;
 
-  using transition_message_container = MessageContainer<transition_message, 0, 0, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING_MOTHER_MACHINE, 0>;
-  using at_most_one_cell_message_container = MessageContainer<at_most_one_cell_message, 0, 1, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING_MOTHER_MACHINE, 1>;
-  using exit_constraint_lower_message = MessageContainer<exit_constraint_message<exit_constraint_position::lower>, 0, 2, variableMessageNumber, 1, FMC_CELL_TRACKING_MOTHER_MACHINE, 2>;
-  using exit_constraint_upper_message = MessageContainer<exit_constraint_message<exit_constraint_position::upper>, 0, 2, variableMessageNumber, 1, FMC_CELL_TRACKING_MOTHER_MACHINE, 3>;
+  using transition_message_container = MessageContainer<transition_message, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING_MOTHER_MACHINE, 0>;
+  using at_most_one_cell_message_container = MessageContainer<at_most_one_cell_message, 0, 1, message_passing_schedule::left, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING_MOTHER_MACHINE, 1>;
+  using exit_constraint_lower_message = MessageContainer<exit_constraint_message<exit_constraint_position::lower>, 0, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_CELL_TRACKING_MOTHER_MACHINE, 2>;
+  using exit_constraint_upper_message = MessageContainer<exit_constraint_message<exit_constraint_position::upper>, 0, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_CELL_TRACKING_MOTHER_MACHINE, 3>;
 
   using FactorList = meta::list< detection_factor_container, at_most_one_hypothesis_container, exit_constraint >;
   using MessageList = meta::list< transition_message_container, at_most_one_cell_message_container, exit_constraint_lower_message, exit_constraint_upper_message >;
@@ -63,7 +63,7 @@ struct FMC_CONSERVATION_TRACKING {
 
   using detection_factor_container = FactorContainer<multiple_detection_factor, FMC_CONSERVATION_TRACKING, 0>;
 
-  using transition_message_container = MessageContainer<transition_message_multiple, 0, 0, variableMessageNumber, variableMessageNumber, FMC_CONSERVATION_TRACKING, 0>;
+  using transition_message_container = MessageContainer<transition_message_multiple, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_CONSERVATION_TRACKING, 0>;
 
   using FactorList = meta::list< detection_factor_container >;
 
