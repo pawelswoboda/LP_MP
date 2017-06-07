@@ -1,3 +1,5 @@
+add_custom_target(all_solvers)
+
 if(BUILD_GRAPH_MATCHING)
    add_subdirectory(graph_matching)
 endif()
@@ -24,3 +26,4 @@ endif()
 
 add_subdirectory(evaluation)
 
+add_dependencies(all_solvers lingeling)
