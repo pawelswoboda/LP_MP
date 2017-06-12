@@ -44,15 +44,16 @@ namespace LP_MP {
    constexpr SIGNED_INDEX variableMessageSize = -1;
 
    // do zrobienia: maybe put this into LP_MP.h
-   enum class LPReparametrizationMode {Anisotropic, Uniform, DampedUniform, Mixed, Undefined};
+   enum class LPReparametrizationMode {Anisotropic, Anisotropic2, Uniform, DampedUniform, Mixed, Undefined};
 
    inline LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
    {
       //feenableexcept(FE_INVALID | FE_OVERFLOW);
       const std::string uniform = "uniform";
       if(s == "anisotropic") {
-         //return LpReparametrizationMode({mode::anisotropic,0.0});
          return LPReparametrizationMode::Anisotropic;
+      } else if(s == "anisotropic2") {
+         return LPReparametrizationMode::Anisotropic2;
       } else if(s == "uniform") {
          return LPReparametrizationMode::Uniform;
       } else if(s == "damped_uniform") {

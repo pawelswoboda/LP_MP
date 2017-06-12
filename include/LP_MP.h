@@ -185,12 +185,15 @@ public:
 
       ordering_valid_ = o.ordering_valid_;
       omega_anisotropic_valid_ = o.omega_anisotropic_valid_ ;
+      omega_anisotropic2_valid_ = o.omega_anisotropic2_valid_;
       omega_isotropic_valid_ = o.omega_isotropic_valid_ ;
       omega_isotropic_damped_valid_ = o.omega_isotropic_damped_valid_ ;
       omega_mixed_valid_ = o.omega_mixed_valid_;
 
       omegaForwardAnisotropic_ = o.omegaForwardAnisotropic_; 
       omegaBackwardAnisotropic_ = o.omegaBackwardAnisotropic_;
+      omegaForwardAnisotropic2_ = o.omegaForwardAnisotropic_; 
+      omegaBackwardAnisotropic2_ = o.omegaBackwardAnisotropic_;
       omegaForwardIsotropic_ = o.omegaForwardIsotropic_; 
       omegaBackwardIsotropic_ = o.omegaBackwardIsotropic_;
       omegaForwardIsotropicDamped_ = o.omegaForwardIsotropicDamped_; 
@@ -292,9 +295,8 @@ public:
    INDEX GetNumberOfMessages() const { return m_.size(); }
    void AddFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2) // indicate that factor f1 comes before factor f2
    {
-      //factorRel_.push_back(std::make_pair(f1,f2));
       ForwardPassFactorRelation(f1,f2);
-      BackwardPassFactorRelation(f1,f2);
+      BackwardPassFactorRelation(f2,f1);
    }
 
    void ForwardPassFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2) { set_flags_dirty(); assert(f1!=f2); forward_pass_factor_rel_.push_back({f1,f2}); }
@@ -335,7 +337,8 @@ public:
    void SortFactors(
          const std::vector<std::pair<FactorTypeAdapter*, FactorTypeAdapter*>>& factor_rel,
          std::vector<FactorTypeAdapter*>& ordering,
-         std::vector<FactorTypeAdapter*>& update_ordering
+         std::vector<FactorTypeAdapter*>& update_ordering,
+         std::vector<INDEX>& f_sorted
          ) 
    {
       // assume that factorRel_ describe a DAG. Compute topological sorting
@@ -354,14 +357,14 @@ public:
          g.addEdge(f1,f2);
       }
 
-      f_sorted_ = g.topologicalSort();
+      f_sorted = g.topologicalSort();
       //std::vector<INDEX> sortedIndices = g.topologicalSort();
-      assert(f_sorted_.size() == f_.size());
+      assert(f_sorted.size() == f_.size());
 
       std::vector<FactorTypeAdapter*> fSorted;
       fSorted.reserve(f_.size());
-      for(INDEX i=0; i<f_sorted_.size(); i++) {
-         fSorted.push_back( f_[ f_sorted_[i] ] );//indexToFactor[sortedIndices[i]] );
+      for(INDEX i=0; i<f_sorted.size(); i++) {
+         fSorted.push_back( f_[ f_sorted[i] ] );//indexToFactor[sortedIndices[i]] );
       }
       assert(fSorted.size() == f_.size());
       assert(HasUniqueValues(fSorted));
@@ -392,13 +395,9 @@ public:
 #pragma omp parallel sections
       {
 #pragma omp section
-         SortFactors(forward_pass_factor_rel_, forwardOrdering_, forwardUpdateOrdering_);
+         SortFactors(forward_pass_factor_rel_, forwardOrdering_, forwardUpdateOrdering_, f_forward_sorted_);
 #pragma omp section
-         {
-            SortFactors(backward_pass_factor_rel_, backwardOrdering_, backwardUpdateOrdering_);
-            std::reverse(backwardOrdering_.begin(), backwardOrdering_.end());
-            std::reverse(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end());
-         }
+         SortFactors(backward_pass_factor_rel_, backwardOrdering_, backwardUpdateOrdering_, f_backward_sorted_);
       }
    }
 
@@ -415,6 +414,10 @@ public:
    void ComputeAnisotropicWeights();
    template<typename FACTOR_ITERATOR, typename FACTOR_SORT_ITERATOR>
    void ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, two_dim_variable_array<REAL>& omega); 
+
+   void ComputeAnisotropicWeights2();
+   template<typename FACTOR_ITERATOR, typename FACTOR_SORT_ITERATOR>
+   void ComputeAnisotropicWeights2(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, two_dim_variable_array<REAL>& omega); 
 
    void ComputeUniformWeights();
 
@@ -539,6 +542,7 @@ public:
    {
       ordering_valid_ = false;
       omega_anisotropic_valid_ = false;
+      omega_anisotropic2_valid_ = false;
       omega_isotropic_valid_ = false;
       omega_isotropic_damped_valid_ = false;
       omega_mixed_valid_ = false;
@@ -557,6 +561,9 @@ public:
       if(repamMode_ == LPReparametrizationMode::Anisotropic) {
          ComputeAnisotropicWeights();
          return omega_storage{omegaForwardAnisotropic_, omegaBackwardAnisotropic_};
+      } else if(repamMode_ == LPReparametrizationMode::Anisotropic2) {
+         ComputeAnisotropicWeights2();
+         return omega_storage{omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_};
       } else if(repamMode_ == LPReparametrizationMode::Uniform) {
          ComputeUniformWeights();
          return omega_storage{omegaForwardIsotropic_, omegaBackwardIsotropic_};
@@ -581,6 +588,8 @@ protected:
 
    bool omega_anisotropic_valid_ = false;
    two_dim_variable_array<REAL> omegaForwardAnisotropic_, omegaBackwardAnisotropic_;
+   bool omega_anisotropic2_valid_ = false;
+   two_dim_variable_array<REAL> omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_;
    bool omega_isotropic_valid_ = false;
    two_dim_variable_array<REAL> omegaForwardIsotropic_, omegaBackwardIsotropic_;
    bool omega_isotropic_damped_valid_ = false;
@@ -592,7 +601,7 @@ protected:
 
    
    std::unordered_map<FactorTypeAdapter*,INDEX> factor_address_to_index_;
-   std::vector<INDEX> f_sorted_; // sorted indices in factor vector f_ 
+   std::vector<INDEX> f_forward_sorted_, f_backward_sorted_; // sorted indices in factor vector f_ 
 
    LPReparametrizationMode repamMode_ = LPReparametrizationMode::Undefined;
 
@@ -1008,9 +1017,23 @@ inline void LP::ComputeAnisotropicWeights()
 #pragma omp sections
       {
 #pragma omp section
-         ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_sorted_.begin(), f_sorted_.end(), omegaForwardAnisotropic_);
+         ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic_);
 #pragma omp section
-         ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_sorted_.rbegin(), f_sorted_.rend(), omegaBackwardAnisotropic_);
+         ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic_);
+      }
+   }
+}
+
+inline void LP::ComputeAnisotropicWeights2()
+{
+   if(!omega_anisotropic2_valid_) {
+      omega_anisotropic2_valid_ = true;
+#pragma omp sections
+      {
+#pragma omp section
+         ComputeAnisotropicWeights2(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic2_);
+#pragma omp section
+         ComputeAnisotropicWeights2(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic2_);
       }
    }
 }
@@ -1025,11 +1048,6 @@ inline void LP::ComputeUniformWeights()
          ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropic_, 0.0);
 #pragma omp section
          ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropic_, 0.0);
-      }
-
-      // only for now, need not generally hold true.
-      for(INDEX i=0; i<forwardOrdering_.size(); ++i) {
-         assert(forwardOrdering_[i] == *(backwardOrdering_.rbegin() + i));
       }
 
       assert(this->backwardUpdateOrdering_.size() == omegaBackwardIsotropic_.size());
@@ -1119,6 +1137,79 @@ std::vector<std::vector<FactorTypeAdapter*> > LP::ComputeFactorConnection(FACTOR
    //}
 
    return fc;
+}
+
+
+template<typename FACTOR_ITERATOR, typename FACTOR_SORT_ITERATOR>
+void LP::ComputeAnisotropicWeights2(
+      FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, // sorted pointers to factors
+      FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, // sorted factor indices in f_
+      two_dim_variable_array<REAL>& omega)
+{
+   std::vector<INDEX> f_sorted_inverse(std::distance(factor_sort_begin, factor_sort_end)); // factor index in order they were added to sorted order
+#pragma omp parallel for
+   for(INDEX i=0; i<std::distance(factor_sort_begin, factor_sort_end); ++i) {
+      f_sorted_inverse[ factor_sort_begin[i] ] = i;
+   }
+
+   assert(std::distance(factorIt,factorEndIt) == f_.size());
+   assert(std::distance(factor_sort_begin, factor_sort_end) == f_.size());
+
+   std::vector<INDEX> no_send_messages_later(f_.size(), 0);
+   for(INDEX i=0; i<m_.size(); ++i) {
+      auto* f_left = m_[i]->GetLeftFactor();
+      const INDEX f_index_left = factor_address_to_index_[f_left];
+      const INDEX index_left = f_sorted_inverse[f_index_left];
+      auto* f_right = m_[i]->GetRightFactor();
+      const INDEX f_index_right = factor_address_to_index_[f_right];
+      const INDEX index_right = f_sorted_inverse[f_index_right];
+      
+      if(m_[i]->SendsMessageToRight() && index_left < index_right) {
+        no_send_messages_later[index_left]++;
+      }
+      if(m_[i]->SendsMessageToLeft() && index_right < index_left) {
+        no_send_messages_later[index_right]++;
+      }
+   }
+
+   std::vector<INDEX> omega_size(f_.size());
+   {
+     INDEX c=0;
+     for(auto it=factorIt; it!=factorEndIt; ++it) {
+       if((*it)->FactorUpdated()) {
+         omega_size[c] = (*it)->no_send_messages();
+         ++c;
+       }
+     }
+     omega_size.resize(c);
+   }
+
+   omega = two_dim_variable_array<REAL>(omega_size);
+
+   {
+      INDEX c=0;
+      for(auto it=factorIt; it!=factorEndIt; ++it) {
+         const INDEX i = std::distance(factorIt, it);
+         assert(i == f_sorted_inverse[ factor_address_to_index_[*it] ]);
+         if((*it)->FactorUpdated()) {
+            INDEX k=0;
+            for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
+               if(mIt.CanSendMessage()) {
+                  auto* f_connected = mIt.GetConnectedFactor();
+                  const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
+                  assert(i != j);
+                  if(i<j) {
+                     omega[c][k] = 1.0/REAL(no_send_messages_later[i]);
+                  } else {
+                     omega[c][k] = 0.0;
+                  } 
+                  ++k;
+               }
+            }
+            ++c;
+         }
+      }
+   }
 }
 
 // do zrobienia: possibly templatize this for use with iterators
@@ -1244,7 +1335,6 @@ void LP::ComputeAnisotropicWeights(
                   const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
                   assert(i != j);
                   if(i<j || last_receiving_factor[j] > i) {
-                  //if(i<j) {
                      omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
                   } else {
                      omega[c][k] = 0.0;

@@ -153,6 +153,13 @@ public:
         ++size; 
       }
     }
+
+    auto* f_first = detection_factors_[ min_detection_factor[0] ][ min_detection_factor[1] ];
+    auto* f_last  = detection_factors_[ max_detection_factor[0] ][ max_detection_factor[1] ];
+    assert(f_first != nullptr);
+    assert(f_last != nullptr);
+    assert(f_first != f_last);
+
     assert(size > 1); // for now, this need not hold true
     if(size <= 1) { return nullptr; }
 
@@ -170,16 +177,19 @@ public:
 
         ++msg_idx;
         lp.AddMessage(m); 
+        if(f != f_last) {
+          lp.ForwardPassFactorRelation(f,e);
+        } else {
+          lp.ForwardPassFactorRelation(e,f);
+        }
+        if(f != f_first) {
+          lp.BackwardPassFactorRelation(f,e);
+        } else {
+          lp.BackwardPassFactorRelation(e,f);
+        }
       }
     }
 
-    auto* f_first = detection_factors_[ min_detection_factor[0] ][ min_detection_factor[1] ];
-    auto* f_last  = detection_factors_[ max_detection_factor[0] ][ max_detection_factor[1] ];
-    assert(f_first != nullptr);
-    assert(f_last != nullptr);
-    assert(f_first != f_last);
-    lp.AddFactorRelation(f_first, e);
-    lp.AddFactorRelation(e, f_last);
     //std::cout << std::endl;
     return e; 
   }
