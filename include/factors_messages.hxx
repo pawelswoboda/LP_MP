@@ -387,7 +387,8 @@ struct MessageContainerSelector {
 enum class message_passing_schedule {
    left, // messages are received from left and sent by left
    right, // messages are received from right and sent by right
-   full // messages are received and send in both directions
+   full, // messages are received and send in both directions
+   only_send // messages are only sent
 };
 
 // Class holding message and left and right factor
@@ -603,7 +604,7 @@ public:
    constexpr static bool 
    CanCallSendMessageToRightContainer()
    { 
-      return MPS == message_passing_schedule::left || MPS == message_passing_schedule::full;
+      return MPS == message_passing_schedule::left || MPS == message_passing_schedule::full || MPS == message_passing_schedule::only_send;
       // obsolete
       return FunctionExistence::HasSendMessageToRight<MessageType, void, 
       LeftFactorType, MessageContainerType, REAL>(); 
@@ -627,7 +628,7 @@ public:
    constexpr static bool
    CanCallSendMessageToLeftContainer()
    { 
-      return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full;
+      return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full || MPS == message_passing_schedule::only_send;
       // obsolete
       return FunctionExistence::HasSendMessageToLeft<MessageType, void, 
       RightFactorType, MessageContainerType, REAL>(); 
@@ -1208,7 +1209,7 @@ public:
    // for weight computations these functions are necessary
    virtual bool SendsMessageToLeft() const final
    {
-      return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full;
+      return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full || MPS == message_passing_schedule::only_send;
       // obsolete
       return 
          this->CanCallSendMessagesToLeftContainer() || 
@@ -1216,7 +1217,7 @@ public:
    }
    virtual bool SendsMessageToRight() const final
    {
-      return MPS == message_passing_schedule::left || MPS == message_passing_schedule::full;
+      return MPS == message_passing_schedule::left || MPS == message_passing_schedule::full || MPS == message_passing_schedule::only_send;
       // obsolete
       return 
          this->CanCallSendMessagesToRightContainer() || 

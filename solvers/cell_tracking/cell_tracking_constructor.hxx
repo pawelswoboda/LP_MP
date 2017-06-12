@@ -10,13 +10,37 @@
 
 namespace LP_MP {
 
+  struct exclusion_item { INDEX timestep; INDEX hypothesis_id;
+    INDEX operator[](const INDEX i) const { if(i==0) return timestep; else return hypothesis_id;}
+  };
+  bool operator<=(const exclusion_item a, const exclusion_item b) 
+  {
+    if(a.timestep != b.timestep) {
+      return a.timestep < b.timestep;
+    } else {
+      return a.hypothesis_id < b.hypothesis_id;
+    } 
+  }
+  bool operator!=(const exclusion_item a, const exclusion_item b) 
+  {
+    return !(a.timestep == b.timestep && a.hypothesis_id == b.hypothesis_id);
+  }
+  bool operator==(const exclusion_item a, const exclusion_item b) 
+  {
+    return a.timestep == b.timestep && a.hypothesis_id == b.hypothesis_id;
+  }
+  static constexpr exclusion_item exclusion_item_delimiter = {std::numeric_limits<INDEX>::max(), std::numeric_limits<INDEX>::max()};
+
 template<typename DETECTION_FACTOR_CONTAINER, typename AT_MOST_ONE_CELL_FACTOR_CONTAINER,
          typename TRANSITION_MESSAGE_CONTAINER, typename AT_MOST_ONE_CELL_MESSAGE_CONTAINER>
 class cell_tracking_constructor {
 public:
   using CONSTRUCTOR = cell_tracking_constructor<DETECTION_FACTOR_CONTAINER, AT_MOST_ONE_CELL_FACTOR_CONTAINER, TRANSITION_MESSAGE_CONTAINER, AT_MOST_ONE_CELL_MESSAGE_CONTAINER>;
+
   template<typename SOLVER>
-  cell_tracking_constructor(SOLVER& solver) {}
+  cell_tracking_constructor(SOLVER& solver) 
+  : lp_(&solver.GetLP()) 
+  {}
 
   // temporary structure which counts how many incoming and outgoing edges are already used by messages for building the model
   struct transition_count {
@@ -49,22 +73,38 @@ public:
 
     if(detection_cost == 0.0 && no_incoming_edges == 0 && no_outgoing_edges == 0 && appearance_cost == 0.0 && disappearance_cost == 0.0) { return nullptr; }
 
-    auto* f = new DETECTION_FACTOR_CONTAINER(no_incoming_edges + 1, no_outgoing_edges + 1, detection_cost); // additional entries for appearance and disappearance cost
-    f->GetFactor()->incoming( no_incoming_edges ) = appearance_cost;
-    f->GetFactor()->outgoing( no_outgoing_edges ) = disappearance_cost;
+    auto* f = new DETECTION_FACTOR_CONTAINER(no_incoming_edges, no_outgoing_edges, detection_cost, appearance_cost, disappearance_cost); // additional entries for appearance and disappearance cost
     lp.AddFactor(f);
     detection_factors_[timestep][hypothesis_id] = f;
-    //std::cout << "Added ";
-    std::cout << "H: " << timestep << ", " << hypothesis_id <<  "," << no_incoming_edges << "," << no_outgoing_edges << ", " << detection_cost << ", " << appearance_cost << ", " << disappearance_cost << std::endl;
+    if(hypothesis_id > 0) {
+      assert( detection_factors_[timestep][hypothesis_id-1] != nullptr); // need not be generally true, but then factor relation must be done more robust.
+    }
+    //std::cout << "H: " << timestep << ", " << hypothesis_id <<  "," << no_incoming_edges << "," << no_outgoing_edges << ", " << detection_cost << ", " << appearance_cost << ", " << disappearance_cost << std::endl;
     return f; 
   }
 
-  template<typename LP_TYPE>
-  AT_MOST_ONE_CELL_FACTOR_CONTAINER* add_exclusion_constraint(LP_TYPE& lp, const INDEX timestep, const std::vector<INDEX>& cell_detections)
+
+  template<typename ITERATOR>
+  void register_exclusion_constraint(ITERATOR cell_detections_begin, ITERATOR cell_detections_end)
   {
+    assert(std::distance(cell_detections_begin, cell_detections_end) > 1);
+    for(auto it=cell_detections_begin; it!=cell_detections_end; ++it) {
+      exclusions_.push_back({(*it)[0], (*it)[1]});
+    }
+    auto begin = exclusions_.end() - std::distance(cell_detections_begin, cell_detections_end);
+    auto end = exclusions_.end();
+    std::sort(begin, end);
+    exclusions_.push_back(exclusion_item_delimiter);
+  }
+
+  template<typename LP_TYPE, typename ITERATOR>
+  AT_MOST_ONE_CELL_FACTOR_CONTAINER* add_exclusion_constraint(LP_TYPE& lp, const INDEX timestep, ITERATOR cell_detections_begin, ITERATOR cell_detections_end)
+  {
+    std::cout << "do not use this function anymore\n";
+    assert(false);
     INDEX size = 0;
-    for(INDEX i=0; i<cell_detections.size(); ++i) {
-      if(detection_factors_[timestep][ cell_detections[i] ] != nullptr) {
+    for(auto it=cell_detections_begin; it!=cell_detections_end; ++it) {
+      if(detection_factors_[timestep][ *it ] != nullptr) {
         ++size; 
       }
     }
@@ -72,12 +112,13 @@ public:
 
     auto* e = new AT_MOST_ONE_CELL_FACTOR_CONTAINER(size);
     lp.AddFactor(e);
-    //std::cout << "Added Excusion for time " << timestep << ": ";
+    //std::cout << "Exclusion for time " << timestep << ": ";
     INDEX msg_idx = 0;
-    for(INDEX i=0; i<cell_detections.size(); ++i) {
+    for(auto it=cell_detections_begin; it!=cell_detections_end; ++it) {
       //std::cout << cell_detections[i] << ", ";
-      if(detection_factors_[timestep][ cell_detections[i] ] != nullptr) {
-        auto* m = new AT_MOST_ONE_CELL_MESSAGE_CONTAINER(msg_idx, detection_factors_[ timestep ][ cell_detections[i] ], e);
+      if(detection_factors_[timestep][ *it ] != nullptr) {
+        auto* f = detection_factors_[ timestep ][ *it ];
+        auto* m = new AT_MOST_ONE_CELL_MESSAGE_CONTAINER(msg_idx, f, e);
         ++msg_idx;
         lp.AddMessage(m); 
       }
@@ -86,33 +127,60 @@ public:
     return e; 
   }
 
-  template<typename LP_TYPE>
-  AT_MOST_ONE_CELL_FACTOR_CONTAINER* add_exclusion_constraint(LP_TYPE& lp, const std::vector<std::array<INDEX,2>>& conflict_set)
+  template<typename LP_TYPE, typename ITERATOR>
+  AT_MOST_ONE_CELL_FACTOR_CONTAINER* add_exclusion_constraint(LP_TYPE& lp, ITERATOR begin, ITERATOR end) // iterator points to std::array<INDEX,2>
   {
+    //std::sort(begin,end, [](auto a, auto b) { if(a[0] != b[0]) return a[0] < b[0]; else return a[1] < b[1]; } );
+    assert(std::distance(begin, end) > 1);
     INDEX size = 0;
-    for(INDEX i=0; i<conflict_set.size(); ++i) {
-      if(detection_factors_[ conflict_set[i][0] ][ conflict_set[i][1] ] != nullptr) {
+    std::array<INDEX,2> min_detection_factor = {std::numeric_limits<INDEX>::max(), std::numeric_limits<INDEX>::max()};
+    std::array<INDEX,2> max_detection_factor = {0,0};
+
+    for(auto it=begin; it!=end; ++it) {
+      const INDEX timestep = (*it)[0];
+      const INDEX hypothesis_id = (*it)[1];
+      if(timestep < min_detection_factor[0] || (timestep == min_detection_factor[0] && hypothesis_id <= min_detection_factor[1])) {
+        min_detection_factor[0] = timestep;
+        min_detection_factor[1] = hypothesis_id;
+      }
+      if(timestep > max_detection_factor[0] || (timestep == max_detection_factor[0] && hypothesis_id >= max_detection_factor[1])) {
+        max_detection_factor[0] = timestep;
+        max_detection_factor[1] = hypothesis_id;
+      }
+
+      assert(detection_factors_[ timestep ][ hypothesis_id ] != nullptr); // for now, this need not hold true
+      if(detection_factors_[ timestep ][ hypothesis_id ] != nullptr) {
         ++size; 
       }
     }
-    assert(size == conflict_set.size()); // this need not hold true
-    if(size == 0) { return nullptr; }
+    assert(size > 1); // for now, this need not hold true
+    if(size <= 1) { return nullptr; }
 
     auto* e = new AT_MOST_ONE_CELL_FACTOR_CONTAINER(size);
     lp.AddFactor(e);
-    std::cout << "Added Excusion ";
     INDEX msg_idx = 0;
-    for(INDEX i=0; i<conflict_set.size(); ++i) {
-      const INDEX timestep = conflict_set[i][0];
-      const INDEX hypothesis_id = conflict_set[i][1];
-      std::cout << timestep << "," << hypothesis_id << " + ";
+    for(auto it=begin; it!=end; ++it) {
+      const INDEX timestep = (*it)[0];
+      const INDEX hypothesis_id = (*it)[1];
       if(detection_factors_[timestep][hypothesis_id] != nullptr) {
-        auto* m = new AT_MOST_ONE_CELL_MESSAGE_CONTAINER(msg_idx, detection_factors_[ timestep ][ hypothesis_id ], e);
+
+        // only valid for sorted conflict set
+        auto* f = detection_factors_[ timestep ][ hypothesis_id ];
+        auto* m = new AT_MOST_ONE_CELL_MESSAGE_CONTAINER(msg_idx, f, e);
+
         ++msg_idx;
         lp.AddMessage(m); 
       }
     }
-    std::cout << std::endl;
+
+    auto* f_first = detection_factors_[ min_detection_factor[0] ][ min_detection_factor[1] ];
+    auto* f_last  = detection_factors_[ max_detection_factor[0] ][ max_detection_factor[1] ];
+    assert(f_first != nullptr);
+    assert(f_last != nullptr);
+    assert(f_first != f_last);
+    lp.AddFactorRelation(f_first, e);
+    lp.AddFactorRelation(e, f_last);
+    //std::cout << std::endl;
     return e; 
   }
 
@@ -170,6 +238,23 @@ public:
     //std::cout << "DA: " << timestep << " " << prev_cell << ", " << next_cell_1 << " " << next_cell_2 << " " << cost << std::endl;
   }
 
+  template<typename LP_TYPE>
+  void order_factors(LP_TYPE& lp) const
+  {
+    for(INDEX t=0; t<detection_factors_.size(); ++t) {
+      assert(detection_factors_[t].size() > 0);
+      for(INDEX i=0; i<detection_factors_[t].size(); ++i) {
+        assert(detection_factors_[t][i] != nullptr);
+      }
+      if(t > 0) {
+        lp.AddFactorRelation(detection_factors_[t-1].back(), detection_factors_[t][0]);
+      }
+      for(INDEX i=1; i<detection_factors_[t].size(); ++i) {
+        lp.AddFactorRelation(detection_factors_[t][i-1], detection_factors_[t][i]);
+      }
+    }
+  }
+
   // output lineage tree
   template<typename STREAM>
   void WritePrimal(STREAM& s, PrimalSolutionStorage& primal) const 
@@ -187,9 +272,76 @@ public:
     }
   }
 
+  // add violated exclusion constraints
+  INDEX Tighten(const INDEX max_constraints_to_add)
+  {
+    std::vector<std::tuple<INDEX,REAL>> exclusion_candidates; // offset into exclusions_ and guaranteed dual increase 
+
+    // to do: parallelize
+    for(INDEX i=0; i<exclusions_.size();) {
+      auto item_begin = exclusions_.begin() + i;
+      auto item_end = item_begin;
+      while((*item_end) != exclusion_item_delimiter) {
+        ++item_end; 
+      }
+      // check how large guaranteed dual increase is when we would add exclusion constraint
+      REAL sum_detection_costs = 0.0;
+      REAL smallest_detection_cost = std::numeric_limits<REAL>::infinity();
+      for(auto it=item_begin; it!=item_end; ++it) {
+        const REAL lb = detection_factors_[it->timestep][it->hypothesis_id]->LowerBound();
+        assert(lb <= 0.0);
+        sum_detection_costs += lb;
+        smallest_detection_cost = std::min(lb, smallest_detection_cost);
+        if(sum_detection_costs + eps < smallest_detection_cost) {
+          exclusion_candidates.push_back( std::make_tuple(i, smallest_detection_cost - sum_detection_costs) );
+        } 
+      }
+      i += 1 + std::distance(item_begin, item_end);
+    }
+
+    // possibly not necessary anymore
+    std::sort(exclusion_candidates.begin(), exclusion_candidates.end(), [](auto a, auto b) { return std::get<1>(a) > std::get<1>(b); });
+
+    if(exclusion_candidates.size() > max_constraints_to_add) {
+      exclusion_candidates.resize(max_constraints_to_add);
+    }
+    for(INDEX i=0; i<exclusion_candidates.size(); ++i) {
+      const INDEX idx = std::get<0>(exclusion_candidates[i]);
+      auto item_begin = exclusions_.begin() + i;
+      auto item_end = item_begin;
+      while(*(item_end) != exclusion_item_delimiter) {
+        ++item_end; 
+      }
+      add_exclusion_constraint(*lp_, item_begin, item_end); 
+      i += 1 + std::distance(item_begin, item_end);
+    }
+
+    constexpr exclusion_item removal_mark = {std::numeric_limits<INDEX>::max(),0};
+    // remove exclusions that were added
+    for(INDEX i=0; i<exclusion_candidates.size(); ++i) {
+      const INDEX idx = std::get<0>(exclusion_candidates[i]);
+      auto it = exclusions_.begin() + idx;
+      for(; (*it)!=exclusion_item_delimiter; ++it) {
+        *it = removal_mark;
+      }
+      *it = removal_mark; 
+    }
+    auto it = std::remove(exclusions_.begin(), exclusions_.end(), removal_mark);
+    exclusions_.resize(std::distance(exclusions_.begin(), it));
+
+    std::cout << "added " << exclusion_candidates.size() << " exclusion factors, " << exclusions_.size() << " exclusions remain\n";
+
+    return exclusion_candidates.size();
+  }
+
 protected:
   using detection_factors_storage = std::vector<std::vector<DETECTION_FACTOR_CONTAINER*>>;
   detection_factors_storage detection_factors_;
+
+  using exclusion_factor_storage = std::vector<exclusion_item>;
+  exclusion_factor_storage exclusions_; // hold all exclusions in a single array. delimiter is std::numeric_limits<INDEX>::max(). First entry in segment is timestep, followed by hypothesis ids
+
+  LP* lp_;
   //std::map<std::tuple<INDEX,INDEX,INDEX>, TRANSITION_FACTOR_CONTAINER*> transition_factors_;
   //std::map<std::tuple<INDEX,INDEX,INDEX,INDEX>, TRANSITION_FACTOR_CONTAINER*> division_factors_;
 
@@ -499,26 +651,28 @@ namespace cell_tracking_parser_mother_machine {
         } 
       }
 
-    INDEX max_out_degree = 0;
-    INDEX max_in_degree = 0;
-    INDEX sum_out_degree = 0;
-    INDEX sum_in_degree = 0;
-    INDEX no_factors = 0;
-    for(auto& d : i.cell_detection_stat_) {
-      for(auto& f : d) {
-        max_out_degree = std::max(max_out_degree, std::get<2>(f));
-        max_in_degree = std::max(max_in_degree, std::get<3>(f));
+      cell_tracking_constructor.order_factors(s.GetLP());
 
-        sum_out_degree += std::get<2>(f);
-        sum_in_degree += std::get<3>(f);
-        if(std::get<2>(f) > 0 || std::get<3>(f) > 0) no_factors++;
+      INDEX max_out_degree = 0;
+      INDEX max_in_degree = 0;
+      INDEX sum_out_degree = 0;
+      INDEX sum_in_degree = 0;
+      INDEX no_factors = 0;
+      for(auto& d : i.cell_detection_stat_) {
+        for(auto& f : d) {
+          max_out_degree = std::max(max_out_degree, std::get<2>(f));
+          max_in_degree = std::max(max_in_degree, std::get<3>(f));
+
+          sum_out_degree += std::get<2>(f);
+          sum_in_degree += std::get<3>(f);
+          if(std::get<2>(f) > 0 || std::get<3>(f) > 0) no_factors++;
+        }
       }
-    }
-    std::cout << "maximum out-degree of detection factors = " << max_out_degree << "\n";
-    std::cout << "maximum in-degree of detection factors = " << max_in_degree << "\n";
+      std::cout << "maximum out-degree of detection factors = " << max_out_degree << "\n";
+      std::cout << "maximum in-degree of detection factors = " << max_in_degree << "\n";
 
-    std::cout << "average out-degree of detection factors = " << REAL(sum_out_degree)/REAL(no_factors) << "\n";
-    std::cout << "average in-degree of detection factors = " << REAL(sum_in_degree)/REAL(no_factors) << "\n";
+      std::cout << "average out-degree of detection factors = " << REAL(sum_out_degree)/REAL(no_factors) << "\n";
+      std::cout << "average in-degree of detection factors = " << REAL(sum_in_degree)/REAL(no_factors) << "\n";
 
       return read_suc;
    }
@@ -624,7 +778,7 @@ namespace cell_tracking_parser_2d {
          INDEX hypothesis_id; s >> hypothesis_id;
          REAL cost; s >> cost;
          std::get<1>(i.cell_detection_stat[timestep][hypothesis_id]) = cost;
-         std::cout << "APP " << timestep << " " << hypothesis_id << " " << cost << "\n";
+         //std::cout << "APP " << timestep << " " << hypothesis_id << " " << cost << "\n";
        }
    };
 
@@ -637,7 +791,7 @@ namespace cell_tracking_parser_2d {
          INDEX hypothesis_id; s >> hypothesis_id;
          REAL cost; s >> cost;
          std::get<2>(i.cell_detection_stat[timestep][hypothesis_id]) = cost;
-         std::cout << "DISAPP " << timestep << " " << hypothesis_id << " " << cost << "\n";
+         //std::cout << "DISAPP " << timestep << " " << hypothesis_id << " " << cost << "\n";
        }
    };
 
@@ -748,22 +902,13 @@ namespace cell_tracking_parser_2d {
           const INDEX no_incoming_edges = std::get<3>(i.cell_detection_stat[t][n]);
           const INDEX no_outgoing_edges = std::get<4>(i.cell_detection_stat[t][n]);
 
-          //assert(t != i.cell_detection_stat.size()-1 || exit_cost == 0.0);
           cell_tracking_constructor.add_detection_hypothesis( lp, t, n, detection_cost, appearance_cost, disappearance_cost, no_incoming_edges, no_outgoing_edges);
         }
       }
       for(const auto& conflict_set : i.conflicts) {
-        cell_tracking_constructor.add_exclusion_constraint(lp, conflict_set ); 
+        cell_tracking_constructor.add_exclusion_constraint(lp, conflict_set.begin(), conflict_set.end()); 
+        //cell_tracking_constructor.register_exclusion_constraint(conflict_set.begin(), conflict_set.end() ); 
       }
-        // check whether all cell hypotheses are covered by exclusion constraints (must be valid for mother machine)
-        //std::vector<INDEX> all_indices;
-        //for(const auto& detections : i.exclusions_[t]) {
-        //  all_indices.insert(all_indices.end(), detections.begin(), detections.end());
-        //}
-        //std::sort(all_indices.begin(), all_indices.end());
-        //all_indices.erase( std::unique( all_indices.begin(), all_indices.end()), all_indices.end() );
-        //assert(all_indices.size() == i.cell_detection_stat[t].size());
-        
 
       auto tc = cell_tracking_constructor.init_transition_counter();
       for(auto& t : i.mappings) {
@@ -790,6 +935,8 @@ namespace cell_tracking_parser_2d {
           assert( std::get<4>(i.cell_detection_stat[t][j]) == tc[t][j][1] );
         }
       }
+
+      cell_tracking_constructor.order_factors(lp);
    }
 
    // we assume problem with single constructor

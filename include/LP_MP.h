@@ -684,7 +684,13 @@ public:
         REAL primal_cost = this->EvaluatePrimal();
         std::cout << "sat solution cost = " << primal_cost << "\n";// ", sat threshold = " << th.th << "\n"; 
      } else {
-        std::cout << "sat not feasible with current threshold\n"; // = " << th.th << "\n";
+        std::cout << "sat not feasible with current threshold ";
+        if(cur_sat_reduction_direction_ == Direction::forward) { 
+          std::cout << forward_sat_th_.th;
+        } else {
+          std::cout << backward_sat_th_.th;
+        } 
+        std::cout << "\n"; // = " << th.th << "\n";
      }
   }
 
@@ -1123,7 +1129,8 @@ void LP::ComputeAnisotropicWeights(
       FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, // sorted factor indices in f_
       two_dim_variable_array<REAL>& omega)
 {
-   std::vector<INDEX> f_sorted_inverse(std::distance(factor_sort_begin, factor_sort_end));
+   std::vector<INDEX> f_sorted_inverse(std::distance(factor_sort_begin, factor_sort_end)); // factor index in order they were added to sorted order
+#pragma omp parallel for
    for(INDEX i=0; i<std::distance(factor_sort_begin, factor_sort_end); ++i) {
       f_sorted_inverse[ factor_sort_begin[i] ] = i;
    }
@@ -1141,13 +1148,13 @@ void LP::ComputeAnisotropicWeights(
    std::fill(no_send_factors_later, no_send_factors_later + f_.size(), 0);
    std::atomic<INDEX>* no_receiving_factors_later = new std::atomic<INDEX>[f_.size()];
    std::fill(no_receiving_factors_later, no_receiving_factors_later + f_.size(), 0);
-   std::atomic<INDEX>* last_receiving_factor = new std::atomic<INDEX>[f_.size()]; // what is the last (in the order given by factor iterator) factor that receives a message?
+   std::atomic<INDEX>* last_receiving_factor = new std::atomic<INDEX>[f_.size()];
    std::fill(last_receiving_factor, last_receiving_factor + f_.size(), 0);
 #else
    std::vector<INDEX> no_send_factors(f_.size(),0);
    std::vector<INDEX> no_send_factors_later(f_.size(),0);
-   std::vector<INDEX> no_receiving_factors_later(f_.size(),0);
-   std::vector<INDEX> last_receiving_factor(f_.size(), 0);
+   std::vector<INDEX> no_receiving_factors_later(f_.size(),0); // numer of factors later than current one receiving message from current one
+   std::vector<INDEX> last_receiving_factor(f_.size(), 0); // what is the last (in the order given by factor iterator) factor that receives a message?
 #endif
 
    // do zrobienia: if factor is not visited at all, then omega is not needed for that entry. We must filter out such entries still
@@ -1237,6 +1244,7 @@ void LP::ComputeAnisotropicWeights(
                   const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
                   assert(i != j);
                   if(i<j || last_receiving_factor[j] > i) {
+                  //if(i<j) {
                      omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
                   } else {
                      omega[c][k] = 0.0;
