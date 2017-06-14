@@ -24,6 +24,7 @@
 #include <future>
 #include "memory_allocator.hxx"
 #include "cereal/archives/binary.hpp"
+#include "serialization.hxx"
 #include "sat_interface.hxx"
 #include "tclap/CmdLine.h"
 
@@ -67,12 +68,24 @@ public:
    virtual void init_primal() = 0;
    virtual void MaximizePotentialAndComputePrimal() = 0;
 
-   // for reading out reparametrization/labeling out of factor
+   // for reading reparametrization/labeling out of factor
+   virtual void serialize_dual(save_archive&) = 0;
+   virtual void serialize_primal(save_archive&) = 0;
+   // for writing reparametrization/labeling into factor
+   virtual void serialize_dual(load_archive&) = 0;
+   virtual void serialize_primal(load_archive&) = 0;
+   // for determining size of archive
+   virtual void serialize_dual(allocate_archive&) = 0;
+   virtual void serialize_primal(allocate_archive&) = 0;
+
+   // obsolete
+   // for reading reparametrization/labeling out of factor
    virtual void serialize_dual(cereal::BinaryOutputArchive& ar) = 0; 
    virtual void serialize_primal(cereal::BinaryOutputArchive& ar) = 0; 
    // for writing reparametrization/labeling into factor
    virtual void serialize_dual(cereal::BinaryInputArchive& ar) = 0; 
    virtual void serialize_primal(cereal::BinaryInputArchive& ar) = 0; 
+
    //virtual PrimalSolutionStorageAdapter* AllocatePrimalSolutionStorage() const = 0;
    //virtual bool CanComputePrimalSolution() const = 0;
    // the offset in the primal storage
@@ -616,30 +629,19 @@ class LP_sat : public BASE_LP_CLASS
 private:
   struct sat_th {
     sat_th() 
-      : th(0.01),
-      feasible_bound(0.1),
-      infeasible_bound(0.0)
+      : th(5.0)
     {}
 
     void adjust_th(const bool feasible)
     {
-      assert(infeasible_bound <= th && th <= feasible_bound);
       if(feasible) {
-        if(th >= feasible_bound - 0.01) {
-          infeasible_bound *= 0.8;
-        }
-        feasible_bound = std::min(feasible_bound, th);
-        th += (infeasible_bound - th)/2.0; 
+        th *= 0.8;
       } else {
-        if(th <= infeasible_bound + 0.001) {
-          feasible_bound *= 2.0;
-        }
-        infeasible_bound = std::max(infeasible_bound, th);
-        th += (feasible_bound - th)/2.0;
+        th *= 2.0;
       } 
     }
 
-    REAL th, feasible_bound, infeasible_bound;
+    REAL th;
   };
 
 
@@ -675,7 +677,13 @@ public:
 
   void collect_sat_result()
   {
-     std::cout << "collect sat result\n";
+     std::cout << "collect sat result with threshold = ";
+     if(cur_sat_reduction_direction_ == Direction::forward) { 
+       std::cout << forward_sat_th_.th;
+     } else {
+       std::cout << backward_sat_th_.th;
+     } 
+     std::cout << "\n"; // = " << th.th << "\n";
      const bool feasible = sat_handle_.get();
      if(feasible && !sat_dirty_) {
 
@@ -693,13 +701,7 @@ public:
         REAL primal_cost = this->EvaluatePrimal();
         std::cout << "sat solution cost = " << primal_cost << "\n";// ", sat threshold = " << th.th << "\n"; 
      } else {
-        std::cout << "sat not feasible with current threshold ";
-        if(cur_sat_reduction_direction_ == Direction::forward) { 
-          std::cout << forward_sat_th_.th;
-        } else {
-          std::cout << backward_sat_th_.th;
-        } 
-        std::cout << "\n"; // = " << th.th << "\n";
+        std::cout << "sat not feasible with current threshold\n";
      }
   }
 
@@ -753,7 +755,7 @@ public:
      const int sat_ret = lglsat(c->sat_);
      std::cout << "solved sat " << sat_ret << "\n";
 
-     const bool feasible = sat_ret == LGL_SATISFIABLE;
+     const bool feasible = (sat_ret == LGL_SATISFIABLE);
      //solve(&assumptions) == CMSat::l_True;
      //const bool feasible = c->sat_.solve(&assumptions) == CMSat::l_True;
      th->adjust_th(feasible);
@@ -804,6 +806,11 @@ public:
    void compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, sat_th& th)
    {
       assert(!sat_computation_running());
+
+      if(sat_handle_.valid()) { // do not collect sat result in first round
+        collect_sat_result();
+      }
+
       sat_vec<sat_literal> assumptions;
       for(auto it=factor_begin; it!=factor_end; ++it, ++omega_begin) {
          const INDEX factor_number = this->factor_address_to_index_[*it];
@@ -815,35 +822,11 @@ public:
          std::cout << "start sat calculation\n";
          sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
          sat_dirty_ = false;
+      } else { 
+        std::cout << "restart sat calculation\n";
+        sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
+        sat_dirty_ = false;
       }
-
-      collect_sat_result();
-      /*
-      std::cout << "collect sat result\n";
-      const bool feasible = sat_handle_.get();
-      if(feasible && !sat_dirty_) {
-
-         for(sat_var i=0; i<lglmaxvar(sat_); ++i) {
-            //for(sat_var i=0; i<sat_.nVars(); ++i) {
-            //assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
-            //}
-         }
-         // convert sat solution to original solution format and compute primal cost
-         for(INDEX i=0; i<this->f_.size(); ++i) {
-            assert(this->factor_address_to_index_[this->f_[i]] == i);
-            this->f_[i]->convert_primal(sat_, sat_var_[i]);
-         }
-         // to do: remove this
-         REAL primal_cost = this->EvaluatePrimal(this->f_.begin(), this->f_.end());
-         std::cout << "sat solution cost = " << primal_cost << ", sat threshold = " << th.th << "\n"; 
-      } else {
-         std::cout << "sat not feasible with current threshold = " << th.th << "\n";
-      }
-
-      */
-      std::cout << "restart sat calculation\n";
-      sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
-      sat_dirty_ = false;
    }
 private:
 
@@ -859,6 +842,34 @@ private:
    // possibly not needed anymore
    bool sat_dirty_ = false; // sat solver is run asynchronously. When factor graph changes, then sat solution cannot be read in anymore and has to be discarded. This flag signifies this case
 };
+
+// two types of archives for use in LP_tree: 
+// (i) count size needed for storing information
+// (ii) fixed size stream buffer
+class COUNTER_BUFFER : public std::streambuf
+{
+private :
+   size_t mSize = 0;
+
+private :
+   int_type overflow(int_type C)
+   {
+      return mSize++;
+   }
+
+public :
+   size_t Size(void) const
+   {
+      return mSize;
+   }
+};
+
+class static_size_buffer : public std::streambuf
+{
+
+};
+
+
 
 // factors are arranged in trees.
 class LP_tree
@@ -961,16 +972,87 @@ public:
       }
       return std::move(factors);
    }
+
+   // find out necessary size for storing primal solution in archive
+   INDEX primal_size() const
+   {
+      serialization_archive a(factors_.begin(), factors_.end(), [](auto f, auto& ar) {f->serialize_primal(ar); }); 
+      return a.size();
+   }
+
+   /*
+   // for the Frank Wolfe implementation
+   // to do: change the SVM implementation and make these methods virtual!
+   static void max_fn(double* wi, YPtr _y, double kappa, TermData term_data)
+   {
+      LP_tree* t = (LP_tree*) term_data;
+      // first add weights to problem
+   }
+
+   static bool compare_fn(YPtr _y1, YPtr _y2, TermData term_data)
+   {
+      // the primal is actually a binary archive constructed by serializing the primal solutions
+      LP_tree* t = (LP_tree*) term_data;
+
+      serialization_archive* y1 = (serialization_archive*) _y1;
+      serialization_archive* y2 = (serialization_archive*) _y2;
+
+      return *y1 == *y2;
+   }
+
+   static void copy_fn(double* ai, YPtr _y, TermData term_data)
+   {}
+
+   static double dot_product_fn(double* wi, YPtr _y, TermData term_data)
+   {
+      return 0.0;
+   }
+   */
 protected:
    std::vector< std::tuple<MessageTypeAdapter*, Chirality>> tree_messages_; // messages forming a tree. Chirality says which side comprises the lower  factor
+   std::vector<FactorTypeAdapter*> factors_;
    // subgradient information = primal solution to tree
    // for sending messages down we need to know to how many lower factors an upper factor is connected and then we need to average messages sent down appropriately.
 };
 
-
 class LP_with_trees : public LP
 {
 
+   void build_frank_wolfe()
+   {
+      // first build up the solver
+      /*
+      const INDEX no_subproblems = trees_.size();
+      INDEX no_Lagrange_multipliers = 0;
+      SVM* s = new SVM(no_Lagrange_multipliers, no_subproblems, max_fn, copy_fn, compare_fn, dot_product_fn, nullptr, false);//int d, int n, MaxFn max_fn, CopyFn copy_fn, CompareFn compare_fn, DotProductFn dot_product_fn, DotProductKernelFn dot_product_kernel_fn, bool zero_lower_bound);
+      s->SetParams(1.0, 1.0, 1.0);
+
+      std::vector<sub_problem*> sp_vec;
+      for(INDEX i=0; i<no_subproblems; ++i) {
+         LP_tree t;
+         t.compute_subgradient();
+         if(p.projectionVar[i][0] + 1 == p.projectionVar[i][1]) { // horizontal projection
+            sp->sign = 1.0; 
+         } else {
+            sp->sign = -1.0; 
+         }
+         //std::cout << "sign = " << sp->sign << "\n";
+
+         sp->unaries = p.projectionVar[i];
+
+         s->SetTerm(i, sp, mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
+         sp_vec.push_back(sp);
+      }
+
+      s->options.gap_threshold = 0.000001;
+      s->options.iter_max = 1000;
+
+      */
+
+   }
+   // note: we have a collection of trees which we can optimize to global optimum efficiently.
+   // These cover all factors. However, e.g. in MRFs, factors can be covered multiple times.
+   // Not all messages are internal messages, some join together the individual
 protected:
    std::vector<LP_tree> trees_;
 };

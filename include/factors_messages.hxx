@@ -1307,6 +1307,7 @@ public:
       if(c == Chirality::right) { // right factor is upper
          static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromRightContainer()>([&](auto f) {
                   // receive restricted messages 
+                  // obsolete
                   std::stringstream dual;
                   cereal::BinaryOutputArchive ar_in(dual);
                   leftFactor_->GetFactor()->serialize_dual( ar_in );
@@ -1601,10 +1602,9 @@ public:
          primal_access_ = primal_access;
          if(CanReceiveRestrictedMessages() && CallsReceiveRestrictedMessages()) {
 
-            // note: use better (fixed size buffer) for dual information and allocate memory on stack for this. How to estimate memory? Mock writing into buffer (possibly slow)? A hint function could be used too.
-            std::stringstream dual;
-            cereal::BinaryOutputArchive ar_in(dual);
-            factor_.serialize_dual( ar_in );
+            serialization_archive ar(GetFactor(), GetFactor()+1, [](auto& f, auto& ar) { f.serialize_dual(ar); });
+            save_archive s_ar(ar);
+            factor_.serialize_dual( s_ar );
 
             // now we change the dual information
             // first we compute restricted incoming messages, on which to compute the primal
@@ -1614,8 +1614,8 @@ public:
             MaximizePotentialAndComputePrimal();
 
             // restore dual reparametrization to before restricted messages were sent.
-            cereal::BinaryInputArchive ar_out(dual);
-            factor_.serialize_dual( ar_out );
+            load_archive l_ar(ar);
+            factor_.serialize_dual( l_ar );
 
             ReceiveMessages(omega);
             MaximizePotential();
@@ -1976,6 +1976,7 @@ public:
       ComputePrimalThroughMessages();
    }
 
+   // obsolete
    virtual void serialize_dual(cereal::BinaryOutputArchive& ar) final
    { factor_.serialize_dual(ar); }
    virtual void serialize_primal(cereal::BinaryOutputArchive& ar) final
@@ -1983,6 +1984,19 @@ public:
    virtual void serialize_dual(cereal::BinaryInputArchive& ar) final
    { factor_.serialize_dual(ar); }
    virtual void serialize_primal(cereal::BinaryInputArchive& ar) final
+   { factor_.serialize_primal(ar); } 
+
+   virtual void serialize_dual(load_archive& ar) final
+   { factor_.serialize_dual(ar); }
+   virtual void serialize_primal(load_archive& ar) final
+   { factor_.serialize_primal(ar); } 
+   virtual void serialize_dual(save_archive& ar) final
+   { factor_.serialize_dual(ar); }
+   virtual void serialize_primal(save_archive& ar) final
+   { factor_.serialize_primal(ar); } 
+   virtual void serialize_dual(allocate_archive& ar) final
+   { factor_.serialize_dual(ar); }
+   virtual void serialize_primal(allocate_archive& ar) final
    { factor_.serialize_primal(ar); } 
 
       // do zrobienia: possibly do it with std::result_of

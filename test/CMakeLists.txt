@@ -8,7 +8,8 @@ if(BUILD_TESTS)
       #min_conv.cpp
       #shortest_path.cpp
       #cycle_inequalities.cpp
-      discrete_tomography_chain.cpp
+      #discrete_tomography_chain.cpp
+      serialization.cpp
       )
    enable_testing()
 

@@ -204,7 +204,7 @@ public:
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
   {
-    const REAL cost = LowerBound();
+    const REAL cost = cost_of_detection();
     if(cost <= -th) {
       //std::cout << "in reduction: detection factor must be on\n";
       assumptions.push_back(to_literal(begin));

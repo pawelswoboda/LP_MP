@@ -422,7 +422,7 @@ int main(int argc, char**argv)
    }
 
    s->options.gap_threshold = 0.000001;
-	s->options.iter_max = 100;
+	s->options.iter_max = 1000;
 
    // push pairwise into dt factors
    for(INDEX i=0; i<mrf.GetNumberOfPairwiseFactors(); ++i) {
@@ -453,21 +453,37 @@ int main(int argc, char**argv)
    //}
    //std::cout << "Lagrange mult. norm = " << mult_norm << "\n";
 
-   for(INDEX iter=0; iter<40; ++iter) {
+   for(INDEX iter=0; iter<400; ++iter) {
       // put weights into trees
       for(INDEX i=0; i<sp_vec.size(); ++i) {
          sp_vec[i]->add_weights(w, -1.0);
       }
 
       delete s;
+
+      /*
+      solver.Solve();
+      for(INDEX i=0; i<mrf.GetNumberOfPairwiseFactors(); ++i) {
+         auto* f = mrf.GetPairwiseFactor(i);
+         for(INDEX m=0; m<f->GetNoMessages(); ++m) {
+            auto * msg = f->GetMessage(m);
+            if(auto* msg_t = dynamic_cast<typename FMC_DT::dt_pairwise_pairwise_message*> (msg)) {
+               msg_t->ReceiveMessageFromLeftContainer();
+            }
+         } 
+      }
+      */ 
+
       s = new SVM(mrf.GetNumberOfVariables()*no_labels, p.projectionVar.size(), max_fn, copy_fn, compare_fn, dot_product_fn, nullptr, false);
-      s->SetParams(lambda/REAL(iter+2), mu / mu_SCALE, kappa / kappa_SCALE);
+      s->SetParams(lambda, mu / mu_SCALE, kappa / kappa_SCALE);
+      //s->SetParams(lambda/REAL(iter+2), mu / mu_SCALE, kappa / kappa_SCALE);
       for(INDEX i=0; i<sp_vec.size(); ++i) {
          s->SetTerm(i, sp_vec[i], mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
       }
       s->options.gap_threshold = 0.000001;
       s->options.iter_max = 100;
       w = s->Solve();
+
    }
 
 
