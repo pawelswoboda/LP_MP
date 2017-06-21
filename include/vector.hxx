@@ -2,7 +2,10 @@
 #define LP_MP_VECTOR_HXX
 
 #include "memory_allocator.hxx"
-#include "cereal/archives/binary.hpp"
+#include "serialization.hxx"
+#define SIMDPP_ARCH_X86_AVX2
+#include "simdpp/simd.h"
+//#include "cereal/archives/binary.hpp"
 
 namespace LP_MP {
 
@@ -64,21 +67,31 @@ public:
   vector(ITERATOR begin, ITERATOR end)
   {
     const INDEX size = std::distance(begin,end);
+    const INDEX padding = (8-(size%8))%8;
     assert(size > 0);
-    begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size);
+    begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size+padding,32);
     assert(begin_ != nullptr);
     end_ = begin_ + size;
     for(auto it=this->begin(); begin!=end; ++begin, ++it) {
       (*it) = *begin;
     }
+    if(padding != 0) {
+      std::fill(end_, end_ + padding, std::numeric_limits<REAL>::infinity());
+    }
   }
 
   vector(const INDEX size) 
   {
-    begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size);
+    const INDEX padding = (8-(size%8))%8;
+    assert((padding + size)%8 == 0);
+    begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size+padding,32);
     assert(size > 0);
     assert(begin_ != nullptr);
     end_ = begin_ + size;
+    // infinities in padding
+    if(padding != 0) {
+      std::fill(end_, end_ + padding, std::numeric_limits<REAL>::infinity());
+    }
   }
   vector(const INDEX size, const T value) 
      : vector(size)
@@ -92,11 +105,15 @@ public:
      }
   }
    vector(const vector& o)  {
-      begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(o.size());
-      end_ = begin_ + o.size();
-      assert(begin_ != nullptr);
-      auto it = begin_;
-      for(auto o_it = o.begin(); o_it!=o.end(); ++it, ++o_it) { *it = *o_it; }
+     const INDEX padding = (8-(o.size()%8))%8;
+     begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(o.size()+padding,32);
+     end_ = begin_ + o.size();
+     assert(begin_ != nullptr);
+     auto it = begin_;
+     for(auto o_it = o.begin(); o_it!=o.end(); ++it, ++o_it) { *it = *o_it; }
+     if(padding != 0) {
+       std::fill(end_, end_ + padding, std::numeric_limits<REAL>::infinity());
+     }
    }
    vector(vector&& o) {
       begin_ = o.begin_;
@@ -121,6 +138,18 @@ public:
       assert(size() == o.size());
       for(INDEX i=0; i<o.size(); ++i) { 
          (*this)[i] += o[i]; } 
+   }
+
+   void operator+=(const REAL x) {
+      for(INDEX i=0; i<this->size(); ++i) { 
+         (*this)[i] += x;
+      } 
+   }
+
+   void operator-=(const REAL x) {
+      for(INDEX i=0; i<this->size(); ++i) { 
+         (*this)[i] -= x;
+      } 
    }
 
 
@@ -151,8 +180,103 @@ public:
    template<typename ARCHIVE>
    void serialize(ARCHIVE& ar)
    {
-      ar( cereal::binary_data( begin_, sizeof(T)*size()) );
+      assert(false);
+      //ar( cereal::binary_data( begin_, sizeof(T)*size()) );
+      //ar( binary_data<REAL>( begin_, sizeof(T)*size()) );
    }
+
+   void prefetch() const { simdpp::prefetch_read(begin_); }
+
+   // minimum operation with simd instructions (when T is float, double or integer)
+   T min() const
+   {
+     //check for correct alignment
+     //std::cout << std::size_t(begin_) << " aligned?" << std::endl;
+     //if((std::size_t(begin_) % 32) != 0) {
+     //  std::cout << std::size_t(begin_) << "not aligned" << std::endl;
+     //  assert(false);
+     //}
+
+     if(std::is_same<T,double>::value) {
+
+       simdpp::float64<4> min_val = simdpp::load( begin_ );
+       for(auto it=begin_+4; it<end_; it+=4) {
+         simdpp::float64<4> tmp = simdpp::load( it );
+         min_val = simdpp::min(min_val, tmp); 
+       }
+       return simdpp::reduce_min(min_val);
+
+     } else if(std::is_same<T,float>::value) {
+
+       simdpp::float32<8> min_val = simdpp::load( begin_ );
+       for(auto it=begin_+8; it<end_; it+=8) {
+         simdpp::float32<8> tmp = simdpp::load( it );
+         min_val = simdpp::min(min_val, tmp); 
+       }
+       return simdpp::reduce_min(min_val);
+
+     } else {
+       return *std::min_element(begin(), end());
+     }
+   }
+
+   void min(const T val)
+   {
+     if(std::is_same<T,float>::value) {
+       simdpp::float32<8> val_vec = simdpp::make_float(val);
+       for(auto it=begin_+8; it<end_; it+=8) {
+         simdpp::float32<8> tmp = simdpp::load( it );
+         tmp = simdpp::min(val_vec, tmp); 
+         simdpp::store(it, tmp);
+       }
+     } else {
+       assert(false);
+     } 
+   }
+
+   std::array<T,2> two_min() const
+   {
+     //assert(std::is_same<T,float>::value == true);
+
+     simdpp::float32<8> min_val = simdpp::make_float(std::numeric_limits<REAL>::infinity());
+     simdpp::float32<8> second_min_val = simdpp::make_float(std::numeric_limits<REAL>::infinity());
+     for(auto it=begin_; it<end_; it+=8) {
+         simdpp::float32<8> tmp = simdpp::load( it );
+         simdpp::float32<8> tmp_min = simdpp::min(tmp, min_val);
+         simdpp::float32<8> tmp_max = simdpp::max(tmp, min_val);
+         min_val = tmp_min;
+         second_min_val = simdpp::min(tmp_max, second_min_val); 
+     }
+
+     // second minimum is the minimum of the second minimum in vector min and the minimum in second_min_val
+     simdpp::float32<4> x1;
+     simdpp::float32<4> y1;
+     simdpp::split(min_val, x1, y1);
+     simdpp::float32<4> min2 = simdpp::min(x1, y1);
+     simdpp::float32<4> max2 = simdpp::max(x1, y1);
+
+     std::array<T,4> min_array; //
+     min_array[0] = min2.vec(0); //min2.vec(1), min2.vec(2), min2.vec(3)});
+     const auto min3 = two_smallest_elements<T>(min_array.begin(), min_array.end());
+     //const REAL min = simdpp::reduce_min(min2);
+     const REAL second_min = std::min({simdpp::reduce_min(second_min_val), simdpp::reduce_min(max2), min3[1]});
+     return std::array<T,2>({min3[0], second_min});
+     /*
+     simdpp::float32<2> x2;
+     simdpp::float32<2> y2;
+     simdpp::split(min2, x2, y2);
+     simdpp::float32<2> min3 = simdpp::min(x2, y2);
+     simdpp::float32<2> max3 = simdpp::max(x2, y2);
+
+
+     const REAL min = simdpp::reduce_min(min3);
+     const REAL second_min = std::min({simdpp::reduce_min(second_min_val), simdpp::reduce_min(max2), simdpp::reduce_min(max3), simdpp::reduce_max(min3)});
+     assert(min == two_smallest_elements<T>(begin_, end_)[0]);
+     assert(second_min == two_smallest_elements<T>(begin_, end_)[1]);
+     return std::array<T,2>({min, second_min});
+     */
+   }
+
 private:
   T* begin_;
   T* end_;
@@ -244,6 +368,8 @@ private:
 };
 
 
+// matrix is based on vector.
+// However, the entries are padded so that each coordinate (i,0) is aligned
 template<typename T=REAL>
 class matrix : public matrix_expression<T,matrix<T>> {
 public:
@@ -259,35 +385,61 @@ public:
    T* begin() const { return vec_.begin(); }
    T* end() const { return vec_.end(); }
 
-   matrix(const INDEX d1, const INDEX d2) : vec_(d1*d2), dim2_(d2) {
-      assert(d1 > 0 && d2 > 0);
+   static INDEX underlying_vec_size(const INDEX d1, const INDEX d2)
+   {
+     return d1*(d2 + padding(d2));
    }
-   matrix(const INDEX d1, const INDEX d2, const T val) : vec_(d1*d2), dim2_(d2) {
+   static INDEX padding(const INDEX i) {
+     if(std::is_same<T,float>::value) {
+       const INDEX padding = (8-(i%8))%8;
+       return i + padding; 
+     } else {
+       assert(false);
+     }
+   }
+
+   INDEX padded_dim2() const { return padded_dim2_; }
+
+   void fill_padding()
+   {
+     for(INDEX x1=0; x1<dim1(); ++x1) {
+       for(INDEX x2=dim2(); x2<padded_dim2(); ++x2) {
+         vec_[x1*padded_dim2() + x2] = std::numeric_limits<REAL>::infinity();
+       }
+     }
+   }
+   matrix(const INDEX d1, const INDEX d2) : vec_(underlying_vec_size(d1,d2)), dim2_(d2), padded_dim2_(d2 + padding(d2)) {
+      assert(d1 > 0 && d2 > 0);
+      fill_padding();
+   }
+   matrix(const INDEX d1, const INDEX d2, const T val) : vec_(underlying_vec_size(d1,d2)), dim2_(d2), padded_dim2_(d2 + padding(d2)) {
       assert(d1 > 0 && d2 > 0);
       std::fill(this->begin(), this->end(), val);
+      fill_padding();
    }
    matrix(const matrix& o) 
       : vec_(o.vec_),
-      dim2_(o.dim2_) 
+      dim2_(o.dim2_),
+      padded_dim2_(o.padded_dim2_)
    {}
    matrix(matrix&& o) 
       : vec_(std::move(o.vec_)),
-      dim2_(o.dim2_) 
+      dim2_(o.dim2_),
+      padded_dim2_(o.padded_dim2_)
    {}
    void operator=(const matrix<T>& o) {
       assert(this->size() == o.size() && o.dim2_ == dim2_);
+      // to do: use SIMD
       for(INDEX i=0; i<o.size(); ++i) { 
          vec_[i] = o[i]; 
       }
    }
-   T& operator()(const INDEX x1, const INDEX x2) {
-      assert(x1<dim1() && x2<dim2());
-      return vec_[x1*dim2_ + x2]; 
-   }
-   T operator()(const INDEX x1, const INDEX x2) const { return vec_[x1*dim2_ + x2]; }
-   T operator()(const INDEX x1, const INDEX x2, const INDEX x3) const { assert(x3 == 0); return vec_[x1*dim2_ + x2]; } // sometimes we treat a matrix as a tensor with trivial last dimension
-   T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) { assert(x3 == 0); return vec_[x1*dim2_ + x2]; } // sometimes we treat a matrix as a tensor with trivial last dimension
-   const INDEX dim1() const { return vec_.size()/dim2_; }
+   T& operator()(const INDEX x1, const INDEX x2) { assert(x1<dim1() && x2<dim2()); return vec_[x1*padded_dim2() + x2]; }
+   T operator()(const INDEX x1, const INDEX x2) const { assert(x1<dim1() && x2<dim2()); return vec_[x1*padded_dim2() + x2]; }
+   T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) { assert(x3 == 0); return (*this)(x1,x2); } // sometimes we treat a matrix as a tensor with trivial last dimension
+   T operator()(const INDEX x1, const INDEX x2, const INDEX x3) const { assert(x3 == 0); return (*this)(x1,x2); } // sometimes we treat a matrix as a tensor with trivial last dimension
+
+   const INDEX dim1() const { return vec_.size()/padded_dim2(); }
    const INDEX dim2() const { return dim2_; }
 
    void transpose() {
@@ -298,9 +450,60 @@ public:
          }
       }
    }
+
+   // should these functions be members?
+   // minima along second dimension
+   // should be slower than min2
+   vector<T> min1() const
+   {
+     assert(false);
+     vector<T> min(dim1());
+     if(std::is_same<T,float>::value) {
+       for(INDEX x1=0; x1<dim1(); ++x1) {
+         simdpp::float32<8> cur_min = simdpp::load( &vec_[x1*padded_dim2()] );
+         for(INDEX x2=1; x2<dim2(); x2+=8) {
+           simdpp::float32<8> tmp = simdpp::load( &vec_[x1*padded_dim2() + x2] );
+           cur_min = simdpp::min(cur_min, tmp); 
+         }
+         min[x1] = simdpp::reduce_min(cur_min); 
+       }
+     } else {
+       assert(false);
+     }
+
+     return std::move(min);
+   }
+
+   // minima along first dimension
+   vector<T> min2() const
+   {
+     assert(false);
+     vector<T> min(dim2());
+     // possibly other methods are faster, e.g. doing a non-contiguous access, or explicitly holding a few variables and not storing them back in vector min for a few sizes
+     if(std::is_same<T,float>::value) {
+       for(INDEX x2=0; x2<dim2(); x2+=8) {
+         simdpp::float32<8> tmp = simdpp::load( vec_.begin() + x2 );
+         simdpp::store(&min[x2], tmp);
+       }
+
+       for(INDEX x1=1; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); x2+=8) {
+           simdpp::float32<8> cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
+           simdpp::float32<8> tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
+           cur_min = simdpp::min(cur_min, tmp);
+           simdpp::store(&min[x1], cur_min);
+         } 
+       }
+     } else {
+       assert(false);
+     }
+
+     return std::move(min); 
+   }
 protected:
    vector<T> vec_;
    const INDEX dim2_;
+   const INDEX padded_dim2_; // possibly do not store but compute when needed?
 };
 
 template<typename T=REAL>

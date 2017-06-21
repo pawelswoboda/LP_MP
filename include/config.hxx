@@ -17,7 +17,7 @@
 namespace LP_MP {
 
    // data types for all floating point/integer operations 
-   using REAL = double;
+   using REAL = float;
    using INDEX = unsigned int;
    using UNSIGNED_INDEX = INDEX;
    using SIGNED_INDEX = int; // note: must be the same as flow type in MinCost

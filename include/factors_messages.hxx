@@ -1307,10 +1307,9 @@ public:
       if(c == Chirality::right) { // right factor is upper
          static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromRightContainer()>([&](auto f) {
                   // receive restricted messages 
-                  // obsolete
-                  std::stringstream dual;
-                  cereal::BinaryOutputArchive ar_in(dual);
-                  leftFactor_->GetFactor()->serialize_dual( ar_in );
+                  serialization_archive ar(leftFactor_->GetFactor(), leftFactor_->GetFactor()+1, [](auto& f, auto& ar) { f.serialize_dual(ar); });
+                  save_archive s_ar(ar);
+                  leftFactor_->GetFactor()->serialize_dual( s_ar );
 
                   f(this)->ReceiveRestrictedMessageFromRightContainer();
 
@@ -1318,8 +1317,8 @@ public:
                   leftFactor_->MaximizePotentialAndComputePrimal();
 
                   // restore dual reparametrization to before restricted messages were sent.
-                  cereal::BinaryInputArchive ar_out(dual);
-                  leftFactor_->GetFactor()->serialize_dual( ar_out );
+                  load_archive l_ar(ar);
+                  leftFactor_->GetFactor()->serialize_dual( l_ar );
 
                   // propagate back to upper
                   f(this)->ComputeRightFromLeftPrimal(); 
@@ -1339,9 +1338,9 @@ public:
          static_if<RightFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromLeftContainer()>([&](auto f) {
                   std::stringstream ss;
                   // receive restricted messages 
-                  std::stringstream dual;
-                  cereal::BinaryOutputArchive ar_in(dual);
-                  rightFactor_->GetFactor()->serialize_dual( ar_in );
+                  serialization_archive ar(rightFactor_->GetFactor(), rightFactor_->GetFactor()+1, [](auto& f, auto& ar) { f.serialize_dual(ar); });
+                  save_archive s_ar(ar);
+                  rightFactor_->GetFactor()->serialize_dual( s_ar );
 
                   f(this)->ReceiveRestrictedMessageFromLeftContainer();
 
@@ -1349,8 +1348,8 @@ public:
                   rightFactor_->MaximizePotentialAndComputePrimal();
 
                   // restore dual reparametrization to before restricted messages were sent.
-                  cereal::BinaryInputArchive ar_out(dual);
-                  rightFactor_->GetFactor()->serialize_dual( ar_out );
+                  load_archive l_ar(ar);
+                  rightFactor_->GetFactor()->serialize_dual( l_ar );
 
                   // propagate back to upper
                   f(this)->ComputeLeftFromRightPrimal(); 
@@ -1368,7 +1367,7 @@ public:
 
       } else {
          assert(false);
-      } 
+      }
    }
 
 protected:
@@ -1385,19 +1384,6 @@ protected:
       }
    };
 };
-
-// additionally store message difference between left and right factor (might be != 0) for use in Frank-Wolfe algorithm decomposition
-template<typename MESSAGE_CONTAINER>
-class FwMessageContainer : public MESSAGE_CONTAINER {
-   template<typename... ARGS>
-   FwMessageContainer(const INDEX msg_size, ARGS... args):
-      MESSAGE_CONTAINER(args...),
-      msg_diff_(msg_size)
-   {}
-private:
-   std::vector<REAL> msg_diff_; // change to vector
-};
-
 
 
 // container class for factors. Here we hold the factor, all connected messages, reparametrization storage and perform reparametrization and coordination for sending and receiving messages.
@@ -1975,16 +1961,6 @@ public:
       //}
       ComputePrimalThroughMessages();
    }
-
-   // obsolete
-   virtual void serialize_dual(cereal::BinaryOutputArchive& ar) final
-   { factor_.serialize_dual(ar); }
-   virtual void serialize_primal(cereal::BinaryOutputArchive& ar) final
-   { factor_.serialize_primal(ar); } 
-   virtual void serialize_dual(cereal::BinaryInputArchive& ar) final
-   { factor_.serialize_dual(ar); }
-   virtual void serialize_primal(cereal::BinaryInputArchive& ar) final
-   { factor_.serialize_primal(ar); } 
 
    virtual void serialize_dual(load_archive& ar) final
    { factor_.serialize_dual(ar); }

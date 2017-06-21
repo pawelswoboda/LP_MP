@@ -20,6 +20,7 @@ OPTION(WITH_SAT_BASED_ROUNDING "Use the glucose SAT solver to decode a primal so
 OPTION(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/MQLib/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/libsimdpp")
 find_library(MAX_CUT_LIB NAMES MQLib.a PATHS "${CMAKE_CURRENT_SOURCE_DIR}/external/MQLib/bin")
 #link_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/MQLib/bin/")
 

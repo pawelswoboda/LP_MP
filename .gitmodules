@@ -1,3 +1,6 @@
 [submodule "external/MQLib"]
 	path = external/MQLib
 	url = git://github.com/pawelswoboda/MQLib.git
+[submodule "external/libsimdpp"]
+	path = external/libsimdpp
+	url = https://github.com/p12tic/libsimdpp.git

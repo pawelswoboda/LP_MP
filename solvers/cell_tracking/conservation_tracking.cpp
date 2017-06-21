@@ -5,8 +5,8 @@ using namespace LP_MP;
 int main(int argc, char* argv[])
 
 {
-MpRoundingSolver<Solver<FMC_CONSERVATION_TRACKING,LP_sat<LP>,StandardTighteningVisitor>> solver(argc,argv);
-solver.ReadProblem(conservation_tracking_parser::ParseProblem<Solver<FMC_CONSERVATION_TRACKING,LP_sat<LP>,StandardTighteningVisitor>>);
+Solver<FMC_CONSERVATION_TRACKING,LP,StandardTighteningVisitor> solver(argc,argv);
+solver.ReadProblem(conservation_tracking_parser::ParseProblem<Solver<FMC_CONSERVATION_TRACKING,LP,StandardTighteningVisitor>>);
 return solver.Solve();
 
 }

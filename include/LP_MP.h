@@ -78,13 +78,9 @@ public:
    virtual void serialize_dual(allocate_archive&) = 0;
    virtual void serialize_primal(allocate_archive&) = 0;
 
-   // obsolete
-   // for reading reparametrization/labeling out of factor
-   virtual void serialize_dual(cereal::BinaryOutputArchive& ar) = 0; 
-   virtual void serialize_primal(cereal::BinaryOutputArchive& ar) = 0; 
-   // for writing reparametrization/labeling into factor
-   virtual void serialize_dual(cereal::BinaryInputArchive& ar) = 0; 
-   virtual void serialize_primal(cereal::BinaryInputArchive& ar) = 0; 
+   // for use in tree decomposition:
+   //void dot_product();
+   //void load_Lagrange_multipliers(load_archive& ar);
 
    //virtual PrimalSolutionStorageAdapter* AllocatePrimalSolutionStorage() const = 0;
    //virtual bool CanComputePrimalSolution() const = 0;
@@ -460,9 +456,9 @@ public:
       }
    }
 
-   REAL LowerBound() const
+   double LowerBound() const
    {
-      REAL lb = 0.0;
+      double lb = 0.0;
 #pragma omp parallel for reduction(+:lb)
       for(INDEX i=0; i<f_.size(); ++i) {
          lb += f_[i]->LowerBound();
@@ -475,17 +471,17 @@ public:
    bool CheckPrimalConsistency() const;
 
    template<typename FACTOR_ITERATOR>
-   REAL EvaluatePrimal(cereal::BinaryInputArchive& primal, FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end) // read in primal solution from primal archive and evaluate cost
+   double EvaluatePrimal(cereal::BinaryInputArchive& primal, FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end) // read in primal solution from primal archive and evaluate cost
    {
       assert(std::distance(factor_begin, factor_end) == f_.size());
       assert(false); 
       return 0.0;
    }
-   REAL EvaluatePrimal() {
+   double EvaluatePrimal() {
       const bool consistent = CheckPrimalConsistency();
       if(consistent == false) return std::numeric_limits<REAL>::infinity();
 
-      REAL cost = 0.0;
+      double cost = 0.0;
 #pragma omp parallel for reduction(+:cost)
       for(INDEX i=0; i<f_.size(); ++i) {
          cost += f_[i]->EvaluatePrimal();
@@ -843,219 +839,6 @@ private:
    bool sat_dirty_ = false; // sat solver is run asynchronously. When factor graph changes, then sat solution cannot be read in anymore and has to be discarded. This flag signifies this case
 };
 
-// two types of archives for use in LP_tree: 
-// (i) count size needed for storing information
-// (ii) fixed size stream buffer
-class COUNTER_BUFFER : public std::streambuf
-{
-private :
-   size_t mSize = 0;
-
-private :
-   int_type overflow(int_type C)
-   {
-      return mSize++;
-   }
-
-public :
-   size_t Size(void) const
-   {
-      return mSize;
-   }
-};
-
-class static_size_buffer : public std::streambuf
-{
-
-};
-
-
-
-// factors are arranged in trees.
-class LP_tree
-{
-public:
-   void AddMessage(MessageTypeAdapter* m, Chirality c) // chirality denotes which factor is upper
-   {
-      tree_messages_.push_back(std::make_tuple(m, c));
-   }
-   void compute_subgradient()
-   {
-      // send messages up the tree
-      for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
-         auto* m = std::get<0>(*it);
-         Chirality c = std::get<1>(*it);
-         m->send_message_up(c);
-      }
-      // compute primal for topmost factor
-      // also init primal for top factor, all other primals were initialized already by send_message_up
-      if(std::get<1>(tree_messages_.back()) == Chirality::right) {
-         // init primal for right factor!
-         std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->init_primal();
-         std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->MaximizePotentialAndComputePrimal();
-      } else {
-         std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->init_primal(); 
-         std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->MaximizePotentialAndComputePrimal(); 
-      }
-      // track down optimal primal solution
-      for(auto it = tree_messages_.rbegin(); it!= tree_messages_.rend(); ++it) {
-         auto* m = std::get<0>(*it);
-         Chirality c = std::get<1>(*it);
-         m->track_solution_down(c);
-      } 
-
-      // check if primal cost is equal to lower bound
-      assert(std::abs(lower_bound() - primal_cost()) <= eps);
-   }
-
-   REAL primal_cost() const
-   {
-      REAL cost = 0.0;
-      for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
-         auto* m = std::get<0>(*it);
-         Chirality c = std::get<1>(*it);
-         if(c == Chirality::right) {
-            cost += m->GetLeftFactorTypeAdapter()->EvaluatePrimal(); 
-         } else {
-            cost += m->GetRightFactorTypeAdapter()->EvaluatePrimal();
-         }
-      }
-      if(std::get<1>(tree_messages_.back()) == Chirality::right) {
-         cost += std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->EvaluatePrimal();
-      } else {
-         cost += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->EvaluatePrimal(); 
-      }
-      return cost;
-   }
-
-   REAL lower_bound() const 
-   {
-      REAL lb = 0.0;
-      for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
-         auto* m = std::get<0>(*it);
-         Chirality c = std::get<1>(*it);
-         if(c == Chirality::right) {
-            lb += m->GetLeftFactorTypeAdapter()->LowerBound(); 
-         } else {
-            lb += m->GetRightFactorTypeAdapter()->LowerBound();
-         }
-      }
-      if(std::get<1>(tree_messages_.back()) == Chirality::right) {
-         lb += std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->LowerBound();
-      } else {
-         lb += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->LowerBound(); 
-      }
-      return lb; 
-   }
-
-   template<typename FACTOR_TYPE>
-   std::vector<FACTOR_TYPE*> get_factors() const
-   {
-      std::vector<FACTOR_TYPE*> factors;
-      std::set<FACTOR_TYPE*> factor_present;
-      for(auto& t : tree_messages_) {
-
-         auto* left = std::get<0>(t)->GetLeftFactorTypeAdapter();
-         auto* left_cast = dynamic_cast<FACTOR_TYPE*>(left);
-         if(left_cast && factor_present.find(left_cast) == factor_present.end()) {
-            factors.push_back(left_cast);
-            factor_present.insert(left_cast);
-         }
-
-         auto* right = std::get<0>(t)->GetRightFactorTypeAdapter();
-         auto* right_cast = dynamic_cast<FACTOR_TYPE*>(right);
-         if(right_cast && factor_present.find(right_cast) == factor_present.end()) {
-            factors.push_back(right_cast);
-            factor_present.insert(right_cast);
-         } 
-
-      }
-      return std::move(factors);
-   }
-
-   // find out necessary size for storing primal solution in archive
-   INDEX primal_size() const
-   {
-      serialization_archive a(factors_.begin(), factors_.end(), [](auto f, auto& ar) {f->serialize_primal(ar); }); 
-      return a.size();
-   }
-
-   /*
-   // for the Frank Wolfe implementation
-   // to do: change the SVM implementation and make these methods virtual!
-   static void max_fn(double* wi, YPtr _y, double kappa, TermData term_data)
-   {
-      LP_tree* t = (LP_tree*) term_data;
-      // first add weights to problem
-   }
-
-   static bool compare_fn(YPtr _y1, YPtr _y2, TermData term_data)
-   {
-      // the primal is actually a binary archive constructed by serializing the primal solutions
-      LP_tree* t = (LP_tree*) term_data;
-
-      serialization_archive* y1 = (serialization_archive*) _y1;
-      serialization_archive* y2 = (serialization_archive*) _y2;
-
-      return *y1 == *y2;
-   }
-
-   static void copy_fn(double* ai, YPtr _y, TermData term_data)
-   {}
-
-   static double dot_product_fn(double* wi, YPtr _y, TermData term_data)
-   {
-      return 0.0;
-   }
-   */
-protected:
-   std::vector< std::tuple<MessageTypeAdapter*, Chirality>> tree_messages_; // messages forming a tree. Chirality says which side comprises the lower  factor
-   std::vector<FactorTypeAdapter*> factors_;
-   // subgradient information = primal solution to tree
-   // for sending messages down we need to know to how many lower factors an upper factor is connected and then we need to average messages sent down appropriately.
-};
-
-class LP_with_trees : public LP
-{
-
-   void build_frank_wolfe()
-   {
-      // first build up the solver
-      /*
-      const INDEX no_subproblems = trees_.size();
-      INDEX no_Lagrange_multipliers = 0;
-      SVM* s = new SVM(no_Lagrange_multipliers, no_subproblems, max_fn, copy_fn, compare_fn, dot_product_fn, nullptr, false);//int d, int n, MaxFn max_fn, CopyFn copy_fn, CompareFn compare_fn, DotProductFn dot_product_fn, DotProductKernelFn dot_product_kernel_fn, bool zero_lower_bound);
-      s->SetParams(1.0, 1.0, 1.0);
-
-      std::vector<sub_problem*> sp_vec;
-      for(INDEX i=0; i<no_subproblems; ++i) {
-         LP_tree t;
-         t.compute_subgradient();
-         if(p.projectionVar[i][0] + 1 == p.projectionVar[i][1]) { // horizontal projection
-            sp->sign = 1.0; 
-         } else {
-            sp->sign = -1.0; 
-         }
-         //std::cout << "sign = " << sp->sign << "\n";
-
-         sp->unaries = p.projectionVar[i];
-
-         s->SetTerm(i, sp, mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
-         sp_vec.push_back(sp);
-      }
-
-      s->options.gap_threshold = 0.000001;
-      s->options.iter_max = 1000;
-
-      */
-
-   }
-   // note: we have a collection of trees which we can optimize to global optimum efficiently.
-   // These cover all factors. However, e.g. in MRFs, factors can be covered multiple times.
-   // Not all messages are internal messages, some join together the individual
-protected:
-   std::vector<LP_tree> trees_;
-};
 
 inline void LP::Begin()
 {

@@ -4,7 +4,7 @@
 #include "LP_MP.h"
 #include "memory_allocator.hxx"
 #include "vector.hxx"
-#include "cereal/types/array.hpp"
+//#include "cereal/types/array.hpp"
 #ifdef WITH_SAT
 #include "sat_interface.hxx"
 #endif
@@ -202,7 +202,8 @@ public:
    }
 
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_[0], primal_[1] ); }
-   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( cereal::binary_data( pairwise_, sizeof(REAL)*(size()+dim1()+dim2()) ) ); }
+   //template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( cereal::binary_data( pairwise_, sizeof(REAL)*(size()+dim1()+dim2()) ) ); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( binary_data<REAL>( pairwise_, sizeof(REAL)*(size()+dim1()+dim2()) ) ); }
 
    template<typename VECTOR>
    void min_marginal_1(VECTOR& m) const
@@ -453,9 +454,12 @@ public:
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) 
    { 
-      ar( cereal::binary_data( msg12_, sizeof(REAL)*(dim1()*dim2()) ) );
-      ar( cereal::binary_data( msg13_, sizeof(REAL)*(dim1()*dim3()) ) );
-      ar( cereal::binary_data( msg23_, sizeof(REAL)*(dim2()*dim3()) ) );
+      //ar( cereal::binary_data( msg12_, sizeof(REAL)*(dim1()*dim2()) ) );
+      //ar( cereal::binary_data( msg13_, sizeof(REAL)*(dim1()*dim3()) ) );
+      //ar( cereal::binary_data( msg23_, sizeof(REAL)*(dim2()*dim3()) ) );
+      ar( binary_data<REAL>( msg12_, sizeof(REAL)*(dim1()*dim2()) ) );
+      ar( binary_data<REAL>( msg13_, sizeof(REAL)*(dim1()*dim3()) ) );
+      ar( binary_data<REAL>( msg23_, sizeof(REAL)*(dim2()*dim3()) ) );
    }
 
 
@@ -659,10 +663,11 @@ public:
    {
       assert(dim1 == dim2);
       assert(is_potts(cost));
+      assert(cost(0,0) == 0.0);
    }
 
    pairwise_potts_factor(const INDEX dim1, const INDEX dim2)
-      : pairwise_potts_factor(dim1, 0.0)
+      : pairwise_potts_factor(dim1, REAL(0.0))
    {
       assert(dim1 == dim2);
    }

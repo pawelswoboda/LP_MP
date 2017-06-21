@@ -30,6 +30,26 @@ struct FMC_CELL_TRACKING {
   using ProblemDecompositionList = meta::list<constructor>; 
 };
 
+struct FMC_CELL_TRACKING_WITH_DIVISION_DISTANCE {
+  constexpr static char* name = "Cell tracking with division distance";
+
+  using detection_factor_container = FactorContainer<detection_factor_dd, FMC_CELL_TRACKING_WITH_DIVISION_DISTANCE, 0, true>;
+  using at_most_one_hypothesis_container = FactorContainer<at_most_one_cell_factor, FMC_CELL_TRACKING_WITH_DIVISION_DISTANCE, 1, false>;
+
+  using transition_message_container = MessageContainer<transition_message_dd, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING_WITH_DIVISION_DISTANCE, 0>;
+  using at_most_one_cell_message_container = MessageContainer<at_most_one_cell_message, 0, 1, message_passing_schedule::left, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING_WITH_DIVISION_DISTANCE, 1>;
+
+  using FactorList = meta::list<detection_factor_container, at_most_one_hypothesis_container>;
+  using MessageList = meta::list<transition_message_container, at_most_one_cell_message_container>;
+
+  using base_constructor = cell_tracking_constructor<
+    detection_factor_container, at_most_one_hypothesis_container, 
+    transition_message_container, at_most_one_cell_message_container
+      >;
+  using constructor = cell_tracking_with_division_distance_constructor<base_constructor>;
+
+  using ProblemDecompositionList = meta::list<constructor>; 
+};
 struct FMC_CELL_TRACKING_MOTHER_MACHINE {
   constexpr static char* name = "Cell tracking in the mother machine";
 

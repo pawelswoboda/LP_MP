@@ -10,12 +10,14 @@ int main(int argc, char* argv[])
 FMC = [ 
       'FMC_CELL_TRACKING_MOTHER_MACHINE',
       'FMC_CONSERVATION_TRACKING',
-      'FMC_CELL_TRACKING'
+      'FMC_CELL_TRACKING',
+      'FMC_CELL_TRACKING_WITH_DIVISION_DISTANCE'
       ]
 
 parse_fun = [
       'cell_tracking_parser_mother_machine::ParseProblemMotherMachine',
       'conservation_tracking_parser::ParseProblem',
+      'cell_tracking_parser_2d::ParseProblem',
       'cell_tracking_parser_2d::ParseProblem'
 
       ]
@@ -23,12 +25,13 @@ parse_fun = [
 file_name = [
       'cell_tracking_mother_machine.cpp',
       'conservation_tracking.cpp',
-      'cell_tracking.cpp'
+      'cell_tracking.cpp',
+      'cell_tracking_with_division_distance.cpp'
       ]
 
 
-main_body = ["MpRoundingSolver<Solver<" + e[0] + ",LP_sat<LP>,StandardTighteningVisitor>> solver(argc,argv);\nsolver.ReadProblem(" + e[1] + "<Solver<" + e[0] + ",LP_sat<LP>,StandardTighteningVisitor>>);\nreturn solver.Solve();\n" for e in zip(FMC,parse_fun)]
-#main_body = ["Solver<" + e[0] + ",LP_sat<LP>,StandardTighteningVisitor> solver(argc,argv);\nsolver.ReadProblem(" + e[1] + "<Solver<" + e[0] + ",LP_sat<LP>,StandardTighteningVisitor>>);\nreturn solver.Solve();\n" for e in zip(FMC,parse_fun)]
+#main_body = ["MpRoundingSolver<Solver<" + e[0] + ",LP_sat<LP>,StandardTighteningVisitor>> solver(argc,argv);\nsolver.ReadProblem(" + e[1] + "<Solver<" + e[0] + ",LP_sat<LP>,StandardTighteningVisitor>>);\nreturn solver.Solve();\n" for e in zip(FMC,parse_fun)]
+main_body = ["Solver<" + e[0] + ",LP,StandardTighteningVisitor> solver(argc,argv);\nsolver.ReadProblem(" + e[1] + "<Solver<" + e[0] + ",LP,StandardTighteningVisitor>>);\nreturn solver.Solve();\n" for e in zip(FMC,parse_fun)]
 
 for e in zip(main_body,file_name):
    f = open(e[1],'w')

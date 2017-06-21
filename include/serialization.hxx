@@ -8,6 +8,8 @@
 
 namespace LP_MP {
 
+  // to do: use perfect forwarding where applicable
+
 template<typename T>
 class binary_data {
 public:
@@ -50,6 +52,12 @@ public:
   void serialize(const vector<T>& v)
   {
      serialize(v.begin(), v.size());
+  }
+
+  template<typename T>
+  void serialize(const matrix<T>& m)
+  {
+     serialize(m.begin(), m.size());
   }
 
   // for std::vector<T>
@@ -107,12 +115,27 @@ public:
      cur_ = archive_;
   }
 
+  serialization_archive(void* mem, INDEX size_in_bytes)
+  {
+     assert(mem != nullptr);
+     archive_ = (char*) mem;
+     cur_ = archive_;
+     end_ = archive_ + size_in_bytes;
+  }
+
   ~serialization_archive()
   {
     assert(archive_ != nullptr);
     if(archive_ != nullptr) {
       delete[] archive_;
     }
+  }
+
+  void release_memory()
+  { 
+     archive_ = nullptr;
+     cur_ = nullptr;
+     end_ = nullptr;
   }
 
   bool operator==(serialization_archive& o) const
@@ -198,6 +221,12 @@ public:
      serialize(v.begin(), v.size());
   }
 
+  template<typename T>
+  void serialize(const matrix<T>& m)
+  {
+     serialize(m.begin(), m.size());
+  }
+
   // for std::vector<T>
   template<typename T>
   void serialize(const std::vector<T>& v)
@@ -280,6 +309,13 @@ public:
      serialize(v.begin(), v.size());
   }
 
+  template<typename T>
+  void serialize(matrix<T>& m)
+  {
+     assert(m.size() == *((INDEX*)ar.cur_address()));
+     serialize(m.begin(), m.size());
+  }
+
   // for std::vector<T>
   template<typename T>
   void serialize(std::vector<T>& v)
@@ -308,6 +344,101 @@ public:
      serialize(t);
      (*this)(types...);
   }
+
+private:
+  serialization_archive& ar;
+};
+
+// add numeric values stored in archive to variables
+template<INDEX PREFIX>
+class addition_archive {
+public:
+   addition_archive(serialization_archive& a) 
+      : ar(a) 
+   {
+      ar.reset_cur(); 
+   }
+
+   // for arrays
+   template<typename T>
+     void serialize(T* pointer, const INDEX size)
+     {
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value);
+       INDEX* s = (INDEX*) ar.cur_address();
+       assert(*s == size);
+       ++s;
+       T* val = (T*) s;
+       for(INDEX i=0; i<size; ++i) {
+         pointer[i] += T(PREFIX) * val[i]; 
+       }
+       std::memcpy((void*) pointer, (void*) s, size*sizeof(T));
+       const INDEX size_in_bytes = sizeof(INDEX) + sizeof(T)*size;
+       ar.advance(size_in_bytes);
+     }
+   template<typename T>
+     void serialize( binary_data<T> b )
+     {
+       serialize(b.pointer, b.no_elements); 
+     }
+
+   // for std::array<T,N>
+   template<typename T, std::size_t N>
+     void serialize(std::array<T,N>& v)
+     {
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value);
+       T* s = (T*) ar.cur_address();
+       for(auto& x : v) {
+         x += T(PREFIX) * (*s);
+         ++s; 
+       }
+       const INDEX size_in_bytes = sizeof(T)*N;
+       ar.advance(size_in_bytes);
+     } 
+
+   // for vector<T>
+   template<typename T>
+     void serialize(vector<T>& v)
+     {
+       assert(v.size() == *((INDEX*)ar.cur_address()));
+       serialize(v.begin(), v.size());
+     }
+
+   template<typename T>
+     void serialize(matrix<T>& m)
+     {
+       assert(m.size() == *((INDEX*)ar.cur_address()));
+       serialize(m.begin(), m.size());
+     }
+
+   // for std::vector<T>
+   template<typename T>
+     void serialize(std::vector<T>& v)
+     {
+       assert(v.size() == *((INDEX*)ar.cur_address()));
+       serialize(v.data(), v.size());
+     } 
+
+   // for plain data
+   template<typename T>
+     typename std::enable_if<std::is_arithmetic<T>::value>::type
+     serialize(T& t)
+     {
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value);
+       T* s = (T*) ar.cur_address();
+       t += T(PREFIX) * (*s);
+       ar.advance(sizeof(T));
+     }
+
+   // save multiple entries
+   template<typename... T_REST>
+     void operator()(T_REST&&... types)
+     {}
+   template<typename T, typename... T_REST>
+     void operator()(T&& t, T_REST&&... types)
+     {
+       serialize(t);
+       (*this)(types...);
+     }
 
 private:
   serialization_archive& ar;

@@ -90,6 +90,17 @@ bool HasUniqueValues(const VECTOR& v)
    return true;
 }
 
+template<typename T, typename ITERATOR>
+T min_value(ITERATOR begin, ITERATOR end)
+{
+  T min_val = *begin;
+  ++begin;
+  for(; begin!=end; ++begin) {
+    min_val = std::min(min_val, *begin);
+  }
+  return min_val;
+}
+
 // find out smallest and second smallest without branching
 template<typename T, typename ITERATOR>
 std::array<T,2> two_smallest_elements(ITERATOR begin, ITERATOR end)

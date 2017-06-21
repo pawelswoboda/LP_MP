@@ -318,7 +318,7 @@ namespace LP_MP {
 
          if(tighten_) {
             iteration_after_tightening_++;
-            const REAL cur_slope = std::max(lowerBound - prev_lower_bound_,0.0);
+            const REAL cur_slope = std::max(lowerBound - prev_lower_bound_,REAL(0.0));
             if(iteration_after_tightening_ == 2) {
                tighten_slope_ = cur_slope;
             }

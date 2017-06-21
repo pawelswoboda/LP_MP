@@ -1,3 +1,4 @@
+#include "tree_decomposition.hxx"
 #include <iostream>
 #include <array>
 #include "assert.h"
