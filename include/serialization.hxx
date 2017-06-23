@@ -13,9 +13,9 @@ namespace LP_MP {
 template<typename T>
 class binary_data {
 public:
-   binary_data(const T* _p, const INDEX _no_elements) : pointer(_p), no_elements(_no_elements) {}
-   const T* pointer;
-   INDEX no_elements; 
+   binary_data(T* const _p, const INDEX _no_elements) : pointer(_p), no_elements(_no_elements) {}
+   T* const pointer;
+   const INDEX no_elements; 
 };
 
 class allocate_archive {
@@ -350,7 +350,7 @@ private:
 };
 
 // add numeric values stored in archive to variables
-template<INDEX PREFIX>
+template<SIGNED_INDEX PREFIX>
 class addition_archive {
 public:
    addition_archive(serialization_archive& a) 
@@ -363,7 +363,7 @@ public:
    template<typename T>
      void serialize(T* pointer, const INDEX size)
      {
-       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value);
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
        INDEX* s = (INDEX*) ar.cur_address();
        assert(*s == size);
        ++s;
@@ -385,7 +385,7 @@ public:
    template<typename T, std::size_t N>
      void serialize(std::array<T,N>& v)
      {
-       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value);
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
        T* s = (T*) ar.cur_address();
        for(auto& x : v) {
          x += T(PREFIX) * (*s);
@@ -423,7 +423,7 @@ public:
      typename std::enable_if<std::is_arithmetic<T>::value>::type
      serialize(T& t)
      {
-       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value);
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
        T* s = (T*) ar.cur_address();
        t += T(PREFIX) * (*s);
        ar.advance(sizeof(T));

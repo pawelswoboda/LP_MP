@@ -16,6 +16,8 @@
 
 namespace LP_MP {
 
+   // to do: use type definitions for SIMD types
+
    // data types for all floating point/integer operations 
    using REAL = float;
    using INDEX = unsigned int;
@@ -29,7 +31,7 @@ namespace LP_MP {
    enum class MessageSendingType {SRMP,MPLP}; // also add full, for always sending and receiving messages
    enum class Direction {forward, backward};
 
-   constexpr REAL eps = 1e-8;
+   constexpr REAL eps = std::is_same<REAL,float>::value ? 1e-6 : 1e-8;
    
    // shortcuts to indicate how many messages a factor holds
    constexpr SIGNED_INDEX variableMessageNumber = 0;
@@ -131,9 +133,6 @@ namespace LP_MP {
          bool check(const INDEX& value) const { return value > 0; };
    };
    static PositiveIntegerConstraint positiveIntegerConstraint;
-
-
-
 }
 
 // insert hash functions from above into standard namespace
@@ -149,13 +148,6 @@ namespace std
         }
     };
 }
-
-//template class MinCost<LP_MP::SIGNED_INDEX,LP_MP::REAL>;
-
-//template class MinCost<int,int>;
-//template class MinCost<int,size_t>;
-//template class MinCost<int,double>;
-//template class MinCost<int,float>;
 
 #endif // LP_MP_CONFIG_HXX
 

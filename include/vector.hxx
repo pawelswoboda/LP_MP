@@ -391,8 +391,7 @@ public:
    }
    static INDEX padding(const INDEX i) {
      if(std::is_same<T,float>::value) {
-       const INDEX padding = (8-(i%8))%8;
-       return i + padding; 
+       return (8-(i%8))%8;
      } else {
        assert(false);
      }
@@ -456,13 +455,12 @@ public:
    // should be slower than min2
    vector<T> min1() const
    {
-     assert(false);
      vector<T> min(dim1());
      if(std::is_same<T,float>::value) {
        for(INDEX x1=0; x1<dim1(); ++x1) {
-         simdpp::float32<8> cur_min = simdpp::load( &vec_[x1*padded_dim2()] );
-         for(INDEX x2=1; x2<dim2(); x2+=8) {
-           simdpp::float32<8> tmp = simdpp::load( &vec_[x1*padded_dim2() + x2] );
+         simdpp::float32<8> cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() );
+         for(INDEX x2=8; x2<dim2(); x2+=8) {
+           simdpp::float32<8> tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
            cur_min = simdpp::min(cur_min, tmp); 
          }
          min[x1] = simdpp::reduce_min(cur_min); 
@@ -477,9 +475,8 @@ public:
    // minima along first dimension
    vector<T> min2() const
    {
-     assert(false);
      vector<T> min(dim2());
-     // possibly other methods are faster, e.g. doing a non-contiguous access, or explicitly holding a few variables and not storing them back in vector min for a few sizes
+     // possibly iteration strategy is faster, e.g. doing a non-contiguous access, or explicitly holding a few variables and not storing them back in vector min for a few sizes
      if(std::is_same<T,float>::value) {
        for(INDEX x2=0; x2<dim2(); x2+=8) {
          simdpp::float32<8> tmp = simdpp::load( vec_.begin() + x2 );
@@ -491,7 +488,7 @@ public:
            simdpp::float32<8> cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
            simdpp::float32<8> tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
            cur_min = simdpp::min(cur_min, tmp);
-           simdpp::store(&min[x1], cur_min);
+           simdpp::store(&min[x2], cur_min);
          } 
        }
      } else {

@@ -68,6 +68,10 @@ public:
    virtual void init_primal() = 0;
    virtual void MaximizePotentialAndComputePrimal() = 0;
 
+   // for writing primal solution into subgradient
+   // return value is size of subgradient
+   virtual INDEX subgradient(double* w) = 0;
+
    // for reading reparametrization/labeling out of factor
    virtual void serialize_dual(save_archive&) = 0;
    virtual void serialize_primal(save_archive&) = 0;
@@ -77,6 +81,9 @@ public:
    // for determining size of archive
    virtual void serialize_dual(allocate_archive&) = 0;
    virtual void serialize_primal(allocate_archive&) = 0;
+   // for adding weights in Frank Wolfe algorithm
+   virtual void serialize_dual(addition_archive<+1>&) = 0;
+   virtual void serialize_dual(addition_archive<-1>&) = 0;
 
    // for use in tree decomposition:
    //void dot_product();

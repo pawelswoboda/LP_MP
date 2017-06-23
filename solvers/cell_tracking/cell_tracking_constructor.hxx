@@ -31,16 +31,15 @@ namespace LP_MP {
   }
   static constexpr exclusion_item exclusion_item_delimiter = {std::numeric_limits<INDEX>::max(), std::numeric_limits<INDEX>::max()};
 
-template<typename DETECTION_FACTOR_CONTAINER, typename AT_MOST_ONE_CELL_FACTOR_CONTAINER,
-         typename TRANSITION_MESSAGE_CONTAINER, typename AT_MOST_ONE_CELL_MESSAGE_CONTAINER>
-class cell_tracking_constructor {
+template<typename DETECTION_FACTOR_CONTAINER, typename AT_MOST_ONE_CELL_FACTOR_CONTAINER, typename AT_MOST_ONE_CELL_MESSAGE_CONTAINER>
+class basic_cell_tracking_constructor {
 public:
   using detection_factor_container = DETECTION_FACTOR_CONTAINER;
 
-  using CONSTRUCTOR = cell_tracking_constructor<DETECTION_FACTOR_CONTAINER, AT_MOST_ONE_CELL_FACTOR_CONTAINER, TRANSITION_MESSAGE_CONTAINER, AT_MOST_ONE_CELL_MESSAGE_CONTAINER>;
+  using CONSTRUCTOR = basic_cell_tracking_constructor<DETECTION_FACTOR_CONTAINER, AT_MOST_ONE_CELL_FACTOR_CONTAINER, AT_MOST_ONE_CELL_MESSAGE_CONTAINER>;
 
   template<typename SOLVER>
-  cell_tracking_constructor(SOLVER& solver) 
+  basic_cell_tracking_constructor(SOLVER& solver) 
   : lp_(&solver.GetLP()) 
   {}
 
@@ -49,12 +48,15 @@ public:
     transition_count(CONSTRUCTOR& c) 
     {
       current_transition_no.resize( c.detection_factors_.size() );
+      current_division_no.resize( c.detection_factors_.size() );
       for(INDEX i=0; i<c.detection_factors_.size(); ++i) {
         current_transition_no[i].resize( c.detection_factors_[i].size(), {0,0});
+        current_division_no[i].resize( c.detection_factors_[i].size(), {0,0});
       }
     }
-    std::vector<std::array<INDEX,2>>& operator[](const INDEX i) { return current_transition_no[i]; }
+    //std::vector<std::array<INDEX,2>>& operator[](const INDEX i) { return current_transition_no[i]; }
     std::vector<std::vector<std::array<INDEX,2>>> current_transition_no; 
+    std::vector<std::vector<std::array<INDEX,2>>> current_division_no; 
   };
   transition_count init_transition_counter() { return transition_count(*this); }
 
@@ -205,56 +207,6 @@ public:
   }
 
   template<typename LP_TYPE>
-  void add_cell_transition(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next, const INDEX next_cell, const REAL cost, transition_count& tc) 
-  {
-    assert(timestep_prev + 1 == timestep_next);
-
-    auto* out_cell_factor = detection_factors_[timestep_prev][prev_cell];
-    const INDEX outgoing_edge_index  = tc[timestep_prev][prev_cell][1];
-    //assert( out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] == 0.0 );
-    out_cell_factor->GetFactor()->set_outgoing_transition_cost(outgoing_edge_index, 0.5*cost);
-    //out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] = cost;
-    tc[timestep_prev][prev_cell][1]++;
-
-    auto* in_cell_factor = detection_factors_[timestep_next][next_cell];
-    const INDEX incoming_edge_index = tc[timestep_next][next_cell][0];
-    //assert( in_cell_factor->GetFactor()->set_incoming[incoming_edge_index] == 0.0 );
-    tc[timestep_next][next_cell][0]++;
-    in_cell_factor->GetFactor()->set_incoming_transition_cost(incoming_edge_index, 0.5*cost);
-    auto* m = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor, false, outgoing_edge_index, incoming_edge_index);
-    lp.AddMessage(m);
-
-    //std::cout << "MA: " << timestep << " " << prev_cell << ", " << next_cell << " " << cost << std::endl;
-  }
-
-  template<typename LP_TYPE>
-  void add_cell_division(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next_1, const INDEX next_cell_1, const INDEX timestep_next_2, const INDEX next_cell_2, const REAL cost, transition_count& tc) 
-  {
-    auto* out_cell_factor = detection_factors_[timestep_prev][prev_cell];
-    const INDEX outgoing_edge_index  = tc[timestep_prev][prev_cell][1];
-    out_cell_factor->GetFactor()->set_outgoing_division_cost(outgoing_edge_index, 1.0/3.0*cost);
-    tc[timestep_prev][prev_cell][1]++;
-
-    auto* in_cell_factor_1 = detection_factors_[timestep_next_1][next_cell_1];
-    const INDEX incoming_edge_index_1 = tc[timestep_next_1][next_cell_1][0];
-    in_cell_factor_1->GetFactor()->set_outgoing_division_cost(incoming_edge_index_1, 1.0/3.0*cost);
-    tc[timestep_next_1][next_cell_1][0]++;
-    
-    auto* in_cell_factor_2 = detection_factors_[timestep_next_2][next_cell_2];
-    const INDEX incoming_edge_index_2 = tc[timestep_next_2][next_cell_2][0];
-    in_cell_factor_2->GetFactor()->set_outgoing_division_cost(incoming_edge_index_2, 1.0/3.0*cost);
-    tc[timestep_next_2][next_cell_2][0]++;
-    
-    auto* m1 = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor_1, true, outgoing_edge_index, incoming_edge_index_1);
-    lp.AddMessage(m1);
-    
-    auto* m2 = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor_2, true, outgoing_edge_index, incoming_edge_index_2);
-    lp.AddMessage(m2);
-
-    //std::cout << "DA: " << timestep << " " << prev_cell << ", " << next_cell_1 << " " << next_cell_2 << " " << cost << std::endl;
-  }
-
-  template<typename LP_TYPE>
   void order_factors(LP_TYPE& lp) const
   {
     for(INDEX t=0; t<detection_factors_.size(); ++t) {
@@ -291,6 +243,7 @@ public:
   // add violated exclusion constraints
   INDEX Tighten(const INDEX max_constraints_to_add)
   {
+    assert(false); // not currently in use
     std::vector<std::tuple<INDEX,REAL>> exclusion_candidates; // offset into exclusions_ and guaranteed dual increase 
 
     // to do: parallelize
@@ -358,8 +311,154 @@ protected:
   exclusion_factor_storage exclusions_; // hold all exclusions in a single array. delimiter is std::numeric_limits<INDEX>::max(). First entry in segment is timestep, followed by hypothesis ids
 
   LP* lp_;
-  //std::map<std::tuple<INDEX,INDEX,INDEX>, TRANSITION_FACTOR_CONTAINER*> transition_factors_;
-  //std::map<std::tuple<INDEX,INDEX,INDEX,INDEX>, TRANSITION_FACTOR_CONTAINER*> division_factors_;
+};
+
+
+template<typename BASIC_CELL_TRACKING_CONSTRUCTOR, typename TRANSITION_MESSAGE_CONTAINER>
+class cell_tracking_constructor : public BASIC_CELL_TRACKING_CONSTRUCTOR {
+public:
+  using BASIC_CELL_TRACKING_CONSTRUCTOR::BASIC_CELL_TRACKING_CONSTRUCTOR;
+  using transition_count = typename BASIC_CELL_TRACKING_CONSTRUCTOR::transition_count;
+
+  //void set_number_of_timesteps(const INDEX t)
+  //{
+  //  assert(detection_factors_.size() == 0);
+  //  detection_factors_.resize(t);
+  //}
+
+  template<typename LP_TYPE>
+  void add_cell_transition(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next, const INDEX next_cell, const REAL cost, transition_count& tc) 
+  {
+    assert(timestep_prev + 1 == timestep_next);
+
+    auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
+    const INDEX outgoing_edge_index  = tc.current_transition_no[timestep_prev][prev_cell][1];
+    //assert( out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] == 0.0 );
+    out_cell_factor->GetFactor()->set_outgoing_transition_cost(outgoing_edge_index, 0.5*cost);
+    //out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] = cost;
+    tc.current_transition_no[timestep_prev][prev_cell][1]++;
+
+    auto* in_cell_factor = this->detection_factors_[timestep_next][next_cell];
+    const INDEX incoming_edge_index = tc.current_transition_no[timestep_next][next_cell][0];
+    //assert( in_cell_factor->GetFactor()->set_incoming[incoming_edge_index] == 0.0 );
+    tc.current_transition_no[timestep_next][next_cell][0]++;
+    in_cell_factor->GetFactor()->set_incoming_transition_cost(incoming_edge_index, 0.5*cost);
+    auto* m = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor, false, outgoing_edge_index, incoming_edge_index);
+    lp.AddMessage(m);
+
+    //std::cout << "MA: " << timestep << " " << prev_cell << ", " << next_cell << " " << cost << std::endl;
+  }
+
+  template<typename LP_TYPE>
+  void add_cell_division(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next_1, const INDEX next_cell_1, const INDEX timestep_next_2, const INDEX next_cell_2, const REAL cost, transition_count& tc) 
+  {
+    // this doees not work for cell tracking without minimal distance. Then the edge indices need to be summed up with the transition edge indices
+    auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
+    const INDEX outgoing_edge_index  = tc.current_transition_no[timestep_prev][prev_cell][1] + tc.current_division_no[timestep_prev][prev_cell][1];
+    out_cell_factor->GetFactor()->set_outgoing_division_cost(outgoing_edge_index, 1.0/3.0*cost);
+    tc.current_division_no[timestep_prev][prev_cell][1]++;
+
+    auto* in_cell_factor_1 = this->detection_factors_[timestep_next_1][next_cell_1];
+    const INDEX incoming_edge_index_1 = tc.current_transition_no[timestep_next_1][next_cell_1][0] + tc.current_division_no[timestep_next_1][next_cell_1][0];
+    in_cell_factor_1->GetFactor()->set_incoming_division_cost(incoming_edge_index_1, 1.0/3.0*cost);
+    tc.current_division_no[timestep_next_1][next_cell_1][0]++;
+    
+    auto* in_cell_factor_2 = this->detection_factors_[timestep_next_2][next_cell_2];
+    const INDEX incoming_edge_index_2 = tc.current_transition_no[timestep_next_2][next_cell_2][0] + tc.current_division_no[timestep_next_2][next_cell_2][0];
+    in_cell_factor_2->GetFactor()->set_incoming_division_cost(incoming_edge_index_2, 1.0/3.0*cost);
+    tc.current_division_no[timestep_next_2][next_cell_2][0]++;
+    
+    auto* m1 = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor_1, true, outgoing_edge_index, incoming_edge_index_1);
+    lp.AddMessage(m1);
+    
+    auto* m2 = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor_2, true, outgoing_edge_index, incoming_edge_index_2);
+    lp.AddMessage(m2);
+
+    //std::cout << "DA: " << timestep << " " << prev_cell << ", " << next_cell_1 << " " << next_cell_2 << " " << cost << std::endl;
+  }
+};
+
+template<typename BASIC_CELL_TRACKING_CONSTRUCTOR, typename MAPPING_EDGE_FACTOR_CONTAINER, typename INCOMING_EDGE_MESSAGE_CONTAINER, typename OUTGOING_EDGE_MESSAGE_CONTAINER>
+class cell_tracking_constructor_duplicate_edges : public BASIC_CELL_TRACKING_CONSTRUCTOR {
+public:
+  using CONSTRUCTOR = cell_tracking_constructor_duplicate_edges<BASIC_CELL_TRACKING_CONSTRUCTOR, MAPPING_EDGE_FACTOR_CONTAINER, INCOMING_EDGE_MESSAGE_CONTAINER, OUTGOING_EDGE_MESSAGE_CONTAINER>;
+  using transition_count = typename BASIC_CELL_TRACKING_CONSTRUCTOR::transition_count;
+
+  using BASIC_CELL_TRACKING_CONSTRUCTOR::BASIC_CELL_TRACKING_CONSTRUCTOR;
+
+  template<typename LP_TYPE>
+  void add_cell_transition(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next, const INDEX next_cell, const REAL cost, transition_count& tc) 
+  {
+    assert(timestep_prev + 1 == timestep_next);
+
+    auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
+    const INDEX outgoing_edge_index  = tc.current_transition_no[timestep_prev][prev_cell][1];
+    //assert( out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] == 0.0 );
+    out_cell_factor->GetFactor()->set_outgoing_transition_cost(outgoing_edge_index, 0.5*cost);
+    //out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] = cost;
+    tc.current_transition_no[timestep_prev][prev_cell][1]++;
+
+    auto* in_cell_factor = this->detection_factors_[timestep_next][next_cell];
+    const INDEX incoming_edge_index = tc.current_transition_no[timestep_next][next_cell][0];
+    //assert( in_cell_factor->GetFactor()->set_incoming[incoming_edge_index] == 0.0 );
+    tc.current_transition_no[timestep_next][next_cell][0]++;
+    in_cell_factor->GetFactor()->set_incoming_transition_cost(incoming_edge_index, 0.5*cost);
+
+    auto* f = new MAPPING_EDGE_FACTOR_CONTAINER(0.0);
+    lp.AddFactor(f);
+
+    auto* m_outgoing = new OUTGOING_EDGE_MESSAGE_CONTAINER(f, out_cell_factor, outgoing_edge_index, false);
+    lp.AddMessage(m_outgoing);
+    auto* m_incoming = new INCOMING_EDGE_MESSAGE_CONTAINER(f, in_cell_factor, incoming_edge_index);
+    lp.AddMessage(m_incoming);
+    lp.AddFactorRelation(out_cell_factor, f);
+    lp.AddFactorRelation(f, in_cell_factor);
+
+    //std::cout << "MA: " << timestep << " " << prev_cell << ", " << next_cell << " " << cost << std::endl;
+  }
+
+  template<typename LP_TYPE>
+  void add_cell_division(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next_1, const INDEX next_cell_1, const INDEX timestep_next_2, const INDEX next_cell_2, const REAL cost, transition_count& tc) 
+  {
+    // this doees not work for cell tracking without minimal distance. Then the edge indices need to be summed up with the transition edge indices
+    auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
+    const INDEX outgoing_edge_index  = tc.current_transition_no[timestep_prev][prev_cell][1] + tc.current_division_no[timestep_prev][prev_cell][1];
+    out_cell_factor->GetFactor()->set_outgoing_division_cost(outgoing_edge_index, 1.0/3.0*cost);
+    tc.current_division_no[timestep_prev][prev_cell][1]++;
+
+    auto* in_cell_factor_1 = this->detection_factors_[timestep_next_1][next_cell_1];
+    const INDEX incoming_edge_index_1 = tc.current_transition_no[timestep_next_1][next_cell_1][0] + tc.current_division_no[timestep_next_1][next_cell_1][0];
+    in_cell_factor_1->GetFactor()->set_incoming_division_cost(incoming_edge_index_1, 1.0/3.0*cost);
+    tc.current_division_no[timestep_next_1][next_cell_1][0]++;
+    
+    auto* in_cell_factor_2 = this->detection_factors_[timestep_next_2][next_cell_2];
+    const INDEX incoming_edge_index_2 = tc.current_transition_no[timestep_next_2][next_cell_2][0] + tc.current_division_no[timestep_next_2][next_cell_2][0];
+    in_cell_factor_2->GetFactor()->set_incoming_division_cost(incoming_edge_index_2, 1.0/3.0*cost);
+    tc.current_division_no[timestep_next_2][next_cell_2][0]++;
+    
+    auto* f_1 = new MAPPING_EDGE_FACTOR_CONTAINER(0.0);
+    lp.AddFactor(f_1);
+    auto* f_2 = new MAPPING_EDGE_FACTOR_CONTAINER(0.0);
+    lp.AddFactor(f_2);
+
+    auto* m_outgoing_1 = new OUTGOING_EDGE_MESSAGE_CONTAINER(f_1, out_cell_factor, outgoing_edge_index, true);
+    auto* m_outgoing_2 = new OUTGOING_EDGE_MESSAGE_CONTAINER(f_2, out_cell_factor, outgoing_edge_index, true);
+
+    auto* m_incoming_1 = new INCOMING_EDGE_MESSAGE_CONTAINER(f_1, in_cell_factor_1, incoming_edge_index_1);
+    auto* m_incoming_2 = new INCOMING_EDGE_MESSAGE_CONTAINER(f_2, in_cell_factor_2, incoming_edge_index_2);
+
+    lp.AddMessage(m_outgoing_1);
+    lp.AddMessage(m_outgoing_2);
+    lp.AddMessage(m_incoming_1);
+    lp.AddMessage(m_incoming_2);
+
+    lp.AddFactorRelation(out_cell_factor, f_1);
+    lp.AddFactorRelation(out_cell_factor, f_2);
+    lp.AddFactorRelation(f_1, in_cell_factor_1);
+    lp.AddFactorRelation(f_2, in_cell_factor_2);
+
+    //std::cout << "DA: " << timestep << " " << prev_cell << ", " << next_cell_1 << " " << next_cell_2 << " " << cost << std::endl;
+  }
 
 };
 
@@ -397,7 +496,7 @@ public:
     if(hypothesis_id > 0) {
       assert( this->detection_factors_[timestep][hypothesis_id-1] != nullptr); // need not be generally true, but then factor relation must be done more robust.
     }
-    //std::cout << "H: " << timestep << ", " << hypothesis_id <<  "," << no_incoming_edges << "," << no_outgoing_edges << ", " << detection_cost << ", " << appearance_cost << ", " << disappearance_cost << std::endl;
+    //std::cout << "H: " << timestep << ", " << hypothesis_id <<  "," << no_incoming_transition_edges << "," << no_incoming_division_edges << "," << no_outgoing_transition_edges << ", " << no_outgoing_division_edges << "," << detection_cost << ", " << appearance_cost << ", " << disappearance_cost << std::endl;
     return f; 
   }
   
@@ -750,6 +849,9 @@ namespace cell_tracking_parser_2d {
 
    struct my_eolf : pegtl::sor<pegtl::eol, pegtl::eof> {}; // do zrobienia: revert to usual pegtl::eolf
    struct comment_line : pegtl::seq< opt_whitespace, pegtl::sor< pegtl::seq< pegtl::string<'#'>, pegtl::until<my_eolf> >, my_eolf> > {};
+
+   struct division_distance : pegtl::seq< positive_integer> {};
+   struct division_distance_line : pegtl::seq< opt_whitespace, pegtl::string<'D','I','V','I','S','I','O','N',' ','D','I','S','T','A','N','C','E'>, opt_whitespace, pegtl::string<'='>, opt_whitespace, division_distance, opt_whitespace, my_eolf > {};
    
    // H timestep hypothesis_id {detection cost} (x_coord, lower coord) 
    struct cell_detection_hypothesis : pegtl::seq< positive_integer, mand_whitespace, positive_integer, mand_whitespace, real_number, opt_whitespace, pegtl::string<'('>, opt_whitespace, real_number, opt_whitespace, pegtl::string<','>, opt_whitespace, real_number, opt_whitespace, pegtl::string<')'> > {};
@@ -781,6 +883,22 @@ namespace cell_tracking_parser_2d {
                     division_line
                     >>> {};
 
+   struct grammar_division_distance : 
+                    pegtl::seq< 
+                    pegtl::star< comment_line >,
+                    division_distance_line,
+                    
+                    pegtl::star<pegtl::sor<
+                    comment_line,
+                    cell_detection_hypothesis_line,
+                    appearance_line,
+                    disappearance_line,
+                    conflict_line,
+                    mapping_line,
+                    division_line
+                    >>> {};
+
+
    struct input {
      struct detection_factor_stat {
        REAL detection_cost = 0.0, appearance_cost = 0.0, disappearance_cost = 0.0;
@@ -791,6 +909,7 @@ namespace cell_tracking_parser_2d {
      std::vector<std::tuple<INDEX,INDEX,INDEX,INDEX,REAL>> mappings; // timestep outgoing, outgoing cell, timestep incoming, incoming cell, cost
      std::vector<std::tuple<INDEX,INDEX,INDEX,INDEX,INDEX,INDEX,REAL>> divisions; // timestep outgoing, outgoing cell, incoming timestep 1, incoming cell 1, incoming timestep 2, incoming cell 2, cost
      std::vector<std::vector<std::array<INDEX,2>>> conflicts; // timestep, {hyp_1, ..., hyp_n}
+     INDEX division_distance = 1;
      bool eof = false;
    };
 
@@ -804,6 +923,17 @@ namespace cell_tracking_parser_2d {
      {
        //std::cout << "kwaskwas\n";
        i.eof = true;
+     }
+   };
+
+   template<> struct action< division_distance > {
+     template<typename INPUT>
+     static void apply(const INPUT & in, input& i)
+     {
+       assert(i.division_distance == 1);
+       std::stringstream s(in.string()); 
+       s >> i.division_distance; 
+       assert(i.division_distance > 0);
      }
    };
 
@@ -931,8 +1061,8 @@ namespace cell_tracking_parser_2d {
        assert(cell_next_2 < i.cell_detection_stat[timestep_next_2].size());
 
        i.cell_detection_stat[timestep_prev][cell_prev].no_outgoing_division_edges++;
-       i.cell_detection_stat[timestep_next_1][cell_next_1].no_outgoing_division_edges++;
-       i.cell_detection_stat[timestep_next_2][cell_next_2].no_outgoing_division_edges++;
+       i.cell_detection_stat[timestep_next_1][cell_next_1].no_incoming_division_edges++;
+       i.cell_detection_stat[timestep_next_2][cell_next_2].no_incoming_division_edges++;
 
        i.divisions.push_back( std::make_tuple(timestep_prev, cell_prev, timestep_next_1, cell_next_1, timestep_next_2, cell_next_2, cost));
        //std::cout << "division: t = " << timestep_prev << ", h1 = " << cell_prev << ", h1,1 = " << cell_next_1 << ", h2,2 = " << cell_next_2 << ", cost = " << cost << "\n";
@@ -940,11 +1070,12 @@ namespace cell_tracking_parser_2d {
    };
 
 
+   template<typename GRAMMAR>
    bool read_input(const std::string& filename, input& i)
    {
       std::cout << "parsing " << filename << "\n";
       pegtl::file_parser problem(filename);
-      const bool success = problem.parse< grammar, action >(i); 
+      const bool success = problem.parse< GRAMMAR, action >(i); 
       //assert(i.eof);
       return success;
    }
@@ -964,8 +1095,8 @@ namespace cell_tracking_parser_2d {
           const REAL disappearance_cost = i.cell_detection_stat[t][n].disappearance_cost;
           const INDEX no_incoming_transition_edges = i.cell_detection_stat[t][n].no_incoming_transition_edges;
           const INDEX no_outgoing_transition_edges = i.cell_detection_stat[t][n].no_outgoing_transition_edges;
-          const INDEX no_incoming_division_edges = i.cell_detection_stat[t][n].no_incoming_transition_edges;
-          const INDEX no_outgoing_division_edges = i.cell_detection_stat[t][n].no_outgoing_transition_edges;
+          const INDEX no_incoming_division_edges = i.cell_detection_stat[t][n].no_incoming_division_edges;
+          const INDEX no_outgoing_division_edges = i.cell_detection_stat[t][n].no_outgoing_division_edges;
 
           cell_tracking_constructor.add_detection_hypothesis( lp, t, n, detection_cost, appearance_cost, disappearance_cost, no_incoming_transition_edges, no_incoming_division_edges, no_outgoing_transition_edges, no_outgoing_division_edges);
         }
@@ -997,8 +1128,8 @@ namespace cell_tracking_parser_2d {
       }
       for(INDEX t=0; t<i.cell_detection_stat.size(); ++t) {
         for(INDEX j=0; j<i.cell_detection_stat[t].size(); ++j) {
-          assert( i.cell_detection_stat[t][j].no_outgoing_transition_edges + i.cell_detection_stat[t][j].no_outgoing_division_edges == tc[t][j][0] );
-          assert( i.cell_detection_stat[t][j].no_incoming_transition_edges + i.cell_detection_stat[t][j].no_incoming_division_edges == tc[t][j][1] );
+          assert( i.cell_detection_stat[t][j].no_outgoing_transition_edges + i.cell_detection_stat[t][j].no_outgoing_division_edges == tc.current_transition_no[t][j][1] + tc.current_division_no[t][j][1] );
+          assert( i.cell_detection_stat[t][j].no_incoming_transition_edges + i.cell_detection_stat[t][j].no_incoming_division_edges == tc.current_transition_no[t][j][0] + tc.current_division_no[t][j][0] );
         }
       }
 
@@ -1010,7 +1141,19 @@ namespace cell_tracking_parser_2d {
    bool ParseProblem(const std::string& filename, SOLVER& s)
    {
      input i;
-     const bool read_suc = read_input(filename, i);
+     const bool read_suc = read_input<grammar>(filename, i);
+     construct_tracking_problem(i, s);
+     return read_suc;
+   }
+
+   // we assume problem with single constructor
+   template<typename SOLVER>
+   bool parse_problem_with_division_distance(const std::string& filename, SOLVER& s)
+   {
+     input i;
+     const bool read_suc = read_input<grammar_division_distance>(filename, i);
+     auto& cell_tracking_constructor = s.template GetProblemConstructor<0>();
+     cell_tracking_constructor.set_division_distance(i.division_distance);
      construct_tracking_problem(i, s);
      return read_suc;
    }

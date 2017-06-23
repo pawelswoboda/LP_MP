@@ -248,6 +248,281 @@ private:
   INDEX incoming_edge_, outgoing_edge_;
 };
 
+class mapping_edge_factor {
+public:
+  mapping_edge_factor(const REAL c) : cost(c) {}
+
+  REAL LowerBound() const
+  { 
+    return std::min(REAL(0.0), cost);
+  }
+
+  REAL EvaluatePrimal() const
+  {
+    return std::numeric_limits<REAL>::infinity();
+  }
+       
+  INDEX size() const { return 1; }
+
+  void init_primal() {}
+  template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+  template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( cost ); }
+
+  REAL cost;
+
+private: 
+  bool primal_;
+};
+
+// left is mapping_edge_factor, right is detection_factor
+class cell_incoming_edge_detection_factor {
+public:
+  cell_incoming_edge_detection_factor(const INDEX incoming_edge_index) : incoming_edge_index_(incoming_edge_index) {}
+
+  template<typename G>
+  void RepamLeft(G& l, const REAL msg, const INDEX msg_dim)
+  {
+    assert(msg_dim == 0);
+    l.cost += msg;
+  }
+  template<typename G>
+  void RepamRight(G& r, const REAL msg, const INDEX msg_dim)
+  {
+    assert(msg_dim == 0);
+    r.incoming[incoming_edge_index_] += msg;
+  }
+
+  template<typename LEFT_FACTOR, typename G2>
+  void send_message_to_right(LEFT_FACTOR& l, G2& msg, const REAL omega)
+  { 
+    msg[0] -= omega*l.cost;
+  }
+
+  template<typename RIGHT_FACTOR, typename G2>
+  void send_message_to_left(RIGHT_FACTOR& r, G2& msg, const REAL omega)
+  {
+    assert(false);
+    r.outgoing.prefetch();
+    r.incoming.prefetch();
+
+    const REAL detection_outgoing_cost = r.detection + r.outgoing.min();
+
+    const REAL incoming_val = r.incoming[incoming_edge_index_];
+    r.incoming[incoming_edge_index_] = std::numeric_limits<REAL>::infinity();
+    const REAL min_incoming_val = r.incoming.min();
+    r.incoming[incoming_edge_index_] = incoming_val;
+
+    msg[0] -= omega*( detection_outgoing_cost + incoming_val - std::min(detection_outgoing_cost + min_incoming_val, REAL(0.0)) ); 
+  } 
+
+  // send messages from detection factor along outgoing edges
+  template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+  static void SendMessagesToLeft(const RIGHT_FACTOR& r, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omega_begin)
+  {
+    REAL omega = 0.0;
+    auto omega_it = omega_begin;
+    for(auto it = msg_begin; it!=msg_end; ++it, ++omega_it) {
+      omega += *omega_it;
+    }
+    assert(omega <= 1.0 + eps);
+    assert(omega > 0.0);
+    //std::cout << "send messages to left with omega = " << omega << "\n";
+
+    // check #messages+1 = no incoming edges
+    {
+      INDEX c=0;
+      for(auto it = msg_begin; it!=msg_end; ++it)  ++c;
+      assert(c+1 == r.incoming.size());
+    }
+
+
+    const REAL detection_outgoing_cost = r.detection + r.outgoing.min();
+
+    /*
+    std::vector<bool> edge_taken(r.incoming.size(), false);
+    omega_it = omega_begin;
+    for(auto msg_it = msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
+      if(*omega_it > 0.0) {
+        edge_taken[(*msg_it).GetMessageOp().incoming_edge_index_] = true;
+      }
+    }
+    for(INDEX i=0; i<edge_taken.size()-1; ++i) { edge_taken[i] = true; }
+
+
+    REAL smallest_taken = std::numeric_limits<REAL>::infinity();
+    REAL second_smallest_taken = std::numeric_limits<REAL>::infinity();
+    REAL smallest_not_taken = std::numeric_limits<REAL>::infinity();
+    for(INDEX i=0; i<r.incoming.size(); ++i) {
+      const REAL val = r.incoming[i];
+      if(edge_taken[i]) {
+        const REAL min = std::min(smallest_taken, val);
+        const REAL max = std::max(smallest_taken, val);
+        smallest_taken = min;
+        second_smallest_taken = std::min(max, second_smallest_taken);
+      } else {
+        smallest_not_taken = std::min(val, smallest_not_taken); 
+      }
+    }
+
+    REAL set_to_cost;
+    if(smallest_not_taken < smallest_taken) {
+      set_to_cost = std::min(detection_outgoing_cost + smallest_not_taken, REAL(0.0));
+    } else {
+      set_to_cost = std::min({detection_outgoing_cost + second_smallest_taken, detection_outgoing_cost + smallest_not_taken, REAL(0.0)});
+    }
+
+    omega_it = omega_begin;
+    for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
+      if(*omega_it > 0.0) {
+        const REAL msg = detection_outgoing_cost + r.incoming[ (*msg_it).GetMessageOp().incoming_edge_index_ ] - set_to_cost;
+        (*msg_it)[0] -= omega*msg;
+      }
+    } 
+    return;
+    */
+
+    const auto smallest_incoming = two_smallest_elements<REAL>(r.incoming.begin(), r.incoming.end()); // do not take into account disappearance cost 
+
+    const REAL set_to_cost = std::min(detection_outgoing_cost + smallest_incoming[1], REAL(0.0));
+    omega_it = omega_begin;
+    for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
+      const REAL msg = detection_outgoing_cost + r.incoming[ (*msg_it).GetMessageOp().incoming_edge_index_ ] - set_to_cost;
+      (*msg_it)[0] -= omega*msg;
+    } 
+  }
+
+private:
+  const INDEX incoming_edge_index_; 
+};
+
+// left is mapping_edge_factor, right is detection_factor
+class cell_outgoing_edge_detection_factor {
+public:
+  cell_outgoing_edge_detection_factor(const INDEX outgoing_edge_index, const bool split)
+    : outgoing_edge_index_(outgoing_edge_index),
+    split_(split)
+  {}
+
+  template<typename G>
+  void RepamLeft(G& l, const REAL msg, const INDEX msg_dim)
+  {
+    assert(msg_dim == 0);
+    l.cost += msg;
+  }
+  template<typename G>
+  void RepamRight(G& r, const REAL msg, const INDEX msg_dim)
+  {
+    assert(msg_dim == 0);
+    r.outgoing[outgoing_edge_index_] += msg;
+  }
+
+  template<typename LEFT_FACTOR, typename G2>
+  void send_message_to_right(LEFT_FACTOR& l, G2& msg, const REAL omega)
+  { 
+    msg[0] -= omega*l.cost;
+  }
+
+  template<typename RIGHT_FACTOR, typename G2>
+  void send_message_to_left(RIGHT_FACTOR& r, G2& msg, const REAL omega)
+  {
+    assert(false);
+    r.incoming.prefetch();
+    r.outgoing.prefetch();
+    const REAL detection_incoming_cost = r.detection + r.incoming.min();
+
+    const REAL outgoing_val = r.outgoing[outgoing_edge_index_];
+    r.outgoing[outgoing_edge_index_] = std::numeric_limits<REAL>::infinity();
+    const REAL min_outgoing_val = r.outgoing.min();
+    r.outgoing[outgoing_edge_index_] = outgoing_val;
+
+    msg[0] -= omega*( detection_incoming_cost + outgoing_val - std::min(detection_incoming_cost + min_outgoing_val, REAL(0.0)) );
+  } 
+
+  // send messages from detection factor along incoming edges
+  template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+  static void SendMessagesToLeft(const RIGHT_FACTOR& r, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omega_begin)
+  {
+    REAL omega = 0.0;
+    auto omega_it = omega_begin;
+    for(auto it = msg_begin; it!=msg_end; ++it, ++omega_it) {
+      omega += *omega_it;
+    }
+    assert(omega > 0.0);
+    assert(omega <= 1.0 + eps);
+
+    // do zrobienia: check whether no of messages is greater than no of outgoing edges. Multiple messages can act on same edge when divisions occur
+    {
+      INDEX c=0;
+      for(auto it = msg_begin; it!=msg_end; ++it)  ++c;
+      assert(c+1 >= std::distance(r.outgoing.begin(), r.outgoing.end()));
+    }
+
+
+    const REAL detection_incoming_cost = r.detection + r.incoming.min(); //*std::min_element(leftFactor.incoming.begin(), leftFactor.incoming.end());
+
+    /*
+    std::vector<bool> edge_taken(r.outgoing.size(), false);
+    omega_it = omega_begin;
+    for(auto msg_it = msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
+      if(*omega_it > 0.0) {
+        edge_taken[(*msg_it).GetMessageOp().outgoing_edge_index_] = true;
+      }
+    }
+    for(INDEX i=0; i<edge_taken.size()-1; ++i) { edge_taken[i] = true; }
+
+    REAL smallest_taken = std::numeric_limits<REAL>::infinity();
+    REAL second_smallest_taken = std::numeric_limits<REAL>::infinity();
+    REAL smallest_not_taken = std::numeric_limits<REAL>::infinity();
+    for(INDEX i=0; i<r.outgoing.size(); ++i) {
+      const REAL val = r.outgoing[i];
+      if(edge_taken[i]) {
+        const REAL min = std::min(smallest_taken, val);
+        const REAL max = std::max(smallest_taken, val);
+        smallest_taken = min;
+        second_smallest_taken = std::min(max, second_smallest_taken);
+      } else {
+        smallest_not_taken = std::min(val, smallest_not_taken); 
+      }
+    }
+
+    REAL set_to_cost;
+    if(smallest_not_taken < smallest_taken) {
+      set_to_cost = std::min(detection_incoming_cost + smallest_not_taken, REAL(0.0));
+    } else {
+      set_to_cost = std::min({detection_incoming_cost + second_smallest_taken, detection_incoming_cost + smallest_not_taken, REAL(0.0)});
+    }
+     
+    omega_it = omega_begin;
+    for(; msg_begin!=msg_end; ++msg_begin, ++omega_it) {
+      if(*omega_it > 0.0) {
+        const REAL w = (*msg_begin).GetMessageOp().split_ ? 0.5 : 1.0;
+        const REAL msg = w*(detection_incoming_cost + r.outgoing[ (*msg_begin).GetMessageOp().outgoing_edge_index_ ] - set_to_cost);
+        (*msg_begin)[0] -= omega*msg;
+      }
+    } 
+
+    return;
+    */
+
+    // compute smallest and second smallest value over all outgoing edges
+    const auto smallest_outgoing = two_smallest_elements<REAL>(r.outgoing.begin(), r.outgoing.end()); // omit disappearance term
+
+    const REAL set_to_cost = std::min(detection_incoming_cost + smallest_outgoing[1], REAL(0.0));
+    omega_it = omega_begin;
+    for(; msg_begin!=msg_end; ++msg_begin, ++omega_it) {
+      const REAL w = (*msg_begin).GetMessageOp().split_ ? 0.5 : 1.0;
+      const REAL msg = w*(detection_incoming_cost + r.outgoing[ (*msg_begin).GetMessageOp().outgoing_edge_index_ ] - set_to_cost);
+      (*msg_begin)[0] -= omega*msg;
+    } 
+    return; 
+  }
+
+private:
+  // to do: use bitfields
+  const INDEX outgoing_edge_index_; 
+  const bool split_;
+}; 
+
 // message connecting outgoing edge to incoming edge of detection factors between consecutive timeframes
 class transition_message {
 public:
@@ -971,28 +1246,31 @@ public:
       )
     :
       detection(division_distance, detection_cost),
-      incoming_division(no_incoming_division_edges, REAL(0.0)),
-      incoming_transition(no_incoming_transition_edges, division_distance-1, REAL(0.0)), // no incoming edges in timepoint 0
-      outgoing_transition(no_outgoing_transition_edges, division_distance, REAL(0.0)),
-      outgoing_division(no_outgoing_division_edges, REAL(0.0)), 
-      appearance_cost_(appearance_cost),
-      disappearance_cost_(disappearance_cost)
+      incoming_division(no_incoming_division_edges+1, std::numeric_limits<REAL>::infinity()),
+      incoming_transition(no_incoming_transition_edges+1, division_distance-1, std::numeric_limits<REAL>::infinity()),
+      outgoing_transition(no_outgoing_transition_edges+1, division_distance, std::numeric_limits<REAL>::infinity()),
+      outgoing_division(no_outgoing_division_edges+1, std::numeric_limits<REAL>::infinity())
   {
     assert(division_distance >= 1); 
+    incoming_division[ incoming_division.size()-1 ] = appearance_cost;
+    outgoing_division[ outgoing_division.size()-1 ] = disappearance_cost;
+    for(INDEX i=0; i<incoming_transition.dim2(); ++i) {
+      incoming_transition(incoming_transition.dim1()-1, i) = appearance_cost;
+    }
+    for(INDEX i=0; i<outgoing_transition.dim2(); ++i) {
+      outgoing_transition(outgoing_transition.dim1()-1, i) = disappearance_cost;
+    }
   }
 
-  REAL appearance_cost() const { return appearance_cost_; } 
-  REAL disappearance_cost() const { return disappearance_cost_; }
-
   INDEX division_distance() const { return detection.size(); }
-  INDEX no_incoming_division_edges() const { return incoming_transition.size(); }
+  INDEX no_incoming_division_edges() const { return incoming_division.size(); }
   INDEX no_incoming_transition_edges() const { return incoming_transition.dim1(); }
   INDEX no_outgoing_transition_edges() const { return outgoing_transition.dim1(); }
   INDEX no_outgoing_division_edges() const { return outgoing_division.size(); }
 
   INDEX size() const
   {
-    assert(false); 
+    //assert(false); 
     // note: appearance and disappearance are stored separately
     return 0;
     //return division_distance() + no_incoming_transition_edges()*(division_distance()-1) + no_incoming_division_edges() + no_outgoing_transition_edges()*division_edges() + no_outgoing_division_edges();
@@ -1000,6 +1278,7 @@ public:
 
   void set_incoming_transition_cost(const INDEX edge_index, const REAL cost)
   {
+    assert(edge_index < incoming_transition.dim1()-1);
     for(INDEX i=0; i<division_distance()-1; ++i) {
       incoming_transition(edge_index, i) = cost;
     }
@@ -1007,6 +1286,7 @@ public:
 
   void set_outgoing_transition_cost(const INDEX edge_index, const REAL cost)
   {
+    assert(edge_index < outgoing_transition.dim1()-1);
     for(INDEX i=0; i<division_distance(); ++i) {
       outgoing_transition(edge_index, i) = cost;
     }
@@ -1014,35 +1294,33 @@ public:
 
   void set_incoming_division_cost(const INDEX edge_index, const REAL cost)
   {
-    assert(edge_index >= no_incoming_transition_edges());
-    assert(incoming_division[edge_index - no_incoming_transition_edges()] == 0.0);
-    incoming_division[edge_index - no_incoming_transition_edges()] = cost;
+    assert(edge_index < no_incoming_division_edges()-1);
+    assert(incoming_division[edge_index] == std::numeric_limits<REAL>::infinity());
+    incoming_division[edge_index] = cost;
   }
 
   void set_outgoing_division_cost(const INDEX edge_index, const REAL cost)
   {
-    assert(edge_index >= no_outgoing_transition_edges());
-    assert(outgoing_division[edge_index - no_outgoing_transition_edges()] == 0.0);
-    outgoing_division[edge_index - no_outgoing_transition_edges()] = cost;
+    assert(edge_index < no_outgoing_division_edges()-1);
+    assert(outgoing_division[edge_index] == std::numeric_limits<REAL>::infinity());
+    outgoing_division[edge_index] = cost;
   }
 
   REAL min_detection_cost() const
   {
     auto outgoing_transition_min = outgoing_transition.min2();
-    outgoing_transition_min.min(disappearance_cost());
     auto incoming_transition_min = incoming_transition.min2();
-    incoming_transition_min.min(appearance_cost());
 
-    const REAL c_first = detection[0] + std::min(incoming_division.min(), appearance_cost()) + std::min(outgoing_transition_min[0], disappearance_cost());
+    const REAL c_first = detection[0] + incoming_division.min() + outgoing_transition_min[0];
     REAL cost = c_first;
 
     for(INDEX i=1; i<division_distance()-1; ++i) {
-      const REAL c = detection[i] + std::min(incoming_transition_min[i-1], appearance_cost()) + std::min(outgoing_transition_min[i], disappearance_cost());
+      const REAL c = detection[i] + incoming_transition_min[i-1] + outgoing_transition_min[i];
       cost = std::min(cost, c);
     }
 
     const INDEX last = division_distance()-1;
-    const REAL c_last = detection[last] + std::min(incoming_transition_min[last-1], appearance_cost()) + std::min({outgoing_transition_min[last], outgoing_division.min(), disappearance_cost()});
+    const REAL c_last = detection[last] + incoming_transition_min[last-1] + std::min(outgoing_transition_min[last], outgoing_division.min());
 
     cost = std::min(cost, c_last);
     return cost;
@@ -1092,7 +1370,6 @@ public:
   vector<REAL> outgoing_division;
 
 private:
-  const REAL appearance_cost_, disappearance_cost_;
 
   // primal
   INDEX incoming_edge_, outgoing_edge_, division_;
@@ -1114,9 +1391,7 @@ public:
     if(split_) {
       
       auto outgoing_transition_min = r.outgoing_transition.min2();
-      outgoing_transition_min.min(r.disappearance_cost());
       auto incoming_transition_min = r.incoming_transition.min2();
-      incoming_transition_min.min(r.appearance_cost());
 
       const REAL cost_1 = r.detection[0] + outgoing_transition_min[0] + r.incoming_division[ incoming_edge_index_ ];
 
@@ -1144,7 +1419,7 @@ public:
 
       vector<REAL> original_edge_val(r.division_distance()-1);
       for(INDEX i=0; i<r.division_distance()-1; ++i) {
-        original_edge_val[i] = r.incoming_transition(i, incoming_edge_index_);
+        original_edge_val[i] = r.incoming_transition(incoming_edge_index_, i);
         r.incoming_transition(incoming_edge_index_, i) = std::numeric_limits<REAL>::infinity();
       }
       vector<REAL> incoming_transition_min = r.incoming_transition.min2();
@@ -1164,7 +1439,7 @@ public:
       }
 
       const INDEX last = r.division_distance() - 1;
-      cost_diff[last] = r.detection[last] + original_edge_val[last-1] + std::min(outgoing_transition_min[last], r.outgoing_division.min())
+      cost_diff[last-1] = r.detection[last] + original_edge_val[last-1] + std::min(outgoing_transition_min[last], r.outgoing_division.min())
         - std::min(r.detection[last] + incoming_transition_min[last-1] + std::min(outgoing_transition_min[last], r.outgoing_division.min()), cost_0);
 
       msg -= omega*( cost_diff );
@@ -1179,10 +1454,8 @@ public:
       
       auto outgoing_transition_min = l.outgoing_transition.min2();
       assert(outgoing_transition_min.size() == l.division_distance());
-      outgoing_transition_min.min(l.disappearance_cost());
       auto incoming_transition_min = l.incoming_transition.min2();
       assert(incoming_transition_min.size() == l.division_distance()-1);
-      incoming_transition_min.min(l.appearance_cost());
 
       const REAL outgoing_val = l.outgoing_division[outgoing_edge_index_];
       l.outgoing_division[outgoing_edge_index_] = std::numeric_limits<REAL>::infinity();
@@ -1210,12 +1483,12 @@ public:
 
       vector<REAL> original_edge_val(l.division_distance());
       for(INDEX i=0; i<l.division_distance(); ++i) {
-        original_edge_val[i] = l.outgoing_transition(i, outgoing_edge_index_);
-        l.outgoing_transition(i, outgoing_edge_index_) = std::numeric_limits<REAL>::infinity();
+        original_edge_val[i] = l.outgoing_transition(outgoing_edge_index_, i);
+        l.outgoing_transition(outgoing_edge_index_, i) = std::numeric_limits<REAL>::infinity();
       }
       vector<REAL> outgoing_transition_min = l.outgoing_transition.min2();
       for(INDEX i=0; i<l.division_distance(); ++i) {
-        l.outgoing_transition(i, outgoing_edge_index_) = original_edge_val[i];
+        l.outgoing_transition(outgoing_edge_index_, i) = original_edge_val[i];
       }
 
       vector<REAL> incoming_transition_min = l.incoming_transition.min2();
@@ -1250,9 +1523,11 @@ public:
   void RepamLeft(G& l, const MSG& msg)
   {
     assert(!split_);
-    for(INDEX i=0; i<l.division_distance(); ++i) {
-      l.outgoing_transition(i, outgoing_edge_index_) += msg[i];
+    assert(msg.size() == l.division_distance()-1);
+    for(INDEX i=0; i<l.division_distance()-1; ++i) {
+      l.outgoing_transition(outgoing_edge_index_, i) += msg[i];
     }
+    l.outgoing_transition(outgoing_edge_index_, l.division_distance()-1) += msg[ l.division_distance()-1 ];
   }
 
   template<typename G>
@@ -1266,9 +1541,9 @@ public:
   void RepamRight(G& r, const MSG& msg)
   {
     assert(!split_);
-    assert(msg.size() == r.division_distance());
-    for(INDEX i=0; i<r.division_distance(); ++i) {
-      r.incoming_transition(i, incoming_edge_index_) += msg[i];
+    assert(msg.size() == r.division_distance()-1);
+    for(INDEX i=0; i<r.division_distance()-1; ++i) {
+      r.incoming_transition(incoming_edge_index_, i) += msg[i];
     }
   }
 

@@ -78,6 +78,8 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotentialAndComputePrimal, MaximizePotentialAndComputePrimal)
 
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_subgradient, subgradient)
+
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasReduceLp, ReduceLp)
@@ -1962,6 +1964,20 @@ public:
       ComputePrimalThroughMessages();
    }
 
+   constexpr static bool can_compute_subgradient()
+   {
+      return FunctionExistence::has_subgradient<FactorType, INDEX, double*>(); 
+   }
+
+   virtual INDEX subgradient(double* w) final
+   {
+      static_if<can_compute_subgradient()>([this,w](auto f) {
+            return f(factor_).subgradient(w);
+            });
+      assert(false); // should not be called otherwise
+      return 0;
+   }
+
    virtual void serialize_dual(load_archive& ar) final
    { factor_.serialize_dual(ar); }
    virtual void serialize_primal(load_archive& ar) final
@@ -1974,6 +1990,10 @@ public:
    { factor_.serialize_dual(ar); }
    virtual void serialize_primal(allocate_archive& ar) final
    { factor_.serialize_primal(ar); } 
+   virtual void serialize_dual(addition_archive<+1>& ar) final
+   { factor_.serialize_dual(ar); }
+   virtual void serialize_dual(addition_archive<-1>& ar) final
+   { factor_.serialize_dual(ar); }
 
       // do zrobienia: possibly do it with std::result_of
    //auto begin() -> decltype(std::declval<RepamStorageType>().begin()) { return RepamStorageType::begin(); }
