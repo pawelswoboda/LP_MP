@@ -269,10 +269,11 @@ template<typename T>
 template<typename T>
 	inline T* stack_arena<T>::allocate(std::size_t n, int align){
 		//size_bytes is rounded up to multiple of 4
-		if (n == 0){
-			perror("Allocating 0 bytes?\n"); fflush(stdout);
-			abort();
-      }
+    assert(n > 0);
+		//if (n == 0){
+		//	perror("Allocating 0 bytes?\n"); fflush(stdout);
+		//	abort();
+    //  }
     const int size_bytes = n * sizeof(T);
 		// actually assume size_bytes is already aligned, so this just divides
 		//int size = (size_bytes + 3) >> 2;

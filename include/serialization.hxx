@@ -22,49 +22,49 @@ class allocate_archive {
 public:
   // for plain data
   template<typename T>
-  typename std::enable_if<std::is_arithmetic<T>::value>::type
+  static typename std::enable_if<std::is_arithmetic<T>::value,INDEX>::type
   serialize(const T&)
   {
-    size_in_bytes_ += sizeof(T); 
+    return sizeof(T); 
   }
   
   // for arrays
   template<typename T>
-  void serialize(const T*, const INDEX s)
+  static INDEX serialize(const T*, const INDEX s)
   {
-    size_in_bytes_ += sizeof(INDEX) + sizeof(T)*s;
+    return sizeof(T)*s;
   }
   template<typename T>
-  void serialize( const binary_data<T> b )
+  static INDEX serialize( const binary_data<T> b )
   {
-     serialize(b.pointer, b.no_elements); 
+     return serialize(b.pointer, b.no_elements); 
   }
 
   // for std::array<T>
   template<typename T, std::size_t N>
-  void serialize(const std::array<T,N>&)
+  static INDEX serialize(const std::array<T,N>&)
   {
-    size_in_bytes_ += sizeof(T)*N;
+    return sizeof(T)*N;
   }
 
   // for vector<T>
   template<typename T>
-  void serialize(const vector<T>& v)
+  static INDEX serialize(const vector<T>& v)
   {
-     serialize(v.begin(), v.size());
+     return serialize(v.begin(), v.size());
   }
 
   template<typename T>
-  void serialize(const matrix<T>& m)
+  static INDEX serialize(const matrix<T>& m)
   {
-     serialize(m.begin(), m.size());
+     return serialize(m.begin(), m.size());
   }
 
   // for std::vector<T>
   template<typename T>
-  void serialize(const std::vector<T>& v)
+  static INDEX serialize(const std::vector<T>& v)
   {
-     serialize(v.data(), v.size());
+     return serialize(v.data(), v.size());
   }
 
   template<typename... T_REST>
@@ -73,7 +73,7 @@ public:
   template<typename T, typename... T_REST>
   void operator()(T&& t, T_REST... types)
   {
-     serialize(t);
+     size_in_bytes_ += serialize(t);
      (*this)(types...);
   }
 
@@ -81,7 +81,6 @@ public:
   {
     return size_in_bytes_; 
   }
-
 
 private:
   INDEX size_in_bytes_ = 0;
@@ -189,10 +188,8 @@ public:
   void serialize(const T* p, const INDEX size)
   {
       INDEX* s = (INDEX*) ar.cur_address();
-      *s = size;
-      ++s;
       std::memcpy((void*) s, (void*) p, size*sizeof(T));
-      const INDEX size_in_bytes = sizeof(INDEX) + sizeof(T)*size;
+      const INDEX size_in_bytes = sizeof(T)*size;
       ar.advance(size_in_bytes);
   }
   template<typename T>
@@ -275,11 +272,9 @@ public:
   template<typename T>
   void serialize(T* pointer, const INDEX size)
   {
-      INDEX* s = (INDEX*) ar.cur_address();
-      assert(*s == size);
-      ++s;
+      T* s = (T*) ar.cur_address();
       std::memcpy((void*) pointer, (void*) s, size*sizeof(T));
-      const INDEX size_in_bytes = sizeof(INDEX) + sizeof(T)*size;
+      const INDEX size_in_bytes = sizeof(T)*size;
       ar.advance(size_in_bytes);
   }
   template<typename T>
@@ -364,15 +359,11 @@ public:
      void serialize(T* pointer, const INDEX size)
      {
        static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
-       INDEX* s = (INDEX*) ar.cur_address();
-       assert(*s == size);
-       ++s;
-       T* val = (T*) s;
+       T* val = (T*) ar.cur_address();
        for(INDEX i=0; i<size; ++i) {
          pointer[i] += T(PREFIX) * val[i]; 
        }
-       std::memcpy((void*) pointer, (void*) s, size*sizeof(T));
-       const INDEX size_in_bytes = sizeof(INDEX) + sizeof(T)*size;
+       const INDEX size_in_bytes = sizeof(T)*size;
        ar.advance(size_in_bytes);
      }
    template<typename T>

@@ -374,7 +374,7 @@ int main(int argc, char**argv)
 
 
    //MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
-   Solver<FMC_DT,LP,StandardVisitor> solver;
+   Solver<FMC_DT,LP_with_trees,StandardVisitor> solver;
 
    pegtl::file_parser problem(filename);
 
@@ -420,6 +420,8 @@ int main(int argc, char**argv)
 
       s->SetTerm(i, sp, mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
       sp_vec.push_back(sp);
+
+      solver.GetLP().add_tree(t);
    }
 
    s->options.gap_threshold = 0.000001;
@@ -440,6 +442,8 @@ int main(int argc, char**argv)
          }
       } 
    }
+
+   solver.Solve();
 
    double* w = s->Solve();
 

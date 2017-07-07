@@ -54,6 +54,7 @@ public:
    virtual void construct_sat_clauses(LGL*) = 0;
    virtual void convert_primal(LGL*, sat_var) = 0; // this is not nice: the solver should be templatized
    virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
+   // to do: remove both
    virtual INDEX size() const = 0;
    virtual INDEX PrimalSize() const = 0;
    MessageIterator begin(); 
@@ -64,13 +65,14 @@ public:
    virtual FactorTypeAdapter* GetConnectedFactor(const INDEX i) const = 0;
    virtual bool CanSendMessage(const INDEX i) const = 0;
    virtual REAL LowerBound() const = 0;
-   virtual std::vector<REAL> GetReparametrizedPotential() const = 0;
    virtual void init_primal() = 0;
    virtual void MaximizePotentialAndComputePrimal() = 0;
 
+   // for use in tree decomposition:
    // for writing primal solution into subgradient
    // return value is size of subgradient
    virtual INDEX subgradient(double* w) = 0;
+   virtual REAL dot_product(double* w) = 0;
 
    // for reading reparametrization/labeling out of factor
    virtual void serialize_dual(save_archive&) = 0;
@@ -85,13 +87,11 @@ public:
    virtual void serialize_dual(addition_archive<+1>&) = 0;
    virtual void serialize_dual(addition_archive<-1>&) = 0;
 
-   // for use in tree decomposition:
-   //void dot_product();
-   //void load_Lagrange_multipliers(load_archive& ar);
+   virtual INDEX dual_size() = 0;
+   virtual INDEX primal_size() = 0;
 
-   //virtual PrimalSolutionStorageAdapter* AllocatePrimalSolutionStorage() const = 0;
-   //virtual bool CanComputePrimalSolution() const = 0;
    // the offset in the primal storage
+   // to do: remove
    virtual void SetPrimalOffset(const INDEX) = 0; // do zrobienia: delete
    virtual INDEX GetPrimalOffset() const = 0; // do zrobienia: delete
    
@@ -100,8 +100,6 @@ public:
    
    // do zrobienia: this function is not needed. Evaluation can be performed automatically
    virtual REAL EvaluatePrimal() const = 0;
-   // do zrobienia: this is not needed as well and could be automated. Possibly it is good to keep this to enable solution rewriting.
-   //virtual void WritePrimal(PrimalSolutionStorage::Element primalSolution, std::ofstream& fs) const = 0;
 
    // for the LP interface
    virtual INDEX GetNumberOfAuxVariables() const = 0;
@@ -494,7 +492,7 @@ public:
          cost += f_[i]->EvaluatePrimal();
       }
 
-      std::cout << "primal cost = " << cost << "\n";
+      if(verbosity >= 2) { std::cout << "primal cost = " << cost << "\n"; }
 
       return cost;
    }
@@ -680,13 +678,15 @@ public:
 
   void collect_sat_result()
   {
-     std::cout << "collect sat result with threshold = ";
-     if(cur_sat_reduction_direction_ == Direction::forward) { 
-       std::cout << forward_sat_th_.th;
-     } else {
-       std::cout << backward_sat_th_.th;
-     } 
-     std::cout << "\n"; // = " << th.th << "\n";
+     if(verbosity >= 2) { 
+       std::cout << "collect sat result with threshold = ";
+       if(cur_sat_reduction_direction_ == Direction::forward) { 
+         std::cout << forward_sat_th_.th;
+       } else {
+         std::cout << backward_sat_th_.th;
+       } 
+       std::cout << "\n"; // = " << th.th << "\n";
+     }
      const bool feasible = sat_handle_.get();
      if(feasible && !sat_dirty_) {
 
@@ -702,9 +702,9 @@ public:
         }
         // to do: remove this
         REAL primal_cost = this->EvaluatePrimal();
-        std::cout << "sat solution cost = " << primal_cost << "\n";// ", sat threshold = " << th.th << "\n"; 
+        if(verbosity >= 2) { std::cout << "sat solution cost = " << primal_cost << "\n"; }
      } else {
-        std::cout << "sat not feasible with current threshold\n";
+       if(verbosity >= 2) { std::cout << "sat not feasible with current threshold\n"; }
      }
   }
 
@@ -756,7 +756,7 @@ public:
        lglfreeze(c->sat_, to_literal(i));
      }
      const int sat_ret = lglsat(c->sat_);
-     std::cout << "solved sat " << sat_ret << "\n";
+     if(verbosity >= 2) { std::cout << "solved sat " << sat_ret << "\n"; }
 
      const bool feasible = (sat_ret == LGL_SATISFIABLE);
      //solve(&assumptions) == CMSat::l_True;
@@ -822,11 +822,11 @@ public:
 
       // run sat solver on reduced problem asynchronuously
       if(!sat_handle_.valid()) { 
-         std::cout << "start sat calculation\n";
+         if(verbosity >= 2) { std::cout << "start sat calculation\n"; }
          sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
          sat_dirty_ = false;
       } else { 
-        std::cout << "restart sat calculation\n";
+        if(verbosity >= 2) { std::cout << "restart sat calculation\n"; }
         sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
         sat_dirty_ = false;
       }
@@ -856,7 +856,7 @@ inline void LP::Begin()
 
 #ifdef LP_MP_PARALLEL
    omp_set_num_threads(num_lp_threads_arg_.getValue());
-   std::cout << "number of threads = " << num_lp_threads_arg_.getValue() << "\n";
+   if(verbosity >= 2) { std::cout << "number of threads = " << num_lp_threads_arg_.getValue() << "\n"; }
 #endif
 }
 
@@ -959,7 +959,7 @@ bool LP::CheckPrimalConsistency() const
          consistent = false;
       }
    }
-   std::cout << "primal solution consistent: " << consistent << "\n";
+   if(verbosity >= 2) { std::cout << "primal solution consistent: " << consistent << "\n"; }
    return consistent;
 }
 

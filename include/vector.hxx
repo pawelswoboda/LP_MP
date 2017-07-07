@@ -3,8 +3,7 @@
 
 #include "memory_allocator.hxx"
 #include "serialization.hxx"
-#define SIMDPP_ARCH_X86_AVX2
-#include "simdpp/simd.h"
+#include "config.hxx"
 //#include "cereal/archives/binary.hpp"
 
 namespace LP_MP {
@@ -67,7 +66,7 @@ public:
   vector(ITERATOR begin, ITERATOR end)
   {
     const INDEX size = std::distance(begin,end);
-    const INDEX padding = (8-(size%8))%8;
+    const INDEX padding = (REAL_ALIGNMENT-(size%REAL_ALIGNMENT))%REAL_ALIGNMENT;
     assert(size > 0);
     begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size+padding,32);
     assert(begin_ != nullptr);
@@ -82,8 +81,8 @@ public:
 
   vector(const INDEX size) 
   {
-    const INDEX padding = (8-(size%8))%8;
-    assert((padding + size)%8 == 0);
+    const INDEX padding = (REAL_ALIGNMENT-(size%REAL_ALIGNMENT))%REAL_ALIGNMENT;
+    assert((padding + size)%REAL_ALIGNMENT == 0);
     begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size+padding,32);
     assert(size > 0);
     assert(begin_ != nullptr);
@@ -97,7 +96,7 @@ public:
      : vector(size)
   {
      assert(size > 0);
-     std::fill(begin_,end_,value);
+     std::fill(begin_, end_, value);
   }
   ~vector() {
      if(begin_ != nullptr) {
@@ -105,7 +104,7 @@ public:
      }
   }
    vector(const vector& o)  {
-     const INDEX padding = (8-(o.size()%8))%8;
+     const INDEX padding = (REAL_ALIGNMENT-(o.size()%REAL_ALIGNMENT))%REAL_ALIGNMENT;
      begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(o.size()+padding,32);
      end_ = begin_ + o.size();
      assert(begin_ != nullptr);
@@ -171,11 +170,15 @@ public:
    }
    T& operator[](const INDEX i) {
       assert(i<size());
+      assert(!std::isnan(begin_[i]));
       return begin_[i];
    }
    using iterator = T*;
    T* begin() const { return begin_; }
    T* end() const { return end_; }
+
+   T back() const { return *(end_-1); }
+   T& back() { return *(end_-1); }
 
    template<typename ARCHIVE>
    void serialize(ARCHIVE& ar)
@@ -222,10 +225,18 @@ public:
 
    void min(const T val)
    {
+     static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
      if(std::is_same<T,float>::value) {
        simdpp::float32<8> val_vec = simdpp::make_float(val);
        for(auto it=begin_+8; it<end_; it+=8) {
          simdpp::float32<8> tmp = simdpp::load( it );
+         tmp = simdpp::min(val_vec, tmp); 
+         simdpp::store(it, tmp);
+       }
+     } else if(std::is_same<T,double>::value) {
+       simdpp::float64<4> val_vec = simdpp::make_float(val);
+       for(auto it=begin_+4; it<end_; it+=4) {
+         simdpp::float64<4> tmp = simdpp::load( it );
          tmp = simdpp::min(val_vec, tmp); 
          simdpp::store(it, tmp);
        }
@@ -390,11 +401,8 @@ public:
      return d1*(d2 + padding(d2));
    }
    static INDEX padding(const INDEX i) {
-     if(std::is_same<T,float>::value) {
-       return (8-(i%8))%8;
-     } else {
-       assert(false);
-     }
+     static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
+     return (REAL_ALIGNMENT-(i%REAL_ALIGNMENT))%REAL_ALIGNMENT;
    }
 
    INDEX padded_dim2() const { return padded_dim2_; }
@@ -456,11 +464,11 @@ public:
    vector<T> min1() const
    {
      vector<T> min(dim1());
-     if(std::is_same<T,float>::value) {
+     if(std::is_same<T,float>::value || std::is_same<T,double>::value) {
        for(INDEX x1=0; x1<dim1(); ++x1) {
-         simdpp::float32<8> cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() );
+         REAL_VECTOR cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() );
          for(INDEX x2=8; x2<dim2(); x2+=8) {
-           simdpp::float32<8> tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
+           REAL_VECTOR tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
            cur_min = simdpp::min(cur_min, tmp); 
          }
          min[x1] = simdpp::reduce_min(cur_min); 
@@ -477,16 +485,16 @@ public:
    {
      vector<T> min(dim2());
      // possibly iteration strategy is faster, e.g. doing a non-contiguous access, or explicitly holding a few variables and not storing them back in vector min for a few sizes
-     if(std::is_same<T,float>::value) {
+     if(std::is_same<T,float>::value || std::is_same<T,double>::value) {
        for(INDEX x2=0; x2<dim2(); x2+=8) {
-         simdpp::float32<8> tmp = simdpp::load( vec_.begin() + x2 );
+         REAL_VECTOR tmp = simdpp::load( vec_.begin() + x2 );
          simdpp::store(&min[x2], tmp);
        }
 
        for(INDEX x1=1; x1<dim1(); ++x1) {
          for(INDEX x2=0; x2<dim2(); x2+=8) {
-           simdpp::float32<8> cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
-           simdpp::float32<8> tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
+           REAL_VECTOR cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
+           REAL_VECTOR tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
            cur_min = simdpp::min(cur_min, tmp);
            simdpp::store(&min[x2], cur_min);
          } 

@@ -112,15 +112,17 @@ namespace LP_MP {
          // first output based on what lp solver did in last iteration
          if(c.computePrimal == false && c.computeLowerBound == false) {
             // output nothing
-         } else {
-            std::cout << "iteration = " << curIter_;
-            if(c.computeLowerBound) {
-               std::cout << ", lower bound = " << lowerBound;
+         } else { 
+            if(verbosity >= 1) { 
+              std::cout << "iteration = " << curIter_;
+              if(c.computeLowerBound) {
+                std::cout << ", lower bound = " << lowerBound;
+              }
+              if(c.computePrimal) {
+                std::cout << ", upper bound = " << primalBound;
+              }
+              std::cout << ", time elapsed = " << timeElapsed/1000 << "." << (timeElapsed%1000)/10 << "s\n";
             }
-            if(c.computePrimal) {
-               std::cout << ", upper bound = " << primalBound;
-            }
-            std::cout << ", time elapsed = " << timeElapsed/1000 << "." << (timeElapsed%1000)/10 << "s\n";
          }
 
          curIter_++;
@@ -134,32 +136,32 @@ namespace LP_MP {
          }
          // check if optimization has to be terminated
          if(remainingIter_ == 0) {
-            std::cout << "One iteration remaining\n";
+           if(verbosity >= 1) { std::cout << "One iteration remaining\n"; }
             ret.end = true;
             return ret;
          } 
          if(primalBound <= lowerBound + eps) {
             assert(primalBound + eps >= lowerBound);
-            std::cout << "Primal cost " << primalBound << " greater equal lower bound " << lowerBound << "\n";
+            if(verbosity >= 1) { std::cout << "Primal cost " << primalBound << " greater equal lower bound " << lowerBound << "\n"; }
             ret.end = true;
             return ret;
          }
          if(timeout_ != std::numeric_limits<REAL>::max() && timeElapsed/1000 >= timeout_) {
-            std::cout << "Timeout reached after " << timeElapsed << " seconds\n";
+            if(verbosity >= 1) { std::cout << "Timeout reached after " << timeElapsed << " seconds\n"; }
             remainingIter_ = std::min(INDEX(1),remainingIter_);
          }
          if(maxMemory_ > 0) {
             const INDEX memoryUsed = memory_used()/(1024*1024);
             if(maxMemory_ < memoryUsed) {
                remainingIter_ = std::min(INDEX(1),remainingIter_);
-               std::cout << "Solver uses " << memoryUsed << " MB memory, aborting optimization\n";
+               if(verbosity >= 1) { std::cout << "Solver uses " << memoryUsed << " MB memory, aborting optimization\n"; }
             }
          }
          if(c.computeLowerBound && curIter_ >= minDualImprovementInterval_ && minDualImprovementArg_.isSet()) {
             assert(lowerBound_.size() >= minDualImprovementInterval_);
             const REAL prevLowerBound = lowerBound_[lowerBound_.size() - 1 - minDualImprovementInterval_];
             if(minDualImprovement_ > 0 && lowerBound - prevLowerBound < minDualImprovement_) {
-               std::cout << "Dual improvement smaller than " << minDualImprovement_ << " after " << minDualImprovementInterval_ << " iterations, terminating optimization\n";
+               if(verbosity >= 1) { std::cout << "Dual improvement smaller than " << minDualImprovement_ << " after " << minDualImprovementInterval_ << " iterations, terminating optimization\n"; }
                remainingIter_ = std::min(INDEX(1),remainingIter_);
             }
          }
@@ -192,8 +194,10 @@ namespace LP_MP {
       void end(const REAL lower_bound, const REAL upper_bound)
       {
          auto endTime = std::chrono::steady_clock::now();
-         std::cout << "final lower bound = " << lower_bound << ", upper bound = " << upper_bound << "\n";
-         std::cout << "Optimization took " <<  std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations.\n";
+         if(verbosity >= 1) { 
+           std::cout << "final lower bound = " << lower_bound << ", upper bound = " << upper_bound << "\n";
+           std::cout << "Optimization took " <<  std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations.\n";
+         }
       }
       
       using TimeType = decltype(std::chrono::steady_clock::now());
@@ -325,7 +329,7 @@ namespace LP_MP {
             if((this->GetIter() >= tightenIteration_ && 
                      (this->GetIter() >= lastTightenIteration_ + tightenInterval_ || 
                       (tightenSlopeArg_.isSet() && cur_slope < tightenSlopeArg_.getValue()*tighten_slope_)))) {
-               std::cout << "Time to tighten\n";
+               if(verbosity >= 1) { std::cout << "Time to tighten\n"; }
                ret = SetTighten(ret);
                iteration_after_tightening_ = 0;
                tighten_slope_ = -std::numeric_limits<REAL>::infinity();
@@ -335,8 +339,10 @@ namespace LP_MP {
                   assert(this->lowerBound_.size() >= tightenMinDualImprovementInterval_);
                   const REAL prevLowerBound = lowerBound_[lowerBound_.size() - 1 - tightenMinDualImprovementInterval_];
                   if(tightenMinDualImprovement_ > 0 && lowerBound - prevLowerBound < tightenMinDualImprovement_) {
-                     std::cout << "cur lower bound = " << lowerBound << " prev lower bound = " << prevLowerBound << "\n";
-                     std::cout << "Dual improvement smaller than " << tightenMinDualImprovement_ << " after " << tightenMinDualImprovementInterval_ << " iterations, tighten\n";
+                     if(verbosity >= 1) { 
+                       std::cout << "cur lower bound = " << lowerBound << " prev lower bound = " << prevLowerBound << "\n";
+                       std::cout << "Dual improvement smaller than " << tightenMinDualImprovement_ << " after " << tightenMinDualImprovementInterval_ << " iterations, tighten\n";
+                     }
                      ret = SetTighten(ret);
                      iteration_after_tightening_ = 0;
                      tighten_slope_ = -std::numeric_limits<REAL>::infinity();

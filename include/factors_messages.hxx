@@ -79,6 +79,7 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotentialAndComputePrimal, MaximizePotentialAndComputePrimal)
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(has_subgradient, subgradient)
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_dot_product, dot_product)
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables)
@@ -1964,6 +1965,8 @@ public:
       ComputePrimalThroughMessages();
    }
 
+   // todo: possibly replace dot_product by using subgradient as follows: create mock object which reacts when 1.0 is written via operator[](int i) to it.
+   // get i and add w[i] to dot product. For usual subgradient zero iniaitialize array that is given to factor
    constexpr static bool can_compute_subgradient()
    {
       return FunctionExistence::has_subgradient<FactorType, INDEX, double*>(); 
@@ -1976,6 +1979,20 @@ public:
             });
       assert(false); // should not be called otherwise
       return 0;
+   }
+
+   constexpr static bool can_compute_dot_product()
+   {
+      return FunctionExistence::has_dot_product<FactorType, INDEX, double*>(); 
+   }
+
+   virtual REAL dot_product(double* w) final
+   {
+      static_if<can_compute_dot_product()>([this,w](auto f) {
+            return f(factor_).dot_product(w);
+            });
+      assert(false);
+      return 0.0; 
    }
 
    virtual void serialize_dual(load_archive& ar) final
@@ -1995,6 +2012,22 @@ public:
    virtual void serialize_dual(addition_archive<-1>& ar) final
    { factor_.serialize_dual(ar); }
 
+   // returns size in bytes
+   virtual INDEX dual_size() final
+   {
+      allocate_archive ar;
+      factor_.serialize_dual(ar);
+      assert(ar.size() % sizeof(REAL) == 0);
+      return ar.size();
+   }
+
+   virtual INDEX primal_size() final
+   {
+      allocate_archive ar;
+      factor_.serialize_primal(ar);
+      return ar.size(); 
+   }
+
       // do zrobienia: possibly do it with std::result_of
    //auto begin() -> decltype(std::declval<RepamStorageType>().begin()) { return RepamStorageType::begin(); }
    //auto end()   -> decltype(std::declval<RepamStorageType>().end()) { return RepamStorageType::end(); }
@@ -2008,17 +2041,6 @@ public:
    //auto operator[](const INDEX i) -> decltype(std::declval<RepamStorageType>().operator[](0)) { return RepamStorageType::operator[](i); }
    REAL& operator[](const INDEX i) { return RepamStorageType::operator[](i); }
    */
-
-   // do zrobienia: remove
-   std::vector<REAL> GetReparametrizedPotential() const final
-   {
-      assert(false);
-      std::vector<REAL> repam(size());
-      //for(INDEX i=0; i<repam.size(); ++i) {
-      //   repam[i] = RepamStorageType::operator[](i);
-      //}
-      return repam;
-   }
 
    // do zrobienia: remove
    INDEX size() const final { 
@@ -2089,6 +2111,7 @@ protected:
    FactorType factor_; // the factor operation
 public:
    INDEX primal_access_ = 0; // counts when primal was accessed last, do zrobienia: make setter and getter for clean interface or make MessageContainer a friend
+
    virtual void init_primal() final
    {
       factor_.init_primal();

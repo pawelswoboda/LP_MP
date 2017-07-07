@@ -298,7 +298,9 @@ public:
     auto it = std::remove(exclusions_.begin(), exclusions_.end(), removal_mark);
     exclusions_.resize(std::distance(exclusions_.begin(), it));
 
-    std::cout << "added " << exclusion_candidates.size() << " exclusion factors, " << exclusions_.size() << " exclusions remain\n";
+    if(verbosity >= 2) {
+      std::cout << "added " << exclusion_candidates.size() << " exclusion factors, " << exclusions_.size() << " exclusions remain\n";
+    }
 
     return exclusion_candidates.size();
   }
@@ -319,6 +321,7 @@ class cell_tracking_constructor : public BASIC_CELL_TRACKING_CONSTRUCTOR {
 public:
   using BASIC_CELL_TRACKING_CONSTRUCTOR::BASIC_CELL_TRACKING_CONSTRUCTOR;
   using transition_count = typename BASIC_CELL_TRACKING_CONSTRUCTOR::transition_count;
+  using transition_message_container = TRANSITION_MESSAGE_CONTAINER;
 
   //void set_number_of_timesteps(const INDEX t)
   //{
@@ -333,14 +336,11 @@ public:
 
     auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
     const INDEX outgoing_edge_index  = tc.current_transition_no[timestep_prev][prev_cell][1];
-    //assert( out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] == 0.0 );
     out_cell_factor->GetFactor()->set_outgoing_transition_cost(outgoing_edge_index, 0.5*cost);
-    //out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] = cost;
     tc.current_transition_no[timestep_prev][prev_cell][1]++;
 
     auto* in_cell_factor = this->detection_factors_[timestep_next][next_cell];
     const INDEX incoming_edge_index = tc.current_transition_no[timestep_next][next_cell][0];
-    //assert( in_cell_factor->GetFactor()->set_incoming[incoming_edge_index] == 0.0 );
     tc.current_transition_no[timestep_next][next_cell][0]++;
     in_cell_factor->GetFactor()->set_incoming_transition_cost(incoming_edge_index, 0.5*cost);
     auto* m = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor, false, outgoing_edge_index, incoming_edge_index);
@@ -352,7 +352,6 @@ public:
   template<typename LP_TYPE>
   void add_cell_division(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next_1, const INDEX next_cell_1, const INDEX timestep_next_2, const INDEX next_cell_2, const REAL cost, transition_count& tc) 
   {
-    // this doees not work for cell tracking without minimal distance. Then the edge indices need to be summed up with the transition edge indices
     auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
     const INDEX outgoing_edge_index  = tc.current_transition_no[timestep_prev][prev_cell][1] + tc.current_division_no[timestep_prev][prev_cell][1];
     out_cell_factor->GetFactor()->set_outgoing_division_cost(outgoing_edge_index, 1.0/3.0*cost);
@@ -464,8 +463,10 @@ public:
 
 template<typename CELL_TRACKING_CONSTRUCTOR>
 class cell_tracking_with_division_distance_constructor : public CELL_TRACKING_CONSTRUCTOR {
-  using detection_factor_container = typename CELL_TRACKING_CONSTRUCTOR::detection_factor_container;
 public:
+  using detection_factor_container = typename CELL_TRACKING_CONSTRUCTOR::detection_factor_container;
+  using transition_count = typename CELL_TRACKING_CONSTRUCTOR::transition_count;
+  using transition_message_container = typename CELL_TRACKING_CONSTRUCTOR::transition_message_container;
   using CELL_TRACKING_CONSTRUCTOR::CELL_TRACKING_CONSTRUCTOR;
 
   void set_division_distance(const INDEX d) 
@@ -500,6 +501,32 @@ public:
     return f; 
   }
   
+  template<typename LP_TYPE>
+  void add_cell_division(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next_1, const INDEX next_cell_1, const INDEX timestep_next_2, const INDEX next_cell_2, const REAL cost, transition_count& tc) 
+  {
+    auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
+    const INDEX outgoing_edge_index  = tc.current_division_no[timestep_prev][prev_cell][1];
+    out_cell_factor->GetFactor()->set_outgoing_division_cost(outgoing_edge_index, 1.0/3.0*cost);
+    tc.current_division_no[timestep_prev][prev_cell][1]++;
+
+    auto* in_cell_factor_1 = this->detection_factors_[timestep_next_1][next_cell_1];
+    const INDEX incoming_edge_index_1 = tc.current_division_no[timestep_next_1][next_cell_1][0];
+    in_cell_factor_1->GetFactor()->set_incoming_division_cost(incoming_edge_index_1, 1.0/3.0*cost);
+    tc.current_division_no[timestep_next_1][next_cell_1][0]++;
+    
+    auto* in_cell_factor_2 = this->detection_factors_[timestep_next_2][next_cell_2];
+    const INDEX incoming_edge_index_2 = tc.current_division_no[timestep_next_2][next_cell_2][0];
+    in_cell_factor_2->GetFactor()->set_incoming_division_cost(incoming_edge_index_2, 1.0/3.0*cost);
+    tc.current_division_no[timestep_next_2][next_cell_2][0]++;
+    
+    auto* m1 = new transition_message_container(out_cell_factor, in_cell_factor_1, true, outgoing_edge_index, incoming_edge_index_1);
+    lp.AddMessage(m1);
+    
+    auto* m2 = new transition_message_container(out_cell_factor, in_cell_factor_2, true, outgoing_edge_index, incoming_edge_index_2);
+    lp.AddMessage(m2);
+
+    //std::cout << "DA: " << timestep << " " << prev_cell << ", " << next_cell_1 << " " << next_cell_2 << " " << cost << std::endl;
+  }
 
 private:
   INDEX division_distance_ = 0;
@@ -704,7 +731,9 @@ namespace cell_tracking_parser_mother_machine {
 
    bool read_input(const std::string& filename, input& i)
    {
-      std::cout << "parsing " << filename << "\n";
+      if(verbosity >= 1) {
+        std::cout << "parsing " << filename << "\n";
+      }
       pegtl::file_parser problem(filename);
       const bool success = problem.parse< grammar, action >(i); 
       //assert(i.eof);
@@ -826,11 +855,13 @@ namespace cell_tracking_parser_mother_machine {
           if(std::get<2>(f) > 0 || std::get<3>(f) > 0) no_factors++;
         }
       }
-      std::cout << "maximum out-degree of detection factors = " << max_out_degree << "\n";
-      std::cout << "maximum in-degree of detection factors = " << max_in_degree << "\n";
+      if(verbosity >= 2) {
+        std::cout << "maximum out-degree of detection factors = " << max_out_degree << "\n";
+        std::cout << "maximum in-degree of detection factors = " << max_in_degree << "\n";
 
-      std::cout << "average out-degree of detection factors = " << REAL(sum_out_degree)/REAL(no_factors) << "\n";
-      std::cout << "average in-degree of detection factors = " << REAL(sum_in_degree)/REAL(no_factors) << "\n";
+        std::cout << "average out-degree of detection factors = " << REAL(sum_out_degree)/REAL(no_factors) << "\n";
+        std::cout << "average in-degree of detection factors = " << REAL(sum_in_degree)/REAL(no_factors) << "\n";
+      }
 
       return read_suc;
    }
@@ -1073,7 +1104,9 @@ namespace cell_tracking_parser_2d {
    template<typename GRAMMAR>
    bool read_input(const std::string& filename, input& i)
    {
-      std::cout << "parsing " << filename << "\n";
+      if(verbosity >= 1) {
+        std::cout << "parsing " << filename << "\n";
+      }
       pegtl::file_parser problem(filename);
       const bool success = problem.parse< GRAMMAR, action >(i); 
       //assert(i.eof);

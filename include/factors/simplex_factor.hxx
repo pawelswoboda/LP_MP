@@ -53,6 +53,17 @@ public:
    INDEX& primal() { return primal_; }
    void primal(const INDEX p) { primal_ = p; }
 
+   INDEX subgradient(double* w) const
+   {
+      assert(primal_ < size());
+      std::fill(w, w+this->size(), 0.0);
+      w[primal_] = 1.0;
+      return this->size();
+   }
+   REAL dot_product(double* w) const
+   {
+      return w[primal_];
+   }
 
 #ifdef WITH_SAT
    template<typename SAT_SOLVER>
@@ -227,6 +238,18 @@ public:
              m[x2] = std::min(m[x2],(*this)(x1,x2));
           }
        } 
+   }
+
+   INDEX subgradient(double* w) const
+   {
+      assert(primal_[0] < dim1() && primal_[1] < dim2());
+      std::fill(w, w+this->size(), 0.0);
+      w[primal_[0]*dim2_ + primal_[1]] = 1.0;
+      return this->size();
+   }
+   REAL dot_product(double* w) const
+   {
+      return w[primal_[0]*dim2_ + primal_[1]];
    }
 
 #ifdef WITH_SAT

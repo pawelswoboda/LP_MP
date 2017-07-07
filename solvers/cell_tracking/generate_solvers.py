@@ -33,7 +33,7 @@ file_name = [
 
 
 #main_body = ["MpRoundingSolver<Solver<" + e[0] + ",LP_sat<LP>,StandardTighteningVisitor>> solver(argc,argv);\nsolver.ReadProblem(" + e[1] + "<Solver<" + e[0] + ",LP_sat<LP>,StandardTighteningVisitor>>);\nreturn solver.Solve();\n" for e in zip(FMC,parse_fun)]
-main_body = ["Solver<" + e[0] + ",LP,StandardTighteningVisitor> solver(argc,argv);\nsolver.ReadProblem(" + e[1] + "<Solver<" + e[0] + ",LP,StandardTighteningVisitor>>);\nreturn solver.Solve();\n" for e in zip(FMC,parse_fun)]
+main_body = ["Solver<" + e[0] + ",LP,StandardVisitor> solver(argc,argv);\nsolver.ReadProblem(" + e[1] + "<Solver<" + e[0] + ",LP,StandardVisitor>>);\nreturn solver.Solve();\n" for e in zip(FMC,parse_fun)]
 
 for e in zip(main_body,file_name):
    f = open(e[1],'w')

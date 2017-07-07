@@ -54,6 +54,7 @@ private:
         lp_(cmd_),
         inputFileArg_("i","inputFile","file from which to read problem instance",false,"","file name",cmd_),
         outputFileArg_("o","outputFile","file to write solution",false,"","file name",cmd_),
+        verbosity_arg_("v","verbosity","verbosity level: 0 = silent, 1 = important runtime information, 2 = further diagnostics",false,1,"0,1,2",cmd_),
         visitor_(cmd_)
    {
       for_each_tuple(this->problemConstructor_, [this](auto& l) {
@@ -79,6 +80,8 @@ public:
       try {  
          inputFile_ = inputFileArg_.getValue();
          outputFile_ = outputFileArg_.getValue();
+         verbosity = verbosity_arg_.getValue();
+         if(verbosity > 2) { throw TCLAP::ArgException("verbosity must be 0,1 or 2"); }
       } catch (TCLAP::ArgException &e) {
          std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
          exit(1);
@@ -218,6 +221,9 @@ public:
    
    int Solve()
    {
+     std::cout << std::setprecision(10);
+     std::cout << "test lower bound = " << lp_.LowerBound() << "\n";
+
       this->Begin();
       LpControl c = visitor_.begin(this->lp_);
       while(!c.end && !c.error) {
@@ -303,7 +309,7 @@ public:
    void RegisterPrimal()
    {
       const REAL cost = lp_.EvaluatePrimal();
-      std::cout << "register primal cost = " << cost << "\n"; 
+      if(verbosity >= 2) { std::cout << "register primal cost = " << cost << "\n"; }
       if(cost < bestPrimalCost_) {
          // assume solution is feasible
          const bool feasible = CheckPrimalConsistency();
@@ -340,6 +346,8 @@ protected:
    TCLAP::ValueArg<std::string> outputFileArg_;
    std::string inputFile_;
    std::string outputFile_;
+
+   TCLAP::ValueArg<INDEX> verbosity_arg_;
 
    REAL lowerBound_;
    // while Solver does not know how to compute primal, derived solvers do know. After computing a primal, they are expected to register their primals with the base solver
@@ -432,13 +440,13 @@ public:
          this->RegisterPrimal();
          // alternatively  compute forward and backward based rounding
          if(cur_primal_computation_direction_ == Direction::forward) {
-            std::cout << "compute primal for forward pass\n";
+            if(verbosity >= 2) { std::cout << "compute primal for forward pass\n"; }
             this->lp_.ComputeForwardPassAndPrimal(iter);
             this->lp_.ComputeBackwardPass();
             cur_primal_computation_direction_ = Direction::backward;
          } else {
             assert(cur_primal_computation_direction_ == Direction::backward);
-            std::cout << "compute primal for backward pass\n";
+            if(verbosity >= 2) { std::cout << "compute primal for backward pass\n"; }
             this->lp_.ComputeForwardPass();
             this->lp_.ComputeBackwardPassAndPrimal(iter);
             cur_primal_computation_direction_ = Direction::forward;

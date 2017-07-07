@@ -2,7 +2,8 @@
 #define LP_MP_CELL_TRACKING__HXX
 
 #include "factors_messages.hxx"
-#include "detection_factor.hxx"
+//#include "detection_factor.hxx"
+#include "detection_factor_caching.hxx"
 #include "cell_tracking_constructor.hxx"
 #include "conservation_tracking_constructor.hxx"
 #include "LP_MP.h"
@@ -35,8 +36,8 @@ struct FMC_CELL_TRACKING_DUPLICATE_EDGES {
   using edge_factor_container = FactorContainer<mapping_edge_factor, FMC_CELL_TRACKING_DUPLICATE_EDGES, 1, false>;
   using at_most_one_hypothesis_container = FactorContainer<at_most_one_cell_factor, FMC_CELL_TRACKING_DUPLICATE_EDGES, 2, false>;
 
-  using incoming_edge_message_container = MessageContainer<cell_incoming_edge_detection_factor, 1, 0, message_passing_schedule::left, 1, variableMessageNumber, FMC_CELL_TRACKING_DUPLICATE_EDGES, 0>;
-  using outgoing_edge_message_container = MessageContainer<cell_outgoing_edge_detection_factor, 1, 0, message_passing_schedule::left, 1, variableMessageNumber, FMC_CELL_TRACKING_DUPLICATE_EDGES, 1>;
+  using incoming_edge_message_container = MessageContainer<cell_incoming_edge_detection_factor, 1, 0, message_passing_schedule::full, 1, variableMessageNumber, FMC_CELL_TRACKING_DUPLICATE_EDGES, 0>;
+  using outgoing_edge_message_container = MessageContainer<cell_outgoing_edge_detection_factor, 1, 0, message_passing_schedule::full, 1, variableMessageNumber, FMC_CELL_TRACKING_DUPLICATE_EDGES, 1>;
   using at_most_one_cell_message_container = MessageContainer<at_most_one_cell_message, 0, 2, message_passing_schedule::left, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING_DUPLICATE_EDGES, 2>;
 
   using FactorList = meta::list<detection_factor_container, edge_factor_container, at_most_one_hypothesis_container>;
@@ -66,6 +67,7 @@ struct FMC_CELL_TRACKING_WITH_DIVISION_DISTANCE {
 
   using ProblemDecompositionList = meta::list<constructor>; 
 };
+
 struct FMC_CELL_TRACKING_MOTHER_MACHINE {
   constexpr static char* name = "Cell tracking in the mother machine";
 

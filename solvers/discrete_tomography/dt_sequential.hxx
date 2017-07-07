@@ -761,6 +761,12 @@ public:
       }
    }
 
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
+   {
+      l.primal()[0] = r.state_[0];
+      l.primal()[1] = r.state_[1];
+   }
 private:
    const bool transpose_; 
 };

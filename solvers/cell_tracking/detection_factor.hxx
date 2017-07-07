@@ -40,16 +40,6 @@ public:
     //std::cout << "no incoming = " << incoming.size() << ", no outgoing = " << no_outgoing_edges << "\n";
   }
 
-  //REAL operator[](const INDEX i) const {
-  //  assert(i<size());
-  //  return pot_[i];
-  //}
-  //REAL& operator[](const INDEX i) {
-  //  assert(i<size());
-  //  return pot_[i];
-  //}
-
-
   REAL min_detection_cost() const {
     //std::cout << pot_[0] << " : ";
     //for(auto it=incoming.begin(); it!= incoming.end(); ++it) std::cout << *it << ",";
@@ -238,10 +228,10 @@ public:
     }
   }
 
-
   REAL detection;
   vector<REAL> incoming;
   vector<REAL> outgoing;
+
 private:
   
   // primal  
@@ -715,12 +705,11 @@ public:
   {
     r.outgoing.prefetch();
     r.incoming.prefetch();
-    // to do: measure time! is this or the construction below faster?
-    const REAL detection_outgoing_cost = r.detection + r.outgoing.min(); //*std::min_element(r.outgoing.begin(), r.outgoing.end());
+    const REAL detection_outgoing_cost = r.detection + r.outgoing.min();
 
     const REAL incoming_val = r.incoming[incoming_edge_index_];
     r.incoming[incoming_edge_index_] = std::numeric_limits<REAL>::infinity();
-    const REAL min_incoming_val = r.incoming.min(); //*std::min_element(r.incoming.begin(), r.incoming.end());
+    const REAL min_incoming_val = r.incoming.min();
     r.incoming[incoming_edge_index_] = incoming_val;
 
     msg[0] -= omega*( detection_outgoing_cost + incoming_val - std::min(detection_outgoing_cost + min_incoming_val, REAL(0.0)) ); 
@@ -1251,7 +1240,7 @@ public:
       outgoing_transition(no_outgoing_transition_edges+1, division_distance, std::numeric_limits<REAL>::infinity()),
       outgoing_division(no_outgoing_division_edges+1, std::numeric_limits<REAL>::infinity())
   {
-    assert(division_distance >= 1); 
+    assert(division_distance >= 2); 
     incoming_division[ incoming_division.size()-1 ] = appearance_cost;
     outgoing_division[ outgoing_division.size()-1 ] = disappearance_cost;
     for(INDEX i=0; i<incoming_transition.dim2(); ++i) {
@@ -1280,6 +1269,7 @@ public:
   {
     assert(edge_index < incoming_transition.dim1()-1);
     for(INDEX i=0; i<division_distance()-1; ++i) {
+      assert(incoming_transition(edge_index, i) == std::numeric_limits<REAL>::infinity());
       incoming_transition(edge_index, i) = cost;
     }
   }
@@ -1288,6 +1278,7 @@ public:
   {
     assert(edge_index < outgoing_transition.dim1()-1);
     for(INDEX i=0; i<division_distance(); ++i) {
+      assert(outgoing_transition(edge_index, i) == std::numeric_limits<REAL>::infinity());
       outgoing_transition(edge_index, i) = cost;
     }
   }
@@ -1309,10 +1300,12 @@ public:
   REAL min_detection_cost() const
   {
     auto outgoing_transition_min = outgoing_transition.min2();
+    assert(outgoing_transition_min.size() == division_distance());
     auto incoming_transition_min = incoming_transition.min2();
+    assert(incoming_transition_min.size() + 1 == division_distance());
 
     const REAL c_first = detection[0] + incoming_division.min() + outgoing_transition_min[0];
-    REAL cost = c_first;
+    REAL cost = std::min(c_first, REAL(0.0));
 
     for(INDEX i=1; i<division_distance()-1; ++i) {
       const REAL c = detection[i] + incoming_transition_min[i-1] + outgoing_transition_min[i];
@@ -1527,7 +1520,7 @@ public:
     for(INDEX i=0; i<l.division_distance()-1; ++i) {
       l.outgoing_transition(outgoing_edge_index_, i) += msg[i];
     }
-    l.outgoing_transition(outgoing_edge_index_, l.division_distance()-1) += msg[ l.division_distance()-1 ];
+    l.outgoing_transition(outgoing_edge_index_, l.division_distance()-2) += msg[ l.division_distance()-2 ];
   }
 
   template<typename G>

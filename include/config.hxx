@@ -12,6 +12,9 @@
 #include <limits>
 #include "tclap/CmdLine.h"
 
+#define SIMDPP_ARCH_X86_AVX2
+#include "simdpp/simd.h"
+
 // type definitions for LP_MP
 
 namespace LP_MP {
@@ -19,7 +22,14 @@ namespace LP_MP {
    // to do: use type definitions for SIMD types
 
    // data types for all floating point/integer operations 
-   using REAL = float;
+   //using REAL = float;
+   //constexpr std::size_t REAL_ALIGNMENT = 8;
+   //using REAL_VECTOR = simdpp::float32<REAL_ALIGNMENT>;
+
+   using REAL = double;
+   constexpr std::size_t REAL_ALIGNMENT = 4;
+   using REAL_VECTOR = simdpp::float64<REAL_ALIGNMENT>;
+
    using INDEX = unsigned int;
    using UNSIGNED_INDEX = INDEX;
    using SIGNED_INDEX = int; // note: must be the same as flow type in MinCost
@@ -32,6 +42,10 @@ namespace LP_MP {
    enum class Direction {forward, backward};
 
    constexpr REAL eps = std::is_same<REAL,float>::value ? 1e-6 : 1e-8;
+   // verbosity levels: 0: silent
+   //                   1: important diagnostics, e.g. lower bound, upper bound, runtimes
+   //                   2: debug informations
+   static INDEX verbosity = 0; 
    
    // shortcuts to indicate how many messages a factor holds
    constexpr SIGNED_INDEX variableMessageNumber = 0;
