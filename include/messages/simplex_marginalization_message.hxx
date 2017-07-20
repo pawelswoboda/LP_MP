@@ -125,6 +125,7 @@ namespace LP_MP {
       }
       */
 
+#ifdef WITH_SAT
     template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
     void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_var left_begin, const sat_var right_begin) const
     {
@@ -134,7 +135,7 @@ namespace LP_MP {
           make_sat_var_equal(s, to_literal(left_var), to_literal(right_var)); 
        }
     }
- 
+#endif 
 
     template<typename LEFT_FACTOR, typename G2>
     void send_message_to_right(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)

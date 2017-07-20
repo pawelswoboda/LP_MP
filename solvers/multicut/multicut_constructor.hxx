@@ -115,11 +115,9 @@ public:
       auto it = unaryFactors_.insert(std::make_pair(std::array<INDEX,2>{i1,i2}, u)).first;
       unaryFactorsVector_.push_back(std::make_pair(std::array<INDEX,2>{i1,i2}, u));
 
-      //std::cout << "current edge: (" << i1 << "," << i2 << ")";
       if(it != unaryFactors_.begin()) {
          auto prevIt = it;
          --prevIt;
-         //std::cout << ", prev edge: (" << prevIt->first.operator[](0) << "," << prevIt->first.operator[](1) << ")";
          assert(prevIt->second != u);
          lp_->AddFactorRelation(prevIt->second, u);
       }
@@ -127,15 +125,9 @@ public:
       ++nextIt;
       if(nextIt != unaryFactors_.end()) {
          assert(nextIt->second != u);
-         //std::cout << ", next edge: (" << nextIt->first.operator[](0) << "," << nextIt->first.operator[](1) << ")";
          lp_->AddFactorRelation(u, nextIt->second);
       }
-      //std::cout << "\n";
 
-
-      //LinkUnaryGlobal(u,globalFactor_,i1,i2);
-      
-      //logger->info() << "Add unary factor (" << i1 << "," << i2 << ") with cost = " << cost;
       return u;
    }
    UnaryFactorContainer* GetUnaryFactor(const INDEX i1, const INDEX i2) const {
@@ -143,6 +135,7 @@ public:
       return unaryFactors_.find(std::array<INDEX,2>{i1,i2})->second;
    }
    INDEX number_of_edges() const { return unaryFactors_.size(); }
+   INDEX number_of_triplets() const { return tripletFactors_.size(); }
 
    template<typename MESSAGE_CONTAINER>
    MESSAGE_CONTAINER* LinkUnaryTriplet(UnaryFactorContainer* u, TripletFactorContainer* t) 
@@ -157,6 +150,23 @@ public:
    //   lp_->AddMessage(m);
    //   return m;
    //}
+
+   // add triplet factor with prespecified cost
+   // edges on triplet are (uw,uw,vw) (lexicographically)
+   TripletFactorContainer* AddTripletFactorHO(
+         const INDEX u, const INDEX v, const INDEX w, 
+         const REAL c000, const REAL c011, const REAL c101, const REAL c110, const REAL c111)
+   {
+      auto* f = AddTripletFactor(u,v,w);
+      auto* t = f->GetFactor();
+      AddToConstant(c000);
+      (*t)[0] = c110 - c000;
+      (*t)[1] = c101 - c000;
+      (*t)[2] = c011 - c000;
+      (*t)[3] = c111 - c000;
+      return f;
+   }
+
    virtual TripletFactorContainer* AddTripletFactor(const INDEX i1, const INDEX i2, const INDEX i3) // declared virtual so that derived constructor notices when triplet factor is added
    {
       assert(i1 < i2 && i2 < i3);
@@ -276,6 +286,8 @@ public:
    // search for cycles to add such that coordinate ascent will be possible
    INDEX Tighten(const INDEX max_factors_to_add)
    {
+      no_original_edges_ = std::min(no_original_edges_, INDEX(unaryFactorsVector_.size()));
+
       if(number_of_edges() > 2) {
          std::cout << "Search for violated triplet constraints\n";
          INDEX triplets_added = find_violated_triplets(max_factors_to_add);
@@ -968,19 +980,24 @@ public:
          
          std::cout << "use Burer's heuristic to compute max-cut\n";
          // use heuristics from MQlib
-         std::vector<mqlib::Instance::InstanceTuple> edge_list;
+         //std::vector<mqlib::Instance::InstanceTuple> edge_list;
+         std::vector<Instance::InstanceTuple> edge_list;
          edge_list.reserve(unaryFactorsVector_.size());
          for(INDEX e=0; e<unaryFactorsVector_.size(); ++e) {
             const INDEX i = unaryFactorsVector_[e].first[0];
             const INDEX j = unaryFactorsVector_[e].first[1];
             assert(i<j);
             const REAL cost_ij = unaryFactorsVector_[e].second->GetFactor()->operator[](0);
-            edge_list.push_back(mqlib::Instance::InstanceTuple(std::make_pair(i+1, j+1), -cost_ij));
+            //edge_list.push_back(mqlib::Instance::InstanceTuple(std::make_pair(i+1, j+1), -cost_ij));
+            edge_list.push_back(Instance::InstanceTuple(std::make_pair(i+1, j+1), -cost_ij));
          }
 
-         mqlib::MaxCutInstance mi(edge_list, this->noNodes_);
-         mqlib::Burer2002 heur(mi, 1.0, false, NULL);
-         const mqlib::MaxCutSimpleSolution& mc_sol = heur.get_best_solution();
+         //mqlib::MaxCutInstance mi(edge_list, this->noNodes_);
+         MaxCutInstance mi(edge_list, this->noNodes_);
+         //mqlib::Burer2002 heur(mi, 1.0, false, NULL);
+         Burer2002 heur(mi, 1.0, false, NULL);
+         //const mqlib::MaxCutSimpleSolution& mc_sol = heur.get_best_solution();
+         const MaxCutSimpleSolution& mc_sol = heur.get_best_solution();
          const std::vector<int>& solution = mc_sol.get_assignments();
          std::cout << "write solution back\n";
          for(INDEX e=0; e<unaryFactorsVector_.size(); ++e) {
@@ -997,6 +1014,20 @@ public:
       } 
    }
 
+   template<typename STREAM>
+   void WritePrimal(STREAM& s)
+   {
+      assert(no_original_edges_ <= unaryFactorsVector_.size());
+      for(INDEX e=0; e<std::min(no_original_edges_, INDEX(unaryFactorsVector_.size())); ++e) {
+         const INDEX i = unaryFactorsVector_[e].first[0];
+         const INDEX j = unaryFactorsVector_[e].first[1];
+         auto* t = unaryFactorsVector_[e].second->GetFactor();
+         const bool cut = t->primal()[0];
+         s << i << " " << j << " " << cut << "\n";
+      } 
+   }
+
+
 protected:
 
    decltype(std::async(std::launch::async, gaec_klj, andres::graph::Graph<>(0), std::vector<REAL>{})) primal_handle_;
@@ -1005,6 +1036,7 @@ protected:
    // do zrobienia: replace this by unordered_map, provide hash function.
    // possibly dont do this, but use sorting to provide ordering for LP
    std::map<std::array<INDEX,2>, UnaryFactorContainer*> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
+   INDEX no_original_edges_ = std::numeric_limits<INDEX>::max();
    //std::unordered_map<std::array<INDEX,2>, UnaryFactorContainer*> unaryFactors_; // actually unary factors in multicut are defined on edges. assume first index < second one
    std::vector<std::pair<std::array<INDEX,2>, UnaryFactorContainer*>> unaryFactorsVector_; // we store a second copy of unary factors for faster iterating
    // sort triplet factors as follows: Let indices be i=(i1,i2,i3) and j=(j1,j2,j3). Then i<j iff i1+i2+i3 < j1+j2+j3 or for ties sort lexicographically
@@ -1588,6 +1620,10 @@ public:
          }
       }
 
+      if(odd_3_wheel_candidates.size() > 0) {
+         std::cout << "added " << factors_added << " by local odd 3 wheel search with guaranteed dual improvement " << odd_3_wheel_candidates[0].cost << "\n";
+      }
+
       return factors_added;
    }
 
@@ -1600,7 +1636,6 @@ public:
             return triplets_added;
          } else {
             const INDEX odd_3_wheels_added = find_odd_3_wheels(max_factors_to_add);
-            std::cout << "added " << odd_3_wheels_added << " by local odd 3 wheel search\n";
             if(odd_3_wheels_added > 0.1*max_factors_to_add) {
                return odd_3_wheels_added + triplets_added;
             } else {

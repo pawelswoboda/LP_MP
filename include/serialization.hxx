@@ -4,6 +4,7 @@
 #include <array>
 #include <vector>
 #include "vector.hxx"
+#include <bitset>
 #include <cstring>
 
 namespace LP_MP {
@@ -65,6 +66,13 @@ public:
   static INDEX serialize(const std::vector<T>& v)
   {
      return serialize(v.data(), v.size());
+  }
+
+  // for std::bitset<N>
+  template<std::size_t N>
+  static INDEX serialize(const std::bitset<N>& v)
+  {
+     return sizeof(std::bitset<N>);
   }
 
   template<typename... T_REST>
@@ -231,6 +239,13 @@ public:
      serialize(v.data(), v.size());
   }
 
+  // for std::bitset<N>
+  template<std::size_t N>
+  static INDEX serialize(const std::bitset<N>& v)
+  {
+    assert(false);
+  }
+
    // for plain data
    template<typename T>
    typename std::enable_if<std::is_arithmetic<T>::value>::type
@@ -318,6 +333,14 @@ public:
      assert(v.size() == *((INDEX*)ar.cur_address()));
      serialize(v.data(), v.size());
   } 
+
+  // for std::bitset<N>
+  template<std::size_t N>
+  static INDEX serialize(const std::bitset<N>& v)
+  {
+    assert(false);
+  }
+
 
    // for plain data
    template<typename T>
@@ -408,6 +431,14 @@ public:
        assert(v.size() == *((INDEX*)ar.cur_address()));
        serialize(v.data(), v.size());
      } 
+
+  // for std::bitset<N>
+  template<std::size_t N>
+  static INDEX serialize(const std::bitset<N>& v)
+  {
+    assert(false);
+  }
+
 
    // for plain data
    template<typename T>

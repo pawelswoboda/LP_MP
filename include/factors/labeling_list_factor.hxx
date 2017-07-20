@@ -5,9 +5,12 @@
 #include <bitset>
 #include "vector.hxx"
 #include "config.hxx"
-#include "cereal/types/bitset.hpp""
-#include "cereal/archives/binary.hpp"
+//#include "cereal/types/bitset.hpp"
+//#include "cereal/archives/binary.hpp"
 
+#ifdef WITH_SAT
+#include "sat_interface.hxx"
+#endif
 
 // to do: make _impl functions private
 // make functions static whenever they can be
@@ -21,6 +24,7 @@ struct labeling {
    constexpr static
    typename std::enable_if<LABEL_NO == 0,INDEX>::type label_impl()
    {
+     static_assert(LABEL == 0 || LABEL == 1,"");
       return LABEL;
    }
 
@@ -64,6 +68,28 @@ struct labeling {
    static bool matches(const std::bitset< sizeof...(LABELS)>& l)
    {
       return matches_impl<0, LABELS...>(l); 
+   }
+
+   template<INDEX I, INDEX... LABELS_REST>
+   static typename std::enable_if<(I == sizeof...(LABELS))>::type
+   get_labeling_impl(const std::bitset< sizeof...(LABELS)>& l)
+   {
+      return;
+   }
+
+   template<INDEX I, INDEX LABEL, INDEX... LABELS_REST>
+   static typename std::enable_if<(I < sizeof...(LABELS))>::type
+   get_labeling_impl(std::bitset< sizeof...(LABELS)>& l)
+   {
+     l[I] = (LABEL == 0) ? false : true;
+     return get_labeling_impl<I+1, LABELS_REST...>(l);
+   }
+
+   static std::bitset<no_labels()> get_labeling()
+   {
+     std::bitset<no_labels()> l;
+     get_labeling_impl<0, LABELS...>(l);
+     return l;
    }
 };
 
@@ -135,6 +161,30 @@ struct labelings
       return matching_labeling_impl<0, LABELINGS...>(l); 
    }
 
+   template<INDEX I, typename... LABELINGS_REST>
+   static typename std::enable_if<(I >= sizeof...(LABELINGS)), std::bitset<no_labels()>>::type
+   labeling_impl(const INDEX no)
+   {
+     assert(false);
+      return std::bitset<no_labels()>();
+   }
+
+   template<INDEX I, typename LABELING, typename... LABELINGS_REST>
+   static typename std::enable_if<(I < sizeof...(LABELINGS)), std::bitset<no_labels()>>::type
+   labeling_impl(const INDEX no)
+   {
+     if(I == no) {
+       return LABELING::get_labeling();
+     } else {
+       return labeling_impl<I+1,LABELINGS_REST...>(no);
+     }
+   }
+
+   static std::bitset<no_labels()> labeling(const INDEX no)
+   {
+     return labeling_impl<0, LABELINGS...>(no);
+   }
+
 };
 
 template<>
@@ -172,9 +222,7 @@ public:
       std::fill(this->begin(), this->end(), 0.0);
    }
    ~labeling_factor()
-   {
-      static_assert(IMPLICIT_ORIGIN, "implicit zero label obligatory yet");
-   }
+   {}
 
    constexpr static bool has_implicit_origin() { return IMPLICIT_ORIGIN; } // means zero label has cost 0 and is not recorded.
 
@@ -188,7 +236,7 @@ public:
 
    REAL LowerBound() const
    {
-      if(IMPLICIT_ORIGIN) {
+      if(has_implicit_origin()) {
          return std::min(0.0, *std::min_element(this->begin(), this->end()));
       } else {
          return *std::min_element(this->begin(), this->end());
@@ -237,8 +285,40 @@ public:
    const auto& primal() const { return primal_; }
 
    void init_primal() {}
-   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<array<REAL,size()>*>(this) ); }
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( binary_data<REAL>(&(*this)[0], size()) ); }//*static_cast<array<REAL,size()>*>(this) ); }
    template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+
+#ifdef WITH_SAT
+   template<typename SAT_SOLVER>
+   void construct_sat_clauses(SAT_SOLVER& s) const
+   {
+      const INDEX no_vars = size() + (has_implicit_origin() ? 1 : 0);
+      auto vars = create_sat_variables(s, no_vars);
+      add_simplex_constraint_sat(s, vars.begin(), vars.end());
+   }
+
+   template<typename VEC>
+   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
+   {
+      const REAL lb = LowerBound();
+      for(INDEX i=0; i<this->size(); ++i) {
+         if((*this)[i] > lb + th) { 
+            assumptions.push_back(-to_literal(begin+i));
+         }
+      } 
+   }
+
+   template<typename SAT_SOLVER>
+   void convert_primal(SAT_SOLVER& s, sat_var first)
+   {
+      primal_.reset();
+      for(INDEX i=first; i<first+this->size(); ++i) {
+         if(lglderef(s,to_literal(i)) == 1) {
+           primal_ = LABELINGS::labeling(i); 
+         }
+      }
+   }
+#endif
 
 private:
    std::bitset<primal_size()> primal_;
@@ -443,6 +523,47 @@ public:
       print_matching_impl<0>(RIGHT_LABELINGS{});
    }
 
+#ifdef WITH_SAT
+   /*
+   template<INDEX LEFT_LABELING_NO, typename... RIGHT_LABELINGS_REST>
+   static typename std::enable_if<(RIGHT_INDEX >= RIGHT_LABELINGS::no_labelings()), INDEX>::type
+   no_corresponding_labelings_impl(const INDEX no)
+   { return no; }
+   template<INDEX LEFT_LABELING_NO, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
+   static typename std::enable_if<(RIGHT_INDEX < RIGHT_LABELINGS::no_labelings())>::type
+   no_corresponding_labelings_impl(const INDEX no)
+   {
+     INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr! Is this an llvm bug?
+     if(left_label_number == LEFT_LABELING_NO) {
+     matches = 1;
+     } else {
+       matches = 0;
+     }
+       return matches + no_corresponding_labelings_impl<RIGHT_LABELINGS_REST...>(no);
+   }
+
+   static std::array<INDEX, LEFT_LABELINGS::no_labelings()> no_corresponding_labelings()
+   {
+     std::array<INDEX, LEFT_LABELINGS::no_labelings()> no(0);
+     no_corresponding_labelings_impl<RIGHT_LABELINGS...>(no);
+     return no; 
+   }
+
+    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+    void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_var left_begin, const sat_var right_begin) const
+    {
+      auto no = no_corresponding_labelings();
+      for(INDEX i=0; i<l.size(); ++i) {
+        auto left_var = left_begin+i;
+        std::array<sat_var, no[i]> 
+        for(INDEX r_i=0;
+        make_sat_var_equal(s, to_literal(left_begin), to_literal(right_var));
+        }
+
+
+    }
+    */
+#endif
 private:
 };
 

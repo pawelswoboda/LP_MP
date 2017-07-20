@@ -443,9 +443,12 @@ namespace MulticutTextInput {
    using Parsing::positive_integer;
    using Parsing::real_number;
 
+   // add pegtl::eolf to line structs and remove from grammar
+   struct comment : pegtl::seq< opt_whitespace, pegtl::string<'#'>, pegtl::until< pegtl::eolf > > {};
+   struct comment_line : pegtl::seq< pegtl::sor< comment, opt_whitespace >, pegtl::eolf > {};
    struct init_line : pegtl::seq< opt_whitespace, pegtl::string<'M','U','L','T','I','C','U','T'>, opt_whitespace > {};
    struct numberOfVariables_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace > {};
-   struct edge_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace, positive_integer, opt_whitespace, real_number, opt_whitespace > {};
+   struct edge_line : pegtl::seq< opt_whitespace, positive_integer, opt_whitespace, positive_integer, opt_whitespace, real_number, opt_whitespace, pegtl::eolf > {};
 
    struct grammar : pegtl::must<
                     init_line, pegtl::eol,
@@ -471,66 +474,76 @@ namespace MulticutTextInput {
                     pegtl::star<pegtl::sor<mand_whitespace, pegtl::eol>>,
                     pegtl::eof> {};
 
+   struct base_edges_begin_line : pegtl::seq< opt_whitespace, pegtl::string<'B','A','S','E',' ','E','D','G','E','S'>, opt_whitespace, pegtl::eol > {};
+   struct triplet_begin_line : pegtl::seq< opt_whitespace, pegtl::string<'T','R','I','P','L','E','T','S'>, opt_whitespace, pegtl::eol > {};
+   struct triplet_line : pegtl::seq<
+                         opt_whitespace, positive_integer, mand_whitespace, positive_integer, mand_whitespace, positive_integer, mand_whitespace,
+                         real_number, mand_whitespace, real_number, mand_whitespace, real_number, mand_whitespace, real_number, mand_whitespace, real_number, mand_whitespace, real_number, opt_whitespace, 
+                         pegtl::eolf> {};
 
-   // do zrobienia: remove this structure
-   struct MulticutInput {
-      INDEX numberOfVariables_;
-      std::vector<std::tuple<INDEX,INDEX,REAL>> edges_;
-   };
+   struct higher_order_grammar : pegtl::must<
+                                 pegtl::star<comment_line>,
+                                 base_edges_begin_line,
+                                 pegtl::star< pegtl::sor< comment_line, edge_line > >,
+                                 triplet_begin_line,
+                                 pegtl::star< pegtl::sor< comment_line, triplet_line > >
+                                 > {};
+
 
    template<typename SOLVER, typename Rule >
       struct action
       : pegtl::nothing< Rule > {};
 
 
-   template<typename SOLVER> struct action<SOLVER, positive_integer > {
-      template<typename INPUT>
-      static void apply(const INPUT & in, SOLVER&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
-      {
-         integer_stack.push(std::stoul(in.string())); 
-      }
-   };
-   template<typename SOLVER> struct action<SOLVER, real_number > {
-      template<typename INPUT>
-      static void apply(const INPUT & in, SOLVER&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput &)
-      {
-         real_stack.push(std::stod(in.string())); 
-      }
-   };
-   template<typename SOLVER> struct action<SOLVER, numberOfVariables_line > {
-      template<typename INPUT>
-      static void apply(const INPUT & in, SOLVER&, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
-      {
-         assert(integer_stack.size() == 1);
-         mcInput.numberOfVariables_ = integer_stack.top();
-         integer_stack.pop();
-      }
-   };
    template<typename SOLVER> struct action<SOLVER, edge_line > {
       template<typename INPUT>
-      static void apply(const INPUT & in, SOLVER& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
+      static void apply(const INPUT & in, SOLVER& mc)
       {
-         assert(integer_stack.size() == 2);
-         assert(real_stack.size() == 1);
-         INDEX i2 = integer_stack.top();
-         integer_stack.pop();
-         INDEX i1 = integer_stack.top();
-         integer_stack.pop();
-         const REAL cost = real_stack.top();
-         real_stack.pop();
+         std::stringstream s(in.string());
+         INDEX i1; s >> i1;
+         INDEX i2; s >> i2;
+         REAL cost; s >> cost;
          if(i1 > i2) {
             std::swap(i1,i2);
          }
          assert(i1 < i2);
-         assert(i2 < mcInput.numberOfVariables_);
-         auto& mc = pd.template GetProblemConstructor<0>();
          mc.AddUnaryFactor( i1,i2,cost );
       }
    };
-   template<typename SOLVER> struct action<SOLVER, pegtl::eof> {
+
+   template<typename SOLVER> struct action<SOLVER, triplet_line > {
       template<typename INPUT>
-      static void apply(const INPUT & in, SOLVER& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput& mcInput)
-      {}
+      static void apply(const INPUT & in, SOLVER& mc)
+      {
+         std::stringstream s(in.string());
+         INDEX u; s >> u;
+         INDEX v; s >> v;
+         INDEX w; s >> w;
+         REAL cost_000; s >> cost_000;
+         REAL cost_011; s >> cost_011;
+         REAL cost_101; s >> cost_101;
+         REAL cost_110; s >> cost_110;
+         REAL cost_111; s >> cost_111;
+         assert(u < v && v << w);
+         mc.AddTripletFactorHO( u,v,w, cost_000, cost_011, cost_101, cost_110, cost_111 );
+      }
+   };
+
+
+   template<typename SOLVER> struct action<SOLVER, lifted_edge_line > {
+      template<typename INPUT>
+      static void apply(const INPUT & in, SOLVER& mc)
+      {
+         std::stringstream s(in.string());
+         INDEX i1; s >> i1;
+         INDEX i2; s >> i2;
+         REAL cost; s >> cost;
+         if(i1 > i2) {
+            std::swap(i1,i2);
+         }
+         assert(i1 < i2);
+         mc.AddLiftedUnaryFactor( i1,i2,cost );
+      }
    };
 
    template<typename SOLVER>
@@ -538,53 +551,38 @@ namespace MulticutTextInput {
          template<typename RULE> struct type : public action<SOLVER,RULE> {};
       };
 
-
-   template<typename SOLVER> struct action<SOLVER, lifted_edge_line > {
-      template<typename INPUT>
-      static void apply(const INPUT & in, SOLVER& pd, std::stack<SIGNED_INDEX>& integer_stack, std::stack<REAL>& real_stack, MulticutInput & mcInput)
-      {
-         assert(integer_stack.size() == 2);
-         assert(real_stack.size() == 1);
-         INDEX i2 = integer_stack.top();
-         integer_stack.pop();
-         INDEX i1 = integer_stack.top();
-         integer_stack.pop();
-         const REAL cost = real_stack.top();
-         real_stack.pop();
-         if(i1 > i2) {
-            std::swap(i1,i2);
-         }
-         assert(i1 < i2);
-         assert(i2 < mcInput.numberOfVariables_);
-         auto& mc = pd.template GetProblemConstructor<0>();
-         mc.AddLiftedUnaryFactor( i1,i2,cost );
-      }
-   };
-
       
    template<typename SOLVER>
    bool ParseProblem(const std::string filename, SOLVER& pd)
    {
-      std::stack<SIGNED_INDEX> integer_stack;
-      std::stack<REAL> real_stack;
-      MulticutInput mcInput;
       std::cout << "parsing " << filename << "\n";
 
       pegtl::file_parser problem(filename);
-
-      return problem.parse< grammar, actionSpecialization<SOLVER>::template type >(pd, integer_stack, real_stack, mcInput);
+      auto& mc = pd.template GetProblemConstructor<0>();
+      return problem.parse< grammar, actionSpecialization<decltype(mc)>::template type >(mc);
    }
 
    template<typename SOLVER>
    bool ParseLiftedProblem(const std::string filename, SOLVER& pd)
    {
-      std::stack<SIGNED_INDEX> integer_stack;
-      std::stack<REAL> real_stack;
-      MulticutInput mcInput;
       std::cout << "parsing " << filename << "\n";
 
       pegtl::file_parser problem(filename);
-      return problem.parse< LiftedMulticutGrammar, actionSpecialization<SOLVER>::template type >(pd, integer_stack, real_stack, mcInput);
+      auto& mc = pd.template GetProblemConstructor<0>();
+      return problem.parse< LiftedMulticutGrammar, actionSpecialization<decltype(mc)>::template type >(mc);
+   }
+
+   template<typename SOLVER>
+   bool parse_higher_order(const std::string filename, SOLVER& s)
+   {
+      std::cout << "parsing " << filename << "\n";
+      pegtl::file_parser problem(filename);
+      auto& mc = s.template GetProblemConstructor<0>();
+      auto ret = problem.parse< higher_order_grammar, actionSpecialization<decltype(mc)>::template type >(mc);
+      if(verbosity >= 1) {
+         std::cout << "loaded problem with " << mc.number_of_edges() << " edges and " << mc.number_of_triplets() << " triplets\n";
+      }
+      return ret;
    }
 
 

@@ -5,6 +5,7 @@
 #include "cycle_inequalities.hxx"
 #include "parse_rules.h"
 #include "pegtl/parse.hh"
+#include "tree_decomposition.hxx"
 
 #include <string>
 

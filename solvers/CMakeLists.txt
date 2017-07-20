@@ -26,5 +26,9 @@ if(BUILD_MORAL_LINEAGE_TRACING)
   add_subdirectory(moral_lineage_tracing)
 endif()
 
+if(BUILD_CANDIDATE_MULTICUT)
+  add_subdirectory(candidate_multicut)
+endif()
+
 add_subdirectory(evaluation)
 

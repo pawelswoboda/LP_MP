@@ -99,6 +99,103 @@ private:
    INDEX primal_;
 };
 
+// the polytope {x >= 0 : x_1 + ... + x_n <= 1 }
+
+class at_most_one_factor : public vector<REAL> {
+public:
+   at_most_one_factor(const std::vector<REAL>& cost) : vector<REAL>(cost.begin(), cost.end()) {}
+   at_most_one_factor(const INDEX n) : vector<REAL>(n, 0.0) {}
+
+   REAL LowerBound() const { 
+      const REAL lb = this->min();
+      assert(std::isfinite(lb));
+      return std::min(lb,REAL(0.0));
+   }
+
+   REAL EvaluatePrimal() const 
+   { 
+      if(primal_ > size()) {
+         return std::numeric_limits<REAL>::infinity();
+      } else if(primal_ == size()) {
+        return 0.0;
+      } else {
+        return (*this)[primal_]; 
+      }
+   }
+   void MaximizePotentialAndComputePrimal() 
+   {
+      if(primal_ > size()) {
+         auto min = std::min_element(this->begin(), this->end());
+         if(*min < 0.0) {
+           primal_ = min - this->begin();
+         } else {
+           primal_ = this->size();
+         }
+         assert(primal_ <= size());
+      }
+   }
+
+   // load/store function for the primal value
+   template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector<REAL>*>(this) ); }
+
+   void init_primal() { primal_ = std::numeric_limits<INDEX>::max(); }
+   INDEX primal() const { return primal_; }
+   INDEX& primal() { return primal_; }
+   void primal(const INDEX p) { primal_ = p; }
+
+   INDEX subgradient(double* w) const
+   {
+      assert(primal_ <= size());
+      std::fill(w, w+this->size(), 0.0);
+      if(primal_ < this->size()) {
+        w[primal_] = 1.0;
+      }
+      return this->size();
+   }
+   REAL dot_product(double* w) const
+   {
+     if(primal_ < size()) {
+       return w[primal_];
+     } else {
+       return 0.0;
+     }
+   }
+
+#ifdef WITH_SAT
+   template<typename SAT_SOLVER>
+   void construct_sat_clauses(SAT_SOLVER& s) const
+   {
+      auto vars = create_sat_variables(s, size() + 1);
+      add_simplex_constraint_sat(s, vars.begin(), vars.end());
+   }
+
+   template<typename VEC>
+   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
+   {
+      const REAL lb = LowerBound();
+      for(INDEX i=0; i<this->size()+1; ++i) {
+         if((*this)[i] > lb + th) { 
+            assumptions.push_back(-to_literal(begin+i));
+         }
+      } 
+   }
+
+   template<typename SAT_SOLVER>
+   void convert_primal(SAT_SOLVER& s, sat_var first)
+   {
+      for(INDEX i=first; i<first+this->size()+1; ++i) {
+         if(lglderef(s,to_literal(i)) == 1) {
+            primal_ = i-first;
+         }
+      }
+   }
+#endif
+
+private:
+   INDEX primal_;
+};
+
 // do zrobienia: if pairwise was supplied to us (e.g. external factor, then reflect this in constructor and only allocate space for messages.
 // When tightening, we can simply replace pairwise pointer to external factor with an explicit copy. Reallocate left_msg_ and right_msg_ to make memory contiguous? Not sure, depends whether we use block_allocator, which will not acually release the memory
 // when factor is copied, then pairwise_ must only be copied if it is actually modified. This depends on whether we execute SMRP or MPLP style message passing. Templatize for this possibility

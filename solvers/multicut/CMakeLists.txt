@@ -1,5 +1,8 @@
 SET(SOURCE_FILES 
    multicut_srmp.cpp 
+   multicut_higher_order.cpp 
+   multicut_higher_order_odd_wheel.cpp 
+   multicut_higher_order_bicycle_wheel.cpp 
    multicut_opengm_srmp_cycle.cpp 
    multicut_opengm_srmp_cycle_odd_wheel.cpp
    multicut_opengm_srmp_cycle_odd_wheel_odd_bicycle_wheel.cpp
@@ -7,6 +10,8 @@ SET(SOURCE_FILES
    lifted_multicut_h5.cpp
    lifted_multicut_h5_grid.cpp
    potts_via_multiway_cut.cpp
+
+   convert_hdf_to_text.cpp
    )
 
 
