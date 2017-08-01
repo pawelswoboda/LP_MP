@@ -478,7 +478,7 @@ namespace MulticutTextInput {
    struct triplet_begin_line : pegtl::seq< opt_whitespace, pegtl::string<'T','R','I','P','L','E','T','S'>, opt_whitespace, pegtl::eol > {};
    struct triplet_line : pegtl::seq<
                          opt_whitespace, positive_integer, mand_whitespace, positive_integer, mand_whitespace, positive_integer, mand_whitespace,
-                         real_number, mand_whitespace, real_number, mand_whitespace, real_number, mand_whitespace, real_number, mand_whitespace, real_number, mand_whitespace, real_number, opt_whitespace, 
+                         real_number, mand_whitespace, real_number, mand_whitespace, real_number, mand_whitespace, real_number, mand_whitespace, real_number, opt_whitespace, 
                          pegtl::eolf> {};
 
    struct higher_order_grammar : pegtl::must<
@@ -486,7 +486,8 @@ namespace MulticutTextInput {
                                  base_edges_begin_line,
                                  pegtl::star< pegtl::sor< comment_line, edge_line > >,
                                  triplet_begin_line,
-                                 pegtl::star< pegtl::sor< comment_line, triplet_line > >
+                                 pegtl::star< pegtl::sor< comment_line, triplet_line > >,
+                                 pegtl::at< pegtl::eof >
                                  > {};
 
 

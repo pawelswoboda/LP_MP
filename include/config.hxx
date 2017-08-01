@@ -46,6 +46,8 @@ namespace LP_MP {
    //                   1: important diagnostics, e.g. lower bound, upper bound, runtimes
    //                   2: debug informations
    static INDEX verbosity = 0; 
+   static bool diagnostics() { return verbosity >= 1; }
+   static bool debug() { return verbosity >= 2; }
    
    // shortcuts to indicate how many messages a factor holds
    constexpr SIGNED_INDEX variableMessageNumber = 0;

@@ -122,13 +122,15 @@ public:
          if(!output_file.is_open()) {
             throw std::runtime_error("could not open file " + outputFile_);
          }
+         
+         output_file << solution_; // to do: not so nice, better have primal serialized, write back into factors, then write primal?
 
-         for_each_tuple(this->problemConstructor_, [this,&output_file](auto* l) {
-               using pc_type = typename std::remove_pointer<decltype(l)>::type;
-               static_if<SolverType::CanWritePrimalIntoFile<pc_type>()>([&](auto f) {
-                     f(*l).WritePrimal(output_file);
-               });
-         }); 
+         //for_each_tuple(this->problemConstructor_, [this,&output_file](auto* l) {
+         //      using pc_type = typename std::remove_pointer<decltype(l)>::type;
+         //      static_if<SolverType::CanWritePrimalIntoFile<pc_type>()>([&](auto f) {
+         //            f(*l).WritePrimal(output_file);
+         //      });
+         //}); 
       }
    }
 
@@ -136,10 +138,10 @@ public:
    {
       std::stringstream ss;
 
-      for_each_tuple(this->problemConstructor_, [&ss,this](auto& l) {
-            using pc_type = typename std::remove_reference<decltype(l)>::type;
+      for_each_tuple(this->problemConstructor_, [&ss,this](auto* l) {
+            using pc_type = typename std::remove_pointer<decltype(l)>::type;
             static_if<SolverType::CanWritePrimalIntoString<pc_type>()>([&](auto f) {
-                  f(l).WritePrimal(ss);
+                  f(*l).WritePrimal(ss);
             });
       }); 
 
@@ -231,7 +233,6 @@ public:
          this->Iterate(c);
          this->PostIterate(c);
          c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
-         this->WritePrimal();
       }
       if(!c.error) {
          this->End();
@@ -309,14 +310,21 @@ public:
    void RegisterPrimal()
    {
       const REAL cost = lp_.EvaluatePrimal();
-      if(verbosity >= 2) { std::cout << "register primal cost = " << cost << "\n"; }
+      if(debug()) { std::cout << "register primal cost = " << cost << "\n"; }
       if(cost < bestPrimalCost_) {
          // assume solution is feasible
          const bool feasible = CheckPrimalConsistency();
          if(feasible) {
+            if(debug()) {
+               std::cout << "solution feasible\n";
+            }
             bestPrimalCost_ = cost;
             solution_ = write_primal_into_string();
-         }
+         } else {
+            if(debug()) {
+               std::cout << "solution infeasible\n";
+            }
+         } 
       }
    }
 

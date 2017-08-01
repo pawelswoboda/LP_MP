@@ -3,31 +3,25 @@
 
 namespace LP_MP {
 class UnionFind {
-   INDEX *id, cnt, *sz;
+   INDEX *id, cnt, *sz, N; // it is not necessary to hold sz!
 public:
    // Create an empty union find data structure with N isolated sets.
-   UnionFind(INDEX N) {
-      cnt = N;
-      id = new INDEX[N];
-      sz = new INDEX[N];
-      for(INDEX i=0; i<N; i++) {
-         id[i] = i;
-         sz[i] = 1;
-      }
+   UnionFind(INDEX _N) : N(_N) {
+      id = new INDEX[2*N];
+      sz = id + N;
+      reset();
    }
    ~UnionFind() {
       delete [] id;
-      delete [] sz;
    }
    void reset(const INDEX N) {
       cnt = N;
-      for(INDEX i=0; i<N; ++i) {
-         id[i] = i;
-         sz[i] = 1;
-      }
+      for(INDEX i=0; i<N; ++i) { id[i] = i; }
+      for(INDEX i=0; i<N; ++i) { sz[i] = 1; }
    }
    // Return the id of component corresponding to object p.
    INDEX find(INDEX p) {
+      assert(p < N);
       INDEX root = p;
       while (root != id[root])
          root = id[root];
@@ -72,7 +66,32 @@ public:
    INDEX count() {
       return cnt;
    }
+
+   // makes ids contiguous
+   void make_ids_contiguous()
+   {
+      INDEX* id_mapping = new INDEX[N];
+      std::fill(id_mapping, id_mapping + N, std::numeric_limits<INDEX>::max());
+      for(INDEX i=0; i<N; ++i) {
+         INDEX d = find(i);
+         id_mapping[d] = 1; 
+      }
+      INDEX next_id = 0;
+      for(INDEX d=0; d<N; ++d) {
+         if(id_mapping[d] == 1) {
+            id_mapping[d] = next_id;
+            ++next_id;
+         }
+      }
+      for(INDEX i=0; i<N; ++i) {
+         INDEX d = find(i);
+         assert(d != std::numeric_limits<INDEX>::max());
+         id[i] = id_mapping[d];
+      }
+      delete[] id_mapping;
+   }
 };
 
 }; // end namespace LP_MP
+
 #endif // LP_MP_UNION_FIND_HXX

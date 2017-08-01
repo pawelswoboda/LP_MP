@@ -96,11 +96,13 @@ struct labeling {
 template<typename... LABELINGS> // all labels must be instances of labeling
 struct labelings
 {
+   /* destructor makes labelings a non-constant type
    ~labelings()
    {
       static_assert(sizeof...(LABELINGS) > 0, "at least one labeling must be present");
       // to do: check whether each label occurs at most once and each labeling has same number of labels.
    }
+   */
 
    template<INDEX LABELING_NO, INDEX LABEL_NO, typename LABELING, typename... LABELINGS_REST>
    constexpr static typename std::enable_if<LABELING_NO == 0,INDEX>::type 
@@ -119,6 +121,9 @@ struct labelings
    template<INDEX LABELING_NO, INDEX LABEL_NO>
    constexpr static INDEX label()
    {
+      static_assert(sizeof...(LABELINGS) > 0, "at least one labeling must be present");
+      // to do: check whether each label occurs at most once and each labeling has same number of labels.
+
       static_assert(LABELING_NO < sizeof...(LABELINGS), "labeling number must be smaller than number of labelings");
       return get_label<LABELING_NO,LABEL_NO,LABELINGS...>();
    }
@@ -236,6 +241,30 @@ public:
 
    REAL LowerBound() const
    {
+
+      /*
+      static_assert(std::is_same<REAL, double>::value, "");
+         // for this to work, array must be aligned
+      REAL min;
+      auto it = this->begin();
+      // first compute minimum entry with SIMD
+      if(this->size() >= 4) {
+         simdpp::float64<4> min_vec = simdpp::load(it);
+         for(it+=4; it+4<this->end(); it+=4) {
+            simdpp::float64<4> tmp = simdpp::load( it );
+            min_vec = simdpp::min(min_vec, tmp);
+         }
+
+         min = simdpp::reduce_min(min_vec);
+      } else {
+         min = *it;
+         ++it;
+      }
+      for(; it<this->end(); ++it) {
+         min = std::min(min, *it);
+      } 
+      */
+
       if(has_implicit_origin()) {
          return std::min(0.0, *std::min_element(this->begin(), this->end()));
       } else {
@@ -524,45 +553,75 @@ public:
    }
 
 #ifdef WITH_SAT
-   /*
    template<INDEX LEFT_LABELING_NO, typename... RIGHT_LABELINGS_REST>
-   static typename std::enable_if<(RIGHT_INDEX >= RIGHT_LABELINGS::no_labelings()), INDEX>::type
-   no_corresponding_labelings_impl(const INDEX no)
-   { return no; }
+   constexpr static std::size_t no_corresponding_labelings_impl(labelings<RIGHT_LABELINGS_REST...>)
+   {
+      return 0;
+   }
    template<INDEX LEFT_LABELING_NO, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
-   static typename std::enable_if<(RIGHT_INDEX < RIGHT_LABELINGS::no_labelings())>::type
-   no_corresponding_labelings_impl(const INDEX no)
+   constexpr static std::size_t no_corresponding_labelings_impl(labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>)
    {
-     INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr! Is this an llvm bug?
-     if(left_label_number == LEFT_LABELING_NO) {
-     matches = 1;
-     } else {
-       matches = 0;
-     }
-       return matches + no_corresponding_labelings_impl<RIGHT_LABELINGS_REST...>(no);
+      if(matching_left_labeling<RIGHT_LABELING>() == LEFT_LABELING_NO) {
+         return 1 + no_corresponding_labelings_impl<LEFT_LABELING_NO>(labelings<RIGHT_LABELINGS_REST...>{});
+      } else {
+         return no_corresponding_labelings_impl<LEFT_LABELING_NO>(labelings<RIGHT_LABELINGS_REST...>{});
+      }
+   }
+   template<INDEX LEFT_LABELING_NO>
+   constexpr static std::size_t no_corresponding_labelings()
+   {
+      return no_corresponding_labelings_impl<LEFT_LABELING_NO>(RIGHT_LABELINGS{}); 
    }
 
-   static std::array<INDEX, LEFT_LABELINGS::no_labelings()> no_corresponding_labelings()
+
+   template<INDEX LEFT_LABELING_NO, INDEX RIGHT_LABELING_IDX, typename ARRAY_IT, typename... RIGHT_LABELINGS_REST>
+   void corresponding_labelings_impl(ARRAY_IT idx, labelings<RIGHT_LABELINGS_REST...>) const
    {
-     std::array<INDEX, LEFT_LABELINGS::no_labelings()> no(0);
-     no_corresponding_labelings_impl<RIGHT_LABELINGS...>(no);
-     return no; 
+      static_assert(RIGHT_LABELING_IDX == RIGHT_LABELINGS::no_labelings(), "");
+      return;
+   }
+   template<INDEX LEFT_LABELING_NO, INDEX RIGHT_LABELING_IDX, typename ARRAY_IT, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
+   void corresponding_labelings_impl(ARRAY_IT it, labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>) const
+   {
+      INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr!
+      if(left_label_number == LEFT_LABELING_NO) {
+         *it = RIGHT_LABELING_IDX;
+         corresponding_labelings_impl<LEFT_LABELING_NO, RIGHT_LABELING_IDX+1>(it+1, labelings<RIGHT_LABELINGS_REST...>{});
+      } else {
+         corresponding_labelings_impl<LEFT_LABELING_NO, RIGHT_LABELING_IDX+1>(it, labelings<RIGHT_LABELINGS_REST...>{});
+      } 
+   }
+   template<INDEX LEFT_LABELING_NO>
+   std::array< sat_var, no_corresponding_labelings<LEFT_LABELING_NO>() > corresponding_labelings() const
+   {
+      std::array< sat_var, no_corresponding_labelings<LEFT_LABELING_NO>() > idx;
+      corresponding_labelings_impl<LEFT_LABELING_NO, 0>(idx.begin(), RIGHT_LABELINGS{});
+      return idx;
    }
 
-    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-    void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_var left_begin, const sat_var right_begin) const
-    {
-      auto no = no_corresponding_labelings();
-      for(INDEX i=0; i<l.size(); ++i) {
-        auto left_var = left_begin+i;
-        std::array<sat_var, no[i]> 
-        for(INDEX r_i=0;
-        make_sat_var_equal(s, to_literal(left_begin), to_literal(right_var));
-        }
 
+   template<INDEX LEFT_LABELING_NO, typename SAT_SOLVER>
+   typename std::enable_if<(LEFT_LABELING_NO >= LEFT_LABELINGS::no_labelings())>::type
+   construct_sat_clauses_impl(SAT_SOLVER& s, const sat_var left_begin, const sat_var right_begin) const
+   {}
+   template<INDEX LEFT_LABELING_NO, typename SAT_SOLVER>
+   typename std::enable_if<(LEFT_LABELING_NO < LEFT_LABELINGS::no_labelings())>::type
+   construct_sat_clauses_impl(SAT_SOLVER& s, const sat_var left_begin, const sat_var right_begin) const
+   {
+      auto right_idx = corresponding_labelings<LEFT_LABELING_NO>();
+      for(auto& idx : right_idx) {
+         idx += right_begin;
+      }
+      auto one_active = one_active_indicator_sat(s, right_idx.begin(), right_idx.end());
+      make_sat_var_equal(s, to_literal(left_begin + LEFT_LABELING_NO), to_literal(one_active));
+      construct_sat_clauses_impl<LEFT_LABELING_NO+1>(s, left_begin, right_begin);
+   }
+   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_var left_begin, const sat_var right_begin) const
+   {
+      construct_sat_clauses_impl<0>(s, left_begin, right_begin);
+   }
 
-    }
-    */
 #endif
 private:
 };

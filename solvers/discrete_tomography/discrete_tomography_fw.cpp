@@ -424,6 +424,12 @@ int main(int argc, char**argv)
       solver.GetLP().add_tree(t);
    }
 
+   // decompose mrf into trees automatically
+   auto trees = mrf.compute_forest_cover();
+   for(auto& tree : trees) {
+      solver.GetLP().add_tree(tree);
+   }
+
    s->options.gap_threshold = 0.000001;
 	s->options.iter_max = 1000;
 

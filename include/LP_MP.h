@@ -747,6 +747,7 @@ public:
       return BASE_LP_CLASS::AddMessage(m);
    }
 
+   // do zrobienia: only pass sat solver, not while LP object
    static bool solve_sat_problem(LP_type* c, sat_vec<sat_literal> assumptions, sat_th* th)
    {
      for(INDEX i=0; i<assumptions.size(); ++i) {

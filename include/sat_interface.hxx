@@ -31,12 +31,17 @@ namespace LP_MP {
   template<typename SAT_SOLVER>
   void make_sat_var_equal(SAT_SOLVER& s, const sat_literal i, const sat_literal j)
   {
-    lgladd(s, i); lgladd(s, -j); lgladd(s, 0); 
-    lgladd(s, -i); lgladd(s, j); lgladd(s, 0); 
+     lgladd(s, i); lgladd(s, -j); lgladd(s, 0); 
+     lgladd(s, -i); lgladd(s, j); lgladd(s, 0); 
       //s.add_clause({i,-j});
       //s.add_clause({-i,j}); 
   }
 
+  template<typename SAT_SOLVER>
+  sat_var create_sat_variable(SAT_SOLVER& s)
+  {
+     return lglincvar(s)-1;
+  }
   template<typename SAT_SOLVER>
   std::vector<sat_var> create_sat_variables(SAT_SOLVER& s, const INDEX n)
   {
@@ -49,6 +54,7 @@ namespace LP_MP {
     }
     return std::move(v);
   }
+
   template<typename SAT_SOLVER, typename ITERATOR>
   sat_var add_at_most_one_constraint_naive_sat(SAT_SOLVER& s, ITERATOR var_begin, ITERATOR var_end)
   {
@@ -158,6 +164,28 @@ namespace LP_MP {
        add_simplex_constraint_naive_sat(s, c_list.begin(), c_list.end());
     }
   } 
+
+  // expects sat_var
+  template<typename SAT_SOLVER, typename ITERATOR>
+  sat_var one_active_indicator_sat(SAT_SOLVER& s, ITERATOR var_begin, ITERATOR var_end)
+  {
+    sat_var one_active = create_sat_variable(s);
+    // add implication var => one_active
+    for(auto it=var_begin; it!=var_end; ++it) {
+       lgladd(s, -to_literal(*it));
+       lgladd(s, -to_literal(one_active));
+       lgladd(s, 0);
+    }
+
+    // add implication !one_active => !var
+    for(auto it=var_begin; it!=var_end; ++it) {
+       lgladd(s, to_literal(one_active));
+       lgladd(s, -to_literal(*it));
+       lgladd(s, 0);
+    }
+
+    return one_active;
+  }
 
 #endif // WITH_SAT
 

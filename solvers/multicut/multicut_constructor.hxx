@@ -86,7 +86,9 @@ public:
    void End() 
    {
       // wait for the primal rounding to finish.
-      std::cout << "wait for primal computation to end\n";
+      if(debug()) {
+         std::cout << "wait for primal computation to end\n";
+      }
       if(primal_handle_.valid()) {
          auto labeling = primal_handle_.get();
          write_labeling_into_factors(labeling);
@@ -159,11 +161,12 @@ public:
    {
       auto* f = AddTripletFactor(u,v,w);
       auto* t = f->GetFactor();
-      AddToConstant(c000);
-      (*t)[0] = c110 - c000;
-      (*t)[1] = c101 - c000;
-      (*t)[2] = c011 - c000;
-      (*t)[3] = c111 - c000;
+      const REAL scaling = 1.0;
+      AddToConstant(scaling*c000);
+      (*t)[0] = scaling*(c110 - c000);
+      (*t)[1] = scaling*(c101 - c000);
+      (*t)[2] = scaling*(c011 - c000);
+      (*t)[3] = scaling*(c111 - c000);
       return f;
    }
 
@@ -289,17 +292,25 @@ public:
       no_original_edges_ = std::min(no_original_edges_, INDEX(unaryFactorsVector_.size()));
 
       if(number_of_edges() > 2) {
-         std::cout << "Search for violated triplet constraints\n";
+         if(diagnostics()) {
+            std::cout << "Search for violated triplet constraints\n";
+         }
          INDEX triplets_added = find_violated_triplets(max_factors_to_add);
-         std::cout << "Added " << triplets_added << " triplet(s) out of " <<  max_factors_to_add << " by searching for triplets\n"; 
+         if(diagnostics()) {
+            std::cout << "Added " << triplets_added << " triplet(s) out of " <<  max_factors_to_add << " by searching for triplets\n"; 
+         }
          if(triplets_added < 0.6*max_factors_to_add) {
-            std::cout << "Additionally search via shortest paths for violated constraints\n";
+            if(diagnostics()) {
+               std::cout << "Additionally search via shortest paths for violated constraints\n";
+            }
             if(CUT_TYPE == cut_type::multicut) {
                triplets_added += find_violated_cycles_multicut(max_factors_to_add - triplets_added);
             } else if(CUT_TYPE == cut_type::maxcut) {
                triplets_added += find_violated_cycles_maxcut(max_factors_to_add - triplets_added);
             }
-            std::cout << "Added " << triplets_added << " triplet(s) out of " <<  max_factors_to_add << " in total\n";
+            if(diagnostics()) {
+               std::cout << "Added " << triplets_added << " triplet(s) out of " <<  max_factors_to_add << " in total\n";
+            }
          }
          return triplets_added;
       } else {
@@ -453,7 +464,7 @@ public:
       }
       std::sort(triplet_candidates.begin(), triplet_candidates.end());
 
-      if(triplet_candidates.size() > 0) {
+      if(triplet_candidates.size() > 0 && diagnostics()) {
          std::cout << "best triplet candidate in triplet search has guaranteed dual improvement " << triplet_candidates[0].cost << "\n";
       }
 
@@ -575,7 +586,7 @@ public:
 
       for(REAL th=0.5*initial_th; th>=eps || zero_th_iteration; th*=0.1) {
          if(th < eps) {
-            if(triplets_added <= 0.01*max_triplets_to_add) {
+            if(triplets_added <= 0.01*max_triplets_to_add && diagnostics()) {
                std::cout << "additional separation with no guaranteed dual increase, i.e. th = 0\n";
                th = 0.0;
                zero_th_iteration = false;
@@ -633,7 +644,7 @@ public:
          // sort by guaranteed increase in decreasing order
          std::sort(triplet_candidates.begin(), triplet_candidates.end());
 
-         if(triplet_candidates.size() > 0) {
+         if(triplet_candidates.size() > 0 && diagnostics()) {
             std::cout << "best triplet candidate in triplet search has guaranteed dual improvement " << triplet_candidates[0].cost << "\n";
          }
 
@@ -712,9 +723,10 @@ public:
       for(REAL th=initial_th; th>=eps || zero_th_iteration; th*=0.1) {
          if(th < eps) {
             if(triplets_added <= 0.01*max_triplets_to_add) {
-               std::cout << "additional separation with no guaranteed dual increase, i.e. th = 0\n";
-               th = 0.0;
-               zero_th_iteration = false;
+               // we would first like to go on with odd wheels and odd bicycle wheels before actually adding triplets with no guaranteed dual increase.
+               //std::cout << "additional separation with no guaranteed dual increase, i.e. th = 0\n";
+               //th = 0.0;
+               //zero_th_iteration = false;
             } else {
                break;
             }
@@ -768,7 +780,7 @@ public:
          // sort by guaranteed increase in decreasing order
          std::sort(triplet_candidates.begin(), triplet_candidates.end());
 
-         if(triplet_candidates.size() > 0) {
+         if(triplet_candidates.size() > 0 && diagnostics()) {
             std::cout << "best triplet candidate in triplet search has guaranteed dual improvement " << triplet_candidates[0].cost << "\n";
          }
 
@@ -797,7 +809,9 @@ public:
    {
       if(CUT_TYPE == cut_type::multicut) {
 
-         std::cout << "checking primal feasibility for multicut ... ";
+         if(debug()) {
+            std::cout << "checking primal feasibility for multicut ... ";
+         }
          UnionFind uf(noNodes_);
          for(const auto& e : unaryFactorsVector_) {
             UnaryFactorContainer* f = e.second; 
@@ -815,13 +829,17 @@ public:
                const INDEX j = std::get<1>(e.first);
                // there must not be a path from i1 to i2 consisting of edges with primal value false only
                if(uf.connected(i,j)) {
-                  std::cout << "solution infeasible: (" << i << "," << j << ") = true, yet there exists a path with false values only\n";
+                  if(debug()) {
+                     std::cout << "solution infeasible: (" << i << "," << j << ") = true, yet there exists a path with false values only\n";
+                  }
                   return false;
                }
             }
          }
 
-         std::cout << "solution feasible\n";
+         if(debug()) {
+            std::cout << "solution feasible\n";
+         }
          return true;
 
       } else if(CUT_TYPE == cut_type::maxcut) {
@@ -872,7 +890,9 @@ public:
                         node_label[j] = label_j;
                      } else {
                         if(node_label[j] != label_j) {
-                           std::cout << "solution infeasible\n";
+                           if(debug()) {
+                              std::cout << "solution infeasible\n";
+                           }
                            return false;
                         }
                      }
@@ -880,8 +900,10 @@ public:
                }
             }
          }
-         
-         std::cout << "solution feasible\n";
+
+         if(debug()) {
+            std::cout << "solution feasible\n";
+         }
          return true;
 
       } else {
@@ -891,7 +913,9 @@ public:
 
    void round()
    {
-      std::cout << "compute multicut primal with GAEC + KLj\n";
+      if(diagnostics()) {
+         std::cout << "compute multicut primal with GAEC + KLj\n";
+      }
       andres::graph::Graph<> graph(noNodes_);
       std::vector<REAL> edgeValues;
       edgeValues.reserve(unaryFactorsVector_.size());
@@ -934,7 +958,9 @@ public:
                uf.merge(i,j);
             }
          }
-         std::cout << "built union find structure, propagate information now\n";
+         if(debug()) {
+            std::cout << "built union find structure, propagate information now\n";
+         }
          for(INDEX c=labeling.size(); c<unaryFactorsVector_.size(); ++c) {
             UnaryFactorContainer* f = unaryFactorsVector_[c].second; 
             const INDEX i = std::get<0>(unaryFactorsVector_[c].first);
@@ -965,20 +991,28 @@ public:
             throw std::runtime_error("asynchronuous primal multicut rounding was deferred, but this should not happen");
          } else if(primal_state == std::future_status::ready) {
 
-            std::cout << "collect multicut rounding result\n";
+            if(debug()) {
+               std::cout << "collect multicut rounding result\n";
+            }
             auto labeling = primal_handle_.get();
             write_labeling_into_factors(labeling);
 
-            std::cout << "restart primal rounding\n";
+            if(debug()) {
+               std::cout << "restart primal rounding\n";
+            }
             round();
 
          } else {
-            std::cout << "multicut rounding is currently running.\n";
+            if(debug()) {
+               std::cout << "multicut rounding is currently running.\n";
+            }
          }
 
       } else if(CUT_TYPE == cut_type::maxcut) {
          
-         std::cout << "use Burer's heuristic to compute max-cut\n";
+         if(diagnostics()) {
+            std::cout << "use Burer's heuristic to compute max-cut\n";
+         }
          // use heuristics from MQlib
          //std::vector<mqlib::Instance::InstanceTuple> edge_list;
          std::vector<Instance::InstanceTuple> edge_list;
@@ -999,7 +1033,9 @@ public:
          //const mqlib::MaxCutSimpleSolution& mc_sol = heur.get_best_solution();
          const MaxCutSimpleSolution& mc_sol = heur.get_best_solution();
          const std::vector<int>& solution = mc_sol.get_assignments();
-         std::cout << "write solution back\n";
+         if(debug()) {
+            std::cout << "write solution back\n";
+         }
          for(INDEX e=0; e<unaryFactorsVector_.size(); ++e) {
             const INDEX i = unaryFactorsVector_[e].first[0];
             const INDEX j = unaryFactorsVector_[e].first[1];
@@ -1620,7 +1656,7 @@ public:
          }
       }
 
-      if(odd_3_wheel_candidates.size() > 0) {
+      if(odd_3_wheel_candidates.size() > 0 && diagnostics()) {
          std::cout << "added " << factors_added << " by local odd 3 wheel search with guaranteed dual improvement " << odd_3_wheel_candidates[0].cost << "\n";
       }
 
@@ -1640,7 +1676,9 @@ public:
                return odd_3_wheels_added + triplets_added;
             } else {
                const INDEX odd_wheels_added = find_odd_wheels(max_factors_to_add);
-               std::cout << "Added " << odd_wheels_added << " factors for odd wheel constraints\n";
+               if(diagnostics()) {
+                  std::cout << "Added " << odd_wheels_added << " factors for odd wheel constraints\n";
+               }
                return odd_wheels_added + odd_3_wheels_added + triplets_added;
             }
          }
@@ -1992,9 +2030,13 @@ public:
    {
       const INDEX factors_added = BaseConstructor::Tighten(max_factors_to_add);
       if(factors_added < 0.1*max_factors_to_add) {
-         std::cout << "search for odd bicycle wheels\n";
+         if(diagnostics()) {
+            std::cout << "search for odd bicycle wheels\n";
+         }
          const INDEX odd_bicycles_added = find_violated_odd_bicycle_wheels(max_factors_to_add - factors_added);
-         std::cout << "added " << odd_bicycles_added << " odd bicycle wheels\n";
+         if(diagnostics()) {
+            std::cout << "added " << odd_bicycles_added << " odd bicycle wheels\n";
+         }
          return odd_bicycles_added + factors_added;
       } else {
          return factors_added;
@@ -2164,12 +2206,16 @@ class MULTICUT_CONSTRUCTOR,
                const INDEX noBaseConstraints = MULTICUT_CONSTRUCTOR::Tighten(std::ceil(0.8*max_factors_to_add));
                //return noBaseConstraints;
                INDEX noLiftingConstraints = 0;
-               std::cout << "number of cut constraints = " << liftedMulticutFactors_.size() << "\n";
+               if(debug()) {
+                  std::cout << "number of cut constraints = " << liftedMulticutFactors_.size() << "\n";
+               }
                if(noBaseConstraints < max_factors_to_add) {
                   REAL th = FindViolatedCutsThreshold(max_factors_to_add - noBaseConstraints);
                   if(th >= 0.0) {
                      noLiftingConstraints = FindViolatedCuts(th, max_factors_to_add - noBaseConstraints);
-                     std::cout << "added " << noLiftingConstraints << " lifted cut factors.\n";
+                     if(diagnostics()) {
+                        std::cout << "added " << noLiftingConstraints << " lifted cut factors.\n";
+                     }
                   }
                }
                addingTighteningEdges = prevMode;
@@ -2425,13 +2471,17 @@ class MULTICUT_CONSTRUCTOR,
 
             void round()
             {
-               std::cout << "compute lifted multicut primal with GAEC + KLj\n";
+               if(diagnostics()) {
+                  std::cout << "compute lifted multicut primal with GAEC + KLj\n";
+               }
                andres::graph::Graph<> originalGraph(this->noNodes_);
                andres::graph::Graph<> liftedGraph(this->noNodes_);
                std::vector<REAL> edgeValues;
                edgeValues.reserve(baseEdges_.size() + liftedEdges_.size());
 
-               std::cout << "# base edges = " << baseEdges_.size() << ", # lifted edges = " << liftedEdges_.size() << "\n";
+               if(debug()) {
+                  std::cout << "# base edges = " << baseEdges_.size() << ", # lifted edges = " << liftedEdges_.size() << "\n";
+               }
                // do zrobienia: initalize the graph structures only once
                for(const auto& e : baseEdges_) {
                   originalGraph.insertEdge(e.i, e.j);
@@ -2471,15 +2521,21 @@ class MULTICUT_CONSTRUCTOR,
                   throw std::runtime_error("asynchronuous primal multicut rounding was deferred, but this should not happen");
                } else if(primal_state == std::future_status::ready) {
 
-                  std::cout << "collect lifted multicut rounding result\n";
+                  if(debug()) {
+                     std::cout << "collect lifted multicut rounding result\n";
+                  }
                   auto labeling = primal_handle_.get();
                   this->write_labeling_into_factors(labeling);
 
-                  std::cout << "restart primal rounding\n";
+                  if(debug()) {
+                     std::cout << "restart primal rounding\n";
+                  }
                   round();
 
                } else {
-                  std::cout << "lifted multicut rounding is currently running.\n";
+                  if(debug()) {
+                     std::cout << "lifted multicut rounding is currently running.\n";
+                  }
                }
             } 
 

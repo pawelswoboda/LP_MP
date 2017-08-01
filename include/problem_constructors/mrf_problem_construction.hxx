@@ -148,7 +148,6 @@ public:
       std::cout << "Construct MRF problem with " << unaryFactor_.size() << " unary factors and " << pairwiseFactor_.size() << " pairwise factors\n";
 
       // add order relations. These are important for the anisotropic weights computation to work.
-      unaryFactorIndexBegin_ = lp_->GetNumberOfFactors();
       if(unaryFactor_.size() > 1) {
          for(auto it=unaryFactor_.begin(); it+1 != unaryFactor_.end(); ++it) {
             assert(*it != nullptr);
@@ -172,20 +171,24 @@ public:
    }
 
   // build tree of unary and pairwise factors
-  //template<typename LEFT_MESSAGE, typename RIGHT_MESSAGE>
-  LP_tree add_tree(std::vector<UnaryFactorContainer*> u, std::vector<PairwiseFactorContainer*> p)
+  LP_tree add_tree(std::vector<PairwiseFactorContainer*> p)
   {
-     assert(u.size() == p.size()+1);
      LP_tree t;
      // assume root is the last element of u. build tree recursively from root
-     auto* root = u.back();
-     u.resize(u.size()-1);
+     auto* root = p->GetLeftFactorContainer();
 
      // extract messages joining unaries and pairwise
      std::set<UnaryFactorContainer*> u_set; // u_set is not strictly needed, but helps in checking correctness of algorithm
-     for(auto* f : u) { u_set.insert(f); }
      std::set<PairwiseFactorContainer*> p_set;
-     for(auto* f : p) { p_set.insert(f); }
+     for(auto* f : p) {
+        p_set.insert(f); 
+        UnaryFactorContainer* left = p->GetLeftFactorContainer();
+        UnaryFactorContainer* right = p->GetRightFactorContainer();
+        u_set.insert(left);
+        u_set.insert(right);
+     }
+
+     assert(u_set.size() + 1 == p_set.size());
 
      std::deque<UnaryFactorContainer*> u_stack;
      u_stack.push_back(root);
@@ -237,6 +240,50 @@ public:
      return t;
   }
 
+  // compute forest cover of MRF and add each resulting tree
+  std::vector<LP_tree> compute_forest_cover()
+  {
+     UndirectedGraph g = UndirectedGraph(unaryFactor_.size(), pairwiseFactor_.size());
+     for(auto e : pairwiseIndices_) {
+        const auto i = std::get<0>(e);
+        const auto j = std::get<1>(e);
+        g.AddEdge(i,j,1);
+     }
+     
+     const INDEX forest_num = g->Solve();
+     std::vector<LP_tree> trees;
+
+     for(INDEX k=0; k<forest_num; ++k) {
+        std::vector<int> parents(unaryFactor_.size());
+        g.GetForestEdges(k, parents.data());
+
+        UnionFind uf(unaryFactor_.size());
+        for(INDEX i=0; i<parents.size(); ++i) {
+           if(parents[i] != -1) {
+              uf.merge(std::get<0>(pairwiseIndices_[parents[i]]), std::get<1>(pairwiseIndices_[parents[i]]));
+           }
+        }
+        uf.make_ids_contiguous();
+        
+        const INDEX no_trees = uf.count();
+        std::vector<std::vector<PairwiseFactorContainer*>> pairwise(no_trees);
+
+        for(INDEX i=0; i<parents.size(); ++i) {
+           if(parents[i] != -1) {
+              const INDEX tree_id = uf.find(i);
+              const INDEX j = parents[i];
+              PairwiseFactorContainer* p = GetPairwiseFactor(std::min(i,j), std::max(i,j));
+              pairwise[tree_id].push_back(p);
+           } 
+        }
+        for(INDEX t=0; t<no_trees; ++t) {
+           trees.push_back(add_tree(pairwise[t])); 
+        }
+     }
+
+     return trees;
+  }
+
 protected:
    std::vector<UnaryFactorContainer*> unaryFactor_;
    std::vector<PairwiseFactorContainer*> pairwiseFactor_;
@@ -245,7 +292,7 @@ protected:
 
    std::map<std::tuple<INDEX,INDEX>, INDEX> pairwiseMap_; // given two sorted indices, return factorId belonging to that index.
 
-   INDEX unaryFactorIndexBegin_, unaryFactorIndexEnd_; 
+   //INDEX unaryFactorIndexBegin_, unaryFactorIndexEnd_; // do zrobienia: not needed anymore
 
    LP* lp_;
 };

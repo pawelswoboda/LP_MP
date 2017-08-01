@@ -363,7 +363,8 @@ public:
          for(INDEX x2=0; x2<dim2(); ++x2) {
             tmp_vars.push_back(pairwise_var_begin + x1*dim2() + x2);
          }
-         sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+         //sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+         sat_var c = one_active_indicator_sat(s, tmp_vars.begin(), tmp_vars.end());
          make_sat_var_equal(s, to_literal(c), to_literal(vars[x1]));
          tmp_vars.clear();
       }
@@ -371,7 +372,8 @@ public:
          for(INDEX x1=0; x1<dim1(); ++x1) {
             tmp_vars.push_back(pairwise_var_begin + x1*dim2() + x2);
          }
-         sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+         //sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+         sat_var c = one_active_indicator_sat(s, tmp_vars.begin(), tmp_vars.end());
          make_sat_var_equal(s, to_literal(c), to_literal(vars[dim1() + x2]));
          tmp_vars.clear();
       }
@@ -602,7 +604,8 @@ public:
             for(INDEX x3=0; x3<dim3(); ++x3) {
                tmp_vars.push_back(vars_123[x1*dim2()*dim3() + x2*dim3() + x3]);
             }
-            auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            //auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            auto c = one_active_indicator_sat(s, tmp_vars.begin(), tmp_vars.end());
             make_sat_var_equal(s, to_literal(c), to_literal(vars_12[x1*dim2() + x2]));
             tmp_vars.clear();
          }
@@ -613,7 +616,8 @@ public:
             for(INDEX x2=0; x2<dim2(); ++x2) {
                tmp_vars.push_back(vars_123[x1*dim2()*dim3() + x2*dim3() + x3]);
             }
-            auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            //auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            auto c = one_active_indicator_sat(s, tmp_vars.begin(), tmp_vars.end());
             make_sat_var_equal(s, to_literal(c), to_literal(vars_13[x1*dim3() + x3]));
             tmp_vars.clear();
          }
@@ -624,7 +628,8 @@ public:
             for(INDEX x1=0; x1<dim1(); ++x1) {
                tmp_vars.push_back(vars_123[x1*dim2()*dim3() + x2*dim3() + x3]);
             }
-            auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            //auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
+            auto c = one_active_indicator_sat(s, tmp_vars.begin(), tmp_vars.end());
             make_sat_var_equal(s, to_literal(c), to_literal(vars_23[x2*dim3() + x3]));
             tmp_vars.clear();
          }
