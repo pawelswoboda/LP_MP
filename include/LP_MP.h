@@ -71,7 +71,7 @@ public:
    // for use in tree decomposition:
    // for writing primal solution into subgradient
    // return value is size of subgradient
-   virtual INDEX subgradient(double* w) = 0;
+   virtual INDEX subgradient(double* w, const REAL sign) = 0;
    virtual REAL dot_product(double* w) = 0;
 
    // for reading reparametrization/labeling out of factor
@@ -86,6 +86,8 @@ public:
    // for adding weights in Frank Wolfe algorithm
    virtual void serialize_dual(addition_archive<+1>&) = 0;
    virtual void serialize_dual(addition_archive<-1>&) = 0;
+
+   virtual void divide(const REAL val) = 0; // divide potential by value
 
    virtual INDEX dual_size() = 0;
    virtual INDEX primal_size() = 0;
@@ -114,6 +116,8 @@ public:
    virtual MessageTypeAdapter* clone(FactorTypeAdapter* l, FactorTypeAdapter* r) const = 0;
    virtual FactorTypeAdapter* GetLeftFactor() const = 0;
    virtual FactorTypeAdapter* GetRightFactor() const = 0;
+   virtual void SetLeftFactor(FactorTypeAdapter*) = 0;
+   virtual void SetRightFactor(FactorTypeAdapter*) = 0;
    //virtual bool CheckPrimalConsistency(typename PrimalSolutionStorage::Element left, typename PrimalSolutionStorage::Element right) const = 0;
    virtual bool SendsMessageToLeft() const = 0;
    virtual bool SendsMessageToRight() const = 0;

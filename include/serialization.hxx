@@ -96,6 +96,8 @@ private:
 
 class serialization_archive {
 public:
+   serialization_archive() {}
+
   template<typename ITERATOR, typename SERIALIZATION_FUN>
   serialization_archive(ITERATOR begin, ITERATOR end, SERIALIZATION_FUN serialization_fun)
   {
@@ -117,9 +119,32 @@ public:
      const INDEX size_in_bytes = a.size();
 
      archive_ = new char[size_in_bytes];
-     end_ = archive_ + size_in_bytes;
      assert(archive_ != nullptr);
+     end_ = archive_ + size_in_bytes;
      cur_ = archive_;
+  }
+
+  serialization_archive(const serialization_archive& o)
+  {
+     const INDEX size_in_bytes = o.size();
+
+     archive_ = new char[size_in_bytes];
+     assert(archive_ != nullptr);
+     end_ = archive_ + size_in_bytes;
+     cur_ = archive_ + (o.cur_ - o.archive_);
+
+     std::memcpy(archive_, o.archive_, size_in_bytes); 
+  }
+
+  serialization_archive(serialization_archive&& o)
+  {
+     archive_ = o.archive_;
+     end_ = o.end_;
+     cur_ = o.cur_;
+
+     o.archive_ = nullptr;
+     o.end_ = nullptr;
+     o.cur_ = nullptr;
   }
 
   serialization_archive(void* mem, INDEX size_in_bytes)
@@ -132,11 +157,19 @@ public:
 
   ~serialization_archive()
   {
-    assert(archive_ != nullptr);
+    //assert(archive_ != nullptr); // can be true when memory was released!
     if(archive_ != nullptr) {
       delete[] archive_;
     }
   }
+
+  void aquire_memory(const INDEX size_in_bytes)
+  {
+     archive_ = new char[size_in_bytes];
+     end_ = archive_ + size_in_bytes;
+     assert(archive_ != nullptr);
+     cur_ = archive_;
+  } 
 
   void release_memory()
   { 
@@ -315,14 +348,12 @@ public:
   template<typename T>
   void serialize(vector<T>& v)
   {
-     assert(v.size() == *((INDEX*)ar.cur_address()));
      serialize(v.begin(), v.size());
   }
 
   template<typename T>
   void serialize(matrix<T>& m)
   {
-     assert(m.size() == *((INDEX*)ar.cur_address()));
      serialize(m.begin(), m.size());
   }
 
@@ -330,7 +361,6 @@ public:
   template<typename T>
   void serialize(std::vector<T>& v)
   {
-     assert(v.size() == *((INDEX*)ar.cur_address()));
      serialize(v.data(), v.size());
   } 
 
@@ -368,6 +398,97 @@ private:
 };
 
 // add numeric values stored in archive to variables
+// do arithmetic on values stored in archive
+enum class operation {addition, subtraction, multiplication, division};
+
+template<operation OPERATION>
+class arithmetic_archive {
+public:
+   arithmetic_archive(const REAL val) : val_(val) {}
+
+   // for arrays
+   template<typename T, typename OP>
+     void serialize(T* pointer, const INDEX size, OP op)
+     {
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
+       for(INDEX i=0; i<size; ++i) {
+         pointer[i] = op(pointer[i], T(val_));
+       }
+     }
+   template<typename T, typename OP>
+     void serialize( binary_data<T> b, OP op)
+     {
+       serialize(b.pointer, b.no_elements, op); 
+     }
+
+   // for std::array<T,N>
+   template<typename T, std::size_t N, typename OP>
+     void serialize(std::array<T,N>& v, OP op)
+     {
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
+       for(auto& x : v) {
+          x = op(x, T(val_));
+       }
+     } 
+
+   // for vector<T>
+   template<typename T, typename OP>
+     void serialize(vector<T>& v, OP op)
+     {
+       serialize(v.begin(), v.size(), op);
+     }
+
+   template<typename T, typename OP>
+     void serialize(matrix<T>& m, OP op)
+     {
+       serialize(m.begin(), m.size(), op);
+     }
+
+   // for std::vector<T>
+   template<typename T, typename OP>
+     void serialize(std::vector<T>& v, OP op)
+     {
+       serialize(v.data(), v.size(), op);
+     } 
+
+   // for plain data
+   template<typename T, typename OP>
+     typename std::enable_if<std::is_arithmetic<T>::value>::type
+     serialize(T& t, OP op)
+     {
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
+       t = op(t, T(val_));
+     }
+
+   // save multiple entries
+   template<typename... T_REST>
+     void operator()(T_REST&&... types)
+     {}
+   template<typename T, typename... T_REST>
+     void operator()(T&& t, T_REST&&... types)
+     {
+        if(OPERATION == operation::addition) {
+           auto op = [](auto a, auto b) { return a + b; };
+           serialize(t, op);
+        } else if(OPERATION == operation::subtraction) {
+           assert(false);
+        } else if(OPERATION == operation::multiplication) {
+           assert(false);
+        } else if(OPERATION == operation::division) {
+           auto op = [](auto a, auto b) { return a / b; };
+           serialize(t, op);
+        } else {
+           assert(false);
+        }
+
+       (*this)(types...);
+     }
+
+private:
+   REAL val_;
+};
+
+
 template<SIGNED_INDEX PREFIX>
 class addition_archive {
 public:
@@ -413,14 +534,12 @@ public:
    template<typename T>
      void serialize(vector<T>& v)
      {
-       assert(v.size() == *((INDEX*)ar.cur_address()));
        serialize(v.begin(), v.size());
      }
 
    template<typename T>
      void serialize(matrix<T>& m)
      {
-       assert(m.size() == *((INDEX*)ar.cur_address()));
        serialize(m.begin(), m.size());
      }
 
@@ -428,7 +547,6 @@ public:
    template<typename T>
      void serialize(std::vector<T>& v)
      {
-       assert(v.size() == *((INDEX*)ar.cur_address()));
        serialize(v.data(), v.size());
      } 
 

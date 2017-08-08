@@ -78,6 +78,7 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotentialAndComputePrimal, MaximizePotentialAndComputePrimal)
 
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_apply, apply)
 LP_MP_FUNCTION_EXISTENCE_CLASS(has_subgradient, subgradient)
 LP_MP_FUNCTION_EXISTENCE_CLASS(has_dot_product, dot_product)
 
@@ -1023,6 +1024,17 @@ public:
    LeftFactorContainer* GetLeftFactor() const final { return leftFactor_; }
    RightFactorContainer* GetRightFactor() const final { return rightFactor_; }
 
+   void SetLeftFactor(FactorTypeAdapter* l) final 
+   {
+      assert(dynamic_cast<LeftFactorContainer*>(l));
+      leftFactor_ = static_cast<LeftFactorContainer*>(l); 
+   }
+   void SetRightFactor(FactorTypeAdapter* r) final 
+   {
+      assert(dynamic_cast<RightFactorContainer*>(r));
+      rightFactor_ = static_cast<RightFactorContainer*>(r); 
+   }
+
    //INDEX GetMessageNumber() const final { return MESSAGE_NO; } 
    //REAL GetMessageWeightToRight() const final { return SEND_MESSAGE_TO_RIGHT_WEIGHT::value; }
    //REAL GetMessageWeightToLeft() const final { return SEND_MESSAGE_TO_LEFT_WEIGHT::value;  }
@@ -1375,8 +1387,8 @@ public:
 
 protected:
    MessageType msg_op_; // possibly inherit privately from MessageType to apply empty base optimization when applicable
-   LeftFactorContainer* const leftFactor_;
-   RightFactorContainer* const rightFactor_;
+   LeftFactorContainer* leftFactor_;
+   RightFactorContainer* rightFactor_;
 
    // see notes on allocator in FactorContainer
    struct Allocator {
@@ -1972,12 +1984,32 @@ public:
       return FunctionExistence::has_subgradient<FactorType, INDEX, double*>(); 
    }
 
-   virtual INDEX subgradient(double* w) final
+   struct apply_subgradient {
+      apply_subgradient(double* _w, REAL _sign) : w(_w), sign(_sign) { assert(sign == 1.0 || sign == -1.0); }
+      void operator[](const INDEX i) { w[i] = sign; }
+      private:
+      REAL* const w;
+      const REAL sign;
+   };
+   constexpr static bool can_apply()
    {
-      static_if<can_compute_subgradient()>([this,w](auto f) {
-            return f(factor_).subgradient(w);
-            });
-      assert(false); // should not be called otherwise
+      return FunctionExistence::has_apply<FactorType, void, apply_subgradient>(); 
+   }
+   virtual INDEX subgradient(double* w, const REAL sign) final
+   {
+      //static_if<can_compute_subgradient()>([this,w](auto f) {
+      //      return f(factor_).subgradient(w);
+      //      });
+      //assert(false); // should not be called otherwise
+      //return 0;
+
+      assert(sign == -1.0 || sign == 1.0);
+      static_if<can_apply()>([this,w,sign](auto f) {
+            apply_subgradient a(w,sign);
+            f(factor_).apply(a);
+      }).else_([](auto f) {
+         assert(false);
+      });
       return 0;
    }
 
@@ -1988,11 +2020,29 @@ public:
 
    virtual REAL dot_product(double* w) final
    {
-      static_if<can_compute_dot_product()>([this,w](auto f) {
-            return f(factor_).dot_product(w);
-            });
-      assert(false);
-      return 0.0; 
+      //static_if<can_compute_dot_product()>([this,w](auto f) {
+      //      return f(factor_).dot_product(w);
+      //      });
+      //assert(false);
+      //return 0.0; 
+
+      class apply_dot_product {
+      public:
+         apply_dot_product(double* _w) : w(_w) {}
+         void operator[](const INDEX i) { dp += w[i]; }
+         REAL dot_product() const { return dp; }
+      private:
+         REAL* const w;
+         REAL dp = 0;
+      };
+
+      apply_dot_product d(w);
+      static_if<can_apply()>([this,w,&d](auto f) {
+            f(factor_).apply(d);
+      }).else_([](auto f) {
+         assert(false);
+      });
+      return d.dot_product(); 
    }
 
    virtual void serialize_dual(load_archive& ar) final
@@ -2019,6 +2069,12 @@ public:
       factor_.serialize_dual(ar);
       assert(ar.size() % sizeof(REAL) == 0);
       return ar.size();
+   }
+
+   virtual void divide(const REAL val) final
+   {
+      arithmetic_archive<operation::division> ar(val);
+      factor_.serialize_dual(ar);
    }
 
    virtual INDEX primal_size() final

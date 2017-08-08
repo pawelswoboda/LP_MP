@@ -14,7 +14,7 @@ public:
    ~UnionFind() {
       delete [] id;
    }
-   void reset(const INDEX N) {
+   void reset() {
       cnt = N;
       for(INDEX i=0; i<N; ++i) { id[i] = i; }
       for(INDEX i=0; i<N; ++i) { sz[i] = 1; }
@@ -67,11 +67,12 @@ public:
       return cnt;
    }
 
-   // makes ids contiguous
-   void make_ids_contiguous()
+   std::vector<INDEX> get_contiguous_ids()
    {
-      INDEX* id_mapping = new INDEX[N];
-      std::fill(id_mapping, id_mapping + N, std::numeric_limits<INDEX>::max());
+      std::vector<INDEX> contiguous_ids(N);
+      std::vector<INDEX> id_mapping(N, std::numeric_limits<REAL>::max());
+      //INDEX* id_mapping = new INDEX[N];
+      //std::fill(contiguous_ids.begin(), contiguous_idx.end(), std::numeric_limits<INDEX>::max());
       for(INDEX i=0; i<N; ++i) {
          INDEX d = find(i);
          id_mapping[d] = 1; 
@@ -83,12 +84,13 @@ public:
             ++next_id;
          }
       }
+
       for(INDEX i=0; i<N; ++i) {
          INDEX d = find(i);
-         assert(d != std::numeric_limits<INDEX>::max());
-         id[i] = id_mapping[d];
+         assert(id_mapping[d] != std::numeric_limits<INDEX>::max());
+         contiguous_ids[i] = id_mapping[d];
       }
-      delete[] id_mapping;
+      return std::move(id_mapping);
    }
 };
 

@@ -258,29 +258,9 @@ double max_fn(double* wi, YPtr _y, double kappa, TermData term_data) // maximiza
    assert(kappa < std::numeric_limits<double>::max());
    sub_problem* sp = (sub_problem*) term_data;
 
-   /*
-   std::cout << "\nvariables with sign " << sp->sign << " of " << sp << "\n";
-   for(INDEX i=0; i<sp->no_unaries-1; ++i) {
-      std::cout <<  "(" << sp->pairwise_factors[i]->GetFactor()->first_var_ << "," << sp->pairwise_factors[i]->GetFactor()->second_var_  << "), ";
-   }
-   std::cout << "\n"; 
-   std::cout << "double check: ";
-   for(INDEX i=0; i<sp->no_unaries; ++i) {
-      std::cout <<  sp->unaries[i] << ",";
-   }
-   std::cout << "\n"; 
-   */
-
    sp->add_weights(wi, -1.0/kappa);
-   //const REAL sign = -sp->sign; // because we minimize, yet SVM wants to maximize
-   //std::cout << "\ncompute subgradient on " << sp << "\n";
-   //for(INDEX i=0; i<9; ++i) {
-   //   std::cout << sign*wi[i] << ", ";
-   //}
-   //std::cout << "\n";
 
    sp->dt_chain.compute_subgradient();
-   //std::cout << "lb = " << sp->dt_chain.lower_bound() << ", kappa = " << kappa << "\n";
    INDEX* y = (INDEX*) _y;
    for(INDEX i=0; i<sp->no_unaries-1; ++i) {
       y[i] = sp->pairwise_factors[i]->GetFactor()->state_[0]; 
@@ -290,7 +270,6 @@ double max_fn(double* wi, YPtr _y, double kappa, TermData term_data) // maximiza
       assert(y[i] < no_labels);
    }
 
-
    const REAL cost_test = -sp->dt_chain.lower_bound();
    // now remove the Lagrangean variables from unary factors again
    sp->add_weights(wi, 1.0/kappa);
@@ -299,12 +278,6 @@ double max_fn(double* wi, YPtr _y, double kappa, TermData term_data) // maximiza
 
    // free term excluding wi
    const REAL cost = -sp->dt_chain.primal_cost()*kappa; // we minimize, but SVM expects maximization
-   //std::cout << "cost without weights = " << -cost << ", ";
-   //std::cout << "sol = ";
-   //for(INDEX i=0; i<3; ++i) {
-   //   std::cout << y[i] << ", ";
-   //}
-   //std::cout << "\n";
    return cost;
 }
 
@@ -390,6 +363,7 @@ int main(int argc, char**argv)
    no_labels = mrfInput.cardinality_[0];
    no_vars = mrf.GetNumberOfVariables();
    std::cout << no_vars << ", " << no_labels << "\n";
+   std::cout << "number of MRF factors = " << solver.GetLP().GetNumberOfFactors() << "\n";
 
    LP_MP::DiscreteTomographyTextInput::Projections p;
    ret = problem.parse< LP_MP::DiscreteTomographyTextInput::grammar, LP_MP::DiscreteTomographyTextInput::action>(p);
@@ -406,6 +380,8 @@ int main(int argc, char**argv)
    for(INDEX i=0; i<p.projectionVar.size(); ++i) {
       LP_tree t;
       solver.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i], &t);
+      solver.GetLP().add_tree(t);
+
       auto pairwise = t.get_factors<FMC_DT::dt_sequential_pairwise_factor>();
       sub_problem* sp = new sub_problem(t, pairwise);
       t.compute_subgradient();
@@ -419,16 +395,20 @@ int main(int argc, char**argv)
       sp->unaries = p.projectionVar[i];
 
       s->SetTerm(i, sp, mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
-      sp_vec.push_back(sp);
-
-      solver.GetLP().add_tree(t);
+      sp_vec.push_back(sp); 
    }
 
-   // decompose mrf into trees automatically
+   // decompose mrf into trees automatically. Do this after adding projection, since they can add pairwise factors as well.
    auto trees = mrf.compute_forest_cover();
    for(auto& tree : trees) {
       solver.GetLP().add_tree(tree);
    }
+
+
+   std::cout << "number of factors = " << solver.GetLP().GetNumberOfFactors() << "\n";
+
+   solver.Solve();
+   return 0;
 
    s->options.gap_threshold = 0.000001;
 	s->options.iter_max = 1000;
@@ -449,7 +429,7 @@ int main(int argc, char**argv)
       } 
    }
 
-   solver.Solve();
+   //solver.Solve();
 
    double* w = s->Solve();
 

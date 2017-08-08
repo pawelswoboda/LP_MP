@@ -152,6 +152,12 @@ namespace LP_MP {
        msg -= omega*msgs;
     }
 
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
+   {
+      return l.primal() == r.primal()[0];
+   }
+
   private:
     const INDEX i1_,i2_;
   };
@@ -294,6 +300,12 @@ namespace LP_MP {
        r.min_marginal_2(msgs);
        msg -= omega*msgs;
     }
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
+   {
+      return l.primal() == r.primal()[1];
+   }
 
   private:
     const INDEX i1_,i2_; // do zrobienia: these values are not needed, as they can be obtained from the factors whenever they are used

@@ -53,6 +53,15 @@ public:
    INDEX& primal() { return primal_; }
    void primal(const INDEX p) { primal_ = p; }
 
+   // on which dimensions of cost does the current solution act? Out of this action the subgradient and the dot product between cost and subgradient can be computed
+   // possibly this can be used for primal evaluation, making EvaluatePrimal superfluous.
+   template<typename ARRAY>
+   void apply(ARRAY& a) const 
+   { 
+      assert(primal_ < this->size());
+      a[primal_];
+   }
+
    INDEX subgradient(double* w) const
    {
       assert(primal_ < size());
@@ -295,14 +304,32 @@ public:
       //assert(val < std::numeric_limits<REAL>::infinity());
       return val;
    }
-   void MaximizePotentialAndComputePrimal() 
+   void MaximizePotentialAndComputePrimal_deactivated() 
    {
-      REAL min_val = std::numeric_limits<REAL>::infinity();
-      for(INDEX x1=0; x1<dim1(); ++x1) {
-         for(INDEX x2=0; x2<dim2(); ++x2) {
-            if(min_val >= (*this)(x1,x2)) {
-               min_val = (*this)(x1,x2);
+      if(primal_[0] >= dim1() && primal_[1] >= dim2()) {
+         REAL min_val = std::numeric_limits<REAL>::infinity();
+         for(INDEX x1=0; x1<dim1(); ++x1) {
+            for(INDEX x2=0; x2<dim2(); ++x2) {
+               if(min_val >= (*this)(x1,x2)) {
+                  min_val = (*this)(x1,x2);
+                  primal_[0] = x1;
+                  primal_[1] = x2;
+               }
+            }
+         }
+      } else if(primal_[0] >= dim1()) {
+         REAL min_val = std::numeric_limits<REAL>::infinity();
+         for(INDEX x1=0; x1<dim1(); ++x1) {
+            if(min_val >= (*this)(x1,primal_[1])) {
+               min_val = (*this)(x1,primal_[1]);
                primal_[0] = x1;
+            }
+         } 
+      } else if(primal_[1] >= dim2()) {
+         REAL min_val = std::numeric_limits<REAL>::infinity();
+         for(INDEX x2=0; x2<dim2(); ++x2) {
+            if(min_val >= (*this)(primal_[0],x2)) {
+               min_val = (*this)(primal_[0],x2);
                primal_[1] = x2;
             }
          }
@@ -337,15 +364,24 @@ public:
        } 
    }
 
+   template<typename ARRAY>
+   void apply(ARRAY& a) const
+   {
+      assert(primal_[0] < dim1_ && primal_[1] < dim2_);
+      a[primal_[0]*dim2_ + primal_[1]];
+      a[dim1_*dim2_ + primal_[0]];
+      a[dim1_*dim2_ + dim1_ + primal_[1]]; 
+   }
    INDEX subgradient(double* w) const
    {
+      assert(false);
       assert(primal_[0] < dim1() && primal_[1] < dim2());
-      std::fill(w, w+this->size(), 0.0);
       w[primal_[0]*dim2_ + primal_[1]] = 1.0;
       return this->size();
    }
    REAL dot_product(double* w) const
    {
+      assert(false);
       return w[primal_[0]*dim2_ + primal_[1]];
    }
 

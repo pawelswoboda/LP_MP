@@ -6,6 +6,7 @@
 #include "parse_rules.h"
 #include "pegtl/parse.hh"
 #include "tree_decomposition.hxx"
+#include "arboricity.h"
 
 #include <string>
 
@@ -174,21 +175,33 @@ public:
   LP_tree add_tree(std::vector<PairwiseFactorContainer*> p)
   {
      LP_tree t;
-     // assume root is the last element of u. build tree recursively from root
-     auto* root = p->GetLeftFactorContainer();
+     assert(p.size() > 0);
 
      // extract messages joining unaries and pairwise
      std::set<UnaryFactorContainer*> u_set; // u_set is not strictly needed, but helps in checking correctness of algorithm
      std::set<PairwiseFactorContainer*> p_set;
+     std::vector<std::tuple<Chirality, MessageTypeAdapter*>> ordered_msgs;
+     UnaryFactorContainer* root = nullptr;
      for(auto* f : p) {
         p_set.insert(f); 
-        UnaryFactorContainer* left = p->GetLeftFactorContainer();
-        UnaryFactorContainer* right = p->GetRightFactorContainer();
+
+        auto left_msgs = f->template get_messages<LeftMessageContainer>();
+        assert(left_msgs.size() == 1);
+        UnaryFactorContainer* left = (*left_msgs.begin())->GetLeftFactor();
         u_set.insert(left);
+
+        auto right_msgs = f->template get_messages<RightMessageContainer>();
+        assert(right_msgs.size() == 1);
+        UnaryFactorContainer* right = (*right_msgs.begin())->GetLeftFactor(); 
         u_set.insert(right);
+
+        assert(left != right);
+
+        root = left;
      }
 
-     assert(u_set.size() + 1 == p_set.size());
+     // assume some arbitrary root. build tree recursively from root
+     assert(u_set.size() == p_set.size() + 1);
 
      std::deque<UnaryFactorContainer*> u_stack;
      u_stack.push_back(root);
@@ -204,13 +217,15 @@ public:
               auto* p_cand = (*it)->GetRightFactor();
               if(p_set.find(p_cand) != p_set.end()) {
                  p_set.erase(p_cand);
-                 t.AddMessage((*it), Chirality::left); // or right?
+                 //t.AddMessage((*it), Chirality::left); // or right?
+                 ordered_msgs.push_back(std::make_tuple(Chirality::left, *it));
                  // search for the other unary connected to p_cand
                  auto msgs_other = p_cand->template get_messages<RightMessageContainer>();
                  assert(msgs_other.size() == 1);
                  auto* u_other = (*msgs_other.begin())->GetLeftFactor();
                  assert(u_set.find(u_other) != u_set.end());
-                 t.AddMessage(*(msgs_other.begin()), Chirality::right);
+                 //t.AddMessage(*(msgs_other.begin()), Chirality::right);
+                 ordered_msgs.push_back(std::make_tuple(Chirality::right, *(msgs_other.begin())));
                  u_stack.push_back(u_other);
               }
            }
@@ -222,13 +237,15 @@ public:
               auto* p_cand = (*it)->GetRightFactor();
               if(p_set.find(p_cand) != p_set.end()) {
                  p_set.erase(p_cand);
-                 t.AddMessage((*it), Chirality::left); // or right?
+                 //t.AddMessage((*it), Chirality::left); // or right?
+                 ordered_msgs.push_back(std::make_tuple(Chirality::left, *it));
                  // search for the other unary connected to p_cand
                  auto msgs_other = p_cand->template get_messages<LeftMessageContainer>();
                  assert(msgs_other.size() == 1);
                  auto* u_other = (*msgs_other.begin())->GetLeftFactor();
                  assert(u_set.find(u_other) != u_set.end());
-                 t.AddMessage(*(msgs_other.begin()), Chirality::right);
+                 //t.AddMessage(*(msgs_other.begin()), Chirality::right);
+                 ordered_msgs.push_back(std::make_tuple(Chirality::right, *(msgs_other.begin())));
                  u_stack.push_back(u_other);
               }
            }
@@ -237,7 +254,14 @@ public:
 
      assert(p_set.empty());
 
-     return t;
+     std::reverse(ordered_msgs.begin(), ordered_msgs.end());
+     for(auto e : ordered_msgs) {
+        t.AddMessage(std::get<1>(e), std::get<0>(e));
+     }
+
+     t.init();
+
+     return std::move(t);
   }
 
   // compute forest cover of MRF and add each resulting tree
@@ -250,38 +274,55 @@ public:
         g.AddEdge(i,j,1);
      }
      
-     const INDEX forest_num = g->Solve();
+     const INDEX forest_num = g.Solve();
+     std::cout << "decomposed mrf into " << forest_num << " trees\n";
      std::vector<LP_tree> trees;
 
+     std::vector<int> parents(unaryFactor_.size());
      for(INDEX k=0; k<forest_num; ++k) {
-        std::vector<int> parents(unaryFactor_.size());
-        g.GetForestEdges(k, parents.data());
+        g.GetForestParents(k, parents.data()); // possible GetForestEdges will return pairwise ids, hence GetPairwiseFactor(id) then can be called, which is faster
 
         UnionFind uf(unaryFactor_.size());
         for(INDEX i=0; i<parents.size(); ++i) {
            if(parents[i] != -1) {
-              uf.merge(std::get<0>(pairwiseIndices_[parents[i]]), std::get<1>(pairwiseIndices_[parents[i]]));
+              uf.merge(i, parents[i]);//std::get<0>(pairwiseIndices_[parents[i]]), std::get<1>(pairwiseIndices_[parents[i]]));
            }
         }
-        uf.make_ids_contiguous();
+        auto contiguous_ids = uf.get_contiguous_ids();
         
         const INDEX no_trees = uf.count();
         std::vector<std::vector<PairwiseFactorContainer*>> pairwise(no_trees);
 
         for(INDEX i=0; i<parents.size(); ++i) {
            if(parents[i] != -1) {
-              const INDEX tree_id = uf.find(i);
+              const INDEX tree_id = contiguous_ids[uf.find(i)];
               const INDEX j = parents[i];
+              assert(tree_id == contiguous_ids[uf.find(j)]);
               PairwiseFactorContainer* p = GetPairwiseFactor(std::min(i,j), std::max(i,j));
               pairwise[tree_id].push_back(p);
            } 
         }
         for(INDEX t=0; t<no_trees; ++t) {
-           trees.push_back(add_tree(pairwise[t])); 
+           if(pairwise[t].size() > 0) {
+              trees.push_back(add_tree(pairwise[t])); 
+           }
         }
      }
 
-     return trees;
+     auto check_pairwise_factors_present = [&trees]() -> INDEX {
+        INDEX pairwise_factors_in_trees = 0;
+        for(auto& tree : trees) {
+           for(auto* f : tree.factors_) {
+              if(dynamic_cast<PairwiseFactorContainer*>(f)) {
+                 pairwise_factors_in_trees++;
+              }
+           }
+        }
+        return pairwise_factors_in_trees;
+     };
+     assert(check_pairwise_factors_present() == pairwiseFactor_.size());
+
+     return std::move(trees);
   }
 
 protected:

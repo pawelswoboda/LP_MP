@@ -4,3 +4,6 @@
 [submodule "external/libsimdpp"]
 	path = external/libsimdpp
 	url = https://github.com/p12tic/libsimdpp.git
+[submodule "external/arboricity"]
+	path = external/arboricity
+	url = https://github.com/pawelswoboda/arboricity.git

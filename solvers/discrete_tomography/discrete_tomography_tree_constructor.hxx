@@ -224,7 +224,7 @@ class DiscreteTomographyTreeConstructor {
     }
 
     void AddProjection(const std::vector<INDEX>& projectionVar, const std::vector<REAL>& summationCost, LP_tree* tree = nullptr)
-    {      
+    {
        const INDEX max_sum = std::max(noLabels_,INDEX(summationCost.size()));
        assert(projectionVar.size() > 3); // otherwise just use a ternary factor to enforce consistency
        assert(std::is_sorted(projectionVar.begin(), projectionVar.end())); // support unsorted projectionVar (transpose in messages) later
@@ -238,7 +238,7 @@ class DiscreteTomographyTreeConstructor {
            mrf_constructor_.AddPairwiseFactor(i1,i2,pairwise_cost);
         }
       }
-      
+
       std::deque<counting_factor_rec> queue;
 
       // partition projectionVar into subsets of size at least 4 and at most 6
@@ -404,7 +404,7 @@ public:
    }
 
    template<typename ITERATOR>
-   SUM_PAIRWISE_FACTOR* AddProjection(ITERATOR projection_var_begin, ITERATOR projection_var_end, const INDEX max_sum, LP_tree* tree = nullptr)
+   SUM_PAIRWISE_FACTOR* AddProjection(ITERATOR projection_var_begin, ITERATOR projection_var_end, const INDEX max_sum, LP_tree* tree)
    { 
       assert(noLabels_ > 0);
       assert(std::distance(projection_var_begin, projection_var_end) > 1);
@@ -453,6 +453,9 @@ public:
          if(f_prev != nullptr) {
             auto* m = new SUM_PAIRWISE_MESSAGE(f_prev,f);
             lp_->AddMessage(m);
+            if(tree != nullptr) {
+               tree->AddMessage(m, Chirality::right);
+            }
 
             // reparametrize dt factors only after unary/pairwise ones
             //lp_->AddFactorRelation(f_prev, f);
@@ -476,6 +479,9 @@ public:
          prev_sum_size = sum_size;
       }
 
+      if(tree != nullptr) {
+         tree->init();
+      }
       return f_prev;
    }
 
