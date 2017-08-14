@@ -79,8 +79,6 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotentialAndComputePrimal, MaximizePotentialAndComputePrimal)
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(has_apply, apply)
-LP_MP_FUNCTION_EXISTENCE_CLASS(has_subgradient, subgradient)
-LP_MP_FUNCTION_EXISTENCE_CLASS(has_dot_product, dot_product)
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables)
@@ -1977,13 +1975,6 @@ public:
       ComputePrimalThroughMessages();
    }
 
-   // todo: possibly replace dot_product by using subgradient as follows: create mock object which reacts when 1.0 is written via operator[](int i) to it.
-   // get i and add w[i] to dot product. For usual subgradient zero iniaitialize array that is given to factor
-   constexpr static bool can_compute_subgradient()
-   {
-      return FunctionExistence::has_subgradient<FactorType, INDEX, double*>(); 
-   }
-
    struct apply_subgradient {
       apply_subgradient(double* _w, REAL _sign) : w(_w), sign(_sign) { assert(sign == 1.0 || sign == -1.0); }
       void operator[](const INDEX i) { w[i] = sign; }
@@ -1997,12 +1988,6 @@ public:
    }
    virtual INDEX subgradient(double* w, const REAL sign) final
    {
-      //static_if<can_compute_subgradient()>([this,w](auto f) {
-      //      return f(factor_).subgradient(w);
-      //      });
-      //assert(false); // should not be called otherwise
-      //return 0;
-
       assert(sign == -1.0 || sign == 1.0);
       static_if<can_apply()>([this,w,sign](auto f) {
             apply_subgradient a(w,sign);
@@ -2013,19 +1998,8 @@ public:
       return 0;
    }
 
-   constexpr static bool can_compute_dot_product()
-   {
-      return FunctionExistence::has_dot_product<FactorType, INDEX, double*>(); 
-   }
-
    virtual REAL dot_product(double* w) final
    {
-      //static_if<can_compute_dot_product()>([this,w](auto f) {
-      //      return f(factor_).dot_product(w);
-      //      });
-      //assert(false);
-      //return 0.0; 
-
       class apply_dot_product {
       public:
          apply_dot_product(double* _w) : w(_w) {}

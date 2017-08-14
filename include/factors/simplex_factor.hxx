@@ -153,24 +153,6 @@ public:
    INDEX& primal() { return primal_; }
    void primal(const INDEX p) { primal_ = p; }
 
-   INDEX subgradient(double* w) const
-   {
-      assert(primal_ <= size());
-      std::fill(w, w+this->size(), 0.0);
-      if(primal_ < this->size()) {
-        w[primal_] = 1.0;
-      }
-      return this->size();
-   }
-   REAL dot_product(double* w) const
-   {
-     if(primal_ < size()) {
-       return w[primal_];
-     } else {
-       return 0.0;
-     }
-   }
-
 #ifdef WITH_SAT
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
@@ -371,18 +353,6 @@ public:
       a[primal_[0]*dim2_ + primal_[1]];
       a[dim1_*dim2_ + primal_[0]];
       a[dim1_*dim2_ + dim1_ + primal_[1]]; 
-   }
-   INDEX subgradient(double* w) const
-   {
-      assert(false);
-      assert(primal_[0] < dim1() && primal_[1] < dim2());
-      w[primal_[0]*dim2_ + primal_[1]] = 1.0;
-      return this->size();
-   }
-   REAL dot_product(double* w) const
-   {
-      assert(false);
-      return w[primal_[0]*dim2_ + primal_[1]];
    }
 
 #ifdef WITH_SAT
