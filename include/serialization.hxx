@@ -489,11 +489,11 @@ private:
 };
 
 
-template<SIGNED_INDEX PREFIX>
 class addition_archive {
 public:
-   addition_archive(serialization_archive& a) 
-      : ar(a) 
+   addition_archive(serialization_archive& a, const REAL scaling) 
+      : ar(a),
+      scaling_(scaling) 
    {
       ar.reset_cur(); 
    }
@@ -505,7 +505,7 @@ public:
        static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
        T* val = (T*) ar.cur_address();
        for(INDEX i=0; i<size; ++i) {
-         pointer[i] += T(PREFIX) * val[i]; 
+         pointer[i] += T(scaling_) * val[i]; 
        }
        const INDEX size_in_bytes = sizeof(T)*size;
        ar.advance(size_in_bytes);
@@ -523,7 +523,7 @@ public:
        static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
        T* s = (T*) ar.cur_address();
        for(auto& x : v) {
-         x += T(PREFIX) * (*s);
+         x += T(scaling_) * (*s);
          ++s; 
        }
        const INDEX size_in_bytes = sizeof(T)*N;
@@ -565,7 +565,7 @@ public:
      {
        static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
        T* s = (T*) ar.cur_address();
-       t += T(PREFIX) * (*s);
+       t += T(scaling_) * (*s);
        ar.advance(sizeof(T));
      }
 
@@ -582,6 +582,7 @@ public:
 
 private:
   serialization_archive& ar;
+  const REAL scaling_;
 };
 
 } // end namespace LP_MP

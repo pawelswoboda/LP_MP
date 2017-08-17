@@ -320,7 +320,7 @@ public:
 
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_[0], primal_[1] ); }
    //template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( cereal::binary_data( pairwise_, sizeof(REAL)*(size()+dim1()+dim2()) ) ); }
-   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( binary_data<REAL>( pairwise_, sizeof(REAL)*(size()+dim1()+dim2()) ) ); }
+   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( binary_data<REAL>( pairwise_, size()+dim1()+dim2() ) ); }
 
    template<typename VECTOR>
    void min_marginal_1(VECTOR& m) const
@@ -585,9 +585,9 @@ public:
       //ar( cereal::binary_data( msg12_, sizeof(REAL)*(dim1()*dim2()) ) );
       //ar( cereal::binary_data( msg13_, sizeof(REAL)*(dim1()*dim3()) ) );
       //ar( cereal::binary_data( msg23_, sizeof(REAL)*(dim2()*dim3()) ) );
-      ar( binary_data<REAL>( msg12_, sizeof(REAL)*(dim1()*dim2()) ) );
-      ar( binary_data<REAL>( msg13_, sizeof(REAL)*(dim1()*dim3()) ) );
-      ar( binary_data<REAL>( msg23_, sizeof(REAL)*(dim2()*dim3()) ) );
+      ar( binary_data<REAL>( msg12_, dim1()*dim2() ) );
+      ar( binary_data<REAL>( msg13_, dim1()*dim3() ) );
+      ar( binary_data<REAL>( msg23_, dim2()*dim3() ) );
    }
 
 

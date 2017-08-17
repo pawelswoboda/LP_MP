@@ -84,13 +84,13 @@ public:
    virtual void serialize_dual(allocate_archive&) = 0;
    virtual void serialize_primal(allocate_archive&) = 0;
    // for adding weights in Frank Wolfe algorithm
-   virtual void serialize_dual(addition_archive<+1>&) = 0;
-   virtual void serialize_dual(addition_archive<-1>&) = 0;
+   virtual void serialize_dual(addition_archive&) = 0;
 
    virtual void divide(const REAL val) = 0; // divide potential by value
 
    virtual INDEX dual_size() = 0;
-   virtual INDEX primal_size() = 0;
+   virtual INDEX dual_size_in_bytes() = 0;
+   virtual INDEX primal_size_in_bytes() = 0;
 
    // the offset in the primal storage
    // to do: remove
@@ -505,7 +505,7 @@ public:
    {
       f->UpdateFactor(omega);
    }
-   void ComputePass();
+   void ComputePass(const INDEX iteration);
 
    void ComputeForwardPass()
    {
@@ -865,7 +865,7 @@ inline void LP::Begin()
 #endif
 }
 
-inline void LP::ComputePass()
+inline void LP::ComputePass(const INDEX iteration)
 {
    const auto omega = get_omega();
    assert(forwardUpdateOrdering_.size() == omega.forward.size());

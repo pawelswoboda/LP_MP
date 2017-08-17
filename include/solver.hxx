@@ -233,6 +233,7 @@ public:
          this->Iterate(c);
          this->PostIterate(c);
          c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
+         ++iter;
       }
       if(!c.error) {
          this->End();
@@ -261,7 +262,7 @@ public:
 
    // what to do for improving lower bound, typically ComputePass or ComputePassAndPrimal
    virtual void Iterate(LpControl c) {
-      lp_.ComputePass();
+      lp_.ComputePass(iter);
    } 
 
    // what to do after one iteration of message passing, e.g. primal computation and/or tightening
@@ -363,6 +364,7 @@ protected:
    std::string solution_;
 
    VISITOR visitor_;
+   INDEX iter = 0;
 };
 
 // local rounding interleaved with message passing 
@@ -375,18 +377,16 @@ public:
   virtual void Iterate(LpControl c)
   {
     if(c.computePrimal) {
-      SOLVER::lp_.ComputeForwardPassAndPrimal(iter);
+      SOLVER::lp_.ComputeForwardPassAndPrimal(this->iter);
       this->RegisterPrimal();
-      SOLVER::lp_.ComputeBackwardPassAndPrimal(iter);
+      SOLVER::lp_.ComputeBackwardPassAndPrimal(this->iter);
       this->RegisterPrimal();
     } else {
       SOLVER::Iterate(c);
     }
-    ++iter;
   }
 
 private:
-   INDEX iter = 0;
 };
 
 // rounding based on primal heuristics provided by problem constructor

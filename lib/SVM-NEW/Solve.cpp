@@ -226,7 +226,11 @@ double* SVM::Solve()
 					memcpy(y_new, terms[i]->y_arr[t], terms[i]->y_size_in_bytes_plus);
 					terms[i]->RemoveUnusedPlanes();
 				}
-				if (copy_fn) { (*copy_fn)(phi_new, y_new, terms[i]->term_data); phi_new[di] = *terms[i]->GetFreeTermPtr(y_new); }
+				if (copy_fn) 
+            {
+               (*copy_fn)(phi_new, y_new, terms[i]->term_data);
+               phi_new[di] = *terms[i]->GetFreeTermPtr(y_new); 
+            }
 
 				// min_{gamma \in [0,1]} B*gamma*gamma - 2*A*gamma
 				double A = -Op1(phi, phi_new, neg_phi_sum, mapping, di) + (phi_new[di] - phi[di])*kappa*lambda_mu; // <phi-phi_new,phi_sum> + (b_new - b) * kappa * lambda

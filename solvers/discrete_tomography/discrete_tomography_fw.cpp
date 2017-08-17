@@ -347,7 +347,7 @@ int main(int argc, char**argv)
 
 
    //MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
-   Solver<FMC_DT,LP_with_trees,StandardVisitor> solver;
+   Solver<FMC_DT,LP_FW_DS,StandardVisitor> solver;
 
    pegtl::file_parser problem(filename);
 

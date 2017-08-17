@@ -2031,13 +2031,16 @@ public:
    { factor_.serialize_dual(ar); }
    virtual void serialize_primal(allocate_archive& ar) final
    { factor_.serialize_primal(ar); } 
-   virtual void serialize_dual(addition_archive<+1>& ar) final
-   { factor_.serialize_dual(ar); }
-   virtual void serialize_dual(addition_archive<-1>& ar) final
+   virtual void serialize_dual(addition_archive& ar) final
    { factor_.serialize_dual(ar); }
 
    // returns size in bytes
    virtual INDEX dual_size() final
+   {
+      return dual_size_in_bytes()/sizeof(REAL);
+   }
+
+   virtual INDEX dual_size_in_bytes() final
    {
       allocate_archive ar;
       factor_.serialize_dual(ar);
@@ -2051,7 +2054,7 @@ public:
       factor_.serialize_dual(ar);
    }
 
-   virtual INDEX primal_size() final
+   virtual INDEX primal_size_in_bytes() final
    {
       allocate_archive ar;
       factor_.serialize_primal(ar);

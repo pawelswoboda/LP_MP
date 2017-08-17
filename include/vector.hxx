@@ -4,6 +4,7 @@
 #include "memory_allocator.hxx"
 #include "serialization.hxx"
 #include "config.hxx"
+#include "help_functions.hxx"
 //#include "cereal/archives/binary.hpp"
 
 namespace LP_MP {

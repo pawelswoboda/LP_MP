@@ -9,11 +9,67 @@ TEST_CASE( "serialization", "[serialization]" ) {
    std::vector<INDEX> v{30,40,50};
    INDEX p [4] = {60,70,80,90};
 
+   REAL i_r=10;
+   std::array<REAL,2> a_r{20,30};
+   std::vector<REAL> v_r{30,40,50};
+   REAL p_r [4] = {60,70,80,90};
+
    allocate_archive a_ar;
    a_ar(i);
    a_ar(a);
    a_ar(v);
    a_ar( binary_data<INDEX>(p,4) );
+
+   SECTION("allocate archive") {
+      {
+         allocate_archive ar;
+         ar( i );
+         REQUIRE(ar.size() == sizeof(INDEX));
+      }
+
+      {
+         allocate_archive ar;
+         ar( a );
+         REQUIRE(ar.size() == 2*sizeof(INDEX));
+      }
+
+      {
+         allocate_archive ar;
+         ar( v );
+         REQUIRE(ar.size() == 3*sizeof(INDEX));
+      }
+
+      {
+         allocate_archive ar;
+         ar( binary_data<INDEX>(p,4) );
+         REQUIRE(ar.size() == 4*sizeof(INDEX));
+      }
+
+      {
+         allocate_archive ar;
+         ar( i_r );
+         REQUIRE(ar.size() == sizeof(REAL));
+      }
+
+      {
+         allocate_archive ar;
+         ar( a_r );
+         REQUIRE(ar.size() == 2*sizeof(REAL));
+      }
+
+      {
+         allocate_archive ar;
+         ar( v_r );
+         REQUIRE(ar.size() == 3*sizeof(REAL));
+      }
+
+      {
+         allocate_archive ar;
+         ar( binary_data<REAL>(p_r,4) );
+         REQUIRE(ar.size() == 4*sizeof(REAL));
+      }
+
+   }
 
 
    SECTION("individual saving") {
