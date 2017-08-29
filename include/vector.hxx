@@ -2,7 +2,7 @@
 #define LP_MP_VECTOR_HXX
 
 #include "memory_allocator.hxx"
-#include "serialization.hxx"
+//#include "serialization.hxx"
 #include "config.hxx"
 #include "help_functions.hxx"
 //#include "cereal/archives/binary.hpp"
@@ -201,20 +201,11 @@ public:
      //  assert(false);
      //}
 
-     if(std::is_same<T,double>::value) {
+     if(std::is_same<T,float>::value || std::is_same<T,double>::value) {
 
-       simdpp::float64<4> min_val = simdpp::load( begin_ );
-       for(auto it=begin_+4; it<end_; it+=4) {
-         simdpp::float64<4> tmp = simdpp::load( it );
-         min_val = simdpp::min(min_val, tmp); 
-       }
-       return simdpp::reduce_min(min_val);
-
-     } else if(std::is_same<T,float>::value) {
-
-       simdpp::float32<8> min_val = simdpp::load( begin_ );
-       for(auto it=begin_+8; it<end_; it+=8) {
-         simdpp::float32<8> tmp = simdpp::load( it );
+       REAL_VECTOR min_val = simdpp::load( begin_ );
+       for(auto it=begin_+REAL_ALIGNMENT; it<end_; it+=REAL_ALIGNMENT) {
+         REAL_VECTOR tmp = simdpp::load( it );
          min_val = simdpp::min(min_val, tmp); 
        }
        return simdpp::reduce_min(min_val);
@@ -226,6 +217,7 @@ public:
 
    void min(const T val)
    {
+     assert(false); // should not be used
      static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
      if(std::is_same<T,float>::value) {
        simdpp::float32<8> val_vec = simdpp::make_float(val);
@@ -387,15 +379,16 @@ class matrix : public matrix_expression<T,matrix<T>> {
 public:
    T& operator[](const INDEX i) { return vec_[i]; }
    const T operator[](const INDEX i) const { return vec_[i]; }
-   INDEX size() const { return vec_.size(); }
+   INDEX size() const { return dim1()*dim2(); }
    template<typename ARCHIVE>
    void serialize(ARCHIVE& ar)
    {
       ar( vec_ );
    }
 
-   T* begin() const { return vec_.begin(); }
-   T* end() const { return vec_.end(); }
+   // when infinity padding is on, we must jump over those places
+   T* begin() const { assert(false); return vec_.begin(); }
+   T* end() const { assert(false); return vec_.end(); }
 
    static INDEX underlying_vec_size(const INDEX d1, const INDEX d2)
    {
@@ -422,7 +415,7 @@ public:
    }
    matrix(const INDEX d1, const INDEX d2, const T val) : vec_(underlying_vec_size(d1,d2)), dim2_(d2), padded_dim2_(d2 + padding(d2)) {
       assert(d1 > 0 && d2 > 0);
-      std::fill(this->begin(), this->end(), val);
+      std::fill(vec_.begin(), vec_.end(), val);
       fill_padding();
    }
    matrix(const matrix& o) 
@@ -461,14 +454,16 @@ public:
 
    // should these functions be members?
    // minima along second dimension
-   // should be slower than min2
+   // should be slower than min2, but possibly it is not, because reduce_min is still a fast operation and not the bottleneck. Measure!
    vector<T> min1() const
    {
+     // this function only works if T is REAL!
+     static_assert(std::is_same<T,REAL>::value, "");
      vector<T> min(dim1());
      if(std::is_same<T,float>::value || std::is_same<T,double>::value) {
        for(INDEX x1=0; x1<dim1(); ++x1) {
          REAL_VECTOR cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() );
-         for(INDEX x2=8; x2<dim2(); x2+=8) {
+         for(INDEX x2=REAL_ALIGNMENT; x2<dim2(); x2+=REAL_ALIGNMENT) {
            REAL_VECTOR tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
            cur_min = simdpp::min(cur_min, tmp); 
          }
@@ -484,20 +479,21 @@ public:
    // minima along first dimension
    vector<T> min2() const
    {
+     static_assert(std::is_same<T,REAL>::value, "");
      vector<T> min(dim2());
      // possibly iteration strategy is faster, e.g. doing a non-contiguous access, or explicitly holding a few variables and not storing them back in vector min for a few sizes
      if(std::is_same<T,float>::value || std::is_same<T,double>::value) {
-       for(INDEX x2=0; x2<dim2(); x2+=8) {
+       for(INDEX x2=0; x2<dim2(); x2+=REAL_ALIGNMENT) {
          REAL_VECTOR tmp = simdpp::load( vec_.begin() + x2 );
          simdpp::store(&min[x2], tmp);
        }
 
        for(INDEX x1=1; x1<dim1(); ++x1) {
-         for(INDEX x2=0; x2<dim2(); x2+=8) {
-           REAL_VECTOR cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
+         for(INDEX x2=0; x2<dim2(); x2+=REAL_ALIGNMENT) {
            REAL_VECTOR tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
-           cur_min = simdpp::min(cur_min, tmp);
-           simdpp::store(&min[x2], cur_min);
+           REAL_VECTOR cur_min = simdpp::load( &min[x2] );
+           auto updated_min = simdpp::min(cur_min, tmp);
+           simdpp::store(&min[x2], updated_min);
          } 
        }
      } else {
@@ -505,6 +501,11 @@ public:
      }
 
      return std::move(min); 
+   }
+
+   T min() const
+   {
+     return vec_.min();
    }
 protected:
    vector<T> vec_;

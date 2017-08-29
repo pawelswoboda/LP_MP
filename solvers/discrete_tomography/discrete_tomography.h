@@ -34,8 +34,8 @@ namespace LP_MP{
     using dt_sequential_pairwise_factor = FactorContainer<dt_sum_state_pairwise_factor, FMC_DT, 3>;
    
     // do zrobienia: possibly try out MPLP as well
-    using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 0 >;
-    using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 1 >;
+    using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,true>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 0 >;
+    using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,true>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT, 1 >;
     
     using DiscreteTomographyCountingMessageLeft = MessageContainer<DiscreteTomographyMessageCounting2, 2, 2, message_passing_schedule::left, atMostTwoMessages, atMostTwoMessages, FMC_DT, 2>;
     using DiscreteTomographyCountingMessageRight = MessageContainer<DiscreteTomographyMessageCounting2, 2, 2, message_passing_schedule::left, atMostOneMessage, atMostOneMessage, FMC_DT, 3>;

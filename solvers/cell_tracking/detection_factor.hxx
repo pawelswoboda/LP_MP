@@ -1480,11 +1480,13 @@ public:
         l.outgoing_transition(outgoing_edge_index_, i) = std::numeric_limits<REAL>::infinity();
       }
       vector<REAL> outgoing_transition_min = l.outgoing_transition.min2();
+      assert(outgoing_transition_min.size() == l.division_distance());
       for(INDEX i=0; i<l.division_distance(); ++i) {
         l.outgoing_transition(outgoing_edge_index_, i) = original_edge_val[i];
       }
 
       vector<REAL> incoming_transition_min = l.incoming_transition.min2();
+      assert(incoming_transition_min.size() == l.division_distance()-1);
 
       vector<REAL> cost_diff(l.division_distance()-1);
 
@@ -1499,6 +1501,18 @@ public:
       const REAL cost_last = l.detection[last] + incoming_transition_min[last-1] + original_edge_val[last]
         - std::min(l.detection[last] + incoming_transition_min[last-1] + std::min(outgoing_transition_min[last], l.outgoing_division.min()), REAL(0.0));
       cost_diff[last-1] = std::min(cost_diff[last-1], cost_last);
+
+
+      const REAL cost_last = 
+        std::min({
+            l.detection[last-1] + incoming_transition_min[last-2] + original_edge_val[last-1],
+            l.detection[last] + incoming_transition_min[last-1] + original_edge_val[last]
+            }) -
+        std::min({
+            l.detection[last-1] + incoming_transition_min[last-2] + outgoing_transition_min[last-1],
+            l.detection[last] + incoming_transition_min[last-1] + std::min(outgoing_transition_min[last], l.outgoing_division.min()),
+            REAL(0.0)); 
+          });
 
       msg -= omega*( cost_diff ); 
     }

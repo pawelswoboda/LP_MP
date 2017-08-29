@@ -22,6 +22,7 @@ namespace LP_MP {
    // to do: use type definitions for SIMD types
 
    // data types for all floating point/integer operations 
+   // float is inaccurate for large problems and I observed oscillation. Possibly, soem sort of numerical stabilization needs to be employed
    //using REAL = float;
    //constexpr std::size_t REAL_ALIGNMENT = 8;
    //using REAL_VECTOR = simdpp::float32<REAL_ALIGNMENT>;
@@ -38,8 +39,15 @@ namespace LP_MP {
    using LONG_INDEX = long unsigned int;
 
    enum class Chirality {left,right};
-   enum class MessageSendingType {SRMP,MPLP}; // also add full, for always sending and receiving messages
+   enum class MessageSendingType {SRMP,MPLP};
    enum class Direction {forward, backward};
+
+   enum class message_passing_schedule {
+     left, // messages are received from left and sent by left
+     right, // messages are received from right and sent by right
+     full, // messages are received and send in both directions
+     only_send // messages are only sent
+   }; 
 
    constexpr REAL eps = std::is_same<REAL,float>::value ? 1e-6 : 1e-8;
    // verbosity levels: 0: silent

@@ -420,6 +420,8 @@ public:
       }
 
       SUM_PAIRWISE_FACTOR* f_prev = nullptr;
+      typename MrfConstructorType::UnaryFactorContainer* last_added_1 = nullptr;
+      typename MrfConstructorType::UnaryFactorContainer* last_added_2 = nullptr;
       INDEX prev_sum_size = 1;//std::min(noLabels_, max_sum);
       //connect_unary_and_sum_factor(mrf_constructor_.GetUnaryFactor(*projection_var_begin), f_prev);
       INDEX i=1;
@@ -472,6 +474,24 @@ public:
          lp_->AddMessage(m_c);
 
          if(tree != nullptr) {
+            // also add messages to unaries considering that unaries can be covered twice (for inner unaries). This allows to have significantly smaller trees for the MRF part, since many pairwise factors and associated unaries are covered by the projection trees.
+
+            auto* left_msg = mrf_constructor_.get_left_message(std::min(*(it-1), *it), std::max(*(it-1), *it));
+            auto* right_msg = mrf_constructor_.get_right_message(std::min(*(it-1), *it), std::max(*(it-1), *it));
+
+            auto* left_factor = mrf_constructor_.GetUnaryFactor(std::min(*(it-1), *it));
+            auto* right_factor = mrf_constructor_.GetUnaryFactor(std::max(*(it-1), *it));
+
+            if(last_added_1 != left_factor && last_added_2 != left_factor) {
+               tree->AddMessage(left_msg, Chirality::right); 
+            }
+            if(last_added_1 != right_factor && last_added_2 != right_factor) {
+               tree->AddMessage(right_msg, Chirality::right); 
+            }
+
+            last_added_1 = left_factor;
+            last_added_2 = right_factor;
+
             tree->AddMessage(m_c, Chirality::right);
          }
 

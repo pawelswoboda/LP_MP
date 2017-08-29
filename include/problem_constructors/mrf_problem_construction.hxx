@@ -112,6 +112,24 @@ public:
       return pairwiseFactor_[factor_id]; 
    }
 
+   LeftMessageContainer* get_left_message(const INDEX i, const INDEX j) const
+   {
+      assert(i < j);
+      auto* f = GetPairwiseFactor(i,j);
+      auto msgs = f->template get_messages<LeftMessageContainer>();
+      assert(msgs.size() == 1);
+      return msgs[0];
+   }
+
+   RightMessageContainer* get_right_message(const INDEX i, const INDEX j) const
+   {
+      assert(i < j);
+      auto* f = GetPairwiseFactor(i,j);
+      auto msgs = f->template get_messages<RightMessageContainer>();
+      assert(msgs.size() == 1);
+      return msgs[0];
+   }
+
    INDEX GetNumberOfVariables() const 
    { 
       assert(!(unaryFactor_.size() == 0 && pairwiseFactor_.size() > 0)); 

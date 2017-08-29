@@ -192,15 +192,15 @@ private:
 // when factor is copied, then pairwise_ must only be copied if it is actually modified. This depends on whether we execute SMRP or MPLP style message passing. Templatize for this possibility
 class PairwiseSimplexFactor : public matrix_expression<REAL, PairwiseSimplexFactor> {
 public:
-   PairwiseSimplexFactor(const INDEX dim1, const INDEX dim2) : dim1_(dim1), dim2_(dim2)
+   PairwiseSimplexFactor(const INDEX _dim1, const INDEX _dim2) : dim_({_dim1,_dim2})
    {
-      const INDEX size = dim1_*dim2_ + dim1_ + dim2_;
+      const INDEX size = dim1()*dim2() + dim1() + dim2();
       pairwise_ = global_real_block_allocator.allocate(size);
       //pairwise_ = new REAL[size]; // possibly use block allocator!
       assert(pairwise_ != nullptr);
       std::fill(pairwise_, pairwise_ + size, 0.0);
-      left_msg_ = pairwise_ + dim1_*dim2_;
-      right_msg_ = left_msg_ + dim1_;
+      left_msg_ = pairwise_ + dim1()*dim2();
+      right_msg_ = left_msg_ + dim1();
    }
 
    template<typename MATRIX>
@@ -217,43 +217,43 @@ public:
    ~PairwiseSimplexFactor() {
       global_real_block_allocator.deallocate(pairwise_,1);
    }
-   PairwiseSimplexFactor(const PairwiseSimplexFactor& o) : dim1_(o.dim1_), dim2_(o.dim2_) {
-      const INDEX size = dim1_*dim2_ + dim1_ + dim2_;
+   PairwiseSimplexFactor(const PairwiseSimplexFactor& o) : dim_(o.dim_) {
+      const INDEX size = dim1()*dim2() + dim1() + dim2();
       pairwise_ = global_real_block_allocator.allocate(size);
-      //pairwise_ = new REAL[dim1_*dim2_ + dim1_ + dim2_]; // possibly use block allocator!
+      //pairwise_ = new REAL[dim1()*dim2() + dim1() + dim2()]; // possibly use block allocator!
       assert(pairwise_ != nullptr);
-      left_msg_ = pairwise_ + dim1_*dim2_;
-      right_msg_ = left_msg_ + dim1_;
-      for(INDEX i=0; i<dim1_*dim2_; ++i) { pairwise_[i] = o.pairwise_[i]; }
-      for(INDEX i=0; i<dim1_; ++i) { left_msg_[i] = o.left_msg_[i]; }
-      for(INDEX i=0; i<dim2_; ++i) { right_msg_[i] = o.right_msg_[i]; }
+      left_msg_ = pairwise_ + dim1()*dim2();
+      right_msg_ = left_msg_ + dim1();
+      for(INDEX i=0; i<dim1()*dim2(); ++i) { pairwise_[i] = o.pairwise_[i]; }
+      for(INDEX i=0; i<dim1(); ++i) { left_msg_[i] = o.left_msg_[i]; }
+      for(INDEX i=0; i<dim2(); ++i) { right_msg_[i] = o.right_msg_[i]; }
    }
    void operator=(const PairwiseSimplexFactor& o) {
-      assert(dim1_ == o.dim1_ && dim2_ == o.dim2_);
-      for(INDEX i=0; i<dim1_*dim2_; ++i) { pairwise_[i] = o.pairwise_[i]; }
-      for(INDEX i=0; i<dim1_; ++i) { left_msg_[i] = o.left_msg_[i]; }
-      for(INDEX i=0; i<dim2_; ++i) { right_msg_[i] = o.right_msg_[i]; }
+      assert(dim1() == o.dim1() && dim2() == o.dim2());
+      for(INDEX i=0; i<dim1()*dim2(); ++i) { pairwise_[i] = o.pairwise_[i]; }
+      for(INDEX i=0; i<dim1(); ++i) { left_msg_[i] = o.left_msg_[i]; }
+      for(INDEX i=0; i<dim2(); ++i) { right_msg_[i] = o.right_msg_[i]; }
    }
 
    REAL operator[](const INDEX x) const {
-      const INDEX x1 = x/dim2_;
-      const INDEX x2 = x%dim2_;
-      assert(x1 < dim1_ && x2 < dim2_);
+      const INDEX x1 = x/dim2();
+      const INDEX x2 = x%dim2();
+      assert(x1 < dim1() && x2 < dim2());
       return pairwise_[x] + left_msg_[x1] + right_msg_[x2];
    }
    // below is not nice: two different values, only differ by const!
    REAL operator()(const INDEX x1, const INDEX x2) const {
-      assert(x1 < dim1_ && x2 < dim2_);
-      return pairwise_[x1*dim2_ + x2] + left_msg_[x1] + right_msg_[x2];
+      assert(x1 < dim1() && x2 < dim2());
+      return pairwise_[x1*dim2() + x2] + left_msg_[x1] + right_msg_[x2];
    }
    REAL& cost(const INDEX x1, const INDEX x2) {
-      assert(x1 < dim1_ && x2 < dim2_);
-      return pairwise_[x1*dim2_ + x2];
+      assert(x1 < dim1() && x2 < dim2());
+      return pairwise_[x1*dim2() + x2];
    }
    REAL LowerBound() const {
       REAL lb = std::numeric_limits<REAL>::infinity();
-      for(INDEX x1=0; x1<dim1_; ++x1) {
-         for(INDEX x2=0; x2<dim2_; ++x2) {
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); ++x2) {
             lb = std::min(lb, (*this)(x1,x2));
          }
       }
@@ -262,14 +262,15 @@ public:
    }
 
    
-   INDEX dim1() const { return dim1_; }
-   INDEX dim2() const { return dim2_; }
+   INDEX dim(const INDEX d) const { assert(d<2); return dim_[d]; }
+   INDEX dim1() const { return dim_[0]; }
+   INDEX dim2() const { return dim_[1]; }
      
-   REAL& pairwise(const INDEX x1, const INDEX x2) { return pairwise_[x1*dim2_ + x2]; }
-   REAL& msg1(const INDEX x1) { return left_msg_[x1]; }
-   REAL& msg2(const INDEX x2) { return right_msg_[x2]; }
+   REAL& pairwise(const INDEX x1, const INDEX x2) { assert(x1<dim1() && x2<dim2()); return pairwise_[x1*dim2() + x2]; }
+   REAL& msg1(const INDEX x1) { assert(x1<dim1()); return left_msg_[x1]; }
+   REAL& msg2(const INDEX x2) { assert(x2<dim2()); return right_msg_[x2]; }
 
-   INDEX size() const { return dim1_*dim2_; }
+   INDEX size() const { return dim_[0]*dim_[1]; }
 
    void init_primal() 
    {
@@ -349,10 +350,10 @@ public:
    template<typename ARRAY>
    void apply(ARRAY& a) const
    {
-      assert(primal_[0] < dim1_ && primal_[1] < dim2_);
-      a[primal_[0]*dim2_ + primal_[1]];
-      a[dim1_*dim2_ + primal_[0]];
-      a[dim1_*dim2_ + dim1_ + primal_[1]]; 
+      assert(primal_[0] < dim1() && primal_[1] < dim2());
+      a[primal_[0]*dim2() + primal_[1]];
+      a[dim1()*dim2() + primal_[0]];
+      a[dim1()*dim2() + dim1() + primal_[1]]; 
    }
 
 #ifdef WITH_SAT
@@ -429,7 +430,7 @@ private:
    REAL* left_msg_;
    REAL* right_msg_;
    std::array<INDEX,2> primal_;
-   const INDEX dim1_, dim2_;
+   const std::array<INDEX,2> dim_;
 
 };
 
