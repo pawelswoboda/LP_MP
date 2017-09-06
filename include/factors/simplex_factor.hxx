@@ -437,42 +437,42 @@ private:
 // factor assumes that triplet potentials is empty and holds only messages to pairwise factors, i.e. is latently factorizable
 class SimpleTighteningTernarySimplexFactor : public tensor3_expression<REAL, SimpleTighteningTernarySimplexFactor> {
 public:
-   SimpleTighteningTernarySimplexFactor(const INDEX dim1, const INDEX dim2, const INDEX dim3) : dim1_(dim1), dim2_(dim2), dim3_(dim3) 
+   SimpleTighteningTernarySimplexFactor(const INDEX _dim1, const INDEX _dim2, const INDEX _dim3) : dim_({_dim1,_dim2,_dim3}) 
    {
-      const INDEX size = dim1_*dim2_ + dim1_*dim3_ + dim2_*dim3_;
+      const INDEX size = dim1()*dim2() + dim1()*dim3() + dim2()*dim3();
       
       msg12_ = global_real_block_allocator.allocate(size);
       assert(msg12_ != nullptr);
-      msg13_ = msg12_ + dim1_*dim2_;
-      msg23_ = msg13_ + dim1_*dim3_;
+      msg13_ = msg12_ + dim1()*dim2();
+      msg23_ = msg13_ + dim1()*dim3();
       std::fill(msg12_, msg12_ + size, 0.0);
    }
    ~SimpleTighteningTernarySimplexFactor() {
       global_real_block_allocator.deallocate(msg12_,1);
    }
-   SimpleTighteningTernarySimplexFactor(const SimpleTighteningTernarySimplexFactor& o) : dim1_(o.dim1_), dim2_(o.dim2_), dim3_(o.dim3_) {
-      const INDEX size = dim1_*dim2_ + dim1_*dim3_ + dim2_*dim3_;
+   SimpleTighteningTernarySimplexFactor(const SimpleTighteningTernarySimplexFactor& o) : dim_(o.dim_) {
+      const INDEX size = dim1()*dim2() + dim1()*dim3() + dim2()*dim3();
       
       msg12_ = global_real_block_allocator.allocate(size);
       assert(msg12_ != nullptr);
-      msg13_ = msg12_ + dim1_*dim2_;
-      msg23_ = msg13_ + dim1_*dim3_;
-      for(INDEX i=0; i<dim1_*dim2_; ++i) { msg12_[i] = o.msg12_[i]; }
-      for(INDEX i=0; i<dim1_*dim3_; ++i) { msg13_[i] = o.msg13_[i]; }
-      for(INDEX i=0; i<dim2_*dim3_; ++i) { msg23_[i] = o.msg23_[i]; }
+      msg13_ = msg12_ + dim1()*dim2();
+      msg23_ = msg13_ + dim1()*dim3();
+      for(INDEX i=0; i<dim1()*dim2(); ++i) { msg12_[i] = o.msg12_[i]; }
+      for(INDEX i=0; i<dim1()*dim3(); ++i) { msg13_[i] = o.msg13_[i]; }
+      for(INDEX i=0; i<dim2()*dim3(); ++i) { msg23_[i] = o.msg23_[i]; }
    }
    void operator=(const SimpleTighteningTernarySimplexFactor& o) {
-      assert(dim1_ == o.dim1_ && dim2_ == o.dim2_ && dim3_ == o.dim3_);
-      for(INDEX i=0; i<dim1_*dim2_; ++i) { msg12_[i] = o.msg12_[i]; }
-      for(INDEX i=0; i<dim1_*dim3_; ++i) { msg13_[i] = o.msg13_[i]; }
-      for(INDEX i=0; i<dim2_*dim3_; ++i) { msg23_[i] = o.msg23_[i]; }
+      assert(dim1() == o.dim1() && dim2() == o.dim2() && dim3() == o.dim3());
+      for(INDEX i=0; i<dim1()*dim2(); ++i) { msg12_[i] = o.msg12_[i]; }
+      for(INDEX i=0; i<dim1()*dim3(); ++i) { msg13_[i] = o.msg13_[i]; }
+      for(INDEX i=0; i<dim2()*dim3(); ++i) { msg23_[i] = o.msg23_[i]; }
    }
 
    REAL LowerBound() const {
       REAL lb = std::numeric_limits<REAL>::infinity();
-      for(INDEX x1=0; x1<dim1_; ++x1) {
-         for(INDEX x2=0; x2<dim2_; ++x2) {
-            for(INDEX x3=0; x3<dim3_; ++x3) {
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); ++x2) {
+            for(INDEX x3=0; x3<dim3(); ++x3) {
                lb = std::min(lb, (*this)(x1,x2,x3));
             }
          }
@@ -483,7 +483,7 @@ public:
 
    REAL EvaluatePrimal() const
    {
-      if(primal_[0] >= dim1_ || primal_[1] >= dim2_ || primal_[2] >= dim3_) {
+      if(primal_[0] >= dim1() || primal_[1] >= dim2() || primal_[2] >= dim3()) {
          return std::numeric_limits<REAL>::infinity();
       }
       //assert((*this)(primal_[0], primal_[1], primal_[2]) < std::numeric_limits<REAL>::infinity());
@@ -496,31 +496,31 @@ public:
 
    /*
    REAL operator[](const INDEX x) const {
-      const INDEX x1 = x / (dim2_*dim3_);
-      const INDEX x2 = ( x % (dim2_*dim3_) ) / dim3_;
-      const INDEX x3 = x % dim3_;
+      const INDEX x1 = x / (dim2()*dim3());
+      const INDEX x2 = ( x % (dim2()*dim3()) ) / dim3();
+      const INDEX x3 = x % dim3();
       return msg12(x1,x2) + msg13(x1,x3) + msg23(x2,x3);
    }
    */
 
    REAL min_marginal12(const INDEX x1, const INDEX x2) const {
       REAL marg = (*this)(x1,x2,0);
-      for(INDEX x3=1; x3<dim3_; ++x3) {
+      for(INDEX x3=1; x3<dim3(); ++x3) {
          marg = std::min(marg, (*this)(x1,x2,x3));
       }
       return marg;
    }
    template<typename MSG>
    void min_marginal12(MSG& msg) const {
-      assert(msg.dim1() == dim1_);
-      assert(msg.dim2() == dim2_);
-      //for(INDEX x1=0; x1<dim1_; ++x1) {
-      //   for(INDEX x2=0; x2<dim2_; ++x2) {
+      assert(msg.dim1() == dim1());
+      assert(msg.dim2() == dim2());
+      //for(INDEX x1=0; x1<dim1(); ++x1) {
+      //   for(INDEX x2=0; x2<dim2(); ++x2) {
       //      msg(x1,x2) = std::numeric_limits<REAL>::infinity();
       //   }
       //}
-      for(INDEX x1=0; x1<dim1_; ++x1) {
-         for(INDEX x2=0; x2<dim2_; ++x2) {
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); ++x2) {
             msg(x1,x2) = min_marginal12(x1,x2);
          }
       }
@@ -528,16 +528,16 @@ public:
 
    template<typename MSG>
    void min_marginal13(MSG& msg) const {
-      assert(msg.dim1() == dim1_);
-      assert(msg.dim2() == dim3_);
-      for(INDEX x1=0; x1<dim1_; ++x1) {
-         for(INDEX x3=0; x3<dim3_; ++x3) {
+      assert(msg.dim1() == dim1());
+      assert(msg.dim2() == dim3());
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x3=0; x3<dim3(); ++x3) {
             msg(x1,x3) = std::numeric_limits<REAL>::infinity();
          }
       }
-      for(INDEX x1=0; x1<dim1_; ++x1) {
-         for(INDEX x2=0; x2<dim2_; ++x2) {
-            for(INDEX x3=0; x3<dim3_; ++x3) {
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); ++x2) {
+            for(INDEX x3=0; x3<dim3(); ++x3) {
                msg(x1,x3) = std::min(msg(x1,x3), (*this)(x1,x2,x3));
             }
          }
@@ -545,16 +545,16 @@ public:
    }
    template<typename MSG>
    void min_marginal23(MSG& msg) const {
-      assert(msg.dim1() == dim2_);
-      assert(msg.dim2() == dim3_);
-      for(INDEX x2=0; x2<dim2_; ++x2) {
-         for(INDEX x3=0; x3<dim3_; ++x3) {
+      assert(msg.dim1() == dim2());
+      assert(msg.dim2() == dim3());
+      for(INDEX x2=0; x2<dim2(); ++x2) {
+         for(INDEX x3=0; x3<dim3(); ++x3) {
             msg(x2,x3) = std::numeric_limits<REAL>::infinity();
          }
       }
-      for(INDEX x1=0; x1<dim1_; ++x1) {
-         for(INDEX x2=0; x2<dim2_; ++x2) {
-            for(INDEX x3=0; x3<dim3_; ++x3) {
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         for(INDEX x2=0; x2<dim2(); ++x2) {
+            for(INDEX x3=0; x3<dim3(); ++x3) {
                msg(x2,x3) = std::min(msg(x2,x3), (*this)(x1,x2,x3));
             }
          }
@@ -563,22 +563,23 @@ public:
 
    INDEX size() const { return dim1()*dim2()*dim3(); }
 
-   INDEX dim1() const { return dim1_; }
-   INDEX dim2() const { return dim2_; }
-   INDEX dim3() const { return dim3_; }
+   INDEX dim(const INDEX d) const { assert(d<3); return dim_[d]; }
+   INDEX dim1() const { return dim_[0]; }
+   INDEX dim2() const { return dim_[1]; }
+   INDEX dim3() const { return dim_[2]; }
 
-   REAL msg12(const INDEX x1, const INDEX x2) const { return msg12_[x1*dim2_ + x2]; }
-   REAL msg13(const INDEX x1, const INDEX x3) const { return msg13_[x1*dim3_ + x3]; }
-   REAL msg23(const INDEX x2, const INDEX x3) const { return msg23_[x2*dim3_ + x3]; }
+   REAL msg12(const INDEX x1, const INDEX x2) const { assert(x1<dim1() && x2<dim2()); return msg12_[x1*dim2() + x2]; }
+   REAL msg13(const INDEX x1, const INDEX x3) const { assert(x1<dim1() && x3<dim3()); return msg13_[x1*dim3() + x3]; }
+   REAL msg23(const INDEX x2, const INDEX x3) const { assert(x2<dim2() && x3<dim3()); return msg23_[x2*dim3() + x3]; }
 
-   REAL& msg12(const INDEX x1, const INDEX x2) { return msg12_[x1*dim2_ + x2]; }
-   REAL& msg13(const INDEX x1, const INDEX x3) { return msg13_[x1*dim3_ + x3]; }
-   REAL& msg23(const INDEX x2, const INDEX x3) { return msg23_[x2*dim3_ + x3]; }
+   REAL& msg12(const INDEX x1, const INDEX x2) { assert(x1<dim1() && x2<dim2()); return msg12_[x1*dim2() + x2]; }
+   REAL& msg13(const INDEX x1, const INDEX x3) { assert(x1<dim1() && x3<dim3()); return msg13_[x1*dim3() + x3]; }
+   REAL& msg23(const INDEX x2, const INDEX x3) { assert(x2<dim2() && x3<dim3()); return msg23_[x2*dim3() + x3]; }
 
    void init_primal() {
-      primal_[0] = dim1_;
-      primal_[1] = dim2_;
-      primal_[2] = dim3_;
+      primal_[0] = dim1();
+      primal_[1] = dim2();
+      primal_[2] = dim3();
    }
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) 
@@ -690,7 +691,7 @@ public:
 
 protected:
    std::array<INDEX,3> primal_;
-   const INDEX dim1_, dim2_, dim3_; // do zrobienia: possibly use 32 bit, for primal as well
+   std::array<INDEX,3> dim_;
    REAL *msg12_, *msg13_, *msg23_;
 };
 

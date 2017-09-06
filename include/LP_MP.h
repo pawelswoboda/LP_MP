@@ -682,6 +682,7 @@ public:
 
   void collect_sat_result()
   {
+    std::cout << lglderef(sat_, 6) << "," << lglderef(sat_,19) << "\n";
      if(verbosity >= 2) { 
        std::cout << "collect sat result with threshold = ";
        if(cur_sat_reduction_direction_ == Direction::forward) { 
@@ -704,9 +705,10 @@ public:
            assert(this->factor_address_to_index_[this->f_[i]] == i);
            this->f_[i]->convert_primal(sat_, sat_var_[i]);
         }
-        // to do: remove this
-        REAL primal_cost = this->EvaluatePrimal();
-        if(verbosity >= 2) { std::cout << "sat solution cost = " << primal_cost << "\n"; }
+        if(verbosity >= 2) {
+          const REAL primal_cost = this->EvaluatePrimal();
+          std::cout << "sat solution cost = " << primal_cost << "\n"; 
+        }
      } else {
        if(verbosity >= 2) { std::cout << "sat not feasible with current threshold\n"; }
      }
@@ -726,6 +728,7 @@ public:
      //std::cout << "number of variables in sat_ = " << sat_var_[sat_var_.size()-1] << "\n";
      f->construct_sat_clauses(sat_);
      INDEX n = BASE_LP_CLASS::AddFactor(f);
+     f->init_primal();
 
      sat_dirty_ = true;
 
@@ -964,7 +967,7 @@ bool LP::CheckPrimalConsistency() const
          consistent = false;
       }
    }
-   if(verbosity >= 2) { std::cout << "primal solution consistent: " << consistent << "\n"; }
+   if(verbosity >= 2) { std::cout << "primal solution consistent: " << (consistent ? "true" : "false") << "\n"; }
    return consistent;
 }
 

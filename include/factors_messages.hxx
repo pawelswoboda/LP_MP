@@ -508,16 +508,7 @@ public:
      if(lck.try_lock())
 #endif
 
-#ifndef NDEBUG
-       const REAL before_lb = leftFactor_->LowerBound() + r->LowerBound();
-#endif
-
        msg_op_.send_message_to_left(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega); 
-
-#ifndef NDEBUG
-       const REAL after_lb =  leftFactor_->LowerBound() + r->LowerBound();
-       assert(before_lb <= after_lb + eps);
-#endif
    }
 
    void send_message_to_right(const REAL omega = 1.0) 
@@ -531,17 +522,7 @@ public:
      std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock())
 #endif
-
-#ifndef NDEBUG
-       const REAL before_lb = l->LowerBound() + rightFactor_->LowerBound();
-#endif
-
        msg_op_.send_message_to_right(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega); 
-
-#ifndef NDEBUG
-       const REAL after_lb =  l->LowerBound() + rightFactor_->LowerBound();
-       assert(before_lb <= after_lb + eps); 
-#endif
    }
 
    constexpr static bool
@@ -554,7 +535,16 @@ public:
    }
    void ReceiveMessageFromRightContainer()
    {
+#ifndef NDEBUG
+//       const REAL before_lb = leftFactor_->LowerBound() + rightFactor_->LowerBound();
+#endif
+
       send_message_to_left();
+
+#ifndef NDEBUG
+//       const REAL after_lb =  leftFactor_->LowerBound() + rightFactor_->LowerBound();
+//       assert(before_lb <= after_lb + eps); 
+#endif
       return;
       // obsolete
       /*
@@ -589,7 +579,16 @@ public:
    }
    void ReceiveMessageFromLeftContainer()
    { 
+#ifndef NDEBUG
+//       const REAL before_lb = leftFactor_->LowerBound() + rightFactor_->LowerBound();
+#endif
+
       send_message_to_right();
+
+#ifndef NDEBUG
+//       const REAL after_lb =  leftFactor_->LowerBound() + rightFactor_->LowerBound();
+//       assert(before_lb <= after_lb + eps); 
+#endif
       return;
       // obsolete
       /*

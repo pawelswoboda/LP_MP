@@ -462,12 +462,7 @@ public:
      vector<T> min(dim1());
      if(std::is_same<T,float>::value || std::is_same<T,double>::value) {
        for(INDEX x1=0; x1<dim1(); ++x1) {
-         REAL_VECTOR cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() );
-         for(INDEX x2=REAL_ALIGNMENT; x2<dim2(); x2+=REAL_ALIGNMENT) {
-           REAL_VECTOR tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
-           cur_min = simdpp::min(cur_min, tmp); 
-         }
-         min[x1] = simdpp::reduce_min(cur_min); 
+         min[x1] = col_min(x1);
        }
      } else {
        assert(false);
@@ -506,6 +501,17 @@ public:
    T min() const
    {
      return vec_.min();
+   }
+
+   T col_min(const INDEX x1) const
+   {
+     assert(x1<dim1());
+     REAL_VECTOR cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() );
+     for(INDEX x2=REAL_ALIGNMENT; x2<dim2(); x2+=REAL_ALIGNMENT) {
+       REAL_VECTOR tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
+       cur_min = simdpp::min(cur_min, tmp); 
+     }
+     return simdpp::reduce_min(cur_min); 
    }
 protected:
    vector<T> vec_;

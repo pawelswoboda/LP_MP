@@ -74,7 +74,7 @@ public:
    }
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   bool ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+   bool ComputeRightFromLeftPrimal_deactivated(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
    {
       assert(l.primal() < l.size());
       if(l.primal() < l.size()) {

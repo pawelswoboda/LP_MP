@@ -55,19 +55,26 @@ namespace LP_MP {
     return std::move(v);
   }
 
+  template<typename SAT_SOLVER>
+  sat_var no_sat_variables(SAT_SOLVER& s)
+  {
+    return lglmaxvar(s);
+  }
+
   template<typename SAT_SOLVER, typename ITERATOR>
   sat_var add_at_most_one_constraint_naive_sat(SAT_SOLVER& s, ITERATOR var_begin, ITERATOR var_end)
   {
     //assert(1 < std::distance(var_begin, var_end));
     const INDEX n = std::distance(var_begin, var_end);
     if(n == 1) {
+      assert(*var_begin < no_sat_variables(s));
       return *var_begin;
     }
     for(INDEX i=0; i<n; ++i) {
       for(INDEX j=i+1; j<n; ++j) {
         //s.add_clause({-to_literal(*(var_begin+i)), -to_literal(*(var_begin+j))});
-        lgladd(s, -to_literal(*(var_begin+i)));
-        lgladd(s, -to_literal(*(var_begin+j)));
+        lgladd(s, -to_literal(*(var_begin+i))); assert(*(var_begin+i) < no_sat_variables(s));
+        lgladd(s, -to_literal(*(var_begin+j))); assert(*(var_begin+j) < no_sat_variables(s));
         lgladd(s, 0);
       }
     }

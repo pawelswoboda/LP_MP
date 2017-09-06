@@ -144,6 +144,7 @@ public:
 
    void MaximizePotentialAndComputePrimal()
    {
+      std::cout << "round primal " << this << "\n";
       if(state_[0] < no_labels()) { assert(sum_[0] < prev_sum_size()); }
       if(state_[1] < no_labels()) { assert(sum_[1] < next_sum_size()); }
 
@@ -764,6 +765,8 @@ public:
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
    void ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
    {
+      std::cout << &l << "," << &r << "\n";
+      assert(r.state_[0] < l.dim1() && r.state_[0] < l.dim2());
       l.primal()[0] = r.state_[0];
       l.primal()[1] = r.state_[1];
    }
