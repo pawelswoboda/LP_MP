@@ -49,6 +49,7 @@ public:
    virtual void UpdateFactor(const weight_vector& omega) = 0;
    virtual void UpdateFactorPrimal(const weight_vector& omega, const INDEX iteration) = 0;
    virtual void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec<sat_literal>& assumptions) = 0;
+   virtual void reduce_sat(const REAL th, sat_var begin, std::vector<sat_literal>& assumptions) = 0;
    //virtual void convert_primal(Glucose::SimpSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
    //virtual void convert_primal(CMSat::SATSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
    virtual void construct_sat_clauses(LGL*) = 0;
@@ -653,7 +654,9 @@ private:
 public:
   using LP_type = LP_sat<BASE_LP_CLASS>;
 
-  LP_sat(TCLAP::CmdLine& cmd) : BASE_LP_CLASS(cmd)
+  LP_sat(TCLAP::CmdLine& cmd) 
+    : BASE_LP_CLASS(cmd), 
+    sat_reduction_mode_arg_("","satReductionMode","how to reduce sat problem",false,"interleaved","{interleaved|static}",cmd)
   {
      sat_ = lglinit();
      assert(sat_ != nullptr);
@@ -822,12 +825,14 @@ public:
       }
 
       sat_vec<sat_literal> assumptions;
-      for(auto it=factor_begin; it!=factor_end; ++it, ++omega_begin) {
-         const INDEX factor_number = this->factor_address_to_index_[*it];
-         (*it)->UpdateFactorSAT(*omega_begin, th.th, sat_var_[factor_number], assumptions);
+      if(sat_reduction_mode_arg_.getValue() == "interleaved") {
+        assumptions = reduce_sat_interleaved(factor_begin, factor_end, omega_begin, th.th);
+      } else if(sat_reduction_mode_arg_.getValue() == "static") {
+        this->ComputePass(factor_begin, factor_end, omega_begin);
+        assumptions = reduce_sat_static(th.th);
       }
 
-      // run sat solver on reduced problem asynchronuously
+      // run sat solver on reduced problem asynchronously
       if(!sat_handle_.valid()) { 
          if(verbosity >= 2) { std::cout << "start sat calculation\n"; }
          sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
@@ -838,6 +843,26 @@ public:
         sat_dirty_ = false;
       }
    }
+
+   template<typename FACTOR_ITERATOR, typename WEIGHT_ITERATOR>
+   std::vector<sat_literal> reduce_sat_interleaved(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, const REAL th)
+   {
+      sat_vec<sat_literal> assumptions;
+      for(auto it=factor_begin; it!=factor_end; ++it, ++omega_begin) {
+         const INDEX factor_number = this->factor_address_to_index_[*it];
+         (*it)->UpdateFactorSAT(*omega_begin, th, sat_var_[factor_number], assumptions);
+      }
+      return std::move(assumptions); 
+   }
+
+   std::vector<sat_literal> reduce_sat_static(const REAL th)
+   {
+      sat_vec<sat_literal> assumptions;
+      for(INDEX i=0; i<this->f_.size(); ++i) {
+        this->f_[i]->reduce_sat(th, sat_var_[i], assumptions);
+      }
+      return std::move(assumptions); 
+   }
 private:
 
    std::vector<sat_var> sat_var_;
@@ -846,6 +871,8 @@ private:
    LGL* sat_;
 
    sat_th forward_sat_th_, backward_sat_th_;
+
+   TCLAP::ValueArg<std::string> sat_reduction_mode_arg_;
 
    decltype(std::async(std::launch::async, solve_sat_problem, nullptr, sat_vec<sat_literal>{}, nullptr)) sat_handle_;
    Direction cur_sat_reduction_direction_ = Direction::forward;

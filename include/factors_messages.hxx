@@ -1595,10 +1595,17 @@ public:
 
      ReceiveMessages(omega);
      MaximizePotential();
+     reduce_sat(th, begin, assumptions);
+     SendMessages(omega);
+   }
+
+   void reduce_sat(const REAL th, sat_var begin, std::vector<sat_literal>& assumptions) final
+   {
      static_if<can_reduce_sat()>([&](auto f) {
        f(factor_).reduce_sat(assumptions, th, begin);
-     });
-     SendMessages(omega);
+     }).else_([&](auto) {
+       assert(false);  
+     }); 
    }
 
    void UpdateFactorPrimal(const weight_vector& omega, INDEX primal_access) final

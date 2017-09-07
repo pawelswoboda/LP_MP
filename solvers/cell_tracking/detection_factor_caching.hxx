@@ -1006,16 +1006,26 @@ public:
   template<typename SAT_SOLVER>
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
-    auto var = create_sat_variables(s, this->size());
-    add_at_most_one_constraint_sat(s, var.begin(), var.end());
+    auto vars = create_sat_variables(s, this->size());
+    auto active = create_sat_variable(s);
+    const auto _active = add_at_most_one_constraint_sat(s, vars.begin(), vars.end());
+    make_sat_var_equal(s, to_literal(active), to_literal(_active));
   }
 
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
   {
-    for(INDEX i=0; i<this->size(); ++i) {
-      if((*this)[i] > th) { 
-        assumptions.push_back(-to_literal(begin+i)); 
+    const REAL min_cost = this->min();
+    if(min_cost > th) {
+      assumptions.push_back(-to_literal(begin+size()));
+    } else {
+      if(min_cost < -th) {
+        assumptions.push_back(to_literal(begin+size()));
+      }
+      for(INDEX i=0; i<this->size(); ++i) {
+        if((*this)[i] > min_cost + th) { 
+          assumptions.push_back(-to_literal(begin+i)); 
+        }
       }
     }
   }
@@ -2053,12 +2063,7 @@ public:
       }
     }
 
-    REAL set_to_cost;
-    if(smallest_not_taken < smallest_taken) {
-      set_to_cost = smallest_not_taken;
-    } else {
-      set_to_cost = std::min(second_smallest_taken, smallest_not_taken);
-    }
+    const REAL set_to_cost = std::min(smallest_not_taken, second_smallest_taken);
 
     assert(std::abs( std::min(smallest_not_taken, smallest_taken) - l.LowerBound()) <= eps);
 
@@ -2093,7 +2098,7 @@ public:
 
   // send messages from detection factor along incoming edges
   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-  static void SendMessagesToLeft(const RIGHT_FACTOR& r, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omega_begin)
+  static void SendMessagesToLeft_deactivated(const RIGHT_FACTOR& r, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omega_begin)
   {
     const auto outgoing_transition_min = r.outgoing_transition.min2();
     assert(outgoing_transition_min.size() == r.division_distance());
@@ -2137,42 +2142,39 @@ public:
       smallest_taken = min;
       second_smallest_taken = std::min(max, second_smallest_taken); 
     };
+    auto update_not_taken = [&smallest_not_taken](const REAL x) { smallest_not_taken = std::min(smallest_not_taken, x); };
 
     {
       for(INDEX i=0; i<r.no_incoming_division_edges(); ++i) {
         const REAL val = r.detection[0] + outgoing_transition_min[0] + r.incoming_division[i];
-        if(!division_edge_taken[i]) {
-          smallest_not_taken = std::min(smallest_not_taken, val);
-        } else {
+        if(division_edge_taken[i]) {
           update_taken(val);
+        } else {
+          update_not_taken(val);
         }
       } 
     }
 
     for(INDEX i=0; i<r.no_incoming_transition_edges(); ++i) {
       if(transition_edge_taken[i]) {
+        
         for(INDEX t=1; t<r.division_distance(); ++t) {
-          const REAL val = r.detection[t] + outgoing_transition_min[t] + r.incoming_transition(i,t-1);
-          update_taken(val);
+          update_taken( r.detection[t] + outgoing_transition_min[t] + r.incoming_transition(i,t-1));
         }
         update_taken( r.detection[last] + outgoing_division_min + r.incoming_transition(i,last-1) );
+
       } else {
+        
         for(INDEX t=1; t<r.division_distance(); ++t) {
-          const REAL val = r.detection[t] + outgoing_transition_min[t] + r.incoming_transition(i,t-1);
-          smallest_not_taken = std::min(smallest_not_taken, val);
+          update_not_taken( r.detection[t] + outgoing_transition_min[t] + r.incoming_transition(i,t-1) );
         }
-        smallest_not_taken = std::min(smallest_not_taken, r.detection[last] + outgoing_division_min + r.incoming_transition(i,last-1));
+        update_not_taken( r.detection[last] + outgoing_division_min + r.incoming_transition(i,last-1));
       }
     }
 
-    REAL set_to_cost;
-    if(smallest_not_taken < smallest_taken) {
-      set_to_cost = smallest_not_taken;
-    } else {
-      set_to_cost = std::min(second_smallest_taken, smallest_not_taken);
-    }
-
     assert(std::abs( std::min(smallest_not_taken, smallest_taken) - r.LowerBound()) <= eps);
+
+    const REAL set_to_cost = std::min(smallest_not_taken, second_smallest_taken); 
 
     omega_it = omega_begin;
     for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
