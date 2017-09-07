@@ -682,7 +682,6 @@ public:
 
   void collect_sat_result()
   {
-    std::cout << lglderef(sat_, 6) << "," << lglderef(sat_,19) << "\n";
      if(verbosity >= 2) { 
        std::cout << "collect sat result with threshold = ";
        if(cur_sat_reduction_direction_ == Direction::forward) { 

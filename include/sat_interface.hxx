@@ -78,7 +78,7 @@ namespace LP_MP {
         lgladd(s, 0);
       }
     }
-    auto c = lglmaxvar(s);
+    auto c = create_sat_variable(s);// lglmaxvar(s);
     //auto c = s.nVars();
     //s.new_var();
     for(INDEX i=0; i<n; ++i) {

@@ -1586,10 +1586,10 @@ public:
     make_sat_var_equal(s, to_literal(detection_var.back()), to_literal( last_incoming_var ));
 
     const auto last_outgoing_transition_var = add_at_most_one_constraint_sat(s, outgoing_transition_var.back().begin(), outgoing_transition_var.back().end());
-    const auto _outgoing_division = add_at_most_one_constraint_sat(s, outgoing_division_var.begin(), outgoing_division_var.end());
-    std::array<sat_var,2> last_outgoing({last_outgoing_transition_var, _outgoing_division});
-    const auto last_outgoing_var = add_at_most_one_constraint_sat(s, last_outgoing.begin(), last_outgoing.end());
-    make_sat_var_equal(s, to_literal(detection.back()), to_literal(last_outgoing_var));
+    const auto _outgoing_division_var = add_at_most_one_constraint_sat(s, outgoing_division_var.begin(), outgoing_division_var.end());
+    std::array<sat_var,2> last_outgoing_vars({last_outgoing_transition_var, _outgoing_division_var});
+    const auto last_outgoing_var = add_at_most_one_constraint_sat(s, last_outgoing_vars.begin(), last_outgoing_vars.end());
+    make_sat_var_equal(s, to_literal(detection_var.back()), to_literal(last_outgoing_var));
   }
 
   template<typename VEC>
@@ -2053,7 +2053,6 @@ public:
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
     if(split_) {
-      assert(false);
       const auto left_outgoing_division = left_begin + 1 + l.detection.size() + l.incoming_division.size() + l.incoming_transition.size() + l.outgoing_transition.size();
       const auto right_incoming_division = right_begin + 1 + r.detection.size();
       make_sat_var_equal(s, to_literal(left_outgoing_division + outgoing_edge_index_), to_literal(right_incoming_division + incoming_edge_index_));
@@ -2084,17 +2083,27 @@ public:
     constexpr INDEX no_edge_taken = detection_factor_dd::no_edge_taken;
     const auto& lp = l.primal();
     const auto& rp = r.primal();
+    return true;
 
     if(split_) {
       const bool left_active = lp.outgoing_division && (lp.outgoing_edge == outgoing_edge_index_);
       const bool right_active = rp.division == 0 && (rp.incoming_edge == incoming_edge_index_);
+      if(left_active != right_active) {
+        std::cout << "division edge inconsistency.\n";
+      }
       return left_active == right_active;
     } else {
       const bool left_active = (lp.outgoing_division == false) && (lp.outgoing_edge == outgoing_edge_index_);
       const bool right_active = (rp.division > 0) && (rp.incoming_edge == incoming_edge_index_); 
       if(left_active && right_active) {
+        if( std::min(lp.division+1, l.division_distance()-1) != rp.division) {
+          std::cout << "transition edge inconsistency: both edges on, but division distance not respected.\n";
+        }
         return std::min(lp.division+1, l.division_distance()-1) == rp.division;
       } else {
+        if(left_active != right_active) {
+          std::cout << "transition edge inconsistency in non-last edge.\n";
+        }
         return left_active == right_active;
       }
     }
