@@ -1866,28 +1866,42 @@ public:
 
     vector<REAL> outgoing_transition_min = outgoing_transition.min2();
     assert(outgoing_transition_min.size() == division_distance());
+    const REAL outgoing_division_min = outgoing_division.min();
 
     const INDEX last = division_distance()-1;
 
     REAL cost_not_taken = 0.0;
-    cost_not_taken = std::min(cost_not_taken, detection[0] + incoming_division.min() + outgoing_transition_min[0]);
+    std::array<REAL,2> smallest_taken = {std::numeric_limits<REAL>::infinity(),std::numeric_limits<REAL>::infinity()};
+    auto update_taken = [&smallest_taken](const REAL x) {
+      const REAL min = std::min(smallest_taken[0], x);
+      const REAL max = std::max(smallest_taken[0], x);
+      smallest_taken[0] = min;
+      smallest_taken[1] = std::min(max, smallest_taken[1]); 
+    };
+    auto update_not_taken = [&cost_not_taken](const REAL x) { cost_not_taken = std::min(cost_not_taken, x); }; 
+
+    update_not_taken( detection[0] + incoming_division.min() + outgoing_transition_min[0] );
     for(INDEX i=1; i<last; ++i) {
-      const REAL cost = detection[i] + incoming_transition_min[i-1] + outgoing_transition_min[i];
-      cost_not_taken = std::min(cost_not_taken, cost); 
+      update_not_taken( detection[i] + incoming_transition_min[i-1] + outgoing_transition_min[i] );
     }
-    {
-      const REAL cost_last = detection[last] + incoming_transition_min[last-1] + std::min(outgoing_transition_min[last], outgoing_division.min());
-      cost_not_taken = std::min(cost_not_taken, cost_last);
-    }
+    update_not_taken( detection[last] + incoming_transition_min[last-1] + std::min(outgoing_transition_min[last], outgoing_division_min) );
 
     vector<REAL> cost_diff(division_distance()-1); 
     for(INDEX i=1; i<last; ++i) {
-      cost_diff[i-1] = detection[i] + original_edge_val[i-1] + outgoing_transition_min[i];
+      const REAL val = detection[i] + original_edge_val[i-1] + outgoing_transition_min[i];
+      update_taken(val);
+      cost_diff[i-1] = val;
     }
-    cost_diff[last-1] = detection[last] + original_edge_val[last-1] + std::min(outgoing_transition_min[last], outgoing_division.min());
+    {
+      const REAL last_val = detection[last] + original_edge_val[last-1] + std::min(outgoing_transition_min[last], outgoing_division_min);
+      update_taken(last_val);
+      cost_diff[last-1] = last_val;
+    }
 
+    const REAL set_to_cost = std::min(cost_not_taken, smallest_taken[1]);
+    //const REAL set_to_cost = cost_not_taken;
     for(INDEX i=0; i<cost_diff.size(); ++i) {
-      cost_diff[i] -= cost_not_taken;
+      cost_diff[i] -= set_to_cost;
     }
 
     return std::move(cost_diff); 
@@ -1918,26 +1932,40 @@ public:
 
     // minimum over all assignments not taken
     REAL cost_not_taken = 0.0;
-    cost_not_taken = std::min(cost_not_taken, detection[0] + incoming_division_min + outgoing_transition_min[0]);
+    std::array<REAL,2> smallest_taken = {std::numeric_limits<REAL>::infinity(),std::numeric_limits<REAL>::infinity()};
+    auto update_taken = [&smallest_taken](const REAL x) {
+      const REAL min = std::min(smallest_taken[0], x);
+      const REAL max = std::max(smallest_taken[0], x);
+      smallest_taken[0] = min;
+      smallest_taken[1] = std::min(max, smallest_taken[1]); 
+    };
+    auto update_not_taken = [&cost_not_taken](const REAL x) { cost_not_taken = std::min(cost_not_taken, x); }; 
+
+    update_not_taken( detection[0] + incoming_division_min + outgoing_transition_min[0] );
     for(INDEX i=1; i<division_distance()-1; ++i) {
-      const REAL cost = detection[i] + incoming_transition_min[i-1] + outgoing_transition_min[i];
-      cost_not_taken = std::min(cost_not_taken, cost); 
+      update_not_taken( detection[i] + incoming_transition_min[i-1] + outgoing_transition_min[i] );
     }
-    {
-      const REAL cost_last = detection[last] + incoming_transition_min[last-1] + std::min(outgoing_transition_min[last], outgoing_division.min());
-      cost_not_taken = std::min(cost_not_taken, cost_last); 
-    } 
+    update_not_taken( detection[last] + incoming_transition_min[last-1] + std::min(outgoing_transition_min[last], outgoing_division.min()) );
 
     vector<REAL> cost_diff(division_distance()-1);
 
     cost_diff[0] = detection[0] + incoming_division_min + original_edge_val[0];
-    for(INDEX i=1; i<last; ++i) {
-      cost_diff[i] = detection[i] + incoming_transition_min[i-1] + original_edge_val[i];
+    for(INDEX i=1; i<last-1; ++i) {
+      const REAL val = detection[i] + incoming_transition_min[i-1] + original_edge_val[i];
+      update_taken(val);
+      cost_diff[i] = val;
     }
-    cost_diff[last-1] = std::min(cost_diff[last-1], detection[last] + incoming_transition_min[last-1] + original_edge_val[last]);
+    {
+      const REAL second_last_val = detection[last-1] + incoming_transition_min[last-2] + original_edge_val[last-1];
+      const REAL last_val =  detection[last] + incoming_transition_min[last-1] + original_edge_val[last];
+      const REAL val = std::min(second_last_val, last_val);
+      update_taken(val);
+      cost_diff[last-1] = val;
+    }
 
+    const REAL set_to_cost = std::min(cost_not_taken, smallest_taken[1]);
     for(INDEX i=0; i<cost_diff.size(); ++i) {
-      cost_diff[i] -= cost_not_taken;
+      cost_diff[i] -= set_to_cost;
     }
 
     return std::move(cost_diff);
@@ -2326,9 +2354,12 @@ public:
       } else {
         update_taken( l.detection[0] + incoming_division_min + l.outgoing_transition(i,0) );
 
-        for(INDEX t=1; t<l.division_distance(); ++t) {
+        for(INDEX t=1; t<l.division_distance()-2; ++t) {
           update_taken( l.detection[t] + incoming_transition_min[t-1] + l.outgoing_transition(i,t) );
         }
+        const REAL second_last_val = l.detection[last-1] + incoming_transition_min[last-2] + l.outgoing_transition(i,last-1);
+        const REAL last_val = l.detection[last] + incoming_transition_min[last-1] + l.outgoing_transition(i,last);
+        update_taken( std::min(second_last_val, last_val) );
       } 
     } 
 
