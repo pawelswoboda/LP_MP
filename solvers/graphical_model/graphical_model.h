@@ -21,8 +21,8 @@ struct FMC_SRMP { // equivalent to SRMP or TRWS
    using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_SRMP, 0, true >;
    using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_SRMP, 1, false >;
 
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_SRMP, 0 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_SRMP, 1 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_SRMP, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_SRMP, 1 >;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor >;
    using MessageList = meta::list< UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer >;
@@ -37,8 +37,8 @@ struct FMC_SRMP_T { // equivalent to SRMP or TRWS
    using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_SRMP_T, 0, true>;
    using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_SRMP_T, 1, false>;
 
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_SRMP_T, 0 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_SRMP_T, 1 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_SRMP_T, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_SRMP_T, 1 >;
    // tightening
    using EmptyTripletFactor = FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_SRMP_T, 2, false>;
    using PairwiseTriplet12MessageContainer = MessageContainer<PairwiseTripletMessage<0,1>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_SRMP_T, 2>;
@@ -63,8 +63,8 @@ struct FMC_MPLP {
    using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_MPLP, 0, true>;
    using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_MPLP, 1, false>;
 
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::right, variableMessageNumber, 1, FMC_MPLP, 0 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::right, variableMessageNumber, 1, FMC_MPLP, 1 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 0, 1, message_passing_schedule::right, variableMessageNumber, 1, FMC_MPLP, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 0, 1, message_passing_schedule::right, variableMessageNumber, 1, FMC_MPLP, 1 >;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor >;
    using MessageList = meta::list< UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer >;

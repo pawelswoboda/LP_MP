@@ -7,11 +7,11 @@ using namespace LP_MP;
 
 TEST_CASE( "shortest path search in multicut factor", "[shortest path]" ) {
 
-   using mc_constructor = MulticutConstructor<FMC_MULTICUT<MessageSendingType::SRMP>, 0, 1, 0, 2>;
-   using graph = mc_constructor::Graph2;
-   using bfs_data = mc_constructor::BfsData2; 
+   using mc_constructor = MulticutConstructor<FMC_MULTICUT<MessageSendingType::SRMP>, 0, 1, 0, 1, 2, 2>;
+   //using graph = mc_constructor::Graph2;
+   //using bfs_data = mc_constructor::BfsData2; 
    
-   graph g(4,8, std::vector<INDEX>{2,2,2,2});
+   Graph g(4,8, std::vector<INDEX>{2,2,2,2});
 
    g.add_arc(0,1,1.0);
    g.add_arc(1,0,1.0);
@@ -26,7 +26,7 @@ TEST_CASE( "shortest path search in multicut factor", "[shortest path]" ) {
    g.add_arc(0,3,2.0);
 
    g.sort();
-   bfs_data sp(g);
+   BfsData sp(g);
 
    auto c1 = sp.FindPath(0,2,g);
    assert(std::get<1>(c1).size() == 3);

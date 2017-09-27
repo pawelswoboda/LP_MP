@@ -483,10 +483,10 @@ public:
             auto* right_factor = mrf_constructor_.GetUnaryFactor(std::max(*(it-1), *it));
 
             if(last_added_1 != left_factor && last_added_2 != left_factor) {
-               tree->AddMessage(left_msg, Chirality::right); 
+               //tree->AddMessage(left_msg, Chirality::right); 
             }
             if(last_added_1 != right_factor && last_added_2 != right_factor) {
-               tree->AddMessage(right_msg, Chirality::right); 
+               //tree->AddMessage(right_msg, Chirality::right); 
             }
 
             last_added_1 = left_factor;

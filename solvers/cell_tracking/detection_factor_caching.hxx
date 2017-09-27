@@ -135,6 +135,10 @@ public:
   void set_incoming_division_cost(const INDEX edge_index, const REAL cost) { assert(incoming[edge_index] == 0.0); incoming[edge_index] = cost; } 
   void set_outgoing_division_cost(const INDEX edge_index, const REAL cost) { assert(outgoing[edge_index] == 0.0); outgoing[edge_index] = cost; }
 
+  REAL detection_cost() const { return detection; }
+  REAL appearance_cost() const { return incoming[incoming.size()-1]; }
+  REAL disappearance_cost() const { return outgoing[outgoing.size()-1]; }
+
   INDEX size() const { return 1 + incoming.size() + outgoing.size(); }
 
   void init_primal() 
@@ -1899,7 +1903,7 @@ public:
     }
 
     const REAL set_to_cost = std::min(cost_not_taken, smallest_taken[1]);
-    //const REAL set_to_cost = cost_not_taken;
+    //const REAL set_to_cost = std::min(cost_not_taken, smallest_taken[0]);
     for(INDEX i=0; i<cost_diff.size(); ++i) {
       cost_diff[i] -= set_to_cost;
     }
@@ -1964,6 +1968,7 @@ public:
     }
 
     const REAL set_to_cost = std::min(cost_not_taken, smallest_taken[1]);
+    //const REAL set_to_cost = std::min(cost_not_taken, smallest_taken[1]);
     for(INDEX i=0; i<cost_diff.size(); ++i) {
       cost_diff[i] -= set_to_cost;
     }
@@ -2187,6 +2192,7 @@ public:
 
     assert(false); // wrong message computation?
     const REAL set_to_cost = std::min(detection_outgoing_cost + smallest_incoming[1], REAL(0.0));
+    //const REAL set_to_cost = std::min(detection_outgoing_cost + smallest_incoming[0], REAL(0.0));
     omega_it = omega_begin;
     for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
       const REAL msg = detection_outgoing_cost + r.incoming[ (*msg_it).GetMessageOp().incoming_edge_index_ ] - set_to_cost;
@@ -2251,50 +2257,6 @@ public:
       msg -= omega*diff;
       return;
 
-      vector<REAL> original_edge_val(l.outgoing_transition.dim2());
-      assert(original_edge_val.size() == l.division_distance());
-      for(INDEX i=0; i<l.division_distance(); ++i) {
-        original_edge_val[i] = l.outgoing_transition(outgoing_edge_index_, i);
-        l.outgoing_transition(outgoing_edge_index_, i) = std::numeric_limits<REAL>::infinity();
-      }
-      vector<REAL> outgoing_transition_min = l.outgoing_transition.min2();
-      assert(outgoing_transition_min.size() == l.division_distance());
-      for(INDEX i=0; i<l.division_distance(); ++i) {
-        l.outgoing_transition(outgoing_edge_index_, i) = original_edge_val[i];
-      }
-
-      auto incoming_transition_min = l.incoming_transition.min2();
-      assert(incoming_transition_min.size() == l.division_distance()-1);
-
-      const REAL incoming_division_min = l.incoming_division.min();
-
-      const INDEX last = l.division_distance()-1;
-
-      // minimum over all assignments not taken
-      REAL cost_not_taken = 0.0;
-      cost_not_taken = std::min(cost_not_taken, l.detection[0] + incoming_division_min + outgoing_transition_min[0]);
-      for(INDEX i=1; i<l.division_distance()-1; ++i) {
-        const REAL cost = l.detection[i] + incoming_transition_min[i-1] + outgoing_transition_min[i];
-        cost_not_taken = std::min(cost_not_taken, cost); 
-      }
-      {
-        const REAL cost_last = l.detection[last] + incoming_transition_min[last-1] + std::min(outgoing_transition_min[last], l.outgoing_division.min());
-        cost_not_taken = std::min(cost_not_taken, cost_last); 
-      } 
-
-      vector<REAL> cost_diff(l.division_distance()-1);
-
-      cost_diff[0] = l.detection[0] + incoming_division_min + original_edge_val[0];
-      for(INDEX i=1; i<last; ++i) {
-        cost_diff[i] = l.detection[i] + incoming_transition_min[i-1] + original_edge_val[i];
-      }
-      cost_diff[last-1] = std::min(cost_diff[last-1], l.detection[last] + incoming_transition_min[last-1] + original_edge_val[last]);
-
-      for(INDEX i=0; i<cost_diff.size(); ++i) {
-        cost_diff[i] -= cost_not_taken;
-      }
-
-      msg -= omega*( cost_diff ); 
     }
   }
 
@@ -2374,6 +2336,7 @@ public:
     }
 
     const REAL set_to_cost = std::min(smallest_not_taken, second_smallest_taken);
+    //const REAL set_to_cost = std::min(smallest_not_taken, smallest_taken);
 
     assert(std::abs( std::min(smallest_not_taken, smallest_taken) - l.LowerBound()) <= eps);
 
@@ -2485,6 +2448,7 @@ public:
     assert(std::abs( std::min(smallest_not_taken, smallest_taken) - r.LowerBound()) <= eps);
 
     const REAL set_to_cost = std::min(smallest_not_taken, second_smallest_taken); 
+    //const REAL set_to_cost = std::min(smallest_not_taken, smallest_taken); 
 
     omega_it = omega_begin;
     for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {

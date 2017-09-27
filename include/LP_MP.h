@@ -982,7 +982,7 @@ inline void LP::ComputeDampedUniformWeights()
 }
 
 // Here we check whether messages constraints are satisfied
-bool LP::CheckPrimalConsistency() const
+inline bool LP::CheckPrimalConsistency() const
 {
    volatile bool consistent=true; // or use std::atomic<bool>?
 
@@ -1305,7 +1305,7 @@ void LP::ComputeUniformWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorE
 }
 
 // compute anisotropic and damped uniform weights, then average them
-void LP::ComputeMixedWeights(
+inline void LP::ComputeMixedWeights(
       const two_dim_variable_array<REAL>& omega_anisotropic,
       const two_dim_variable_array<REAL>& omega_damped_uniform,
       two_dim_variable_array<REAL>& omega)

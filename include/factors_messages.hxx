@@ -536,14 +536,16 @@ public:
    void ReceiveMessageFromRightContainer()
    {
 #ifndef NDEBUG
-//       const REAL before_lb = leftFactor_->LowerBound() + rightFactor_->LowerBound();
+      const REAL before_left_lb = leftFactor_->LowerBound();
+      const REAL before_right_lb = rightFactor_->LowerBound();
 #endif
 
       send_message_to_left();
 
 #ifndef NDEBUG
-//       const REAL after_lb =  leftFactor_->LowerBound() + rightFactor_->LowerBound();
-//       assert(before_lb <= after_lb + eps); 
+      const REAL after_left_lb = leftFactor_->LowerBound();
+      const REAL after_right_lb = rightFactor_->LowerBound();
+      assert(before_left_lb + before_right_lb <= after_left_lb + after_right_lb + eps); 
 #endif
       return;
       // obsolete
@@ -580,14 +582,16 @@ public:
    void ReceiveMessageFromLeftContainer()
    { 
 #ifndef NDEBUG
-//       const REAL before_lb = leftFactor_->LowerBound() + rightFactor_->LowerBound();
+      const REAL before_left_lb = leftFactor_->LowerBound();
+      const REAL before_right_lb = rightFactor_->LowerBound();
 #endif
 
       send_message_to_right();
 
 #ifndef NDEBUG
-//       const REAL after_lb =  leftFactor_->LowerBound() + rightFactor_->LowerBound();
-//       assert(before_lb <= after_lb + eps); 
+      const REAL after_left_lb = leftFactor_->LowerBound();
+      const REAL after_right_lb = rightFactor_->LowerBound();
+      assert(before_left_lb + before_right_lb <= after_left_lb + after_right_lb + eps); 
 #endif
       return;
       // obsolete
@@ -1327,6 +1331,27 @@ public:
    {
       // we can assume that upper factor has already (partially) computed primal.
       // we check whether we can receive restricted messages from upper and compute primal in lower. If yes, we receive restricted message, compute primal in lower factor and propagate it back to upper factor.
+      if(c == Chirality::right) {
+         //leftFactor_->init_primal(); // initialization is already done in upward pass
+         static_if<MessageContainerType::CanComputeLeftFromRightPrimal()>([&](auto f) {
+               f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+         });
+         static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f2) {
+               f2(leftFactor_)->MaximizePotentialAndComputePrimal(); 
+         });
+      } else {
+         assert(c == Chirality::left);
+         //rightFactor_->init_primal();
+         static_if<MessageContainerType::CanComputeRightFromLeftPrimal()>([&](auto f) {
+               f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+         });
+         static_if<RightFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f2) {
+               f2(rightFactor_)->MaximizePotentialAndComputePrimal(); 
+         });
+      }
+      return;
+
+
       // if this is not possible, we propagate primal labeling of upper to lower
       if(c == Chirality::right) { // right factor is upper
          static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromRightContainer()>([&](auto f) {

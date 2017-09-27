@@ -122,6 +122,16 @@ public:
       o.end_ = nullptr;
    }
    template<typename E>
+   bool operator==(const vector_expression<T,E>& o) {
+      assert(size() == o.size());
+      for(INDEX i=0; i<o.size(); ++i) { 
+         if((*this)[i] != o[i]) { 
+            return false;
+         }
+      }
+      return true;
+   }
+   template<typename E>
    void operator=(const vector_expression<T,E>& o) {
       assert(size() == o.size());
       for(INDEX i=0; i<o.size(); ++i) { 
@@ -367,8 +377,31 @@ public:
       ar( array_ );
    } 
 
+   T min() const
+   {
+      static_assert(std::is_same<T,REAL>::value,"");
+
+      if(array_.size() > REAL_ALIGNMENT) {
+         REAL_VECTOR cur_min = simdpp::load(&array_[0]);
+         INDEX last_aligned = array_.size() - (array_.size()%REAL_ALIGNMENT);
+         for(auto i=REAL_ALIGNMENT; i<last_aligned; i+=REAL_ALIGNMENT) {
+            const REAL_VECTOR tmp = simdpp::load( &array_[i] );
+            cur_min = simdpp::min(cur_min, tmp); 
+         }
+
+         REAL aligned_min = simdpp::reduce_min(cur_min);
+
+         for(INDEX i=last_aligned; i<array_.size(); ++i) {
+            aligned_min = std::min(aligned_min, array_[i]);
+         }
+         assert(aligned_min == *std::min_element(array_.begin(), array_.end()) );
+         return aligned_min; 
+      } else { // small vector
+         return *std::min_element(array_.begin(), array_.end());
+      } 
+   }
 private:
-   std::array<T,N> array_;
+   alignas(REAL_ALIGNMENT*sizeof(REAL)) std::array<T,N> array_; // should only be done for REALs, not generally
 };
 
 
@@ -386,9 +419,81 @@ public:
       ar( vec_ );
    }
 
+   class const_iterator {
+   public:
+      const_iterator(const INDEX _dim2, const INDEX _padded_dim2, const vector<T>& _vec, const INDEX _i)
+         :
+            i(_i),
+            dim2(_dim2),
+            padded_dim2(_padded_dim2),
+            vec(_vec)
+      {}
+
+      void operator++() {
+         ++i; 
+      }
+      T operator*() const {
+         const INDEX x1 = i/dim2;
+         const INDEX x2 = i%dim2;
+         return vec[x1*padded_dim2 + x2]; 
+      }
+      bool operator==(const const_iterator& o) const {
+         assert(dim2 == o.dim2 && padded_dim2 == o.padded_dim2 && &vec == &o.vec);
+         return i == o.i;
+      }
+      bool operator!=(const const_iterator& o) const {
+         return !( (*this) == o );
+      }
+   private:
+      INDEX i;
+      const INDEX dim2;
+      const INDEX padded_dim2; 
+      const vector<T>& vec;
+   };
+
+   class iterator {
+   public:
+      iterator(const INDEX _dim2, const INDEX _padded_dim2, vector<T>& _vec, const INDEX _i)
+         :
+            i(_i),
+            dim2(_dim2),
+            padded_dim2(_padded_dim2),
+            vec(_vec)
+      {}
+
+      void operator++() {
+         ++i; 
+      }
+      T& operator*() {
+         const INDEX x1 = i/dim2;
+         const INDEX x2 = i%dim2;
+         return vec[x1*padded_dim2 + x2];
+      }
+      T operator*() const {
+         const INDEX x1 = i/dim2;
+         const INDEX x2 = i%dim2;
+         return vec[x1*padded_dim2 + x2]; 
+      }
+      bool operator==(const iterator& o) const {
+         assert(dim2 == o.dim2 && padded_dim2 == o.padded_dim2 && &vec == &o.vec);
+         return i == o.i;
+      }
+      bool operator!=(const iterator& o) const {
+         return !( (*this) == o );
+      }
+   private:
+      INDEX i;
+      const INDEX dim2;
+      const INDEX padded_dim2; 
+      vector<T>& vec;
+   };
+
    // when infinity padding is on, we must jump over those places
-   T* begin() const { assert(false); return vec_.begin(); }
-   T* end() const { assert(false); return vec_.end(); }
+   const_iterator begin() const { return const_iterator(dim2(), padded_dim2(), vec_, 0); }
+   const_iterator end() const { return const_iterator(dim2(), padded_dim2(), vec_, size()); }
+
+   iterator begin() { return iterator(dim2(), padded_dim2(), vec_, 0); }
+   iterator end() { return iterator(dim2(), padded_dim2(), vec_, size()); }
 
    static INDEX underlying_vec_size(const INDEX d1, const INDEX d2)
    {
@@ -428,12 +533,13 @@ public:
       dim2_(o.dim2_),
       padded_dim2_(o.padded_dim2_)
    {}
+   bool operator==(const matrix<T>& o) {
+      assert(this->size() == o.size() && o.dim2_ == dim2_);
+      return vec_ == o.vec_; 
+   }
    void operator=(const matrix<T>& o) {
       assert(this->size() == o.size() && o.dim2_ == dim2_);
-      // to do: use SIMD
-      for(INDEX i=0; i<o.size(); ++i) { 
-         vec_[i] = o[i]; 
-      }
+      vec_ = o.vec_;
    }
    T& operator()(const INDEX x1, const INDEX x2) { assert(x1<dim1() && x2<dim2()); return vec_[x1*padded_dim2() + x2]; }
    T operator()(const INDEX x1, const INDEX x2) const { assert(x1<dim1() && x2<dim2()); return vec_[x1*padded_dim2() + x2]; }

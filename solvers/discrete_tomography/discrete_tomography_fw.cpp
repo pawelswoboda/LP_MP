@@ -377,6 +377,7 @@ int main(int argc, char**argv)
 
    assert(p.projectionVar.size() == p.projectionCost.size());
    std::vector<sub_problem*> sp_vec;
+   std::set<std::array<INDEX,2>> covered_pairwise;
    for(INDEX i=0; i<p.projectionVar.size(); ++i) {
       LP_tree t;
       solver.template GetProblemConstructor<1>().AddProjection(p.projectionVar[i], p.projectionCost[i], &t);
@@ -396,10 +397,24 @@ int main(int argc, char**argv)
 
       s->SetTerm(i, sp, mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
       sp_vec.push_back(sp); 
+
+      for(INDEX j=0; j<p.projectionVar[i].size()-1; ++j) {
+         const INDEX v1 = p.projectionVar[i][j];
+         const INDEX v2 = p.projectionVar[i][j+1];
+         covered_pairwise.insert(std::array<INDEX,2>({std::min(v1,v2), std::max(v1,v2)}));
+      }
    }
 
+   // compute pairwise elements that are not covered
+   std::vector<std::array<INDEX,2>> not_covered_pairwise;
+   for(INDEX i=0; i<mrf.GetNumberOfPairwiseFactors(); ++i) {
+      if(covered_pairwise.find(mrf.GetPairwiseVariables(i)) == covered_pairwise.end()) {
+         not_covered_pairwise.push_back(mrf.GetPairwiseVariables(i));
+      } 
+   }
    // decompose mrf into trees automatically. Do this after adding projection, since they can add pairwise factors as well.
    auto trees = mrf.compute_forest_cover();
+   //auto trees = mrf.compute_forest_cover(not_covered_pairwise);
    for(auto& tree : trees) {
       solver.GetLP().add_tree(tree);
    }

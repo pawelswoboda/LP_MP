@@ -109,7 +109,7 @@ namespace LP_MP {
    // hash function for various types
    namespace hash {
       // equivalent of boost hash combine
-      size_t hash_combine( size_t lhs, size_t rhs ) {
+      inline size_t hash_combine( size_t lhs, size_t rhs ) {
          lhs^= rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2);
          return lhs;
       }
@@ -125,7 +125,9 @@ namespace LP_MP {
       }
    }
 
-   REAL normalize(const REAL x) {
+   template<typename T>
+   T normalize(const T x) {
+      static_assert(std::is_same<T,double>::value || std::is_same<T,float>::value,"");
       assert(!std::isnan(x));
       if(std::isfinite(x)) {
          return x;

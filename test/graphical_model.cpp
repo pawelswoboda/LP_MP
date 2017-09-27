@@ -30,11 +30,12 @@ R"(MARKOV
 
 std::vector<std::string> solver_options = {
    {"graphical model test"},
-   {"--maxIter"}, {"10"},
+   {"--maxIter"}, {"60"},
    {"--timeout"}, {"60"}, // one minute
    {"--lowerBoundComputationInterval"}, {"1"},
    {"--standardReparametrization"}, {"anisotropic"},
    {"--roundingReparametrization"}, {"anisotropic"},
+   {"-v"}, {"0"},
    {"--inputFile"}, uai_test_input
 };
 
@@ -44,11 +45,10 @@ TEST_CASE("gm", "[graphical model]") {
    SECTION("MAP-estimation for a model given in uai format") {
       using FMC = FMC_SRMP;
       using VisitorType = StandardVisitor;
-      using SolverType = Solver<FMC>;
-      static auto Input = UaiMrfInput::ParseString<FMC,0>;
+      using SolverType = MpRoundingSolver<Solver<FMC,LP,VisitorType>>;
 
-      VisitorSolver<SolverType,VisitorType> s(solver_options);
-      s.ReadProblem(Input);
+      SolverType s(solver_options);
+      UaiMrfInput::ParseString<SolverType,0>(uai_test_input, s); 
       s.Solve();
 
       REQUIRE(std::abs(s.lower_bound() - 0.564) < LP_MP::eps); // is this actually correct?
@@ -57,7 +57,7 @@ TEST_CASE("gm", "[graphical model]") {
    SECTION("Tightening") {
       using FMC = FMC_SRMP_T;
       using VisitorType = StandardTighteningVisitor;
-      using SolverType = MpRoundingSolver<FMC>;
+      using SolverType = MpRoundingSolver<Solver<FMC,LP,VisitorType>>;
 
       auto tightening_solver_options = solver_options;
       tightening_solver_options.push_back("--tighten");
@@ -68,29 +68,82 @@ TEST_CASE("gm", "[graphical model]") {
       tightening_solver_options.push_back("--tightenInterval");
       tightening_solver_options.push_back("10");
       tightening_solver_options.push_back("--tightenReparametrization");
-      tightening_solver_options.push_back("uniform");
-      VisitorSolver<SolverType,VisitorType> s(tightening_solver_options);
+      tightening_solver_options.push_back("damped_uniform");
+      SolverType s(tightening_solver_options);
       auto& mrf = s.template GetProblemConstructor<0>();
 
-      std::vector<REAL> negPotts = {1, 0, 0 ,1};
-      std::vector<REAL> posPotts = {0, 1, 1 ,0};
+      //std::vector<REAL> negPotts = {1, 0, 0 ,1};
+      matrix<REAL> negPotts(2,2);
+      negPotts(0,0) = 1.0; negPotts(1,0) = 0.0;
+      negPotts(0,1) = 0.0; negPotts(1,1) = 1.0;
+      //std::vector<REAL> posPotts = {0, 1, 1 ,0};
+      matrix<REAL> posPotts(2,2);
+      posPotts(0,0) = 0.0; posPotts(1,0) = 1.0;
+      posPotts(0,1) = 1.0; posPotts(1,1) = 0.0;
 
-      SECTION("triplet") {
+      matrix<REAL> negPotts23(2,3);
+      negPotts23(0,0) = 1.0; negPotts23(1,0) = 0.0; 
+      negPotts23(0,1) = 0.0; negPotts23(1,1) = 1.0; 
+      negPotts23(0,2) = 2.0; negPotts23(1,2) = 2.0; 
+      //std::vector<REAL> negPotts23 = {1,0,2, 1,0,2};
+      matrix<REAL> posPotts24(2,4);
+      posPotts24(0,0) = 0.0; posPotts24(1,0) = 1.0;
+      posPotts24(0,1) = 1.0; posPotts24(1,1) = 0.0;
+      posPotts24(0,2) = 2.0; posPotts24(1,2) = 2.0;
+      posPotts24(0,3) = 2.0; posPotts24(1,3) = 2.0;
+      //std::vector<REAL> posPotts24 = {0,1,2,2, 1,0,2,2};
+      matrix<REAL> posPotts34(3,4);
+      posPotts34(0,0) = 0.0; posPotts34(1,0) = 1.0; posPotts34(2,0) = 2.0;
+      posPotts34(0,1) = 1.0; posPotts34(1,1) = 0.0; posPotts34(2,1) = 2.0;
+      posPotts34(0,2) = 2.0; posPotts34(1,2) = 2.0; posPotts34(2,2) = 2.0;
+      posPotts34(0,3) = 2.0; posPotts34(1,3) = 2.0; posPotts34(2,3) = 2.0;
+      //std::vector<REAL> posPotts34 = {0,1,2,2, 1,0,2,2, 2,2,2,2};
+
+      SECTION("binary triplet") {
+         mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+         mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+         mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+
+         // make a cycle of length 3 visiting each label once -> one negative Potts and two positive Potts
+         // make number of labels varying to check whether bounds work alright
+         mrf.AddPairwiseFactor(0,1,negPotts);
+         mrf.AddPairwiseFactor(0,2,posPotts);
+         mrf.AddPairwiseFactor(1,2,posPotts);
+
+         mrf.AddTighteningTriplet(0,1,2);
+         s.Solve();
+         REQUIRE(std::abs(s.lower_bound() - 1.0) <= eps);
+      }
+
+      SECTION("multi-label triplet") {
          mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
          mrf.AddUnaryFactor(std::vector<REAL>(3,0.0));
          mrf.AddUnaryFactor(std::vector<REAL>(4,0.0));
 
          // make a cycle of length 3 visiting each label once -> one negative Potts and two positive Potts
          // make number of labels varying to check whether bounds work alright
-         std::vector<REAL> negPotts23 = {1,0,2, 1,0,2};
-         std::vector<REAL> posPotts24 = {0,1,2,2, 1,0,2,2};
-         std::vector<REAL> posPotts34 = {0,1,2,2, 1,0,2,2, 2,2,2,2};
+         mrf.AddPairwiseFactor(0,1,negPotts23);
+         mrf.AddPairwiseFactor(0,2,posPotts24);
+         mrf.AddPairwiseFactor(1,2,posPotts34);
+
+         mrf.AddTighteningTriplet(0,1,2);
+         s.Solve();
+         REQUIRE(std::abs(s.lower_bound() - 1.0) <= eps);
+      }
+
+      SECTION("triplet search") {
+         mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+         mrf.AddUnaryFactor(std::vector<REAL>(3,0.0));
+         mrf.AddUnaryFactor(std::vector<REAL>(4,0.0));
+
+         // make a cycle of length 3 visiting each label once -> one negative Potts and two positive Potts
+         // make number of labels varying to check whether bounds work alright
          mrf.AddPairwiseFactor(0,1,negPotts23);
          mrf.AddPairwiseFactor(0,2,posPotts24);
          mrf.AddPairwiseFactor(1,2,posPotts34);
 
          s.Solve();
-         REQUIRE(s.lower_bound() == 1.0);
+         REQUIRE(std::abs(s.lower_bound() - 1.0) <= eps);
       }
 
 #ifdef USE_GUROBI
@@ -107,9 +160,6 @@ TEST_CASE("gm", "[graphical model]") {
 
          // make a cycle of length 3 visiting each label once -> one negative Potts and two positive Potts
          // make number of labels varying to check whether bounds work alright
-         std::vector<REAL> negPotts23 = {1,0,2, 1,0,2};
-         std::vector<REAL> posPotts24 = {0,1,2,2, 1,0,2,2};
-         std::vector<REAL> posPotts34 = {0,1,2,2, 1,0,2,2, 2,2,2,2};
          mrf.AddPairwiseFactor(0,1,negPotts23);
          mrf.AddPairwiseFactor(0,2,posPotts24);
          mrf.AddPairwiseFactor(1,2,posPotts34);
@@ -117,7 +167,7 @@ TEST_CASE("gm", "[graphical model]") {
          mrf.AddTighteningTriplet(0,1,2);
 
          s.Solve();
-         REQUIRE(s.lower_bound() == 1.0);
+         REQUIRE(s.lower_bound() >= 1.0 - eps);
       }
 #endif
 
@@ -128,14 +178,14 @@ TEST_CASE("gm", "[graphical model]") {
          mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
          mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
 
-         // make a cycle of length 4 visiting each label once -> one negative Potts and two positive Potts
+         // make a cycle of length 4 visiting each label once -> one negative Potts and three positive Potts
          mrf.AddPairwiseFactor(0,1,negPotts);
          mrf.AddPairwiseFactor(1,2,posPotts);
          mrf.AddPairwiseFactor(2,3,posPotts);
          mrf.AddPairwiseFactor(0,3,posPotts);
 
          s.Solve();
-         REQUIRE(s.lower_bound() == 1.0);
+         REQUIRE(std::abs(s.lower_bound() - 1.0) <= eps);
       }
 
       // to do: add test problem where only create_expanded_projection_graph, but not create_k_projection_graph, can find a violated cycle.
@@ -166,6 +216,13 @@ TEST_CASE("gm", "[graphical model]") {
          REQUIRE(s.lower_bound() == 1.0);
       }
       */
+   }
+
+   SECTION("SAT rounding") {
+      using FMC = FMC_SRMP;
+      using VisitorType = StandardVisitor;
+      using SolverType = MpRoundingSolver<Solver<FMC,LP_sat<LP>,VisitorType>>;
+
    }
 }
 

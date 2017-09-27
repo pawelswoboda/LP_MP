@@ -83,7 +83,7 @@ public:
       lp_->AddFactor(p);
       ConstructPairwiseFactor(*(p->GetFactor()), var1, var2);
       pairwiseFactor_.push_back(p);
-      pairwiseIndices_.push_back(std::make_tuple(var1,var2));
+      pairwiseIndices_.push_back(std::array<INDEX,2>({var1,var2}));
       const INDEX factorId = pairwiseFactor_.size()-1;
       pairwiseMap_.insert(std::make_pair(std::make_tuple(var1,var2), factorId));
       LinkUnaryPairwiseFactor(unaryFactor_[var1], p, unaryFactor_[var2]);
@@ -151,12 +151,12 @@ public:
       }
    }
    INDEX GetNumberOfPairwiseFactors() const { return pairwiseFactor_.size(); }
-   std::tuple<INDEX,INDEX> GetPairwiseVariables(const INDEX factorNo) const { return pairwiseIndices_[factorNo]; }
+   std::array<INDEX,2> GetPairwiseVariables(const INDEX factorNo) const { return pairwiseIndices_[factorNo]; }
    INDEX GetNumberOfLabels(const INDEX i) const { return unaryFactor_[i]->size(); }
    REAL GetPairwiseValue(const INDEX factorId, const INDEX i1, const INDEX i2) const
    {
-      assert(i1 < GetNumberOfLabels( std::get<0>(GetPairwiseVariables(factorId)) ));
-      assert(i2 < GetNumberOfLabels( std::get<1>(GetPairwiseVariables(factorId)) ));
+      assert(i1 < GetNumberOfLabels( GetPairwiseVariables(factorId)[0] ));
+      assert(i2 < GetNumberOfLabels( GetPairwiseVariables(factorId)[1] ));
       return (*pairwiseFactor_[factorId]->GetFactor())(i1,i2);
    }
 
@@ -279,16 +279,24 @@ public:
 
      t.init();
 
+     t.compute_subgradient();
+     assert(std::abs(t.lower_bound() - t.primal_cost()) <= eps);
+
      return std::move(t);
   }
 
   // compute forest cover of MRF and add each resulting tree
-  std::vector<LP_tree> compute_forest_cover()
+
+  auto compute_forest_cover()
+  {
+     return compute_forest_cover(pairwiseIndices_);
+  }
+  std::vector<LP_tree> compute_forest_cover(const std::vector<std::array<INDEX,2>>& pairwiseIndices)
   {
      UndirectedGraph g = UndirectedGraph(unaryFactor_.size(), pairwiseFactor_.size());
-     for(auto e : pairwiseIndices_) {
-        const auto i = std::get<0>(e);
-        const auto j = std::get<1>(e);
+     for(auto e : pairwiseIndices) {
+        const auto i = e[0];
+        const auto j = e[1];
         g.AddEdge(i,j,1);
      }
      
@@ -303,7 +311,7 @@ public:
         UnionFind uf(unaryFactor_.size());
         for(INDEX i=0; i<parents.size(); ++i) {
            if(parents[i] != -1) {
-              uf.merge(i, parents[i]);//std::get<0>(pairwiseIndices_[parents[i]]), std::get<1>(pairwiseIndices_[parents[i]]));
+              uf.merge(i, parents[i]);
            }
         }
         auto contiguous_ids = uf.get_contiguous_ids();
@@ -338,7 +346,7 @@ public:
         }
         return pairwise_factors_in_trees;
      };
-     assert(check_pairwise_factors_present() == pairwiseFactor_.size());
+     assert(check_pairwise_factors_present() == pairwiseIndices.size());
 
      return std::move(trees);
   }
@@ -347,7 +355,7 @@ protected:
    std::vector<UnaryFactorContainer*> unaryFactor_;
    std::vector<PairwiseFactorContainer*> pairwiseFactor_;
    
-   std::vector<std::tuple<INDEX,INDEX>> pairwiseIndices_;
+   std::vector<std::array<INDEX,2>> pairwiseIndices_;
 
    std::map<std::tuple<INDEX,INDEX>, INDEX> pairwiseMap_; // given two sorted indices, return factorId belonging to that index.
 
@@ -503,7 +511,7 @@ public:
    {
       assert(var1<var2 && var2<var3);
       assert(var3<this->GetNumberOfVariables());
-      assert(tripletMap_.find(std::make_tuple(var1,var2,var3)) == tripletMap_.end());
+      assert(tripletMap_.find(std::array<INDEX,3>({var1,var2,var3})) == tripletMap_.end());
       
       assert(this->pairwiseMap_.find(std::make_tuple(var1,var2)) != this->pairwiseMap_.end());
       assert(this->pairwiseMap_.find(std::make_tuple(var1,var3)) != this->pairwiseMap_.end());
@@ -516,9 +524,9 @@ public:
       TripletFactorContainer* t = new TripletFactorContainer(this->GetNumberOfLabels(var1), this->GetNumberOfLabels(var2), this->GetNumberOfLabels(var3));
       this->lp_->AddFactor(t);
       tripletFactor_.push_back(t);
-      tripletIndices_.push_back(std::make_tuple(var1,var2,var3));
+      tripletIndices_.push_back(std::array<INDEX,3>({var1,var2,var3}));
       const INDEX factorId = tripletFactor_.size()-1;
-      tripletMap_.insert(std::make_pair(std::make_tuple(var1,var2,var3), factorId));
+      tripletMap_.insert(std::make_pair(std::array<INDEX,3>({var1,var2,var3}), factorId));
 
       LinkPairwiseTripletFactor<PairwiseTripletMessage12Container>(factor12Id,factorId);
       LinkPairwiseTripletFactor<PairwiseTripletMessage13Container>(factor13Id,factorId);
@@ -539,16 +547,16 @@ public:
       using PairwiseTripletMessageType = typename PAIRWISE_TRIPLET_MESSAGE_CONTAINER::MessageType;
 
       typename MRFPC::PairwiseFactorContainer* const p = this->pairwiseFactor_[pairwiseFactorId];
-      const INDEX pairwiseVar1 = std::get<0>(this->pairwiseIndices_[pairwiseFactorId]);
-      const INDEX pairwiseVar2 = std::get<1>(this->pairwiseIndices_[pairwiseFactorId]);
+      const INDEX pairwiseVar1 = this->pairwiseIndices_[pairwiseFactorId][0];
+      const INDEX pairwiseVar2 = this->pairwiseIndices_[pairwiseFactorId][1];
       assert(pairwiseVar1 < pairwiseVar2);
       const INDEX pairwiseDim1 = this->GetNumberOfLabels(pairwiseVar1);
       const INDEX pairwiseDim2 = this->GetNumberOfLabels(pairwiseVar2);
 
       TripletFactorContainer* const t = tripletFactor_[tripletFactorId];
-      const INDEX tripletVar1 = std::get<0>(tripletIndices_[tripletFactorId]);
-      const INDEX tripletVar2 = std::get<1>(tripletIndices_[tripletFactorId]);
-      const INDEX tripletVar3 = std::get<2>(tripletIndices_[tripletFactorId]);
+      const INDEX tripletVar1 = tripletIndices_[tripletFactorId][0];
+      const INDEX tripletVar2 = tripletIndices_[tripletFactorId][1];
+      const INDEX tripletVar3 = tripletIndices_[tripletFactorId][2];
       assert(tripletVar1 < tripletVar2 && tripletVar2 < tripletVar3);
       const INDEX tripletDim1 = this->GetNumberOfLabels(tripletVar1);
       const INDEX tripletDim2 = this->GetNumberOfLabels(tripletVar2);
@@ -563,6 +571,12 @@ public:
    }
    INDEX GetNumberOfTripletFactors() const { return tripletFactor_.size(); }
 
+   std::array<INDEX,3> GetTripletIndices(const INDEX factor_id)
+   {
+      assert(factor_id < GetNumberOfTripletFactors());
+      return tripletIndices_[factor_id];
+   }
+
    void AddEmptyPairwiseFactor(const INDEX var1, const INDEX var2)
    {
       assert(this->pairwiseMap_.find(std::make_tuple(var1,var2)) == this->pairwiseMap_.end()); 
@@ -570,10 +584,10 @@ public:
    }
 
    // do zrobienia: use references for pi
-   bool AddTighteningTriplet(const SIGNED_INDEX var1, const SIGNED_INDEX var2, const SIGNED_INDEX var3)//, const std::vector<SIGNED_INDEX> pi1, const std::vector<SIGNED_INDEX> pi2, const std::vector<SIGNED_INDEX> pi3)
+   bool AddTighteningTriplet(const INDEX var1, const INDEX var2, const INDEX var3)//, const std::vector<INDEX> pi1, const std::vector<INDEX> pi2, const std::vector<INDEX> pi3)
    {
       assert(var1 < var2 && var2 < var3 && var3 < this->GetNumberOfVariables());
-      if(tripletMap_.find(std::make_tuple(var1,var2,var3)) == tripletMap_.end()) {
+      if(tripletMap_.find(std::array<INDEX,3>({var1,var2,var3})) == tripletMap_.end()) {
          // first check whether necessary pairwise factors are present. If not, add them.
          if(this->pairwiseMap_.find(std::make_tuple(var1,var2)) == this->pairwiseMap_.end()) {
             AddEmptyPairwiseFactor(var1,var2);
@@ -681,8 +695,8 @@ public:
 
 protected:
    std::vector<TripletFactorContainer*> tripletFactor_;
-   std::vector<std::tuple<INDEX,INDEX,INDEX>> tripletIndices_;
-   std::map<std::tuple<INDEX,INDEX,INDEX>, INDEX> tripletMap_; // given two sorted indices, return factorId belonging to that index.
+   std::vector<std::array<INDEX,3>> tripletIndices_;
+   std::map<std::array<INDEX,3>, INDEX> tripletMap_; // given two sorted indices, return factorId belonging to that index.
 };
 
 

@@ -20,7 +20,7 @@ namespace LP_MP {
 
 #ifdef WITH_SAT
 
-  sat_literal to_literal(const sat_var v) 
+  inline sat_literal to_literal(const sat_var v) 
   {
     return v+1;
     //return CMSat::Lit(v,false);

@@ -144,7 +144,6 @@ public:
 
    void MaximizePotentialAndComputePrimal()
    {
-      std::cout << "round primal " << this << "\n";
       if(state_[0] < no_labels()) { assert(sum_[0] < prev_sum_size()); }
       if(state_[1] < no_labels()) { assert(sum_[1] < next_sum_size()); }
 
@@ -161,16 +160,25 @@ public:
          });
       } else if(state_[0] == no_primal_decision) {
          REAL min = std::numeric_limits<REAL>::infinity();
-         const INDEX start_label = sum_[1] > prev_sum_size()-1 ? sum_[1] - (prev_sum_size()-1) : 0; // must be at least so that sum_[0] is smaller than prev_sum_size()
-         const INDEX end_label = std::min(no_labels(), sum_[1]+1); // i.e. one past last label
-         assert(start_label < end_label);
-         for(INDEX x1=start_label; x1<end_label; ++x1) {
-            if(min > eval(x1,state_[1], sum_[1] - x1)) {
-               min = eval(x1,state_[1], sum_[1] - x1);
-               state_[0] = x1;
-               sum_[0] = sum_[1] - x1;
+         //const INDEX start_label = (sum_[1] > prev_sum_size()-1) ? (sum_[1] - (prev_sum_size()-1)) : 0; // must be at least so that sum_[0] is smaller than prev_sum_size()
+         //const INDEX end_label = std::min(no_labels(), sum_[1]+1); // i.e. one past last label
+         //assert(start_label < end_label);
+         //for(INDEX x1=start_label; x1<end_label; ++x1) {
+         //   if(min > eval(x1,state_[1], sum_[1] - x1)) {
+         //      min = eval(x1,state_[1], sum_[1] - x1);
+         //      state_[0] = x1;
+         //      sum_[0] = sum_[1] - x1;
+         //   }
+         //} 
+         for(INDEX x1=0; x1<no_labels(); ++x1) {
+            if(x1 <= sum_[1] && sum_[1] - x1 < prev_sum_size()) {
+               if(min > eval(x1,state_[1], sum_[1] - x1)) {
+                  min = eval(x1,state_[1], sum_[1] - x1);
+                  state_[0] = x1;
+                  sum_[0] = sum_[1] - x1;
+               } 
             }
-         } 
+         }
       } else if(state_[1] == no_primal_decision) {
          REAL min = std::numeric_limits<REAL>::infinity();
          for(INDEX x2=0; x2<std::min(no_labels(), next_sum_size() - state_[0]); ++x2) {
@@ -227,6 +235,7 @@ public:
 
 
 
+#ifdef WITH_SAT
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
@@ -247,41 +256,41 @@ public:
 
       for(INDEX x1=0; x1<no_labels(); ++x1) {
          for(INDEX sum=0; sum<prev_sum_size(); ++sum) {
+            tmp_vars.clear();
             for(INDEX x2=0; x2<no_labels(); ++x2) {
                tmp_vars.push_back(gluing_vars[x1*no_labels()*prev_sum_size() + x2*prev_sum_size() + sum]);
             }
             const auto prev_var = prev_vars[x1*prev_sum_size() + sum];
             const auto sum_var = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
             make_sat_var_equal(s, to_literal(prev_var), to_literal(sum_var));
-            tmp_vars.clear();
          }
       }
 
       for(INDEX x2=0; x2<no_labels(); ++x2) {
          for(INDEX next_sum=0; next_sum<next_sum_size(); ++next_sum) {
+            tmp_vars.clear();
             for(INDEX x1=0; x1<no_labels(); ++x1) {
                if(x1 <= next_sum  && next_sum-x1 < prev_sum_size()) {
                   tmp_vars.push_back(gluing_vars[x1*no_labels()*prev_sum_size() + x2*prev_sum_size() + (next_sum-x1)]);
                }
             }
             const auto next_var = next_vars[x2*next_sum_size() + next_sum];
-            const auto sum_var = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
             if(!tmp_vars.empty()) {
+               const auto sum_var = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
                make_sat_var_equal(s, to_literal(next_var), to_literal(sum_var));
             }
-            tmp_vars.clear();
          }
       }
 
       for(INDEX x1=0; x1<no_labels(); ++x1) {
          for(INDEX x2=0; x2<no_labels(); ++x2) {
+            tmp_vars.clear(); 
             for(INDEX sum=0; sum<prev_sum_size(); ++sum) {
                tmp_vars.push_back(gluing_vars[x1*no_labels()*prev_sum_size() + x2*prev_sum_size() + sum]);
             }
             const auto pairwise_var = pairwise_vars[x1*no_labels() + x2];
             const auto sum_var = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
             make_sat_var_equal(s, to_literal(pairwise_var), to_literal(sum_var));
-            tmp_vars.clear(); 
          }
       } 
    }
@@ -324,8 +333,9 @@ public:
             }
          }
       }
-      assert(state_[0] + sum_[0] == sum_[1]);
+      assert(primal_valid());
    }
+#endif // WITH_SAT
 
    std::array<INDEX,2> state_;
    std::array<INDEX,2> sum_; // both sums are not strictly needed, they help however in labeling
@@ -387,6 +397,7 @@ public:
       }
    }
 
+#ifdef WITH_SAT
    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
    void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
    {
@@ -399,6 +410,7 @@ public:
          }
       }
    } 
+#endif
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
    bool ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
@@ -746,6 +758,7 @@ public:
       }
    }
 
+#ifdef WITH_SAT
    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
    void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
    {
@@ -755,18 +768,18 @@ public:
       // to do: take care of transposed_!
       for(INDEX x1=0; x1<l.dim1(); ++x1) {
          for(INDEX x2=0; x2<l.dim2(); ++x2) {
-            const sat_var left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim1() + x2;
+            const sat_var left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim2() + x2;
             const sat_var right_var = right_begin + r.no_labels()*r.prev_sum_size() + r.no_labels()*r.next_sum_size() + x1*r.no_labels() + x2;
             make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
          }
       }
    }
+#endif
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
    void ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
    {
-      std::cout << &l << "," << &r << "\n";
-      assert(r.state_[0] < l.dim1() && r.state_[0] < l.dim2());
+      assert(r.state_[0] < l.dim1() && r.state_[1] < l.dim2());
       l.primal()[0] = r.state_[0];
       l.primal()[1] = r.state_[1];
    }

@@ -378,7 +378,9 @@ template<typename T>
 			// go to next block
 			P = P + sz + overhead;
       }
-		std::cout << "block: " << alive << " alive and: " << dead << " dead objects\n";
+      if(debug()) {
+         std::cout << "block: " << alive << " alive and: " << dead << " dead objects\n";
+      }
    }
 
 
@@ -489,10 +491,12 @@ template<typename T>
 //#pragma omp critical (mem_allocation)
 		{
 			clean_garbage();
-      std::cout << "no buffers = " << buffers.size() << "\n";
-			printf("peak mem usage: %lli Mb ", big_size(mem_peak_reserved() / (1 << 20)));
-			printf(" / %i allocations, ", alloc_count);
-			printf("at exit: %lli B\n", big_size(mem_used()));
+         if(debug()) {
+            std::cout << "no buffers = " << buffers.size() << "\n";
+            printf("peak mem usage: %lli Mb ", big_size(mem_peak_reserved() / (1 << 20)));
+            printf(" / %i allocations, ", alloc_count);
+            printf("at exit: %lli B\n", big_size(mem_used()));
+         }
 			//assert(buffers.empty() && spare.empty());
 			if (spare.allocated()){
 				int * p = spare.cap_beg();
@@ -564,7 +568,9 @@ template<typename T>
       }
 		// is large and does not fit in available buffers
 		//use malloc for it (with 2 ints of overhead for signature and size)
-    std::cout << "large allocation not fitting into buffers\n";
+      if(debug()) {
+         std::cout << "large allocation not fitting into buffers\n";
+      }
 		big_size cap = round_up(size_bytes);
 		big_size size_allocate = cap + sizeof(int) + sizeof(size_t);
 		if (size_allocate > (big_size)(std::numeric_limits<std::size_t>::max() / 2)){
@@ -668,7 +674,9 @@ template<typename T>
 		for (int b = 0; b<buffers.size(); ++b){
 			buffers[b].check_integrity();
       }
-		std::cout << "block_arena integrity checked\n";
+      if(debug()) {
+         std::cout << "block_arena integrity checked\n";
+      }
    }
 
 
@@ -727,7 +735,7 @@ template<typename T1, typename T2>
 
 
 // global stack allocator
-int stack_arena_mem[100000];
+static int stack_arena_mem[100000];
 static stack_arena<REAL> global_real_stack_arena(stack_arena_mem,100000);
 static stack_allocator<REAL> global_real_stack_allocator(global_real_stack_arena);
 

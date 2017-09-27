@@ -51,10 +51,10 @@ public:
          assert(!std::isnan(msgs[x]));
          const REAL val = SUPPORT_INFINITY ? normalize(msgs[x]) : msgs[x];
          if(CHIRALITY == Chirality::left) {
-            r.msg1(x) = val;
+            r.msg1(x) += val;
             assert(!std::isnan(r.msg1(x)));
          } else {
-            r.msg2(x) = val;
+            r.msg2(x) += val;
             assert(!std::isnan(r.msg2(x)));
          }
       }
@@ -65,18 +65,18 @@ public:
       assert(!std::isnan(msg));
       const REAL val = SUPPORT_INFINITY ? normalize(msg) : msg;
       if(CHIRALITY == Chirality::left) {
-         r.msg1(dim) = val;
+         r.msg1(dim) += val;
          assert(!std::isnan(r.msg1(dim)));
       } else {
-         r.msg2(dim) = val;
+         r.msg2(dim) += val;
          assert(!std::isnan(r.msg2(dim)));
       }
    }
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   bool ComputeRightFromLeftPrimal_deactivated(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
+   bool ComputeRightFromLeftPrimal(const LEFT_FACTOR& l, RIGHT_FACTOR& r)
    {
-      assert(l.primal() < l.size());
+      //assert(l.primal() < l.size());
       if(l.primal() < l.size()) {
          const bool changed = (l.primal() != r.primal()[pairwise_index_]);
          r.primal()[pairwise_index_] = l.primal();
@@ -89,10 +89,14 @@ public:
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
    bool ComputeLeftFromRightPrimal(LEFT_FACTOR& l, const RIGHT_FACTOR& r)
    {
-      assert(r.primal()[pairwise_index_] < l.size());
-      const bool changed = (l.primal() != r.primal()[pairwise_index_]);
-      l.primal() = r.primal()[pairwise_index_];
-      return changed; 
+      //assert(r.primal()[pairwise_index_] < l.size());
+      if(r.primal()[pairwise_index_] < l.size()) {
+         const bool changed = (l.primal() != r.primal()[pairwise_index_]);
+         l.primal() = r.primal()[pairwise_index_];
+         return changed; 
+      } else {
+         return false;
+      }
    }
 
 #ifdef WITH_SAT
@@ -117,6 +121,9 @@ public:
     template<typename RIGHT_FACTOR, typename G2>
     void send_message_to_left(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
     {
+#ifndef NDEBUG
+       const REAL before_lb = r.LowerBound();
+#endif
        vector<REAL> msgs(r.dim(pairwise_index_),std::numeric_limits<REAL>::infinity());
        if(CHIRALITY == Chirality::left) {
           r.min_marginal_1(msgs);
@@ -124,6 +131,10 @@ public:
           r.min_marginal_2(msgs); 
        }
        msg -= omega*msgs;
+#ifndef NDEBUG
+       const REAL after_lb = r.LowerBound();
+       //assert(before_lb <= after_lb); 
+#endif
     }
 
    template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
@@ -234,6 +245,7 @@ public:
                }
       }
 
+#ifdef WITH_SAT
    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
       void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_var left_begin, const sat_var right_begin) const
       {
@@ -273,7 +285,7 @@ public:
                   assert(false); // not possible
                }
       }
-
+#endif // WITH_SAT
 
    template<typename LEFT_FACTOR, typename G2>
       void send_message_to_right(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
@@ -283,29 +295,17 @@ public:
    template<typename RIGHT_FACTOR, typename G2>
       void send_message_to_left(const RIGHT_FACTOR& r, G2& msg, const REAL omega = 1.0)
       {
+         matrix<REAL> msgs(r.dim(I1), r.dim(I2));
          if(I1 == 0 && I2 == 1) {
-
-            matrix<REAL> msgs(r.dim1(), r.dim2(), std::numeric_limits<REAL>::infinity());
             r.min_marginal12(msgs);
-            msg -= omega*msgs;
-
-         } else
-            if(I1 == 0 && I2 == 2) {
-
-               matrix<REAL> msgs(r.dim1(), r.dim3(), std::numeric_limits<REAL>::infinity());
+         } else if(I1 == 0 && I2 == 2) {
                r.min_marginal13(msgs);
-               msg -= omega*msgs; 
-
-            } else
-               if(I1 == 1 && I2 == 2) {
-
-                  matrix<REAL> msgs(r.dim2(), r.dim3(), std::numeric_limits<REAL>::infinity());
-                  r.min_marginal23(msgs);
-                  msg -= omega*msgs; 
-
-               } else {
-                  assert(false);
-               }
+         } else if(I1 == 1 && I2 == 2) {
+            r.min_marginal23(msgs);
+         } else {
+            assert(false);
+         }
+         msg -= omega*msgs;
       }
 };
 

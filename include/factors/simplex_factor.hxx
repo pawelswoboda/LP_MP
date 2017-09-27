@@ -287,8 +287,9 @@ public:
       //assert(val < std::numeric_limits<REAL>::infinity());
       return val;
    }
-   void MaximizePotentialAndComputePrimal_deactivated() 
+   void MaximizePotentialAndComputePrimal() 
    {
+      std::cout << "kwas_pairwise\n";
       if(primal_[0] >= dim1() && primal_[1] >= dim2()) {
          REAL min_val = std::numeric_limits<REAL>::infinity();
          for(INDEX x1=0; x1<dim1(); ++x1) {
@@ -300,7 +301,7 @@ public:
                }
             }
          }
-      } else if(primal_[0] >= dim1()) {
+      } else if(primal_[0] >= dim1() && primal_[1] < dim2()) {
          REAL min_val = std::numeric_limits<REAL>::infinity();
          for(INDEX x1=0; x1<dim1(); ++x1) {
             if(min_val >= (*this)(x1,primal_[1])) {
@@ -308,7 +309,7 @@ public:
                primal_[0] = x1;
             }
          } 
-      } else if(primal_[1] >= dim2()) {
+      } else if(primal_[1] >= dim2() && primal_[0] < dim1()) {
          REAL min_val = std::numeric_limits<REAL>::infinity();
          for(INDEX x2=0; x2<dim2(); ++x2) {
             if(min_val >= (*this)(primal_[0],x2)) {
@@ -316,6 +317,8 @@ public:
                primal_[1] = x2;
             }
          }
+      } else {
+         assert(primal_[0] < dim1() && primal_[1] < dim2());
       }
    }
 
@@ -361,26 +364,24 @@ public:
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
       auto vars = create_sat_variables(s, dim1() + dim2() + dim1()*dim2());
-      sat_var pairwise_var_begin = vars[dim1() + dim2()];
+      auto pairwise_var_begin = vars.begin() + dim1() + dim2();
 
       std::vector<sat_var> tmp_vars;
       tmp_vars.reserve(std::max(dim1(), dim2()));
 
       for(INDEX x1=0; x1<dim1(); ++x1) {
          for(INDEX x2=0; x2<dim2(); ++x2) {
-            tmp_vars.push_back(pairwise_var_begin + x1*dim2() + x2);
+            tmp_vars.push_back(pairwise_var_begin[x1*dim2() + x2]);
          }
-         //sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-         sat_var c = one_active_indicator_sat(s, tmp_vars.begin(), tmp_vars.end());
+         sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
          make_sat_var_equal(s, to_literal(c), to_literal(vars[x1]));
          tmp_vars.clear();
       }
       for(INDEX x2=0; x2<dim2(); ++x2) {
          for(INDEX x1=0; x1<dim1(); ++x1) {
-            tmp_vars.push_back(pairwise_var_begin + x1*dim2() + x2);
+            tmp_vars.push_back(pairwise_var_begin[x1*dim2() + x2]);
          }
-         //sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-         sat_var c = one_active_indicator_sat(s, tmp_vars.begin(), tmp_vars.end());
+         sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
          make_sat_var_equal(s, to_literal(c), to_literal(vars[dim1() + x2]));
          tmp_vars.clear();
       }

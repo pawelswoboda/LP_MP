@@ -19,13 +19,13 @@ TEST_CASE( "unary/pairwise message", "[unary/pairwise message between simplex fa
       }
    }
 
-   UnaryPairwiseMessageLeft<MessageSendingType::SRMP> leftMessage(4,3);
-   UnaryPairwiseMessageRight<MessageSendingType::SRMP> rightMessage(4,3);
+   UnaryPairwiseMessage<Chirality::left,true> leftMessage(4,3);
+   UnaryPairwiseMessage<Chirality::right,true> rightMessage(4,3);
 
    // must add operators -= and += to vector to support the below things
    SECTION( "marginalize pairwise right" ) {
       vector<REAL> marg(4,0.0);
-      leftMessage.ReceiveMessageFromRight(simplexPairwise, marg);
+      leftMessage.send_message_to_left(simplexPairwise, marg);
       REQUIRE(marg[0] == -0.05);
       REQUIRE(marg[1] == -0.001);
       REQUIRE(marg[2] ==  0.3);
@@ -34,7 +34,7 @@ TEST_CASE( "unary/pairwise message", "[unary/pairwise message between simplex fa
 
    SECTION( "marginalize pairwise left" ) {
       vector<REAL> marg(3,0.0);
-      rightMessage.ReceiveMessageFromRight(simplexPairwise, marg);
+      rightMessage.send_message_to_left(simplexPairwise, marg);
       REQUIRE(marg[0] == 0.3);
       REQUIRE(marg[1] == 0.001);
       REQUIRE(marg[2] == 0.2);

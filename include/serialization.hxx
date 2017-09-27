@@ -58,7 +58,7 @@ public:
   template<typename T>
   static INDEX serialize(const matrix<T>& m)
   {
-     return serialize(m.begin(), m.size());
+     return m.size()*sizeof(T);
   }
 
   // for std::vector<T>
@@ -262,7 +262,13 @@ public:
   template<typename T>
   void serialize(const matrix<T>& m)
   {
-     serialize(m.begin(), m.size());
+     T* s = (T*) ar.cur_address();
+     for(auto it=m.begin(); it!=m.end(); ++it) {
+       *s = *it;
+       ++s; 
+     }
+     const INDEX size_in_bytes = sizeof(T)*m.size();
+     ar.advance(size_in_bytes);
   }
 
   // for std::vector<T>
@@ -354,7 +360,13 @@ public:
   template<typename T>
   void serialize(matrix<T>& m)
   {
-     serialize(m.begin(), m.size());
+     T* s = (T*) ar.cur_address();
+     for(auto it=m.begin(); it!=m.end(); ++it) {
+       *it = *s;
+       ++s; 
+     }
+     const INDEX size_in_bytes = sizeof(T)*m.size();
+     ar.advance(size_in_bytes);
   }
 
   // for std::vector<T>
@@ -441,7 +453,10 @@ public:
    template<typename T, typename OP>
      void serialize(matrix<T>& m, OP op)
      {
-       serialize(m.begin(), m.size(), op);
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
+       for(auto it=m.begin(); it!=m.end(); ++it) {
+         *it = op(*it, T(val_));
+       }
      }
 
    // for std::vector<T>
@@ -540,7 +555,14 @@ public:
    template<typename T>
      void serialize(matrix<T>& m)
      {
-       serialize(m.begin(), m.size());
+       static_assert(std::is_same<T,float>::value || std::is_same<T,double>::value,"");
+       T* val = (T*) ar.cur_address();
+       for(auto it=m.begin(); it!=m.end(); ++it) {
+         *it += T(scaling_) * (*val); 
+         ++val;
+       }
+       const INDEX size_in_bytes = sizeof(T)*m.size();
+       ar.advance(size_in_bytes);
      }
 
    // for std::vector<T>

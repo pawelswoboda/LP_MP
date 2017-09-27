@@ -5,8 +5,7 @@
 #include <bitset>
 #include "vector.hxx"
 #include "config.hxx"
-//#include "cereal/types/bitset.hpp"
-//#include "cereal/archives/binary.hpp"
+#include "serialization.hxx"
 
 #ifdef WITH_SAT
 #include "sat_interface.hxx"
@@ -265,10 +264,13 @@ public:
       } 
       */
 
+      assert(this->min() == *std::min_element(this->begin(), this->end()));
       if(has_implicit_origin()) {
-         return std::min(0.0, *std::min_element(this->begin(), this->end()));
+         return std::min(0.0, this->min());
+         //return std::min(0.0, *std::min_element(this->begin(), this->end()));
       } else {
-         return *std::min_element(this->begin(), this->end());
+         return this->min();
+         //return *std::min_element(this->begin(), this->end());
       }
    }
 

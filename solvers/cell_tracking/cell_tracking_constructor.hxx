@@ -21,13 +21,13 @@ namespace LP_MP {
       return a.hypothesis_id < b.hypothesis_id;
     } 
   }
-  bool operator!=(const exclusion_item a, const exclusion_item b) 
-  {
-    return !(a.timestep == b.timestep && a.hypothesis_id == b.hypothesis_id);
-  }
   bool operator==(const exclusion_item a, const exclusion_item b) 
   {
     return a.timestep == b.timestep && a.hypothesis_id == b.hypothesis_id;
+  }
+  bool operator!=(const exclusion_item a, const exclusion_item b) 
+  {
+    return !(a == b);
   }
   static constexpr exclusion_item exclusion_item_delimiter = {std::numeric_limits<INDEX>::max(), std::numeric_limits<INDEX>::max()};
 
@@ -35,6 +35,7 @@ template<typename DETECTION_FACTOR_CONTAINER, typename AT_MOST_ONE_CELL_FACTOR_C
 class basic_cell_tracking_constructor {
 public:
   using detection_factor_container = DETECTION_FACTOR_CONTAINER;
+  using exclusion_factor = AT_MOST_ONE_CELL_FACTOR_CONTAINER;
 
   using CONSTRUCTOR = basic_cell_tracking_constructor<DETECTION_FACTOR_CONTAINER, AT_MOST_ONE_CELL_FACTOR_CONTAINER, AT_MOST_ONE_CELL_MESSAGE_CONTAINER>;
 
@@ -45,20 +46,64 @@ public:
 
   // temporary structure which counts how many incoming and outgoing edges are already used by messages for building the model
   struct transition_count {
-    transition_count(CONSTRUCTOR& c) 
+    //transition_count(CONSTRUCTOR& c) 
+    //{
+    //  current_transition_no.resize( c.detection_factors_.size() );
+    //  current_division_no.resize( c.detection_factors_.size() );
+    //  for(INDEX i=0; i<c.detection_factors_.size(); ++i) {
+    //    current_transition_no[i].resize( c.detection_factors_[i].size(), {0,0});
+    //    current_division_no[i].resize( c.detection_factors_[i].size(), {0,0});
+    //  }
+    //}
+    std::vector<std::vector<std::array<INDEX,2>>> transition_edges; 
+    std::vector<std::vector<std::array<INDEX,2>>> division_edges; 
+
+    void add_detection_hypothesis(
+        const INDEX timestep, const INDEX hypothesis_id,
+        const INDEX no_incoming_transition_edges, const INDEX no_incoming_division_edges,
+        const INDEX no_outgoing_transition_edges, const INDEX no_outgoing_division_edges
+        )
     {
-      current_transition_no.resize( c.detection_factors_.size() );
-      current_division_no.resize( c.detection_factors_.size() );
-      for(INDEX i=0; i<c.detection_factors_.size(); ++i) {
-        current_transition_no[i].resize( c.detection_factors_[i].size(), {0,0});
-        current_division_no[i].resize( c.detection_factors_[i].size(), {0,0});
+      if(timestep >= transition_edges.size()) {
+        transition_edges.resize(timestep+1);
       }
+      if(hypothesis_id >= transition_edges[timestep].size()) {
+        transition_edges[timestep].resize(hypothesis_id + 1, {0,0});
+      }
+      if(timestep >= division_edges.size()) {
+        division_edges.resize(timestep+1);
+      }
+      if(hypothesis_id >= division_edges[timestep].size()) {
+        division_edges[timestep].resize(hypothesis_id + 1, {0,0});
+      }
+      assert(transition_edges[timestep][hypothesis_id][0] == 0 && transition_edges[timestep][hypothesis_id][1] == 0);
+      assert(division_edges[timestep][hypothesis_id][0] == 0 && division_edges[timestep][hypothesis_id][1] == 0);
+
+      division_edges[timestep][hypothesis_id][0] = no_incoming_transition_edges;
+      division_edges[timestep][hypothesis_id][1] = no_outgoing_transition_edges;
     }
-    //std::vector<std::array<INDEX,2>>& operator[](const INDEX i) { return current_transition_no[i]; }
-    std::vector<std::vector<std::array<INDEX,2>>> current_transition_no; 
-    std::vector<std::vector<std::array<INDEX,2>>> current_division_no; 
+    INDEX next_incoming_transition_edge(const INDEX timestep, const INDEX hypothesis_id)
+    {
+      assert(timestep < transition_edges.size() && hypothesis_id < transition_edges[timestep].size());
+      return transition_edges[timestep][hypothesis_id][0]++; 
+    }
+    INDEX next_incoming_division_edge(const INDEX timestep, const INDEX hypothesis_id)
+    {
+      assert(timestep < division_edges.size() && hypothesis_id < division_edges[timestep].size());
+      return division_edges[timestep][hypothesis_id][0]++; 
+    }
+    INDEX next_outgoing_transition_edge(const INDEX timestep, const INDEX hypothesis_id)
+    {
+      assert(timestep < transition_edges.size() && hypothesis_id < transition_edges[timestep].size());
+      return transition_edges[timestep][hypothesis_id][1]++; 
+    }
+    INDEX next_outgoing_division_edge(const INDEX timestep, const INDEX hypothesis_id)
+    {
+      assert(timestep < division_edges.size() && hypothesis_id < division_edges[timestep].size());
+      return division_edges[timestep][hypothesis_id][1]++; 
+    }
   };
-  transition_count init_transition_counter() { return transition_count(*this); }
+  //transition_count init_transition_counter() { return transition_count(*this); }
 
   void set_number_of_timesteps(const INDEX t)
   {
@@ -93,20 +138,6 @@ public:
     }
     //std::cout << "H: " << timestep << ", " << hypothesis_id <<  "," << no_incoming_edges << "," << no_outgoing_edges << ", " << detection_cost << ", " << appearance_cost << ", " << disappearance_cost << std::endl;
     return f; 
-  }
-  
-
-  template<typename ITERATOR>
-  void register_exclusion_constraint(ITERATOR cell_detections_begin, ITERATOR cell_detections_end)
-  {
-    assert(std::distance(cell_detections_begin, cell_detections_end) > 1);
-    for(auto it=cell_detections_begin; it!=cell_detections_end; ++it) {
-      exclusions_.push_back({(*it)[0], (*it)[1]});
-    }
-    auto begin = exclusions_.end() - std::distance(cell_detections_begin, cell_detections_end);
-    auto end = exclusions_.end();
-    std::sort(begin, end);
-    exclusions_.push_back(exclusion_item_delimiter);
   }
 
   template<typename LP_TYPE, typename ITERATOR>
@@ -223,23 +254,6 @@ public:
     }
   }
 
-  // output lineage tree
-  template<typename STREAM>
-  void WritePrimal(STREAM& s, PrimalSolutionStorage& primal) const 
-  {
-    return;
-    for(INDEX t=0; t<detection_factors_.size(); ++t) {
-      std::cout << "t=" << t << "\n";
-      for(INDEX i=0; i<detection_factors_[t].size(); ++i) {
-        auto* f = detection_factors_[t][i]->GetFactor();
-        if(f->outgoing_edge() < f->no_outgoing_edges()) {
-          std::cout << i << " ";
-        }
-      }
-      std::cout << "\n";
-    }
-  }
-
   // add violated exclusion constraints
   INDEX Tighten(const INDEX max_constraints_to_add)
   {
@@ -335,13 +349,13 @@ public:
     assert(timestep_prev + 1 == timestep_next);
 
     auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
-    const INDEX outgoing_edge_index  = tc.current_transition_no[timestep_prev][prev_cell][1];
+    const INDEX outgoing_edge_index  = tc.next_outgoing_transition_edge(timestep_prev, prev_cell);//current_transition_no[timestep_prev][prev_cell][1];
     out_cell_factor->GetFactor()->set_outgoing_transition_cost(outgoing_edge_index, 0.5*cost);
-    tc.current_transition_no[timestep_prev][prev_cell][1]++;
+    //tc.current_transition_no[timestep_prev][prev_cell][1]++;
 
     auto* in_cell_factor = this->detection_factors_[timestep_next][next_cell];
-    const INDEX incoming_edge_index = tc.current_transition_no[timestep_next][next_cell][0];
-    tc.current_transition_no[timestep_next][next_cell][0]++;
+    const INDEX incoming_edge_index = tc.next_incoming_transition_edge(timestep_next, next_cell);//current_transition_no[timestep_next][next_cell][0];
+    //tc.current_transition_no[timestep_next][next_cell][0]++;
     in_cell_factor->GetFactor()->set_incoming_transition_cost(incoming_edge_index, 0.5*cost);
     auto* m = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor, false, outgoing_edge_index, incoming_edge_index);
     lp.AddMessage(m);
@@ -353,19 +367,19 @@ public:
   void add_cell_division(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next_1, const INDEX next_cell_1, const INDEX timestep_next_2, const INDEX next_cell_2, const REAL cost, transition_count& tc) 
   {
     auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
-    const INDEX outgoing_edge_index  = tc.current_transition_no[timestep_prev][prev_cell][1] + tc.current_division_no[timestep_prev][prev_cell][1];
+    const INDEX outgoing_edge_index  = tc.next_outgoing_division_edge(timestep_prev, prev_cell);//tc.current_transition_no[timestep_prev][prev_cell][1] + tc.current_division_no[timestep_prev][prev_cell][1];
     out_cell_factor->GetFactor()->set_outgoing_division_cost(outgoing_edge_index, 1.0/3.0*cost);
-    tc.current_division_no[timestep_prev][prev_cell][1]++;
+    //tc.current_division_no[timestep_prev][prev_cell][1]++;
 
     auto* in_cell_factor_1 = this->detection_factors_[timestep_next_1][next_cell_1];
-    const INDEX incoming_edge_index_1 = tc.current_transition_no[timestep_next_1][next_cell_1][0] + tc.current_division_no[timestep_next_1][next_cell_1][0];
+    const INDEX incoming_edge_index_1 = tc.next_incoming_division_edge(timestep_next_1, next_cell_1);//tc.current_transition_no[timestep_next_1][next_cell_1][0] + tc.current_division_no[timestep_next_1][next_cell_1][0];
     in_cell_factor_1->GetFactor()->set_incoming_division_cost(incoming_edge_index_1, 1.0/3.0*cost);
-    tc.current_division_no[timestep_next_1][next_cell_1][0]++;
+    //tc.current_division_no[timestep_next_1][next_cell_1][0]++;
     
     auto* in_cell_factor_2 = this->detection_factors_[timestep_next_2][next_cell_2];
-    const INDEX incoming_edge_index_2 = tc.current_transition_no[timestep_next_2][next_cell_2][0] + tc.current_division_no[timestep_next_2][next_cell_2][0];
+    const INDEX incoming_edge_index_2 = tc.next_incoming_division_edge(timestep_next_2, next_cell_2);//tc.current_transition_no[timestep_next_2][next_cell_2][0] + tc.current_division_no[timestep_next_2][next_cell_2][0];
     in_cell_factor_2->GetFactor()->set_incoming_division_cost(incoming_edge_index_2, 1.0/3.0*cost);
-    tc.current_division_no[timestep_next_2][next_cell_2][0]++;
+    //tc.current_division_no[timestep_next_2][next_cell_2][0]++;
     
     auto* m1 = new TRANSITION_MESSAGE_CONTAINER(out_cell_factor, in_cell_factor_1, true, outgoing_edge_index, incoming_edge_index_1);
     lp.AddMessage(m1);
@@ -391,16 +405,16 @@ public:
     assert(timestep_prev + 1 == timestep_next);
 
     auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
-    const INDEX outgoing_edge_index  = tc.current_transition_no[timestep_prev][prev_cell][1];
+    const INDEX outgoing_edge_index  = tc.next_incoming_transition_edge(timestep_prev, prev_cell);//tc.current_transition_no[timestep_prev][prev_cell][1];
     //assert( out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] == 0.0 );
     out_cell_factor->GetFactor()->set_outgoing_transition_cost(outgoing_edge_index, 0.5*cost);
     //out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] = cost;
-    tc.current_transition_no[timestep_prev][prev_cell][1]++;
+    //tc.current_transition_no[timestep_prev][prev_cell][1]++;
 
     auto* in_cell_factor = this->detection_factors_[timestep_next][next_cell];
-    const INDEX incoming_edge_index = tc.current_transition_no[timestep_next][next_cell][0];
+    const INDEX incoming_edge_index = tc.next_incoming_transition_edge(timestep_next, next_cell);//tc.current_transition_no[timestep_next][next_cell][0];
     //assert( in_cell_factor->GetFactor()->set_incoming[incoming_edge_index] == 0.0 );
-    tc.current_transition_no[timestep_next][next_cell][0]++;
+    //tc.current_transition_no[timestep_next][next_cell][0]++;
     in_cell_factor->GetFactor()->set_incoming_transition_cost(incoming_edge_index, 0.5*cost);
 
     auto* f = new MAPPING_EDGE_FACTOR_CONTAINER(0.0);
@@ -421,19 +435,19 @@ public:
   {
     // this doees not work for cell tracking without minimal distance. Then the edge indices need to be summed up with the transition edge indices
     auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
-    const INDEX outgoing_edge_index  = tc.current_transition_no[timestep_prev][prev_cell][1] + tc.current_division_no[timestep_prev][prev_cell][1];
+    const INDEX outgoing_edge_index  = tc.next_outgoing_division_edge(timestep_prev, prev_cell);//tc.current_transition_no[timestep_prev][prev_cell][1] + tc.current_division_no[timestep_prev][prev_cell][1];
     out_cell_factor->GetFactor()->set_outgoing_division_cost(outgoing_edge_index, 1.0/3.0*cost);
-    tc.current_division_no[timestep_prev][prev_cell][1]++;
+    //tc.current_division_no[timestep_prev][prev_cell][1]++;
 
     auto* in_cell_factor_1 = this->detection_factors_[timestep_next_1][next_cell_1];
-    const INDEX incoming_edge_index_1 = tc.current_transition_no[timestep_next_1][next_cell_1][0] + tc.current_division_no[timestep_next_1][next_cell_1][0];
+    const INDEX incoming_edge_index_1 = tc.next_incoming_division_edge(timestep_next_1, next_cell_1);//tc.current_transition_no[timestep_next_1][next_cell_1][0] + tc.current_division_no[timestep_next_1][next_cell_1][0];
     in_cell_factor_1->GetFactor()->set_incoming_division_cost(incoming_edge_index_1, 1.0/3.0*cost);
-    tc.current_division_no[timestep_next_1][next_cell_1][0]++;
+    //tc.current_division_no[timestep_next_1][next_cell_1][0]++;
     
     auto* in_cell_factor_2 = this->detection_factors_[timestep_next_2][next_cell_2];
-    const INDEX incoming_edge_index_2 = tc.current_transition_no[timestep_next_2][next_cell_2][0] + tc.current_division_no[timestep_next_2][next_cell_2][0];
+    const INDEX incoming_edge_index_2 = tc.next_incoming_division_edge(timestep_next_2, next_cell_2);//tc.current_transition_no[timestep_next_2][next_cell_2][0] + tc.current_division_no[timestep_next_2][next_cell_2][0];
     in_cell_factor_2->GetFactor()->set_incoming_division_cost(incoming_edge_index_2, 1.0/3.0*cost);
-    tc.current_division_no[timestep_next_2][next_cell_2][0]++;
+    //tc.current_division_no[timestep_next_2][next_cell_2][0]++;
     
     auto* f_1 = new MAPPING_EDGE_FACTOR_CONTAINER(0.0);
     lp.AddFactor(f_1);
@@ -498,6 +512,8 @@ public:
       assert( this->detection_factors_[timestep][hypothesis_id-1] != nullptr); // need not be generally true, but then factor relation must be done more robust.
     }
     //std::cout << "H: " << timestep << ", " << hypothesis_id <<  "," << no_incoming_transition_edges << "," << no_incoming_division_edges << "," << no_outgoing_transition_edges << ", " << no_outgoing_division_edges << "," << detection_cost << ", " << appearance_cost << ", " << disappearance_cost << std::endl;
+
+    tc.add_detection_hypothesis(timestep, hypothesis_id, no_incoming_transition_edges, no_incoming_division_edges, no_outgoing_transition_edges, no_outgoing_division_edges);
     return f; 
   }
   
@@ -505,19 +521,19 @@ public:
   void add_cell_division(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next_1, const INDEX next_cell_1, const INDEX timestep_next_2, const INDEX next_cell_2, const REAL cost, transition_count& tc) 
   {
     auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
-    const INDEX outgoing_edge_index  = tc.current_division_no[timestep_prev][prev_cell][1];
+    const INDEX outgoing_edge_index  = tc.next_outgoing_division_edge(timestep_prev, prev_cell);//tc.current_division_no[timestep_prev][prev_cell][1];
     out_cell_factor->GetFactor()->set_outgoing_division_cost(outgoing_edge_index, 1.0/3.0*cost);
-    tc.current_division_no[timestep_prev][prev_cell][1]++;
+    //tc.current_division_no[timestep_prev][prev_cell][1]++;
 
     auto* in_cell_factor_1 = this->detection_factors_[timestep_next_1][next_cell_1];
-    const INDEX incoming_edge_index_1 = tc.current_division_no[timestep_next_1][next_cell_1][0];
+    const INDEX incoming_edge_index_1 = tc.next_incoming_division_edge(timestep_next_1, next_cell_1);//tc.current_division_no[timestep_next_1][next_cell_1][0];
     in_cell_factor_1->GetFactor()->set_incoming_division_cost(incoming_edge_index_1, 1.0/3.0*cost);
-    tc.current_division_no[timestep_next_1][next_cell_1][0]++;
+    //tc.current_division_no[timestep_next_1][next_cell_1][0]++;
     
     auto* in_cell_factor_2 = this->detection_factors_[timestep_next_2][next_cell_2];
-    const INDEX incoming_edge_index_2 = tc.current_division_no[timestep_next_2][next_cell_2][0];
+    const INDEX incoming_edge_index_2 = tc.next_incoming_division_edge(timestep_next_2, next_cell_2);//tc.current_division_no[timestep_next_2][next_cell_2][0];
     in_cell_factor_2->GetFactor()->set_incoming_division_cost(incoming_edge_index_2, 1.0/3.0*cost);
-    tc.current_division_no[timestep_next_2][next_cell_2][0]++;
+    //tc.current_division_no[timestep_next_2][next_cell_2][0]++;
     
     auto* m1 = new transition_message_container(out_cell_factor, in_cell_factor_1, true, outgoing_edge_index, incoming_edge_index_1);
     lp.AddMessage(m1);
@@ -530,6 +546,213 @@ public:
 
 private:
   INDEX division_distance_ = 0;
+};
+
+// this constructor first builds an ordinary cell tracking problem, solves it, and afterwards converts it into a cell tracking with division distance problem and solves it when it is preprocessed
+// version with no duplicate edges
+template<
+typename CELL_TRACKING_CONSTRUCTOR,
+typename CELL_TRACKING_DIVISION_DISTANCE_CONSTRUCTOR,
+      >
+class cell_tracking_division_distance_conversion_constructor
+{
+public:
+  using transition_count = typename BASIC_CELL_TRACKING_CONSTRUCTOR::transition_count;
+  using exclusion_factor = CELL_TRACKING_CONSTRUCTOR::exclusion_factor;
+
+  cell_tracking_division_distance_conversion_constructor()
+    : cdc_()
+  {}
+
+  ~cell_tracking_division_distance_conversion_constructor()
+  {
+    if(ctc_dd_ != nullptr) {
+      delete ctc_dd_;
+    }
+  }
+
+  template<typename LP_TYPE>
+  DETECTION_FACTOR_CONTAINER* 
+  add_detection_hypothesis(
+      LP_TYPE& lp, 
+      const INDEX timestep, const INDEX hypothesis_id, 
+      const REAL detection_cost, const REAL appearance_cost, const REAL disappearance_cost, 
+      const INDEX no_incoming_transition_edges, const INDEX no_incoming_division_edges, 
+      const INDEX no_outgoing_transition_edges, const INDEX no_outgoing_division_edges
+      )
+  { 
+    if(timestep >= no_transition_edges_.size()) {
+      no_transition_edges_.resize(timestep+1);
+    }
+    if(hypothesis_id >= no_transition_edges_[timestep].size()) {
+      no_transition_edges_[timestep].resize(hypothesis_id + 1, {0,0});
+    }
+    no_transition_edges_[timestep][hypothesis_id][0] = no_incoming_transition_edges;
+    no_transition_edges_[timestep][hypothesis_id][1] = no_outgoing_transition_edges;
+
+    cdc.add_detection_hypothesis(
+        lp, timestep, hypothesis_id, detection_cost, appearance_cost, disappearance_cost, 
+        no_incoming_transition_edges, no_incoming_division_edges,
+        no_outgoing_transition_edges, no_outgoing_division_edges
+        );
+  }
+
+  template<typename LP_TYPE>
+  void add_cell_transition(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next, const INDEX next_cell, const REAL cost, transition_count& tc) 
+  {
+    cdc.add_cell_transition.push_back(lp, timestep_prev, prev_cell, timestep_next, next_cell, cost, tc);
+    transition_edges_.push_back({timestep_prev, prev_cell, timestep_next, next_cell});
+
+  }
+
+  template<typename LP_TYPE>
+  void add_cell_division(LP_TYPE& lp, const INDEX timestep_prev, const INDEX prev_cell, const INDEX timestep_next_1, const INDEX next_cell_1, const INDEX timestep_next_2, const INDEX next_cell_2, const REAL cost, transition_count& tc) 
+  {
+    cdc.add_cell_division(lp, timestep_prev, prev_cell, timestep_next_1, next_cell_1, timestep_next_2, next_cell_2, cost, tc);
+    assert(timestep_prev + 1 == timestep_next);
+    division_edges_.push_back({timestep_prev, prev_cell, timestep_next_1, next_cell_1, timestep_next_2, next_cell_2});
+  }
+
+  template<typename ITERATOR>
+  void register_exclusion_constraint(ITERATOR cell_detections_begin, ITERATOR cell_detections_end)
+  {
+    assert(std::distance(cell_detections_begin, cell_detections_end) > 1);
+    for(auto it=cell_detections_begin; it!=cell_detections_end; ++it) {
+      exclusions_.push_back({(*it)[0], (*it)[1]});
+    }
+    auto begin = exclusions_.end() - std::distance(cell_detections_begin, cell_detections_end);
+    auto end = exclusions_.end();
+    std::sort(begin, end);
+    exclusions_.push_back(exclusion_item_delimiter);
+  }
+
+  template<typename LP_TYPE, typename ITERATOR>
+  AT_MOST_ONE_CELL_FACTOR_CONTAINER* add_exclusion_constraint(LP_TYPE& lp, ITERATOR begin, ITERATOR end) // iterator points to std::array<INDEX,2>
+  {
+    auto* f = cdc.add_exclusion_constraint(lp, begin, end);
+    exclusion_factors_.push_back(f);
+    register_exclusion_constraint(begin, end);
+  }
+
+  template<typename LP>
+  void convert(LP* lp)
+  {
+    auto* ctc_dd = new CELL_TRACKING_DIVISION_DISTANCE_CONSTRUCTOR();
+    // read all factors from ordinary cell tracking problem, and add equivalent ones to problem with division distance.
+    // cost of new factors is reparametrized cost of old ones
+
+    // detection factors
+    for(INDEX t=0; t<ctc.detection_factors_.size()) {
+      for(INDEX i=0; i<ctc.detection_factors_[i].size()) {
+        auto* fp = ctc.detection_factors_[i][t];
+        auto& f = *(f->GetFactor());
+        const REAL detection_cost = f.detection_cost();
+        const REAL appearance_cost = f.appearance_cost()
+        const REAL disappearance_cost = f.disappearance_cost()
+        const INDEX no_incoming_transition = no_transition_edges_[i][t][0];
+        const INDEX no_outgoing_transition = no_transition_edges_[i][t][1];
+        const INDEX no_incoming_division = f.no_incoming_edges() - 1 - no_incoming_transition;
+        const INDEX no_outgoing_division = f.no_outgoing_edges() - 1 - no_outgoing_transition;
+
+        auto* fp_dd = ctc_dd_->add_detection_hypothesis( 
+            lp, t, 
+            detection_cost, appearance_cost, disappearance_cost,
+            no_incoming_transition, no_incoming_division,
+            no_outgoing_transition, no_outgoing_division
+            );
+        auto* f_dd = *(fp_dd->GetFactor());
+
+        for(INDEX incoming_edge = 0; incoming_edge<no_incoming_transition; ++incoming_edge) {
+          const REAL cost = f.incoming[incoming_edge];
+          f_dd.set_incoming_transition_cost(incoming_edge, cost); 
+        }
+        for(INDEX incoming_edge = 0; incoming_edge<no_incoming_division; ++incoming_edge) {
+          const REAL cost = f.incoming[ incoming_edge + no_transition_edges_[t][i] ] ;
+          f_dd.set_incoming_division_cost(incoming_edge, cost); 
+        }
+
+        for(INDEX outgoing_edge = 0; outgoing_edge<no_outgoing_transition; ++outgoing_edge) {
+          const REAL cost = f.outgoing[outgoing_edge];
+          f_dd.set_outgoing_transition_cost(outgoing_edge, cost); 
+        }
+        for(INDEX outgoing_edge = 0; outgoing_edge<no_outgoing_division; ++outgoing_edge) {
+          const REAL cost = f.outgoing[ outgoing_edge + no_transition_edges_[t][i] ] ;
+          f_dd.set_outgoing_division_cost(outgoing_edge, cost); 
+        } 
+      } 
+    }
+
+    // link detections via edges
+    {
+      std::vector<std::vector<std::array<INDEX,2>> edge_counter(f_dd.detection_factors_.size());
+      for(INDEX i=0; i<edge_counter.size(); ++i) {
+        edge_counter[i].resize( f_dd.detection_factors_[i].size(), {0,0} );
+      }
+      for(const auto t : transition_edges) {
+        auto* f_prev = f_dd.detection_factors_[t[0]][t[1]];
+        auto* f_next = f_dd.detection_factors_[t[2]][t[3]];
+        const INDEX outgoing_edge_index = edge_counter[t[0]][t[1]][1]++
+        const INDEX incoming_edge_index = edge_counter[t[2]][t[3]][0]++
+
+        auto* m = new transition_message_container(f_prev, f_next, false, outgoing_edge_index, incoming_edge_index);
+        lp.AddMessage(m);
+      }
+      for(const auto t : division_edges) {
+        auto* f_prev = f_dd.detection_factors_[t[0]][t[1]];
+        auto* f_next_1 = f_dd.detection_factors_[t[2]][t[3]];
+        auto* f_next_2 = f_dd.detection_factors_[t[4]][t[5]];
+        const INDEX outgoing_edge_index = edge_counter[t[0]][t[1]][1]++
+        const INDEX incoming_edge_index_1 = edge_counter[t[2]][t[3]][0]++
+        const INDEX incoming_edge_index_2 = edge_counter[t[4]][t[5]][0]++
+
+        auto* m1 = new transition_message_container(f_prev, f_next_1, true, outgoing_edge_index, incoming_edge_index_1);
+        lp.AddMessage(m1);
+
+        auto* m2 = new transition_message_container(f_prev, f_next_2, true, outgoing_edge_index, incoming_edge_index_2);
+        lp.AddMessage(m2); 
+      }
+    }
+
+    // exclusion factors
+    {
+      auto ef_it = exclusion_factors_.begin();
+      for(INDEX i=0; i<ctc.exclusions_.size();) {
+        auto item_begin = ctc.exclusions_.begin() + i;
+        auto item_end = item_begin;
+        while((*item_end) != exclusion_item_delimiter) {
+          ++item_end; 
+        }
+        auto* f = ctc_dd_->add_exclusion_constraint(*lp_, item_begin, item_end); 
+        i += 1 + std::distance(item_begin, item_end);
+
+        auto* f_old = *ef_it;
+        ++ef_it;
+        for(INDEX j=0; j<f_old.size(); ++j) {
+          f[j] = f_old[j];
+        } 
+      }
+      assert(ef_it == exclusions_factors_.end());
+    }
+    
+    // free up space taken up by conversion information
+    std::swap(no_transition_edges_,decltype(no_transition_edges_));
+    std::swap(transition_edges_,decltype(transition_edges_));
+    std::swap(division_edges_,decltype(division_edges_));
+    std::swap(exclusion_factors_,decltype(exclusion_factors_));
+    std::swap(exclusions_,decltype(exclusions_));
+
+  }
+protected:
+  // store the number of incoming/outgoing transition edges here
+  std::vector<std::vector<std::array<INDEX,2>> no_transition_edges_; 
+  std::vector<std::array<INDEX,4>> transition_edges_;
+  std::vector<std::array<INDEX,6>> division_edges_;
+
+  std::vector<exclusion_factor*> exclusion_factors_;
+  std::vector<exclusion_item> exclusions_;
+
+  CELL_TRACKING_CONSTRUCTOR cdc_;
+  CELL_TRACKING_DIVISION_DISTANCE_CONSTRUCTOR* ctc_dd_ = nullptr;
 };
 
 // we assume that cells are ordered by heigth and lower cells cannot exit if higher ones do not do so.

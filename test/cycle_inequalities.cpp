@@ -61,18 +61,22 @@ TEST_CASE( "cycle inequalities tightening for MAP-MRF", "[MAP-MRF tightening]" )
       REQUIRE(principal_minima(3,3) == 0);
    }
 
-   char * i[3];
+   char * i[5];
    i[0] = "";
    i[1] = "-i";
    i[2] = "";
-   Solver<FMC_SRMP_T,LP,StandardVisitor> s(3,i);
+   i[3] = "-v";
+   i[4] = "2";
+   Solver<FMC_SRMP_T,LP,StandardVisitor> s(5,i);
    auto& mrf = s.template GetProblemConstructor<0>();
+   s.GetLP().set_reparametrization(LPReparametrizationMode::DampedUniform);
 
    matrix<REAL> negPotts2(2,2);
    negPotts2(0,0) = 1.0;
    negPotts2(1,1) = 1.0;
    negPotts2(0,1) = 0.0;
    negPotts2(1,0) = 0.0;
+
    matrix<REAL> posPotts2(2,2); 
    posPotts2(0,0) = 0.0;
    posPotts2(1,1) = 0.0;
@@ -97,9 +101,8 @@ TEST_CASE( "cycle inequalities tightening for MAP-MRF", "[MAP-MRF tightening]" )
       REQUIRE(triplets.size() >= 2);
       mrf.add_triplets(triplets);
 
-      s.GetLP().set_reparametrization(LPReparametrizationMode::Anisotropic);
       for(INDEX i=0; i<100; ++i) {
-         s.GetLP().ComputePass();
+         s.GetLP().ComputePass(i);
       }
       REQUIRE(s.GetLP().LowerBound() > 1.0-eps);
    }
@@ -121,51 +124,39 @@ TEST_CASE( "cycle inequalities tightening for MAP-MRF", "[MAP-MRF tightening]" )
       k_ary_cycle_inequalities_search<typename std::remove_reference<decltype(mrf)>::type> cycle_search(mrf);
 
       auto triplets = cycle_search.search();
-      REQUIRE(triplets.size() >= 2);
+      std::cout << triplets.size() << " kwaskwas\n";
+      for(auto t : triplets) {
+         std::cout << t.i << "," << t.j << "," << t.k << "\n";
+      }
+
+      REQUIRE(triplets.size() >= 3);
       mrf.add_triplets(triplets);
 
-      s.GetLP().set_reparametrization(LPReparametrizationMode::Anisotropic);
+      std::cout << "added triplets:\n";
+
+      for(INDEX f=0; f<mrf.GetNumberOfTripletFactors(); ++f) {
+         const auto indices = mrf.GetTripletIndices(f);
+         std::cout << indices[0] << "," << indices[1] << "," << indices[2] << "\n";
+      } 
+
       for(INDEX i=0; i<100; ++i) {
-         s.GetLP().ComputePass();
+         s.GetLP().ComputePass(i);
       }
       REQUIRE(s.GetLP().LowerBound() > 1.0-eps);
       
    }
 
    matrix<REAL> negPotts4(4,4);
-   negPotts4(0,0) = 1.0;
-   negPotts4(0,1) = 1.0;
-   negPotts4(0,2) = 0.0;
-   negPotts4(0,3) = 0.0;
-   negPotts4(1,0) = 1.0;
-   negPotts4(1,1) = 1.0;
-   negPotts4(1,2) = 0.0;
-   negPotts4(1,3) = 0.0;
-   negPotts4(2,0) = 0.0;
-   negPotts4(2,1) = 0.0;
-   negPotts4(2,2) = 1.0;
-   negPotts4(2,3) = 1.0;
-   negPotts4(3,0) = 0.0;
-   negPotts4(3,1) = 0.0;
-   negPotts4(3,2) = 1.0;
-   negPotts4(3,3) = 1.0;
+   negPotts4(0,0) = 1.0; negPotts4(0,1) = 1.0; negPotts4(0,2) = 0.0; negPotts4(0,3) = 0.0;
+   negPotts4(1,0) = 1.0; negPotts4(1,1) = 1.0; negPotts4(1,2) = 0.0; negPotts4(1,3) = 0.0;
+   negPotts4(2,0) = 0.0; negPotts4(2,1) = 0.0; negPotts4(2,2) = 1.0; negPotts4(2,3) = 1.0;
+   negPotts4(3,0) = 0.0; negPotts4(3,1) = 0.0; negPotts4(3,2) = 1.0; negPotts4(3,3) = 1.0;
+
    matrix<REAL> posPotts4(4,4);
-   posPotts4(0,0) = 0.0;
-   posPotts4(0,1) = 0.0;
-   posPotts4(0,2) = 1.0;
-   posPotts4(0,3) = 1.0;
-   posPotts4(1,0) = 0.0;
-   posPotts4(1,1) = 0.0;
-   posPotts4(1,2) = 1.0;
-   posPotts4(1,3) = 1.0;
-   posPotts4(2,0) = 1.0;
-   posPotts4(2,1) = 1.0;
-   posPotts4(2,2) = 0.0;
-   posPotts4(2,3) = 0.0;
-   posPotts4(3,0) = 1.0;
-   posPotts4(3,1) = 1.0;
-   posPotts4(3,2) = 0.0;
-   posPotts4(3,3) = 0.0;
+   posPotts4(0,0) = 0.0; posPotts4(0,1) = 0.0; posPotts4(0,2) = 1.0; posPotts4(0,3) = 1.0;
+   posPotts4(1,0) = 0.0; posPotts4(1,1) = 0.0; posPotts4(1,2) = 1.0; posPotts4(1,3) = 1.0;
+   posPotts4(2,0) = 1.0; posPotts4(2,1) = 1.0; posPotts4(2,2) = 0.0; posPotts4(2,3) = 0.0;
+   posPotts4(3,0) = 1.0; posPotts4(3,1) = 1.0; posPotts4(3,2) = 0.0; posPotts4(3,3) = 0.0;
 
    SECTION("expanded k-ary cycle search 4-cycle") {
       mrf.AddUnaryFactor({0,0,0,0});
@@ -189,9 +180,8 @@ TEST_CASE( "cycle inequalities tightening for MAP-MRF", "[MAP-MRF tightening]" )
 
       mrf.add_triplets(triplets);
 
-      s.GetLP().set_reparametrization(LPReparametrizationMode::Anisotropic);
       for(INDEX i=0; i<100; ++i) {
-         s.GetLP().ComputePass();
+         s.GetLP().ComputePass(i);
       }
       REQUIRE(s.GetLP().LowerBound() > 1.0-eps);
    }
@@ -220,9 +210,8 @@ TEST_CASE( "cycle inequalities tightening for MAP-MRF", "[MAP-MRF tightening]" )
 
       mrf.add_triplets(triplets);
 
-      s.GetLP().set_reparametrization(LPReparametrizationMode::Anisotropic);
       for(INDEX i=0; i<100; ++i) {
-         s.GetLP().ComputePass();
+         s.GetLP().ComputePass(i);
       }
       REQUIRE(s.GetLP().LowerBound() > 1.0-eps);
    }

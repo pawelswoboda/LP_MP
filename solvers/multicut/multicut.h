@@ -189,8 +189,8 @@ struct FMC_MULTIWAY_CUT {
    using unary_factor_container = FactorContainer<UnarySimplexFactor, FMC_MULTIWAY_CUT, 4, true>;
    using potts_factor_container = FactorContainer<pairwise_potts_factor, FMC_MULTIWAY_CUT, 5>;
 
-   using unary_pairwise_message_0_container = MessageContainer<UnaryPairwiseMessageLeft<>, 4, 5, message_passing_schedule::left, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 7>;
-   using unary_pairwise_message_1_container = MessageContainer<UnaryPairwiseMessageRight<>, 4, 5, message_passing_schedule::left, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 8>;
+   using unary_pairwise_message_0_container = MessageContainer<UnaryPairwiseMessage<Chirality::left>, 4, 5, message_passing_schedule::left, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 7>;
+   using unary_pairwise_message_1_container = MessageContainer<UnaryPairwiseMessage<Chirality::right>, 4, 5, message_passing_schedule::left, variableMessageNumber, 1, FMC_MULTIWAY_CUT, 8>;
 
    // join multicut edge and Potts factor
    using multicut_edge_potts_message_container = MessageContainer<multicut_edge_potts_message, 0, 5, message_passing_schedule::full, atMostOneMessage, atMostOneMessage, FMC_MULTIWAY_CUT, 9>; 
@@ -242,8 +242,8 @@ struct FMC_ASYMMETRIC_MULTIWAY_CUT {
    using unary_factor_container = FactorContainer<UnarySimplexFactor, FMC_ASYMMETRIC_MULTIWAY_CUT, 4, true>;
    using potts_factor_container = FactorContainer<amwc_pairwise_potts_factor, FMC_ASYMMETRIC_MULTIWAY_CUT, 5>;
 
-   using unary_pairwise_message_0_container = MessageContainer<UnaryPairwiseMessageLeft<>, 4, 5, message_passing_schedule::left, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 7>;
-   using unary_pairwise_message_1_container = MessageContainer<UnaryPairwiseMessageRight<>, 4, 5, message_passing_schedule::left, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 8>;
+   using unary_pairwise_message_0_container = MessageContainer<UnaryPairwiseMessage<Chirality::left>, 4, 5, message_passing_schedule::left, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 7>;
+   using unary_pairwise_message_1_container = MessageContainer<UnaryPairwiseMessage<Chirality::right>, 4, 5, message_passing_schedule::left, variableMessageNumber, 1, FMC_ASYMMETRIC_MULTIWAY_CUT, 8>;
 
    // join multicut edge and Potts factor
    using multicut_edge_potts_message_container = MessageContainer<multicut_edge_potts_message, 0, 5, message_passing_schedule::full, atMostOneMessage, atMostOneMessage, FMC_ASYMMETRIC_MULTIWAY_CUT, 9>; 

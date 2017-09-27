@@ -20,10 +20,10 @@ namespace LP_MP {
 
    };
 
-   bool operator<(const triplet_candidate& l, const triplet_candidate& r) {
+   inline bool operator<(const triplet_candidate& l, const triplet_candidate& r) {
       return l.cost > r.cost;
    }
-   bool operator==(const triplet_candidate& l, const triplet_candidate& r) {
+   inline bool operator==(const triplet_candidate& l, const triplet_candidate& r) {
       return l.i == r.i && l.j == r.j && l.k == r.k;
    }
 
