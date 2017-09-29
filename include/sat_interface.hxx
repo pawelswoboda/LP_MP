@@ -8,6 +8,8 @@ extern "C" {
 #include "lglib.h"
 }
 
+// do zrobienia: obsolete, remove!
+
 namespace LP_MP {
 
   using sat_solver = LGL*;

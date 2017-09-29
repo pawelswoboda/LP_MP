@@ -223,8 +223,9 @@ public:
    
    int Solve()
    {
-     std::cout << std::setprecision(10);
-     std::cout << "test lower bound = " << lp_.LowerBound() << "\n";
+      if(debug()) {
+         std::cout << "lower bound before optimization = " << lp_.LowerBound() << "\n";
+      }
 
       this->Begin();
       LpControl c = visitor_.begin(this->lp_);

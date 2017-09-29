@@ -14,7 +14,7 @@ if(BUILD_TESTS)
       graphical_model.cpp
       #graph_matching.cpp
       multicut.cpp
-      #discrete_tomography_chain.cpp
+      discrete_tomography_chain.cpp
       sat_solver.cpp
       )
    enable_testing()

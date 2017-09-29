@@ -2,6 +2,9 @@
 #define LP_MP_DISCRETE_TOMOGRAPHY_SEQUENTIAL_HXX
 
 #include "config.hxx"
+#ifdef WITH_SAT
+#include "sat_solver.hxx"
+#endif
 
 namespace LP_MP {
 
@@ -239,71 +242,64 @@ public:
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
-      auto prev_vars = create_sat_variables(s, no_labels()*prev_sum_size());
-      auto next_vars = create_sat_variables(s, no_labels()*next_sum_size());
-      auto pairwise_vars = create_sat_variables(s, no_labels()*no_labels());
-      auto gluing_vars = create_sat_variables(s, no_labels()*no_labels()*prev_sum_size());
+      auto prev_literals = s.add_literal_matrix(no_labels(), prev_sum_size());
+      auto next_literals = s.add_literal_matrix(no_labels(), next_sum_size());
+      auto pairwise_literals = s.add_literal_matrix(no_labels(), no_labels());
+      auto gluing_literals = s.add_literal_tensor(no_labels(), no_labels(), prev_sum_size());
 
-      add_simplex_constraint_sat(s, prev_vars.begin(), prev_vars.end());
-      add_simplex_constraint_sat(s, next_vars.begin(), next_vars.end());
+      s.add_simplex_constraint(prev_literals.begin(), prev_literals.end());
+      s.add_simplex_constraint(next_literals.begin(), next_literals.end());
       // pairwise vars sum to one through message to pairwise simplex factor
       //add_simplex_constraint_sat(s, pairwise_vars.begin(), pairwise_vars.end());
       // not needed, forced by simplex constraints on marginalized variables
       //add_simplex_constraint_sat(s, gluing_vars.begin(), gluing_vars.end()); 
 
-      std::vector<sat_var> tmp_vars;
-      tmp_vars.reserve(no_labels()*prev_sum_size());
-
       for(INDEX x1=0; x1<no_labels(); ++x1) {
-         for(INDEX sum=0; sum<prev_sum_size(); ++sum) {
-            tmp_vars.clear();
-            for(INDEX x2=0; x2<no_labels(); ++x2) {
-               tmp_vars.push_back(gluing_vars[x1*no_labels()*prev_sum_size() + x2*prev_sum_size() + sum]);
-            }
-            const auto prev_var = prev_vars[x1*prev_sum_size() + sum];
-            const auto sum_var = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-            make_sat_var_equal(s, to_literal(prev_var), to_literal(sum_var));
-         }
-      }
-
-      for(INDEX x2=0; x2<no_labels(); ++x2) {
-         for(INDEX next_sum=0; next_sum<next_sum_size(); ++next_sum) {
-            tmp_vars.clear();
-            for(INDEX x1=0; x1<no_labels(); ++x1) {
-               if(x1 <= next_sum  && next_sum-x1 < prev_sum_size()) {
-                  tmp_vars.push_back(gluing_vars[x1*no_labels()*prev_sum_size() + x2*prev_sum_size() + (next_sum-x1)]);
-               }
-            }
-            const auto next_var = next_vars[x2*next_sum_size() + next_sum];
-            if(!tmp_vars.empty()) {
-               const auto sum_var = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-               make_sat_var_equal(s, to_literal(next_var), to_literal(sum_var));
-            }
+         for(INDEX prev_sum=0; prev_sum<prev_sum_size(); ++prev_sum) {
+            auto slice = gluing_literals.slice13(x1,prev_sum);
+            auto slice_sum = s.add_at_most_one_constraint(slice.begin(), slice.end());
+            s.make_equal(prev_literals(x1,prev_sum), slice_sum);
          }
       }
 
       for(INDEX x1=0; x1<no_labels(); ++x1) {
          for(INDEX x2=0; x2<no_labels(); ++x2) {
-            tmp_vars.clear(); 
-            for(INDEX sum=0; sum<prev_sum_size(); ++sum) {
-               tmp_vars.push_back(gluing_vars[x1*no_labels()*prev_sum_size() + x2*prev_sum_size() + sum]);
-            }
-            const auto pairwise_var = pairwise_vars[x1*no_labels() + x2];
-            const auto sum_var = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-            make_sat_var_equal(s, to_literal(pairwise_var), to_literal(sum_var));
+            auto slice = gluing_literals.slice12(x1,x2);
+            auto slice_sum = s.add_at_most_one_constraint(slice.begin(), slice.end());
+            s.make_equal(pairwise_literals(x1,x2), slice_sum);
          }
-      } 
+      }
+
+      std::vector<sat_literal> tmp_vars;
+      tmp_vars.reserve(no_labels()*prev_sum_size());
+      for(INDEX x2=0; x2<no_labels(); ++x2) {
+         for(INDEX next_sum=0; next_sum<next_sum_size(); ++next_sum) {
+            tmp_vars.clear();
+            for(INDEX x1=0; x1<no_labels(); ++x1) {
+               if(x1 <= next_sum  && next_sum-x1 < prev_sum_size()) {
+                  tmp_vars.push_back(gluing_literals(x1,x2,next_sum-x1));
+               }
+            }
+            auto sum = s.add_at_most_one_constraint(tmp_vars.begin(), tmp_vars.end());
+            s.make_equal(next_literals(x2,next_sum), sum);
+         }
+      }
    }
 
    template<typename VEC>
-   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
+   void reduce_sat(VEC& assumptions, const REAL th, sat_literal begin) const
    {
+      sat_literal_matrix prev_literals(no_labels(), prev_sum_size());
+      sat_literal_matrix next_literals(no_labels(), next_sum_size());
+      sat_literal_matrix pairwise_literals(no_labels(), no_labels());
+      sat_literal_tensor gluing_literals(no_labels(), no_labels(), prev_sum_size());
+      load_sat_literals(begin, prev_literals, next_literals, pairwise_literals, gluing_literals);
+
       const REAL lb = LowerBound();
-      const sat_var gluing_vars_begin = begin + no_labels()*prev_sum_size() + no_labels()*next_sum_size() + no_labels()*no_labels();
       INDEX no_active_labels = 0;
-      for_each_label_sum([this,lb,th,gluing_vars_begin,&assumptions,&no_active_labels](const INDEX x1, const INDEX x2, const INDEX sum) {
+      for_each_label_sum([this,lb,th,gluing_literals,&assumptions,&no_active_labels](const INDEX x1, const INDEX x2, const INDEX sum) {
             if(this->eval(x1,x2,sum) > lb + th) {
-              assumptions.push_back(-to_literal(gluing_vars_begin + x1*this->no_labels()*this->prev_sum_size() + x2*this->prev_sum_size() + sum));
+              assumptions.push_back(-gluing_literals(x1,x2,sum));
             } else {
               no_active_labels++;
             } 
@@ -314,11 +310,17 @@ public:
    }
 
    template<typename SAT_SOLVER>
-   void convert_primal(SAT_SOLVER& s, sat_var first)
+   void convert_primal(SAT_SOLVER& s, sat_literal first)
    {
+      sat_literal_matrix prev_literals(no_labels(), prev_sum_size());
+      sat_literal_matrix next_literals(no_labels(), next_sum_size());
+      sat_literal_matrix pairwise_literals(no_labels(), no_labels());
+      sat_literal_tensor gluing_literals(no_labels(), no_labels(), prev_sum_size());
+      load_sat_literals(first, prev_literals, next_literals, pairwise_literals, gluing_literals);
+
       for(INDEX x1=0; x1<no_labels(); ++x1) {
          for(INDEX sum=0; sum<prev_sum_size(); ++sum) {
-            if(lglderef(s,to_literal(first + x1*prev_sum_size() + sum)) == 1) {
+            if(s.solution(prev_literals(x1,sum))) {
                state_[0] = x1;
                sum_[0] = sum;
             }
@@ -327,9 +329,26 @@ public:
 
       for(INDEX x2=0; x2<no_labels(); ++x2) {
          for(INDEX sum=0; sum<next_sum_size(); ++sum) {
-            if(lglderef(s,to_literal(first + no_labels()*prev_sum_size() + x2*next_sum_size() + sum)) == 1) {
+            if(s.solution(next_literals(x2,sum))) {
                state_[1] = x2;
                sum_[1] = sum;
+            }
+         }
+      }
+
+      for(INDEX x1=0; x1<no_labels(); ++x1) {
+         for(INDEX x2=0; x2<no_labels(); ++x2) {
+            if(s.solution(pairwise_literals(x1,x2))) {
+               assert(x1 == state_[0] && x2 == state_[1]);
+            }
+         }
+      }
+      for(INDEX x1=0; x1<no_labels(); ++x1) {
+         for(INDEX x2=0; x2<no_labels(); ++x2) {
+            for(INDEX sum=0; sum<prev_sum_size(); ++sum) {
+               if(s.solution(gluing_literals(x1,x2,sum))) {
+                  assert(x1 == state_[0] && x2 == state_[1] && sum == sum_[0]);
+               }
             }
          }
       }
@@ -399,16 +418,24 @@ public:
 
 #ifdef WITH_SAT
    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_literal left_begin, sat_literal right_begin) const
    {
       assert(l.next_sum_size() == r.prev_sum_size());
-      for(INDEX x=0; x<l.no_labels(); ++x) {
-         for(INDEX sum=0; sum<l.next_sum_size(); ++sum) {
-            const auto left_var = left_begin + l.no_labels()*l.prev_sum_size()  + x*l.next_sum_size() + sum;
-            const auto right_var = right_begin + x*r.prev_sum_size() + sum;
-            make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
-         }
-      }
+      assert(l.no_labels() == r.no_labels());
+
+      sat_literal_matrix left_prev_literals(l.no_labels(), l.prev_sum_size());
+      sat_literal_matrix left_next_literals(l.no_labels(), l.next_sum_size());
+      sat_literal_matrix left_pairwise_literals(l.no_labels(), l.no_labels());
+      sat_literal_tensor left_gluing_literals(l.no_labels(), l.no_labels(), l.prev_sum_size());
+      load_sat_literals(left_begin, left_prev_literals, left_next_literals, left_pairwise_literals, left_gluing_literals);
+
+      sat_literal_matrix right_prev_literals(r.no_labels(), r.prev_sum_size());
+      sat_literal_matrix right_next_literals(r.no_labels(), r.next_sum_size());
+      sat_literal_matrix right_pairwise_literals(r.no_labels(), r.no_labels());
+      sat_literal_tensor right_gluing_literals(r.no_labels(), r.no_labels(), r.prev_sum_size());
+      load_sat_literals(right_begin, right_prev_literals, right_next_literals, right_pairwise_literals, right_gluing_literals);
+
+      s.make_equal(left_next_literals.begin(), left_next_literals.end(), right_prev_literals.begin(), right_prev_literals.end());
    } 
 #endif
 
@@ -760,17 +787,27 @@ public:
 
 #ifdef WITH_SAT
    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_literal left_begin, sat_literal right_begin) const
    {
       assert(!transpose_);
       assert(r.no_labels() == l.dim1());
       assert(r.no_labels() == l.dim2());
       // to do: take care of transposed_!
+
+      sat_literal_vector pairwise_left(l.dim1());
+      sat_literal_vector pairwise_right(l.dim2());
+      sat_literal_matrix pairwise_pairwise(l.dim1(),l.dim2());
+      load_sat_literals(left_begin, pairwise_left, pairwise_right, pairwise_pairwise);
+
+      sat_literal_matrix dt_prev_literals(r.no_labels(), r.prev_sum_size());
+      sat_literal_matrix dt_next_literals(r.no_labels(), r.next_sum_size());
+      sat_literal_matrix dt_pairwise_literals(r.no_labels(), r.no_labels());
+      sat_literal_tensor dt_gluing_literals(r.no_labels(), r.no_labels(), r.prev_sum_size());
+      load_sat_literals(right_begin, dt_prev_literals, dt_next_literals, dt_pairwise_literals, dt_gluing_literals);
+
       for(INDEX x1=0; x1<l.dim1(); ++x1) {
          for(INDEX x2=0; x2<l.dim2(); ++x2) {
-            const sat_var left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim2() + x2;
-            const sat_var right_var = right_begin + r.no_labels()*r.prev_sum_size() + r.no_labels()*r.next_sum_size() + x1*r.no_labels() + x2;
-            make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+            s.make_equal(pairwise_pairwise(x1,x2), dt_pairwise_literals(x1,x2));
          }
       }
    }

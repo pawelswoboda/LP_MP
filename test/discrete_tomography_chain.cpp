@@ -52,16 +52,18 @@ void add_projection_and_unaries_and_run(SOLVER& s, std::vector<INDEX> projection
 
 TEST_CASE("discrete tomography single chain", "[dt chain]") {
 
-   char * options[7];
-   options[0] = "";
-   options[1] = "-i";
-   options[2] = "";
-   options[3] = "--maxIter";
-   options[4] = "1000";
-   options[5] = "-v";
-   options[6] = "2";
+   std::vector<std::string> options = { {""},
+      {"-i"}, {""},
+      {"--maxIter"}, {"550"},
+      {"-v"},  {"0"},
+      {"--lowerBoundComputationInterval"}, {"1"},
+      {"--primalComputationInterval"}, {"5"},
+      {"--standardReparametrization"}, {"anisotropic"},
+      {"--roundingReparametrization"}, {"damped_uniform"},
+      {"--satReductionMode"}, {"static"}
+   };
 
-   MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> s(7,options);
+   MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> s(options);
 
    // add single Potts chain of length 10 with varying summation costs
    const INDEX noLabels = 3;
@@ -142,15 +144,15 @@ TEST_CASE("discrete tomography single chain", "[dt chain]") {
 
    SECTION("sum = 20 with unaries") { add_projection_and_unaries_and_run(s, projection_var, 20, 0); }
 
-   SECTION("subgradient") {
-      auto& dt = s.template GetProblemConstructor<1>();
-
-      const INDEX projection_sum = 10;
-      std::vector<REAL> projectionCost(projection_sum + 1);
-      std::fill(projectionCost.begin(), projectionCost.end(), std::numeric_limits<REAL>::infinity());
-      projectionCost.back() = 0.0;
-      LP_tree t;
-      dt.AddProjection(projection_var, projectionCost, &t); 
-   }
+   //SECTION("subgradient") {
+   //   auto& dt = s.template GetProblemConstructor<1>();
+//
+//      const INDEX projection_sum = 10;
+//      std::vector<REAL> projectionCost(projection_sum + 1);
+//      std::fill(projectionCost.begin(), projectionCost.end(), std::numeric_limits<REAL>::infinity());
+//      projectionCost.back() = 0.0;
+//      LP_tree t;
+//      dt.AddProjection(projection_var, projectionCost, &t); 
+//   }
 }
 
