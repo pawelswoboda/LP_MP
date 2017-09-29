@@ -6,7 +6,7 @@
 #include "vector.hxx"
 //#include "cereal/types/array.hpp"
 #ifdef WITH_SAT
-#include "sat_interface.hxx"
+#include "sat_solver.hxx"
 #endif
 
 // Investigate contingency tables (Knuth) for more general tabular structures.
@@ -78,26 +78,26 @@ public:
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
-      auto vars = create_sat_variables(s, size());
-      add_simplex_constraint_sat(s, vars.begin(), vars.end());
+      auto literals = s.add_literal_vector(size());
+      s.add_simplex_constraint(literals.begin(), literals.end());
    }
 
    template<typename VEC>
-   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
+   void reduce_sat(VEC& assumptions, const REAL th, sat_literal begin) const
    {
       const REAL lb = LowerBound();
       for(INDEX i=0; i<this->size(); ++i) {
          if((*this)[i] > lb + th) { 
-            assumptions.push_back(-to_literal(begin+i));
+            assumptions.push_back(-(begin+i));
          }
       } 
    }
 
    template<typename SAT_SOLVER>
-   void convert_primal(SAT_SOLVER& s, sat_var first)
+   void convert_primal(SAT_SOLVER& s, sat_literal first)
    {
-      for(INDEX i=first; i<first+this->size(); ++i) {
-         if(lglderef(s,to_literal(i)) == 1) {
+      for(auto i=first; i<first+this->size(); ++i) {
+         if(s.solution(i)) {
             primal_ = i-first;
          }
       }
@@ -157,26 +157,26 @@ public:
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
-      auto vars = create_sat_variables(s, size() + 1);
-      add_simplex_constraint_sat(s, vars.begin(), vars.end());
+      auto literals = s.add_literal_vector(size() + 1);
+      add_simplex_constraint_sat(s, literals.begin(), literals.end());
    }
 
    template<typename VEC>
-   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
+   void reduce_sat(VEC& assumptions, const REAL th, sat_literal begin) const
    {
       const REAL lb = LowerBound();
       for(INDEX i=0; i<this->size()+1; ++i) {
          if((*this)[i] > lb + th) { 
-            assumptions.push_back(-to_literal(begin+i));
+            assumptions.push_back(-(begin+i));
          }
       } 
    }
 
    template<typename SAT_SOLVER>
-   void convert_primal(SAT_SOLVER& s, sat_var first)
+   void convert_primal(SAT_SOLVER& s, sat_literal first)
    {
-      for(INDEX i=first; i<first+this->size()+1; ++i) {
-         if(lglderef(s,to_literal(i)) == 1) {
+      for(sat_literal i=first; i<first+this->size()+1; ++i) {
+         if(s.solution(i)) {
             primal_ = i-first;
          }
       }
@@ -363,27 +363,20 @@ public:
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
-      auto vars = create_sat_variables(s, dim1() + dim2() + dim1()*dim2());
-      auto pairwise_var_begin = vars.begin() + dim1() + dim2();
-
-      std::vector<sat_var> tmp_vars;
-      tmp_vars.reserve(std::max(dim1(), dim2()));
+      auto left_unaries = s.add_literal_vector(dim1());
+      auto right_unaries = s.add_literal_vector(dim2());
+      auto pairwise = s.add_literal_matrix(dim1(), dim2());
 
       for(INDEX x1=0; x1<dim1(); ++x1) {
-         for(INDEX x2=0; x2<dim2(); ++x2) {
-            tmp_vars.push_back(pairwise_var_begin[x1*dim2() + x2]);
-         }
-         sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-         make_sat_var_equal(s, to_literal(c), to_literal(vars[x1]));
-         tmp_vars.clear();
+         auto slice = pairwise.slice_left(x1);
+         auto c = s.add_at_most_one_constraint(slice.begin(), slice.end());
+         s.make_equal(c, left_unaries[x1]);
       }
+
       for(INDEX x2=0; x2<dim2(); ++x2) {
-         for(INDEX x1=0; x1<dim1(); ++x1) {
-            tmp_vars.push_back(pairwise_var_begin[x1*dim2() + x2]);
-         }
-         sat_var c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-         make_sat_var_equal(s, to_literal(c), to_literal(vars[dim1() + x2]));
-         tmp_vars.clear();
+         auto slice = pairwise.slice_right(x2);
+         auto c = s.add_at_most_one_constraint(slice.begin(), slice.end());
+         s.make_equal(c, right_unaries[x2]);
       }
 
       // is superfluous: summation constraints must be active due to unary simplex factors
@@ -394,27 +387,36 @@ public:
    template<typename VEC>
    void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
    {
-      begin += dim1() + dim2();
+      sat_literal_vector left_unaries(dim1());
+      sat_literal_vector right_unaries(dim2());
+      sat_literal_matrix pairwise(dim1(),dim2());
+      load_sat_literals(begin, left_unaries, right_unaries, pairwise);
+
       const REAL lb = LowerBound();
       for(INDEX x1=0; x1<this->dim1(); ++x1) {
          for(INDEX x2=0; x2<this->dim2(); ++x2) {
             if((*this)(x1,x2) > lb + th) { 
-               assumptions.push_back(-to_literal(begin + x1*dim2() + x2));
+               assumptions.push_back(-pairwise(x1,x2));
             }
          }
       } 
    }
 
    template<typename SAT_SOLVER>
-   void convert_primal(SAT_SOLVER& s, sat_var first)
+   void convert_primal(SAT_SOLVER& sat, sat_var first)
    {
+      sat_literal_vector left_unaries(dim1());
+      sat_literal_vector right_unaries(dim2());
+      sat_literal_matrix pairwise(dim1(),dim2());
+      load_sat_literals(first, left_unaries, right_unaries, pairwise);
+
       for(INDEX x1=0; x1<this->dim1(); ++x1) {
-         if(lglderef(s,to_literal(first + x1)) == 1) {
+         if(sat.solution(left_unaries[x1])) {
             primal_[0] = x1;
          } 
       }
       for(INDEX x2=0; x2<this->dim2(); ++x2) {
-         if(lglderef(s,to_literal(first + dim1() + x2)) == 1) {
+         if(sat.solution(right_unaries[x2])) {
             primal_[1] = x2;
          } 
       }
@@ -598,65 +600,51 @@ public:
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
    {
-      //auto vars = create_sat_variables(s, dim1()*dim2() + dim1()*dim3() + dim2()*dim3() + dim1()*dim2()*dim3());
-      auto vars_12 = create_sat_variables(s, dim1()*dim2());
-      auto vars_13 = create_sat_variables(s, dim1()*dim3());
-      auto vars_23 = create_sat_variables(s, dim2()*dim3());
-      auto vars_123 = create_sat_variables(s, dim1()*dim2()*dim3());
-      //auto triplet_var_begin = vars[dim1()*dim2() + dim1()*dim3() + dim2()*dim3()];
-
-      std::vector<sat_var> tmp_vars;
-      tmp_vars.reserve(std::max({dim1()*dim2(), dim1()*dim3(), dim2()*dim3()}));
+      auto literals_12 = s.add_literal_matrix(dim1(),dim2());
+      auto literals_13 = s.add_literal_matrix(dim1(),dim3());
+      auto literals_23 = s.add_literal_matrix(dim2(),dim3());
+      auto literals_123 = s.add_literal_tensor(dim1(),dim2(),dim3());
 
       for(INDEX x1=0; x1<dim1(); ++x1) {
          for(INDEX x2=0; x2<dim2(); ++x2) {
-            for(INDEX x3=0; x3<dim3(); ++x3) {
-               tmp_vars.push_back(vars_123[x1*dim2()*dim3() + x2*dim3() + x3]);
-            }
-            //auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-            auto c = one_active_indicator_sat(s, tmp_vars.begin(), tmp_vars.end());
-            make_sat_var_equal(s, to_literal(c), to_literal(vars_12[x1*dim2() + x2]));
-            tmp_vars.clear();
+            auto slice = literals_123.slice12(x1,x2);
+            auto slice_sum = s.add_at_most_one_constraint(slice.begin(), slice.end());
+            s.make_equal(literals_12(x1,x2), slice_sum);
          }
       }
 
       for(INDEX x1=0; x1<dim1(); ++x1) {
          for(INDEX x3=0; x3<dim3(); ++x3) {
-            for(INDEX x2=0; x2<dim2(); ++x2) {
-               tmp_vars.push_back(vars_123[x1*dim2()*dim3() + x2*dim3() + x3]);
-            }
-            //auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-            auto c = one_active_indicator_sat(s, tmp_vars.begin(), tmp_vars.end());
-            make_sat_var_equal(s, to_literal(c), to_literal(vars_13[x1*dim3() + x3]));
-            tmp_vars.clear();
+            auto slice = literals_123.slice13(x1,x3);
+            auto slice_sum = s.add_at_most_one_constraint(slice.begin(), slice.end());
+            s.make_equal(literals_13(x1,x3), slice_sum);
          }
       }
 
       for(INDEX x2=0; x2<dim2(); ++x2) {
          for(INDEX x3=0; x3<dim3(); ++x3) {
-            for(INDEX x1=0; x1<dim1(); ++x1) {
-               tmp_vars.push_back(vars_123[x1*dim2()*dim3() + x2*dim3() + x3]);
-            }
-            //auto c = add_at_most_one_constraint_sat(s, tmp_vars.begin(), tmp_vars.end());
-            auto c = one_active_indicator_sat(s, tmp_vars.begin(), tmp_vars.end());
-            make_sat_var_equal(s, to_literal(c), to_literal(vars_23[x2*dim3() + x3]));
-            tmp_vars.clear();
+            auto slice = literals_123.slice23(x2,x3);
+            auto slice_sum = s.add_at_most_one_constraint(slice.begin(), slice.end());
+            s.make_equal(literals_23(x2,x3), slice_sum);
          }
       }
-
-      // summation constraints over triplet variables are superfluous: they are enforced via messages
    }
 
    template<typename VEC>
    void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
    {
-      begin += dim1()*dim2() + dim1()*dim3() + dim2()*dim3();
+      sat_literal_matrix literals_12(dim1(),dim2());
+      sat_literal_matrix literals_13(dim1(),dim3());
+      sat_literal_matrix literals_23(dim2(),dim3());
+      sat_literal_tensor literals_123(dim1(),dim2(),dim3());
+      load_sat_literals(begin, literals_12, literals_13, literals_23, literals_123);
+
       const REAL lb = LowerBound();
       for(INDEX x1=0; x1<this->dim1(); ++x1) {
          for(INDEX x2=0; x2<this->dim2(); ++x2) {
             for(INDEX x3=0; x3<this->dim3(); ++x3) {
                if((*this)(x1,x2,x3) > lb + th) { 
-                  assumptions.push_back(-to_literal(begin + x1*dim2()*dim3() + x2*dim3() + x3));
+                  assumptions.push_back(-literals_123(x1,x2,x3));
                }
             }
          }
@@ -666,21 +654,35 @@ public:
    template<typename SAT_SOLVER>
    void convert_primal(SAT_SOLVER& s, sat_var first)
    {
+      sat_literal_matrix literals_12(dim1(),dim2());
+      sat_literal_matrix literals_13(dim1(),dim3());
+      sat_literal_matrix literals_23(dim2(),dim3());
+      sat_literal_tensor literals_123(dim1(),dim2(),dim3());
+      load_sat_literals(first, literals_12, literals_13, literals_23, literals_123);
+
       for(INDEX x1=0; x1<this->dim1(); ++x1) {
          for(INDEX x2=0; x2<this->dim2(); ++x2) {
-            if(lglderef(s,to_literal(first + x1*dim2() + x2)) == 1) {
+            if(s.solution(literals_12(x1,x2))) {
                primal_[0] = x1;
                primal_[1] = x2;
             }
          } 
       }
 
-      const INDEX pairwise_var_begin_13 = first + dim1()*dim2(); 
       for(INDEX x1=0; x1<dim1(); ++x1) {
          for(INDEX x3=0; x3<dim3(); ++x3) {
-            if(lglderef(s,to_literal(pairwise_var_begin_13 + x1*dim3() + x3)) == 1) {
+            if(s.solution(literals_13(x1,x3))) {
                assert(primal_[0] == x1);
                primal_[2] = x3;
+            }
+         }
+      }
+
+      for(INDEX x2=0; x2<dim2(); ++x2) {
+         for(INDEX x3=0; x3<dim3(); ++x3) {
+            if(s.solution(literals_23(x2,x3))) {
+               assert(primal_[1] == x2);
+               assert(primal_[2] == x3);
             }
          }
       }

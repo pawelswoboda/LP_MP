@@ -25,7 +25,7 @@
 #include "memory_allocator.hxx"
 #include "cereal/archives/binary.hpp"
 #include "serialization.hxx"
-#include "sat_interface.hxx"
+#include "sat_solver.hxx"
 #include "tclap/CmdLine.h"
 
 #ifdef LP_MP_PARALLEL
@@ -48,12 +48,12 @@ public:
    virtual FactorTypeAdapter* clone() const = 0;
    virtual void UpdateFactor(const weight_vector& omega) = 0;
    virtual void UpdateFactorPrimal(const weight_vector& omega, const INDEX iteration) = 0;
-   virtual void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec<sat_literal>& assumptions) = 0;
+   virtual void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec& assumptions) = 0;
    virtual void reduce_sat(const REAL th, sat_var begin, std::vector<sat_literal>& assumptions) = 0;
    //virtual void convert_primal(Glucose::SimpSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
    //virtual void convert_primal(CMSat::SATSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
-   virtual void construct_sat_clauses(LGL*) = 0;
-   virtual void convert_primal(LGL*, sat_var) = 0; // this is not nice: the solver should be templatized
+   virtual void construct_sat_clauses(sat_solver&) = 0;
+   virtual void convert_primal(sat_solver&, sat_var) = 0; // this is not nice: the solver should be templatized
    virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
    // to do: remove both
    virtual INDEX size() const = 0;
@@ -136,7 +136,7 @@ public:
    //virtual bool CanSendMessageToLeft() const = 0;
    //virtual bool CanSendMessageToRight() const = 0;
 
-   virtual void construct_sat_clauses(LGL*, sat_var, sat_var) = 0;
+   virtual void construct_sat_clauses(sat_solver&, sat_literal, sat_literal) = 0;
    // for the LP interface
    virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) = 0;
 };
@@ -629,6 +629,7 @@ protected:
 #endif
 };
 
+// do zrobienia: put into own file
 template<typename BASE_LP_CLASS>
 class LP_sat : public BASE_LP_CLASS
 {
@@ -658,8 +659,6 @@ public:
     : BASE_LP_CLASS(cmd), 
     sat_reduction_mode_arg_("","satReductionMode","how to reduce sat problem",false,"interleaved","{interleaved|static}",cmd)
   {
-     sat_ = lglinit();
-     assert(sat_ != nullptr);
      //sat_.set_no_simplify(); // seems to make solver much faster
   }
 
@@ -669,54 +668,11 @@ public:
      //assert(!sat_computation_running());
      if(sat_computation_running()) {
         sat_handle_.wait(); 
-     }
-     lglrelease(sat_);
-  }
-
-  LP_sat(LP_sat& o)
-    : 
-    sat_var_(lglclone(o.sat_var_)),
-    forward_sat_th_(o.forward_sat_th_), 
-    backward_sat_th_(backward_sat_th_),
-    cur_sat_reduction_direction_(o.cur_sat_reduction_direction_)
-  {
-     assert(sat_handle_.valid()); //should not be copied and we assume that currently no sat solver is running
-  }
-
-  void collect_sat_result()
-  {
-     if(verbosity >= 2) { 
-       std::cout << "collect sat result with threshold = ";
-       if(cur_sat_reduction_direction_ == Direction::forward) { 
-         std::cout << forward_sat_th_.th;
-       } else {
-         std::cout << backward_sat_th_.th;
-       } 
-       std::cout << "\n"; // = " << th.th << "\n";
-     }
-     const bool feasible = sat_handle_.get();
-     if(feasible && !sat_dirty_) {
-
-        for(sat_var i=0; i<lglmaxvar(sat_); ++i) {
-           //for(sat_var i=0; i<sat_.nVars(); ++i) {
-           //assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
-           //}
-        }
-        // convert sat solution to original solution format and compute primal cost
-        for(INDEX i=0; i<this->f_.size(); ++i) {
-           assert(this->factor_address_to_index_[this->f_[i]] == i);
-           this->f_[i]->convert_primal(sat_, sat_var_[i]);
-        }
-        if(verbosity >= 2) {
-          const REAL primal_cost = this->EvaluatePrimal();
-          std::cout << "sat solution cost = " << primal_cost << "\n"; 
-        }
-     } else {
-       if(verbosity >= 2) { std::cout << "sat not feasible with current threshold\n"; }
+        collect_sat_result();
      }
   }
 
-
+  
   virtual INDEX AddFactor(FactorTypeAdapter* f) 
   {
      // we must wait for the sat solver to finish
@@ -725,7 +681,7 @@ public:
         collect_sat_result();
      }
 
-     sat_var_.push_back( lglmaxvar(sat_) );
+     sat_var_.push_back( sat_.size()+1 );
      //sat_var_.push_back(sat_.nVars());
      //std::cout << "number of variables in sat_ = " << sat_var_[sat_var_.size()-1] << "\n";
      f->construct_sat_clauses(sat_);
@@ -756,24 +712,69 @@ public:
       return BASE_LP_CLASS::AddMessage(m);
    }
 
-   // do zrobienia: only pass sat solver, not while LP object
-   static bool solve_sat_problem(LP_type* c, sat_vec<sat_literal> assumptions, sat_th* th)
+   void solve_sat_problem_async(const sat_vec& assumptions, sat_th* th)
    {
-     for(INDEX i=0; i<assumptions.size(); ++i) {
-       lglassume( c->sat_, assumptions[i] );
-     }
-     for(INDEX i=0; i<lglmaxvar(c->sat_); ++i) {
-       lglfreeze(c->sat_, to_literal(i));
-     }
-     const int sat_ret = lglsat(c->sat_);
-     if(verbosity >= 2) { std::cout << "solved sat " << sat_ret << "\n"; }
-
-     const bool feasible = (sat_ret == LGL_SATISFIABLE);
-     //solve(&assumptions) == CMSat::l_True;
-     //const bool feasible = c->sat_.solve(&assumptions) == CMSat::l_True;
-     th->adjust_th(feasible);
-     return feasible;
+      assert(!sat_computation_running());
+      sat_handle_ = std::async(std::launch::async, solve_sat_problem_async_impl, &sat_, assumptions, th);
    }
+
+   static bool solve_sat_problem_async_impl(sat_solver* sat_ptr, sat_vec assumptions, sat_th* th)
+   {
+      const bool feasible = sat_ptr->solve(assumptions.begin(), assumptions.end());
+
+      if(debug()) { std::cout << "sat with threshold " << th->th << ": " << (feasible ? "feasible" : "infeasible") << "\n"; }
+      th->adjust_th(feasible);
+      if(debug()) { std::cout << "new threshold = " << th->th << "\n"; }
+
+      return feasible;
+   }
+
+   bool sat_computation_running() const
+   {
+      if(!sat_handle_.valid()) { // do not collect sat result in first round
+         return false;
+      }
+      const auto sat_state = sat_handle_.wait_for(std::chrono::seconds(0));
+      assert(sat_state != std::future_status::deferred); // this should not happen as we launch primal computation immediately.
+      return sat_state != std::future_status::ready;
+   }
+
+   void collect_sat_result()
+   {
+      assert(!sat_computation_running());
+      const bool feasible = sat_handle_.get();
+      if(!feasible) { return; }
+
+      if(debug()) { 
+         std::cout << "collect sat result with threshold = ";
+         if(cur_sat_reduction_direction_ == Direction::forward) { 
+            std::cout << forward_sat_th_.th;
+         } else {
+            std::cout << backward_sat_th_.th;
+         } 
+         std::cout << "\n"; // = " << th.th << "\n";
+      }
+
+      if(!sat_dirty_) {
+
+         for(sat_var i=0; i<sat_.size(); ++i) {
+            //for(sat_var i=0; i<sat_.nVars(); ++i) {
+            //assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
+            //}
+         }
+         // convert sat solution to original solution format and compute primal cost
+         for(INDEX i=0; i<this->f_.size(); ++i) {
+            assert(this->factor_address_to_index_[this->f_[i]] == i);
+            this->f_[i]->convert_primal(sat_, sat_var_[i]);
+         }
+         if(verbosity >= 2) {
+            const REAL primal_cost = this->EvaluatePrimal();
+            std::cout << "sat solution cost = " << primal_cost << "\n"; 
+         }
+      }
+   }
+
+
 
    void ComputeForwardPassAndPrimal(const INDEX iteration)
    {
@@ -805,15 +806,6 @@ public:
       ComputeBackwardPassAndPrimal(2*iteration+2);
    }
 
-   bool sat_computation_running() const
-   {
-     if(!sat_handle_.valid()) {
-        return false; // sat not yet begun.
-     }
-     const auto sat_state = sat_handle_.wait_for(std::chrono::seconds(0));
-     assert(sat_state != std::future_status::deferred); // this should not happen as we launch primal computation immediately.
-     return sat_state != std::future_status::ready; 
-   }
 
    template<typename FACTOR_ITERATOR, typename WEIGHT_ITERATOR>
    void compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, sat_th& th)
@@ -824,7 +816,7 @@ public:
         collect_sat_result();
       }
 
-      sat_vec<sat_literal> assumptions;
+      sat_vec assumptions;
       if(sat_reduction_mode_arg_.getValue() == "interleaved") {
         assumptions = reduce_sat_interleaved(factor_begin, factor_end, omega_begin, th.th);
       } else if(sat_reduction_mode_arg_.getValue() == "static") {
@@ -835,11 +827,11 @@ public:
       // run sat solver on reduced problem asynchronously
       if(!sat_handle_.valid()) { 
          if(verbosity >= 2) { std::cout << "start sat calculation\n"; }
-         sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
+         solve_sat_problem_async(assumptions, &th);
          sat_dirty_ = false;
       } else { 
         if(verbosity >= 2) { std::cout << "restart sat calculation\n"; }
-        sat_handle_ = std::async(std::launch::async, solve_sat_problem, this, assumptions, &th);
+        solve_sat_problem_async(assumptions, &th);
         sat_dirty_ = false;
       }
    }
@@ -847,7 +839,7 @@ public:
    template<typename FACTOR_ITERATOR, typename WEIGHT_ITERATOR>
    std::vector<sat_literal> reduce_sat_interleaved(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, const REAL th)
    {
-      sat_vec<sat_literal> assumptions;
+      sat_vec assumptions;
       for(auto it=factor_begin; it!=factor_end; ++it, ++omega_begin) {
          const INDEX factor_number = this->factor_address_to_index_[*it];
          (*it)->UpdateFactorSAT(*omega_begin, th, sat_var_[factor_number], assumptions);
@@ -857,7 +849,7 @@ public:
 
    std::vector<sat_literal> reduce_sat_static(const REAL th)
    {
-      sat_vec<sat_literal> assumptions;
+      sat_vec assumptions;
       for(INDEX i=0; i<this->f_.size(); ++i) {
         this->f_[i]->reduce_sat(th, sat_var_[i], assumptions);
       }
@@ -866,15 +858,13 @@ public:
 private:
 
    std::vector<sat_var> sat_var_;
-   //Glucose::SimpSolver sat_;
-   //CMSat::SATSolver sat_;
-   LGL* sat_;
+   sat_solver sat_;
+   decltype(std::async(std::launch::async, solve_sat_problem_async_impl, nullptr, sat_vec{}, nullptr)) sat_handle_;
 
    sat_th forward_sat_th_, backward_sat_th_;
 
    TCLAP::ValueArg<std::string> sat_reduction_mode_arg_;
 
-   decltype(std::async(std::launch::async, solve_sat_problem, nullptr, sat_vec<sat_literal>{}, nullptr)) sat_handle_;
    Direction cur_sat_reduction_direction_ = Direction::forward;
    // possibly not needed anymore
    bool sat_dirty_ = false; // sat solver is run asynchronously. When factor graph changes, then sat solution cannot be read in anymore and has to be discarded. This flag signifies this case

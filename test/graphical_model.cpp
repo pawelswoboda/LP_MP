@@ -30,17 +30,22 @@ R"(MARKOV
 
 std::vector<std::string> solver_options = {
    {"graphical model test"},
-   {"--maxIter"}, {"60"},
+   {"--maxIter"}, {"100"},
    {"--timeout"}, {"60"}, // one minute
    {"--lowerBoundComputationInterval"}, {"1"},
+   {"--primalComputationInterval"}, {"5"},
    {"--standardReparametrization"}, {"anisotropic"},
    {"--roundingReparametrization"}, {"anisotropic"},
-   {"-v"}, {"0"},
+   {"-v"}, {"2"},
    {"--inputFile"}, uai_test_input
 };
 
 
 TEST_CASE("gm", "[graphical model]") {
+   auto sat_solver_options = solver_options;
+   sat_solver_options[12] = std::string("damped_uniform");
+   sat_solver_options.push_back("--satReductionMode");
+   sat_solver_options.push_back("static");
 
    SECTION("MAP-estimation for a model given in uai format") {
       using FMC = FMC_SRMP;
@@ -53,6 +58,83 @@ TEST_CASE("gm", "[graphical model]") {
 
       REQUIRE(std::abs(s.lower_bound() - 0.564) < LP_MP::eps); // is this actually correct?
    }
+
+   //std::vector<REAL> negPotts = {1, 0, 0 ,1};
+   matrix<REAL> negPotts(2,2);
+   negPotts(0,0) = 1.0; negPotts(1,0) = 0.0;
+   negPotts(0,1) = 0.0; negPotts(1,1) = 1.0;
+   //std::vector<REAL> posPotts = {0, 1, 1 ,0};
+   matrix<REAL> posPotts(2,2);
+   posPotts(0,0) = 0.0; posPotts(1,0) = 1.0;
+   posPotts(0,1) = 1.0; posPotts(1,1) = 0.0;
+
+   matrix<REAL> negPotts23(2,3);
+   negPotts23(0,0) = 1.0; negPotts23(1,0) = 0.0; 
+   negPotts23(0,1) = 0.0; negPotts23(1,1) = 1.0; 
+   negPotts23(0,2) = 2.0; negPotts23(1,2) = 2.0; 
+   //std::vector<REAL> negPotts23 = {1,0,2, 1,0,2};
+   matrix<REAL> posPotts24(2,4);
+   posPotts24(0,0) = 0.0; posPotts24(1,0) = 1.0;
+   posPotts24(0,1) = 1.0; posPotts24(1,1) = 0.0;
+   posPotts24(0,2) = 2.0; posPotts24(1,2) = 2.0;
+   posPotts24(0,3) = 2.0; posPotts24(1,3) = 2.0;
+   //std::vector<REAL> posPotts24 = {0,1,2,2, 1,0,2,2};
+   matrix<REAL> posPotts34(3,4);
+   posPotts34(0,0) = 0.0; posPotts34(1,0) = 1.0; posPotts34(2,0) = 2.0;
+   posPotts34(0,1) = 1.0; posPotts34(1,1) = 0.0; posPotts34(2,1) = 2.0;
+   posPotts34(0,2) = 2.0; posPotts34(1,2) = 2.0; posPotts34(2,2) = 2.0;
+   posPotts34(0,3) = 2.0; posPotts34(1,3) = 2.0; posPotts34(2,3) = 2.0;
+   //std::vector<REAL> posPotts34 = {0,1,2,2, 1,0,2,2, 2,2,2,2};
+
+   SECTION("SAT rounding without duality gap") {
+      using FMC = FMC_SRMP;
+      using VisitorType = StandardVisitor;
+      using SolverType = MpRoundingSolver<Solver<FMC,LP_sat<LP>,VisitorType>>;
+
+      SolverType s(sat_solver_options);
+      auto& mrf = s.template GetProblemConstructor<0>();
+
+      mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+      mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+      mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+      mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+      mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+
+      // make a cycle of length 4 visiting each label once -> one negative Potts and three positive Potts
+      mrf.AddPairwiseFactor(0,1,negPotts);
+      mrf.AddPairwiseFactor(1,2,posPotts);
+      mrf.AddPairwiseFactor(2,3,posPotts);
+      mrf.AddPairwiseFactor(3,4,posPotts);
+
+      s.Solve();
+      REQUIRE(std::abs(s.lower_bound() - 0.0) <= eps);
+      REQUIRE(std::abs(s.primal_cost() - 0.0) <= eps);
+   }
+
+   SECTION("SAT rounding with duality gap") {
+      using FMC = FMC_SRMP;
+      using VisitorType = StandardVisitor;
+      using SolverType = MpRoundingSolver<Solver<FMC,LP_sat<LP>,VisitorType>>;
+
+      SolverType s(sat_solver_options);
+      auto& mrf = s.template GetProblemConstructor<0>();
+
+      mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+      mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+      mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+      mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
+
+      // make a cycle of length 4 visiting each label once -> one negative Potts and three positive Potts
+      mrf.AddPairwiseFactor(0,1,negPotts);
+      mrf.AddPairwiseFactor(1,2,posPotts);
+      mrf.AddPairwiseFactor(2,3,posPotts);
+      mrf.AddPairwiseFactor(0,3,posPotts);
+
+      s.Solve();
+      REQUIRE(std::abs(s.lower_bound() - 0.0) <= eps);
+      REQUIRE(s.primal_cost() <= 3.0 + eps);
+   }
+
 
    SECTION("Tightening") {
       using FMC = FMC_SRMP_T;
@@ -72,33 +154,7 @@ TEST_CASE("gm", "[graphical model]") {
       SolverType s(tightening_solver_options);
       auto& mrf = s.template GetProblemConstructor<0>();
 
-      //std::vector<REAL> negPotts = {1, 0, 0 ,1};
-      matrix<REAL> negPotts(2,2);
-      negPotts(0,0) = 1.0; negPotts(1,0) = 0.0;
-      negPotts(0,1) = 0.0; negPotts(1,1) = 1.0;
-      //std::vector<REAL> posPotts = {0, 1, 1 ,0};
-      matrix<REAL> posPotts(2,2);
-      posPotts(0,0) = 0.0; posPotts(1,0) = 1.0;
-      posPotts(0,1) = 1.0; posPotts(1,1) = 0.0;
-
-      matrix<REAL> negPotts23(2,3);
-      negPotts23(0,0) = 1.0; negPotts23(1,0) = 0.0; 
-      negPotts23(0,1) = 0.0; negPotts23(1,1) = 1.0; 
-      negPotts23(0,2) = 2.0; negPotts23(1,2) = 2.0; 
-      //std::vector<REAL> negPotts23 = {1,0,2, 1,0,2};
-      matrix<REAL> posPotts24(2,4);
-      posPotts24(0,0) = 0.0; posPotts24(1,0) = 1.0;
-      posPotts24(0,1) = 1.0; posPotts24(1,1) = 0.0;
-      posPotts24(0,2) = 2.0; posPotts24(1,2) = 2.0;
-      posPotts24(0,3) = 2.0; posPotts24(1,3) = 2.0;
-      //std::vector<REAL> posPotts24 = {0,1,2,2, 1,0,2,2};
-      matrix<REAL> posPotts34(3,4);
-      posPotts34(0,0) = 0.0; posPotts34(1,0) = 1.0; posPotts34(2,0) = 2.0;
-      posPotts34(0,1) = 1.0; posPotts34(1,1) = 0.0; posPotts34(2,1) = 2.0;
-      posPotts34(0,2) = 2.0; posPotts34(1,2) = 2.0; posPotts34(2,2) = 2.0;
-      posPotts34(0,3) = 2.0; posPotts34(1,3) = 2.0; posPotts34(2,3) = 2.0;
-      //std::vector<REAL> posPotts34 = {0,1,2,2, 1,0,2,2, 2,2,2,2};
-
+      
       SECTION("binary triplet") {
          mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
          mrf.AddUnaryFactor(std::vector<REAL>(2,0.0));
@@ -216,13 +272,33 @@ TEST_CASE("gm", "[graphical model]") {
          REQUIRE(s.lower_bound() == 1.0);
       }
       */
-   }
 
-   SECTION("SAT rounding") {
-      using FMC = FMC_SRMP;
-      using VisitorType = StandardVisitor;
-      using SolverType = MpRoundingSolver<Solver<FMC,LP_sat<LP>,VisitorType>>;
+      SECTION("SAT rounding") {
+         using SatSolverType = MpRoundingSolver<Solver<FMC,LP_sat<LP>,VisitorType>>;
 
+         SatSolverType s_sat(solver_options);
+         auto& mrf_sat = s_sat.template GetProblemConstructor<0>();
+
+         mrf_sat.AddUnaryFactor(std::vector<REAL>(2,0.0));
+         mrf_sat.AddUnaryFactor(std::vector<REAL>(2,0.0));
+         mrf_sat.AddUnaryFactor(std::vector<REAL>(2,0.0));
+         mrf_sat.AddUnaryFactor(std::vector<REAL>(2,0.0));
+
+         // make a cycle of length 4 visiting each label once -> one negative Potts and three positive Potts
+         mrf_sat.AddPairwiseFactor(0,1,negPotts);
+         mrf_sat.AddPairwiseFactor(1,2,posPotts);
+         mrf_sat.AddPairwiseFactor(2,3,posPotts);
+         mrf_sat.AddPairwiseFactor(0,3,posPotts);
+
+         mrf_sat.AddTighteningTriplet(0,1,2);
+         mrf_sat.AddTighteningTriplet(0,1,3);
+         mrf_sat.AddTighteningTriplet(0,2,3);
+         mrf_sat.AddTighteningTriplet(1,2,3);
+
+         s_sat.Solve();
+         REQUIRE(std::abs(s_sat.lower_bound() - 1.0) <= eps);
+         REQUIRE(std::abs(s_sat.primal_cost() - 1.0) <= eps);
+      }
    }
 }
 

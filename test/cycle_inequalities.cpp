@@ -69,7 +69,7 @@ TEST_CASE( "cycle inequalities tightening for MAP-MRF", "[MAP-MRF tightening]" )
    i[4] = "2";
    Solver<FMC_SRMP_T,LP,StandardVisitor> s(5,i);
    auto& mrf = s.template GetProblemConstructor<0>();
-   s.GetLP().set_reparametrization(LPReparametrizationMode::DampedUniform);
+   s.GetLP().set_reparametrization(LPReparametrizationMode::DampedUniform); // setting reparametrization mode to anisotropic leads to suboptimal fixed point
 
    matrix<REAL> negPotts2(2,2);
    negPotts2(0,0) = 1.0;
@@ -124,20 +124,9 @@ TEST_CASE( "cycle inequalities tightening for MAP-MRF", "[MAP-MRF tightening]" )
       k_ary_cycle_inequalities_search<typename std::remove_reference<decltype(mrf)>::type> cycle_search(mrf);
 
       auto triplets = cycle_search.search();
-      std::cout << triplets.size() << " kwaskwas\n";
-      for(auto t : triplets) {
-         std::cout << t.i << "," << t.j << "," << t.k << "\n";
-      }
 
       REQUIRE(triplets.size() >= 3);
       mrf.add_triplets(triplets);
-
-      std::cout << "added triplets:\n";
-
-      for(INDEX f=0; f<mrf.GetNumberOfTripletFactors(); ++f) {
-         const auto indices = mrf.GetTripletIndices(f);
-         std::cout << indices[0] << "," << indices[1] << "," << indices[2] << "\n";
-      } 
 
       for(INDEX i=0; i<100; ++i) {
          s.GetLP().ComputePass(i);

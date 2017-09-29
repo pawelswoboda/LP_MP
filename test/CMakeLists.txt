@@ -4,17 +4,18 @@ if(BUILD_TESTS)
       simplex.cpp
       potts_factor.cpp
       simplex_marginalization.cpp
+      serialization.cpp
+      vector.cpp
+      labeling_factor_messages.cpp
       #min_cost_flow.cpp
       #min_conv.cpp
       shortest_path.cpp
       cycle_inequalities.cpp
-      #discrete_tomography_chain.cpp
       graphical_model.cpp
       #graph_matching.cpp
       multicut.cpp
-      serialization.cpp
-      vector.cpp
-      labeling_factor_messages.cpp
+      #discrete_tomography_chain.cpp
+      sat_solver.cpp
       )
    enable_testing()
 

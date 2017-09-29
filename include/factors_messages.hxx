@@ -16,7 +16,7 @@
 #include <assert.h>
 #include <cxxabi.h>
 
-#include "sat_interface.hxx"
+#include "sat_solver.hxx"
 
 #include <mutex>
 
@@ -1272,10 +1272,10 @@ public:
    constexpr static bool
    can_construct_sat_clauses()
    {
-      return has_construct_sat_clauses<MessageType,void,LGL*, LeftFactorType, RightFactorType, sat_var, sat_var>();
+      return has_construct_sat_clauses<MessageType,void,sat_solver&, LeftFactorType, RightFactorType, sat_var, sat_var>();
    }
 
-   void construct_sat_clauses(LGL* s, sat_var left_var, sat_var right_var) 
+   void construct_sat_clauses(sat_solver& s, sat_var left_var, sat_var right_var) 
    {
       static_if<can_construct_sat_clauses()>([&](auto f) {
             f(msg_op_).construct_sat_clauses(s, *leftFactor_->GetFactor(), *rightFactor_->GetFactor(), left_var, right_var);
@@ -1577,10 +1577,10 @@ public:
    constexpr static bool
    can_construct_sat_clauses()
    {
-      return has_construct_sat_clauses<FactorType,void,LGL*>();
+      return has_construct_sat_clauses<FactorType,void,sat_solver&>();
    }
 
-   void construct_sat_clauses(LGL* s) 
+   void construct_sat_clauses(sat_solver& s) 
    {
       static_if<can_construct_sat_clauses()>([&](auto f) {
             f(factor_).construct_sat_clauses(s);
@@ -1598,7 +1598,7 @@ public:
    }
    //void convert_primal(Glucose::SimpSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
    //void convert_primal(CMSat::SATSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
-   void convert_primal(LGL* sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   void convert_primal(sat_solver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
    {
       static_if<can_convert_primal<decltype(sat)>()>([&](auto f) { 
             f(factor_).convert_primal(sat, sat_begin);
@@ -1609,10 +1609,10 @@ public:
    constexpr static bool
    can_reduce_sat()
    {
-      return FunctionExistence::has_reduce_sat<FactorType, void, sat_vec<sat_literal>, REAL, sat_var>(); 
+      return FunctionExistence::has_reduce_sat<FactorType, void, sat_vec, REAL, sat_var>(); 
    }
 
-   void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec<sat_literal>& assumptions) final
+   void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec& assumptions) final
    {
 #ifdef LP_MP_PARALLEL
      std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only

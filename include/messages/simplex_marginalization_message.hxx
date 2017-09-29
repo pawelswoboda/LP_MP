@@ -7,6 +7,9 @@
 #include "memory_allocator.hxx"
 #include <cmath>
 #include "config.hxx"
+#ifdef WITH_SAT
+#include "sat_solver.hxx"
+#endif
 
 namespace LP_MP {
 
@@ -103,10 +106,18 @@ public:
     template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
     void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_var left_begin, const sat_var right_begin) const
     {
-       for(INDEX i=0; i<l.size(); ++i) {
-          auto left_var = left_begin+i;
-          auto right_var = right_begin + i + (CHIRALITY == Chirality::right ? r.dim1() : 0);
-          make_sat_var_equal(s, to_literal(left_var), to_literal(right_var)); 
+       sat_literal_vector left_literals(l.size());
+       load_sat_literals(left_begin, left_literals);
+
+       sat_literal_vector right_literals_left(r.dim1());
+       sat_literal_vector right_literals_right(r.dim2());
+       load_sat_literals(right_begin, right_literals_left, right_literals_right);
+
+       if(CHIRALITY == Chirality::left) {
+          s.make_equal(left_literals.begin(), left_literals.end(), right_literals_left.begin(), right_literals_left.end());
+       } else {
+          assert(CHIRALITY == Chirality::right);
+          s.make_equal(left_literals.begin(), left_literals.end(), right_literals_right.begin(), right_literals_right.end());
        }
     }
 #endif 
@@ -249,41 +260,25 @@ public:
    template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
       void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_var left_begin, const sat_var right_begin) const
       {
+         sat_literal_vector left_literals_left(l.dim1());
+         sat_literal_vector left_literals_right(l.dim2());
+         sat_literal_matrix left_literals_pairwise(l.dim1(), l.dim2());
+         load_sat_literals(left_begin, left_literals_left, left_literals_right, left_literals_pairwise);
+
+         sat_literal_matrix right_literals_12(r.dim1(), r.dim2());
+         sat_literal_matrix right_literals_13(r.dim1(), r.dim3());
+         sat_literal_matrix right_literals_23(r.dim2(), r.dim3());
+         load_sat_literals(right_begin, right_literals_12, right_literals_13, right_literals_23);
+
          if(I1 == 0 && I2 == 1) {
-
-            for(INDEX x1=0; x1<l.dim1(); ++x1) {
-               for(INDEX x2=0; x2<l.dim2(); ++x2) {
-                  const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim2() + x2;
-                  const auto right_var = right_begin + x1*l.dim2() + x2;
-                  make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
-               }
-            }
-
-         } else
-            if(I1 == 0 && I2 == 2) {
-
-               for(INDEX x1=0; x1<l.dim1(); ++x1) {
-                  for(INDEX x2=0; x2<l.dim2(); ++x2) {
-                     const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim2() + x2;
-                     const auto right_var = right_begin + r.dim1()*r.dim2() + x1*l.dim2() + x2;
-                     make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
-                  }
-               }
-
-            } else
-               if(I1 == 1 && I2 == 2) {
-
-                  for(INDEX x1=0; x1<l.dim1(); ++x1) {
-                     for(INDEX x2=0; x2<l.dim2(); ++x2) {
-                        const auto left_var = left_begin + l.dim1() + l.dim2() + x1*l.dim2() + x2;
-                        const auto right_var = right_begin + r.dim1()*r.dim2() + r.dim1()*r.dim3() + x1*l.dim2() + x2;
-                        make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
-                     }
-                  }
-
-               } else {
-                  assert(false); // not possible
-               }
+            s.make_equal(left_literals_pairwise.begin(), left_literals_pairwise.end(), right_literals_12.begin(), right_literals_12.end());
+         } else if(I1 == 0 && I2 == 2) {
+            s.make_equal(left_literals_pairwise.begin(), left_literals_pairwise.end(), right_literals_13.begin(), right_literals_13.end());
+         } else if(I1 == 1 && I2 == 2) {
+            s.make_equal(left_literals_pairwise.begin(), left_literals_pairwise.end(), right_literals_23.begin(), right_literals_23.end());
+         } else {
+            assert(false); // not possible
+         }
       }
 #endif // WITH_SAT
 
