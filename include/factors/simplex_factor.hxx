@@ -289,7 +289,6 @@ public:
    }
    void MaximizePotentialAndComputePrimal() 
    {
-      std::cout << "kwas_pairwise\n";
       if(primal_[0] >= dim1() && primal_[1] >= dim2()) {
          REAL min_val = std::numeric_limits<REAL>::infinity();
          for(INDEX x1=0; x1<dim1(); ++x1) {

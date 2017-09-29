@@ -624,68 +624,91 @@ public:
    INDEX Tighten(const INDEX noTripletsToAdd)
    {
       assert(noTripletsToAdd > 0);
-      std::cout << "Tighten mrf with cycle inequalities, no triplets to add = " << noTripletsToAdd << "\n";
+      if(debug()) {
+         std::cout << "Tighten mrf with cycle inequalities, no triplets to add = " << noTripletsToAdd << "\n";
+      }
 
       //auto fp = [this](const INDEX v1, const INDEX v2, const INDEX v3) { return this->AddTighteningTriplet(v1,v2,v3); }; // do zrobienia: do not give this via template, as Cycle already has gm_ object.
 
       triplet_search<typename std::remove_reference<decltype(*this)>::type> triplets(*this, eps);
-      std::cout << "search for triplets\n";
+      if(debug()) { std::cout << "search for triplets\n"; }
       auto triplet_candidates = triplets.search();
-      std::cout << "done\n";
+      if(debug()) { std::cout << "done\n"; }
       INDEX no_triplets_added = add_triplets(triplet_candidates, noTripletsToAdd);
-      std::cout << "added " << no_triplets_added << " by triplet search\n";
+      if(diagnostics()) { std::cout << "added " << no_triplets_added << " by triplet search\n"; }
 
       if(no_triplets_added < 0.2*noTripletsToAdd) {
-         std::cout << "----------------- do cycle search with k-projection graph---------------\n";
+         if(debug()) {
+            std::cout << "----------------- do cycle search with k-projection graph---------------\n";
+         }
          k_ary_cycle_inequalities_search<typename std::remove_reference<decltype(*this)>::type, false> cycle_search(*this, eps);
          triplet_candidates = cycle_search.search();
-         std::cout << "... done\n";
+         if(debug()) { std::cout << "... done\n"; }
          const INDEX no_triplet_k_projection_graph = add_triplets(triplet_candidates, noTripletsToAdd-no_triplets_added);
-         std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in k-projection graph\n";
+         if(diagnostics()) {std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in k-projection graph\n"; }
          no_triplets_added += no_triplet_k_projection_graph;
 
          // search in expanded projection graph
          if(no_triplets_added < 0.2*noTripletsToAdd) {
-            std::cout << "----------------- do cycle search with expanded projection graph---------------\n";
+            if(debug()) {
+               std::cout << "----------------- do cycle search with expanded projection graph---------------\n";
+            }
             k_ary_cycle_inequalities_search<typename std::remove_reference<decltype(*this)>::type, true> cycle_search(*this, eps);
             triplet_candidates = cycle_search.search();
-            std::cout << "... done\n";
+            if(debug()) { std::cout << "... done\n"; }
             const INDEX no_triplet_k_projection_graph = add_triplets(triplet_candidates, noTripletsToAdd-no_triplets_added);
-            std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in expanded projection graph\n";
+            if(diagnostics()) { std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in expanded projection graph\n";
+            }
             no_triplets_added += no_triplet_k_projection_graph;
          }
       }
 
-      std::cout << "no triplets found, now search for triplets with guaranteed increase also smaller than " << eps << "\n";
+      if(debug()) {
+         std::cout << "no triplets found, now search for triplets with guaranteed increase also smaller than " << eps << "\n";
+      }
        
       assert(eps >= std::numeric_limits<REAL>::epsilon());
 
       if(no_triplets_added == 0) {
          triplet_search<typename std::remove_reference<decltype(*this)>::type> triplets(*this, std::numeric_limits<REAL>::epsilon());
-         std::cout << "search for triplets (any will do)\n";
+         if(debug()) {
+            std::cout << "search for triplets (any will do)\n";
+         }
          auto triplet_candidates = triplets.search();
-         std::cout << "done\n";
+         if(debug()) {
+            std::cout << "done\n";
+         }
          no_triplets_added = add_triplets(triplet_candidates, noTripletsToAdd);
-         std::cout << "added " << no_triplets_added << " by triplet search\n";
+         if(diagnostics()) {
+            std::cout << "added " << no_triplets_added << " by triplet search with no increase\n";
+         }
       }
 
       if(no_triplets_added == 0) {
-         std::cout << "----------------- do cycle search with k-projection graph, add all---------------\n";
+         if(debug()) {
+            std::cout << "----------------- do cycle search with k-projection graph, add all---------------\n";
+         }
          k_ary_cycle_inequalities_search<typename std::remove_reference<decltype(*this)>::type, false> cycle_search(*this, std::numeric_limits<REAL>::epsilon());
          triplet_candidates = cycle_search.search();
-         std::cout << "... done\n";
+         if(debug()) { std::cout << "... done\n"; }
          const INDEX no_triplet_k_projection_graph = add_triplets(triplet_candidates, noTripletsToAdd-no_triplets_added);
-         std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in k-projection graph\n";
+         if(diagnostics()) {
+            std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in k-projection grapa with no increase\n";
+         }
          no_triplets_added += no_triplet_k_projection_graph;
       }
 
       if(no_triplets_added == 0) {
-         std::cout << "----------------- do cycle search with expanded projection graph, add all---------------\n";
+         if(debug()) {
+            std::cout << "----------------- do cycle search with expanded projection graph, add all---------------\n";
+         }
          k_ary_cycle_inequalities_search<typename std::remove_reference<decltype(*this)>::type, true> cycle_search(*this, std::numeric_limits<REAL>::epsilon());
          triplet_candidates = cycle_search.search();
-         std::cout << "... done\n";
+         if(debug()) { std::cout << "... done\n"; }
          const INDEX no_triplet_k_projection_graph = add_triplets(triplet_candidates, noTripletsToAdd-no_triplets_added);
-         std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in expanded projection graph\n";
+         if(diagnostics()) {
+            std::cout << "added " << no_triplet_k_projection_graph << " by cycle search in expanded projection graph with no increase\n";
+         }
          no_triplets_added += no_triplet_k_projection_graph;
       }
 

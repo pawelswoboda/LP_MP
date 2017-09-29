@@ -66,7 +66,7 @@ TEST_CASE( "cycle inequalities tightening for MAP-MRF", "[MAP-MRF tightening]" )
    i[1] = "-i";
    i[2] = "";
    i[3] = "-v";
-   i[4] = "2";
+   i[4] = "0";
    Solver<FMC_SRMP_T,LP,StandardVisitor> s(5,i);
    auto& mrf = s.template GetProblemConstructor<0>();
    s.GetLP().set_reparametrization(LPReparametrizationMode::DampedUniform); // setting reparametrization mode to anisotropic leads to suboptimal fixed point

@@ -49,6 +49,28 @@ void add_projection_and_unaries_and_run(SOLVER& s, std::vector<INDEX> projection
 
 }
 
+template<typename SOLVER>
+void add_projection_tree_and_run(SOLVER& s, std::vector<INDEX> projection_var, const INDEX projection_sum) 
+{
+   auto& dt = s.template GetProblemConstructor<1>();
+
+   std::vector<REAL> projectionCost(projection_sum+1);
+   std::fill(projectionCost.begin(), projectionCost.end(), std::numeric_limits<REAL>::infinity());
+   projectionCost.back() = 0.0;
+   LP_tree t;
+   dt.AddProjection(projection_var, projectionCost, &t); 
+   t.compute_subgradient();
+
+   if((projection_sum) % 10 != 0) {
+      REQUIRE(std::abs(t.lower_bound() - 1.0) < eps);
+      REQUIRE(std::abs(t.primal_cost() - 1.0) < eps);
+   } else {
+      REQUIRE(std::abs(t.lower_bound()) < eps);
+      REQUIRE(std::abs(t.primal_cost()) < eps);
+   }
+}
+
+
 
 TEST_CASE("discrete tomography single chain", "[dt chain]") {
 
@@ -113,6 +135,7 @@ TEST_CASE("discrete tomography single chain", "[dt chain]") {
 
    SECTION("sum = 20") { add_projection_and_run(s, projection_var, 20); }
 
+   SECTION("discrete tomography with unaries") {
    // repeat with different unaries
    for(INDEX i=0; i<10; ++i) {
       auto& f = *mrf.GetUnaryFactor(i)->GetFactor();
@@ -143,16 +166,32 @@ TEST_CASE("discrete tomography single chain", "[dt chain]") {
    SECTION("sum = 19 with unaries") { add_projection_and_unaries_and_run(s, projection_var, 19, 2); }
 
    SECTION("sum = 20 with unaries") { add_projection_and_unaries_and_run(s, projection_var, 20, 0); }
+   }
 
-   //SECTION("subgradient") {
-   //   auto& dt = s.template GetProblemConstructor<1>();
-//
-//      const INDEX projection_sum = 10;
-//      std::vector<REAL> projectionCost(projection_sum + 1);
-//      std::fill(projectionCost.begin(), projectionCost.end(), std::numeric_limits<REAL>::infinity());
-//      projectionCost.back() = 0.0;
-//      LP_tree t;
-//      dt.AddProjection(projection_var, projectionCost, &t); 
-//   }
+   SECTION("subgradient") {
+      SECTION("sum = 0") { add_projection_tree_and_run(s, projection_var, 0); }
+      SECTION("sum = 1") { add_projection_tree_and_run(s, projection_var, 1); }
+      SECTION("sum = 2") { add_projection_tree_and_run(s, projection_var, 2); }
+      SECTION("sum = 3") { add_projection_tree_and_run(s, projection_var, 3); }
+      SECTION("sum = 4") { add_projection_tree_and_run(s, projection_var, 4); }
+      SECTION("sum = 5") { add_projection_tree_and_run(s, projection_var, 5); }
+      SECTION("sum = 6") { add_projection_tree_and_run(s, projection_var, 6); }
+      SECTION("sum = 7") { add_projection_tree_and_run(s, projection_var, 7); }
+      SECTION("sum = 8") { add_projection_tree_and_run(s, projection_var, 8); }
+      SECTION("sum = 9") { add_projection_tree_and_run(s, projection_var, 9); }
+
+      SECTION("sum = 10") { add_projection_tree_and_run(s, projection_var, 10); }
+      SECTION("sum = 11") { add_projection_tree_and_run(s, projection_var, 11); }
+      SECTION("sum = 12") { add_projection_tree_and_run(s, projection_var, 12); }
+      SECTION("sum = 13") { add_projection_tree_and_run(s, projection_var, 13); }
+      SECTION("sum = 14") { add_projection_tree_and_run(s, projection_var, 14); }
+      SECTION("sum = 15") { add_projection_tree_and_run(s, projection_var, 15); }
+      SECTION("sum = 16") { add_projection_tree_and_run(s, projection_var, 16); }
+      SECTION("sum = 17") { add_projection_tree_and_run(s, projection_var, 17); }
+      SECTION("sum = 18") { add_projection_tree_and_run(s, projection_var, 18); }
+      SECTION("sum = 19") { add_projection_tree_and_run(s, projection_var, 19); }
+
+      SECTION("sum = 20") { add_projection_tree_and_run(s, projection_var, 20); }
+   }
 }
 
