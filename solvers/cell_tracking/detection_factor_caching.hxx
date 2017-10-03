@@ -171,8 +171,8 @@ public:
     auto incoming_sum = s.add_at_most_one_constraint(incoming_var.begin(), incoming_var.end());
 
     // detection var must be equal to incoming and outgoing var
-    s.make_sat_var_equal(detection_literal,incoming_sum);
-    s.make_sat_var_equal(detection_literal,outgoing_sum);
+    s.make_equal(detection_literal,incoming_sum);
+    s.make_equal(detection_literal,outgoing_sum);
   }
 
   template<typename VEC>
@@ -533,7 +533,7 @@ public:
     sat_literal detection_literal;
     sat_literal_vector incoming_literal(r.incoming.size());
     sat_literal_vector outgoing_literal(r.outgoing.size());
-    load_sat_literals(s, detection_literal, incoming_literal, outgoing_literal);
+    load_sat_literals(right_begin, detection_literal, incoming_literal, outgoing_literal);
 
     s.make_equal(left_begin, incoming_literal[incoming_edge_index_]);
   }
@@ -668,7 +668,8 @@ public:
     sat_literal detection_literal;
     sat_literal_vector incoming_literal(r.incoming.size());
     sat_literal_vector outgoing_literal(r.outgoing.size());
-    load_sat_literals(s, detection_literal, incoming_literal, outgoing_literal);
+    load_sat_literals(right_begin, detection_literal, incoming_literal, outgoing_literal);
+
     s.make_equal(left_begin, outgoing_literal[outgoing_edge_index_]);
   }
 
@@ -1023,7 +1024,7 @@ public:
   template<typename SAT_SOLVER>
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
-    auto literals = s.add_literal_vector(s, this->size()+1);
+    auto literals = s.add_literal_vector(this->size()+1);
     s.add_simplex_constraint(literals.begin(), literals.end());
   }
 
