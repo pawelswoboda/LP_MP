@@ -162,11 +162,9 @@ public:
   {
     // create variables
     auto detection_literal = s.add_literal();
-    //auto detection_var = s.nVars();
-    //s.new_var(); //detection will rather be false
-    //std::cout << "first var in detection factor = " << detection_var << "\n";
     auto incoming_var = s.add_literal_vector(incoming.size());
     auto outgoing_var = s.add_literal_vector(outgoing.size());
+
     auto outgoing_sum = s.add_at_most_one_constraint(outgoing_var.begin(), outgoing_var.end());
     auto incoming_sum = s.add_at_most_one_constraint(incoming_var.begin(), incoming_var.end());
 
@@ -216,14 +214,14 @@ public:
     load_sat_literals(first, detection_literal, incoming_literals, outgoing_literals);
 
     if(s.solution(detection_literal)) {
-      for(INDEX i=first+1; i<first+1+incoming.size(); ++i) {
+      for(INDEX i=0; i<incoming.size(); ++i) {
         if(s.solution(incoming_literals[i])) {
-          incoming_edge_ = i-first-1;
+          incoming_edge_ = i;
         }
       }
-      for(INDEX i=first+1+incoming.size(); i<first+size(); ++i) {
+      for(INDEX i=0; i<outgoing.size(); ++i) {
         if(s.solution(outgoing_literals[i])) {
-          outgoing_edge_ = i-first-1-incoming.size();
+          outgoing_edge_ = i;
         }
       } 
     } else {
@@ -517,7 +515,7 @@ public:
 
     const auto smallest_incoming = two_smallest_elements<REAL>(r.incoming.begin(), r.incoming.end()); // do not take into account disappearance cost 
 
-    assert(false); // wrong message computation?
+    //assert(false); // wrong message computation?
     const REAL set_to_cost = std::min(detection_outgoing_cost + smallest_incoming[1], REAL(0.0));
     omega_it = omega_begin;
     for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
@@ -553,7 +551,7 @@ public:
   template<typename G>
   void RepamLeft(G& l, const REAL msg, const INDEX msg_dim)
   {
-    assert(msg_dim == 0);
+    //assert(msg_dim == 0);
     l.cost += msg;
   }
   template<typename G>
@@ -651,7 +649,7 @@ public:
     // compute smallest and second smallest value over all outgoing edges
     const auto smallest_outgoing = two_smallest_elements<REAL>(r.outgoing.begin(), r.outgoing.end());
 
-    assert(false); // wrong message computation?
+    //assert(false); // wrong message computation?
     const REAL set_to_cost = std::min(detection_incoming_cost + smallest_outgoing[1], REAL(0.0));
     omega_it = omega_begin;
     for(; msg_begin!=msg_end; ++msg_begin, ++omega_it) {
@@ -682,6 +680,9 @@ private:
 // message connecting outgoing edge to incoming edge of detection factors between consecutive timeframes
 class transition_message {
 public:
+  constexpr static INDEX update_from_right = 1;
+  constexpr static INDEX update_from_left = 2; 
+
   transition_message(const bool split, const INDEX outgoing_edge_index, const INDEX incoming_edge_index) 
     : 
     outgoing_edge_index_(outgoing_edge_index),
@@ -751,7 +752,7 @@ public:
     for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
       if(*omega_it > 0.0) {
         const REAL msg = detection_outgoing_cost + rightFactor.incoming[ (*msg_it).GetMessageOp().incoming_edge_index_ ] - set_to_cost;
-        (*msg_it)[2] -= omega*msg;
+        (*msg_it)[update_from_right] -= omega*msg;
       }
     } 
     return;
@@ -829,7 +830,7 @@ public:
       if(*omega_it > 0.0) {
         const REAL w = (*msg_begin).GetMessageOp().split_ ? 0.5 : 1.0;
         const REAL msg = w*(detection_incoming_cost + leftFactor.outgoing[ (*msg_begin).GetMessageOp().outgoing_edge_index_ ] - set_to_cost);
-        (*msg_begin)[1] -= omega*msg;
+        (*msg_begin)[update_from_left] -= omega*msg;
       }
     } 
 
@@ -876,7 +877,7 @@ public:
   template<typename RIGHT_FACTOR, typename G2>
   void send_message_to_left(RIGHT_FACTOR& r, G2& msg, const REAL omega)
   {
-    msg[2] -= omega* r.min_incoming_marginal_diff(incoming_edge_index_);
+    msg[update_from_right] -= omega*r.min_incoming_marginal_diff(incoming_edge_index_);
   }
   
   template<typename RIGHT_FACTOR, typename G2>
@@ -903,7 +904,7 @@ public:
   template<typename LEFT_FACTOR, typename G2>
   void send_message_to_right(LEFT_FACTOR& l, G2& msg, const REAL omega)
   { 
-    msg[1] -= omega* l.min_outgoing_marginal_diff(outgoing_edge_index_);
+    msg[update_from_left] -= omega* l.min_outgoing_marginal_diff(outgoing_edge_index_);
   }
 
   template<typename LEFT_FACTOR, typename G2>
@@ -928,12 +929,14 @@ public:
   template<typename G>
   void RepamLeft(G& l, const REAL msg, const INDEX msg_dim)
   {
-    assert(msg_dim == 1 || msg_dim == 2);
-    if(msg_dim == 1) {
-      l.update_outgoing_valid(outgoing_edge_index_, msg);
-    } else if(msg_dim == 2) {
+    assert(msg_dim == update_from_left || msg_dim == update_from_right);
+    if(msg_dim == update_from_left) {
+      //l.update_outgoing_valid(outgoing_edge_index_, msg);
       l.update_outgoing(outgoing_edge_index_, msg);
-    }
+    } else {
+      assert(msg_dim == update_from_right);
+      l.update_outgoing(outgoing_edge_index_, msg);
+    } 
 
     //assert(msg_dim == 0);
     //l.outgoing[outgoing_edge_index_] += msg;
@@ -941,11 +944,13 @@ public:
   template<typename G>
   void RepamRight(G& r, const REAL msg, const INDEX msg_dim)
   {
-    assert(msg_dim == 1 || msg_dim == 2);
-    if(msg_dim == 1) {
+    assert(msg_dim == update_from_left || msg_dim == update_from_right);
+    if(msg_dim == update_from_left) {
       r.update_incoming(incoming_edge_index_, msg);
-    } else if(msg_dim == 2) {
-      r.update_incoming_valid(incoming_edge_index_, msg);
+    } else {
+      assert(msg_dim == update_from_right);
+      //r.update_incoming_valid(incoming_edge_index_, msg);
+      r.update_incoming(incoming_edge_index_, msg);
     }
     
     //assert(msg_dim == 0);
@@ -970,14 +975,14 @@ public:
     sat_literal left_detection_literal;
     sat_literal_vector left_incoming_literal(l.incoming.size());
     sat_literal_vector left_outgoing_literal(l.outgoing.size());
-    load_sat_literals(s, left_detection_literal, left_incoming_literal, left_outgoing_literal);
+    load_sat_literals(left_begin, left_detection_literal, left_incoming_literal, left_outgoing_literal);
 
     sat_literal right_detection_literal;
-    sat_literal_vector right_incoming_literal(l.incoming.size());
-    sat_literal_vector right_outgoing_literal(l.outgoing.size());
-    load_sat_literals(s, right_detection_literal, right_incoming_literal, right_outgoing_literal);
+    sat_literal_vector right_incoming_literal(r.incoming.size());
+    sat_literal_vector right_outgoing_literal(r.outgoing.size());
+    load_sat_literals(right_begin, right_detection_literal, right_incoming_literal, right_outgoing_literal);
 
-    s.make_equal(left_begin, left_outgoing_literal[outgoing_edge_index_], right_incoming_literal[incoming_edge_index_]);
+    s.make_equal(left_outgoing_literal[outgoing_edge_index_], right_incoming_literal[incoming_edge_index_]);
   }
 private:
   const SHORT_INDEX outgoing_edge_index_;
@@ -1024,22 +1029,25 @@ public:
   template<typename SAT_SOLVER>
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
-    auto literals = s.add_literal_vector(this->size()+1);
-    s.add_simplex_constraint(literals.begin(), literals.end());
+    auto literals = s.add_literal_vector(this->size());
+    auto sum_literal = s.add_literal();
+    auto _sum_literal = s.add_at_most_one_constraint(literals.begin(), literals.end());
+    s.make_equal(sum_literal, _sum_literal);
   }
 
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
   {
     sat_literal_vector literals(this->size()+1);
-    load_sat_literals(begin, literals);
+    sat_literal sum_literal;
+    load_sat_literals(begin, literals, sum_literal);
 
     const REAL min_cost = this->min();
     if(min_cost > th) {
-      assumptions.push_back(-literals[size()]);
+      assumptions.push_back(-sum_literal);
     } else {
       if(min_cost < -th) {
-        assumptions.push_back(literals[size()]);
+        assumptions.push_back(sum_literal);
       }
       for(INDEX i=0; i<this->size(); ++i) {
         if((*this)[i] > min_cost + th) { 
@@ -1056,7 +1064,7 @@ public:
     load_sat_literals(first, literals);
 
     for(INDEX i=0; i<this->size(); ++i) {
-      if(s.solution(i)) {
+      if(s.solution(literals[i])) {
         primal_ = i;
         return;
       }

@@ -408,7 +408,7 @@ public:
     assert(timestep_prev + 1 == timestep_next);
 
     auto* out_cell_factor = this->detection_factors_[timestep_prev][prev_cell];
-    const INDEX outgoing_edge_index  = this->tc_.next_incoming_transition_edge(timestep_prev, prev_cell);//tc.current_transition_no[timestep_prev][prev_cell][1];
+    const INDEX outgoing_edge_index  = this->tc_.next_outgoing_transition_edge(timestep_prev, prev_cell);//tc.current_transition_no[timestep_prev][prev_cell][1];
     //assert( out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] == 0.0 );
     out_cell_factor->GetFactor()->set_outgoing_transition_cost(outgoing_edge_index, 0.5*cost);
     //out_cell_factor->GetFactor()->outgoing[outgoing_edge_index] = cost;

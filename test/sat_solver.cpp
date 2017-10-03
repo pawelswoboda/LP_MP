@@ -306,11 +306,36 @@ TEST_CASE( "sat solver", "[lingeling sat solver encapsulation]" ) {
       auto literals = sat.add_literal_vector(10);
       sat.add_simplex_constraint(literals.begin(),literals.end());
       REQUIRE(sat.solve() == true);
-      std::array<bool,10> sol;
-      for(INDEX i=0; i<10; ++i) {
-         sol[i] = sat.solution(i+1);
+      // forbid previous assignment and check whether new assignment can be found
+      sat_vec assumptions;
+      for(INDEX t=0; t<10; ++t) {
+        if(!assumptions.empty()) {
+          REQUIRE(sat.solve(assumptions.begin(), assumptions.end()) == true);
+        } else {
+          REQUIRE(sat.solve() == true);
+        }
+        auto sol = sat.solution();
+        REQUIRE(std::count(sol.begin(), sol.begin()+10, true) == 1); 
+        const auto sol_lit = literals[std::find(sol.begin(), sol.begin()+10, true) - sol.begin()];
+        assumptions.push_back(-sol_lit);
       }
-      REQUIRE(std::count(sol.begin(), sol.end(), true) == 1); 
+      assert(assumptions.size() == 10);
+      REQUIRE(sat.solve(assumptions.begin(), assumptions.end()) == false);
+   }
+
+   SECTION("at most one constraint") {
+      auto literals = sat.add_literal_vector(10);
+      sat.add_at_most_one_constraint(literals.begin(),literals.end());
+      REQUIRE(sat.solve() == true);
+      auto sol = sat.solution();
+      REQUIRE(std::count(sol.begin(), sol.begin()+10, true) <= 1); 
+      // forbid previous assignment and check whether new assignment can be found
+      sat_vec assumptions;
+      for(INDEX t=0; t<10; ++t) {
+        assumptions.push_back(-literals[t]);
+      }
+      assert(assumptions.size() == 10);
+      REQUIRE(sat.solve(assumptions.begin(), assumptions.end()) == true);
    }
 
    SECTION("load literals") {

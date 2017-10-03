@@ -239,10 +239,10 @@ struct sat_literal_tensor {
 
 
 template<typename... STORAGE_REST>
-void load_sat_literals(sat_literal l, STORAGE_REST... rest)
+void load_sat_literals(sat_literal l, STORAGE_REST&... rest)
 {}
 template<typename... STORAGE_REST>
-void load_sat_literals(sat_literal l, sat_literal& _l, STORAGE_REST... rest)
+void load_sat_literals(sat_literal l, sat_literal& _l, STORAGE_REST&... rest)
 {
   _l = l;
   load_sat_literals(l+1, rest...); 
@@ -625,6 +625,9 @@ public:
   // solution functions
   bool solve()
   {
+     for(INDEX i=0; i<size(); ++i) {
+        lglfreeze(sat_, to_literal(i));
+     }
      const int sat_ret = lglsat(sat_);
      if(verbosity >= 2) { std::cout << "solved sat " << sat_ret << "\n"; }
 
