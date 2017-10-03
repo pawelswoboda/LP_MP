@@ -2,6 +2,7 @@
 #define LP_MP_SAT_SOLVER_HXX
 
 #include "config.hxx"
+#include "vector.hxx"
 #include <vector>
 
 namespace LP_MP {
@@ -47,6 +48,9 @@ struct sat_literal_vector_iterator_strided : std::iterator< std::random_access_i
 
 
 struct sat_literal_vector {
+   template<typename T>
+   sat_literal_vector(const vector<T>& v) : begin_(0), dim_(v.size()) {}
+
    sat_literal_vector(const INDEX dim) : begin_(0), dim_(dim) 
    {
       assert(dim > 0);
@@ -68,6 +72,7 @@ struct sat_literal_vector {
 
    INDEX size() const { return dim_; }
    const sat_literal operator[](const INDEX i) const { assert(i < size()); return begin_ + i; }
+   const sat_literal back() const { return begin_ + size()-1; }
 
    auto begin() const {
       return sat_literal_vector_iterator(begin_);
@@ -93,6 +98,7 @@ struct sat_literal_vector_strided {
 
    INDEX size() const { return dim_; }
    const sat_literal operator[](const INDEX i) const { assert(i < size()); return begin_ + i*stride_; }
+   const sat_literal back() const { return (*this)[size()-1]; }
 
    auto begin() const {
       return sat_literal_vector_iterator_strided(begin_, stride_);
@@ -107,6 +113,9 @@ struct sat_literal_vector_strided {
 }; 
 
 struct sat_literal_matrix {
+   template<typename T>
+   sat_literal_matrix(const matrix<T>& m) : begin_(0), dim_({m.dim1(), m.dim2()}) {}
+
    sat_literal_matrix(const INDEX n, const INDEX m) : begin_(0), dim_({n,m}) 
    {
       assert(n > 0 && m > 0); 
@@ -152,16 +161,22 @@ struct sat_literal_matrix {
       assert(x1 < dim(0));
       return sat_literal_vector(begin_ + x1*dim(1),dim(1));
    }
+   auto slice1(const INDEX x1) const { return slice_left(x1); }
+
    sat_literal_vector_strided slice_right(const INDEX x2) const {
       assert(x2 < dim(1));
       return sat_literal_vector_strided(begin_ + x2, dim(0), dim(1));
    }
+   auto slice2(const INDEX x2) const { return slice_right(x2); }
    private:
    sat_literal begin_;
    const std::array<INDEX,2> dim_;
 };
 
 struct sat_literal_tensor {
+   template<typename T>
+   sat_literal_tensor(const tensor3<T>& t) : begin_(0), dim_({t.dim1(), t.dim2(), t.dim3()}) {}
+
    sat_literal_tensor(const INDEX n, const INDEX m, const INDEX k) : begin_(0), dim_({n,m,k}) 
    {
       assert(n > 0 && m > 0 && k > 0);
@@ -226,6 +241,12 @@ struct sat_literal_tensor {
 template<typename... STORAGE_REST>
 void load_sat_literals(sat_literal l, STORAGE_REST... rest)
 {}
+template<typename... STORAGE_REST>
+void load_sat_literals(sat_literal l, sat_literal& _l, STORAGE_REST... rest)
+{
+  _l = l;
+  load_sat_literals(l+1, rest...); 
+}
 template<typename STORAGE, typename... STORAGE_REST>
 void load_sat_literals(sat_literal l, STORAGE& s, STORAGE_REST&... rest)
 {
@@ -292,6 +313,8 @@ public:
       } 
       return sat_literal_vector(first,n);
    }
+   template<typename T>
+   sat_literal_vector add_literal(const vector<T>& v) { return add_literal(v.size()); }
 
    sat_literal_matrix add_literal_matrix(const INDEX n, const INDEX m)
    {
@@ -303,6 +326,8 @@ public:
       } 
       return sat_literal_matrix(first,n,m);
    }
+   template<typename T>
+   sat_literal_matrix add_literal(const matrix<T>& m) { return add_literal(m.dim1(), m.dim2()); }
 
    sat_literal_tensor add_literal_tensor(const INDEX n, const INDEX m, const INDEX k)
    {
@@ -314,6 +339,8 @@ public:
       } 
       return sat_literal_tensor(first,n,m,k);
    }
+   template<typename T>
+   sat_literal_tensor add_literal(const tensor3<T>& t) { return add_literal(t.dim1(), t.dim2(), t.dim3()); }
 
    template<typename... T_REST>
    void add_clause(T_REST... literals)

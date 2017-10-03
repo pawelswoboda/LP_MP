@@ -4,7 +4,7 @@
 #include "config.hxx"
 #include <bitset>
 #include "vector.hxx"
-#include "sat_interface.hxx"
+#include "sat_solver.hxx"
 
 namespace LP_MP {
 
@@ -161,70 +161,71 @@ public:
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
     // create variables
-    auto detection_var = lglmaxvar(s);
-    lglincvar(s); 
+    auto detection_literal = s.add_literal();
     //auto detection_var = s.nVars();
     //s.new_var(); //detection will rather be false
     //std::cout << "first var in detection factor = " << detection_var << "\n";
-    auto incoming_var = create_sat_variables(s, incoming.size());
-    auto outgoing_var = create_sat_variables(s, outgoing.size());
-    auto outgoing_sum = add_at_most_one_constraint_sat(s, outgoing_var.begin(), outgoing_var.end());
-    auto incoming_sum = add_at_most_one_constraint_sat(s, incoming_var.begin(), incoming_var.end());
+    auto incoming_var = s.add_literal_vector(incoming.size());
+    auto outgoing_var = s.add_literal_vector(outgoing.size());
+    auto outgoing_sum = s.add_at_most_one_constraint(outgoing_var.begin(), outgoing_var.end());
+    auto incoming_sum = s.add_at_most_one_constraint(incoming_var.begin(), incoming_var.end());
 
     // detection var must be equal to incoming and outgoing var
-    make_sat_var_equal(s, to_literal(detection_var),to_literal(incoming_sum));
-    make_sat_var_equal(s, to_literal(detection_var),to_literal(outgoing_sum));
+    s.make_sat_var_equal(detection_literal,incoming_sum);
+    s.make_sat_var_equal(detection_literal,outgoing_sum);
   }
 
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
   {
+    sat_literal detection_literal;
+    sat_literal_vector incoming_literals(incoming.size());
+    sat_literal_vector outgoing_literals(outgoing.size());
+    load_sat_literals(begin, detection_literal, incoming_literals, outgoing_literals);
+
     const REAL cost = min_detection_cost();
     if(cost <= -th) {
       //std::cout << "in reduction: detection factor must be on\n";
-      assumptions.push_back(to_literal(begin));
+      assumptions.push_back(detection_literal);
     }
     if(cost <= th) {
       const REAL incoming_min = incoming.min(); //*std::min_element(incoming.begin(), incoming.end());
       for(INDEX i=0; i<incoming.size(); ++i) {
         if(incoming[i] > incoming_min + th) { 
-           assumptions.push_back(-to_literal(begin+1+i));
+           assumptions.push_back(-incoming_literals[i]);
          }
       }
 
       const REAL outgoing_min = outgoing.min(); //*std::min_element(outgoing.begin(), outgoing.end());
       for(INDEX i=0; i<outgoing.size(); ++i) {
         if(outgoing[i] > outgoing_min + th) { 
-           assumptions.push_back(-to_literal(begin+1+incoming.size()+i));
+           assumptions.push_back(-outgoing_literals[i]);
          }
       } 
     } else {
-      for(auto i=0; i<this->size(); ++i) {
-        assumptions.push_back(-to_literal(begin+i));
-      }
+      assumptions.push_back(-detection_literal);
     }
   }
 
   template<typename SAT_SOLVER>
   void convert_primal(SAT_SOLVER& s, sat_var first)
   {
-    //assert(s.get_model()[first] != CMSat::l_Undef);
-    //std::cout << lglmaxvar(s) << "\n";
-    if(lglderef(s, to_literal(first)) == 1) {
-      //std::cout << "in primal conversion: detection factor is on\n";
-      // find index of incoming and outgoing active edge
+    sat_literal detection_literal;
+    sat_literal_vector incoming_literals(incoming.size());
+    sat_literal_vector outgoing_literals(outgoing.size());
+    load_sat_literals(first, detection_literal, incoming_literals, outgoing_literals);
+
+    if(s.solution(detection_literal)) {
       for(INDEX i=first+1; i<first+1+incoming.size(); ++i) {
-        if(lglderef(s,to_literal(i)) == 1) {
+        if(s.solution(incoming_literals[i])) {
           incoming_edge_ = i-first-1;
-          //std::cout << "incoming edge = " << i << ", ";
         }
       }
       for(INDEX i=first+1+incoming.size(); i<first+size(); ++i) {
-        if(lglderef(s,to_literal(i)) == 1) {
+        if(s.solution(outgoing_literals[i])) {
           outgoing_edge_ = i-first-1-incoming.size();
-          //std::cout << "outgoing edge = " << i << "\n";
         }
-      }
+      } 
     } else {
       incoming_edge_ = no_edge_taken;
       outgoing_edge_ = no_edge_taken;
@@ -384,17 +385,16 @@ public:
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
     // create variables
-    auto detection_var = lglmaxvar(s);
-    lglincvar(s); 
+    s.add_literal();
   }
 
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
   {
     if(cost <= -th) {
-      assumptions.push_back(to_literal(begin));
+      assumptions.push_back(begin);
     } else if(cost >= th) {
-      assumptions.push_back(-to_literal(begin));
+      assumptions.push_back(-begin);
     }
   }
 
@@ -403,7 +403,7 @@ public:
   {
     //assert(s.get_model()[first] != CMSat::l_Undef);
     //std::cout << lglmaxvar(s) << "\n";
-    if(lglderef(s, to_literal(first)) == 1) {
+    if(s.solution(first)) {
       primal_ = true;
     } else {
       primal_ = false;
@@ -530,9 +530,12 @@ public:
   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
-    auto left_var = left_begin;
-    auto right_var = right_begin+1+ incoming_edge_index_;
-    make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+    sat_literal detection_literal;
+    sat_literal_vector incoming_literal(r.incoming.size());
+    sat_literal_vector outgoing_literal(r.outgoing.size());
+    load_sat_literals(s, detection_literal, incoming_literal, outgoing_literal);
+
+    s.make_equal(left_begin, incoming_literal[incoming_edge_index_]);
   }
 
 private:
@@ -662,9 +665,11 @@ public:
   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
-    auto left_var = left_begin;
-    auto right_var = right_begin+1+ r.incoming.size() + outgoing_edge_index_;
-    make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+    sat_literal detection_literal;
+    sat_literal_vector incoming_literal(r.incoming.size());
+    sat_literal_vector outgoing_literal(r.outgoing.size());
+    load_sat_literals(s, detection_literal, incoming_literal, outgoing_literal);
+    s.make_equal(left_begin, outgoing_literal[outgoing_edge_index_]);
   }
 
 private:
@@ -961,9 +966,17 @@ public:
   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
-    auto left_var = left_begin+1+l.incoming.size() + outgoing_edge_index_;
-    auto right_var = right_begin+1+ incoming_edge_index_;
-    make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
+    sat_literal left_detection_literal;
+    sat_literal_vector left_incoming_literal(l.incoming.size());
+    sat_literal_vector left_outgoing_literal(l.outgoing.size());
+    load_sat_literals(s, left_detection_literal, left_incoming_literal, left_outgoing_literal);
+
+    sat_literal right_detection_literal;
+    sat_literal_vector right_incoming_literal(l.incoming.size());
+    sat_literal_vector right_outgoing_literal(l.outgoing.size());
+    load_sat_literals(s, right_detection_literal, right_incoming_literal, right_outgoing_literal);
+
+    s.make_equal(left_begin, left_outgoing_literal[outgoing_edge_index_], right_incoming_literal[incoming_edge_index_]);
   }
 private:
   const SHORT_INDEX outgoing_edge_index_;
@@ -1010,25 +1023,26 @@ public:
   template<typename SAT_SOLVER>
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
-    auto vars = create_sat_variables(s, this->size());
-    auto active = create_sat_variable(s);
-    const auto _active = add_at_most_one_constraint_sat(s, vars.begin(), vars.end());
-    make_sat_var_equal(s, to_literal(active), to_literal(_active));
+    auto literals = s.add_literal_vector(s, this->size()+1);
+    s.add_simplex_constraint(literals.begin(), literals.end());
   }
 
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
   {
+    sat_literal_vector literals(this->size()+1);
+    load_sat_literals(begin, literals);
+
     const REAL min_cost = this->min();
     if(min_cost > th) {
-      assumptions.push_back(-to_literal(begin+size()));
+      assumptions.push_back(-literals[size()]);
     } else {
       if(min_cost < -th) {
-        assumptions.push_back(to_literal(begin+size()));
+        assumptions.push_back(literals[size()]);
       }
       for(INDEX i=0; i<this->size(); ++i) {
         if((*this)[i] > min_cost + th) { 
-          assumptions.push_back(-to_literal(begin+i)); 
+          assumptions.push_back(-literals[i]);
         }
       }
     }
@@ -1037,9 +1051,11 @@ public:
   template<typename SAT_SOLVER>
   void convert_primal(SAT_SOLVER& s, sat_var first)
   {
+    sat_literal_vector literals(this->size()+1);
+    load_sat_literals(first, literals);
+
     for(INDEX i=0; i<this->size(); ++i) {
-      if(lglderef(s, to_literal(first+i)) == 1) {
-      //if(s.get_model()[first+i] == CMSat::l_True) {
+      if(s.solution(i)) {
         primal_ = i;
         return;
       }
@@ -1191,8 +1207,13 @@ public:
   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
-    auto right_var = right_begin+at_most_one_cell_factor_index_;
-    make_sat_var_equal(s, to_literal(left_begin), to_literal(right_var));
+    sat_literal detection_literal;
+    load_sat_literals(left_begin, detection_literal);
+
+    sat_literal_vector at_most_one_literals(r.size()+1);
+    load_sat_literals(right_begin, at_most_one_literals);
+
+    s.make_equal(detection_literal, at_most_one_literals[at_most_one_cell_factor_index_]);
   }
 private:
    const INDEX at_most_one_cell_factor_index_;
@@ -1232,17 +1253,20 @@ public:
   template<typename SAT_SOLVER>
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
-    auto var = create_sat_variables(s, this->size());
-    add_at_most_one_constraint_sat(s, var.begin(), var.end());
+    auto literals = s.add_literal_vector(this->size()+1);
+    s.add_at_most_one_constraint(literals.begin(), literals.end());
   }
 
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
   {
+    sat_literal_vector literals(this->size()+1);
+    load_sat_literals(begin, literals);
+
     // do zrobienia: if reparametrization is < -th, then disallow no edge to be taken!
     for(INDEX i=0; i<this->size(); ++i) {
       if((*this)[i] > th) { 
-        assumptions.push_back(-to_literal(begin+i)); 
+        assumptions.push_back(-literals[i]); 
       }
     }
   }
@@ -1250,9 +1274,11 @@ public:
   template<typename SAT_SOLVER>
   void convert_primal(SAT_SOLVER& s, sat_var first) 
   {
+    sat_literal_vector literals(this->size()+1);
+    load_sat_literals(first, literals);
+
     for(INDEX i=0; i<this->size(); ++i) {
-      if(lglderef(s, to_literal(first+i)) == 1) {
-      //if(s.get_model()[first+i] == CMSat::l_True) 
+      if(s.solution(literals[i])) {
         primal_ = i;
         return;
       }
@@ -1379,16 +1405,20 @@ public:
   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
+    sat_literal detection_literal;
+    sat_literal_vector incoming_literals(l.incoming.size());
+    sat_literal_vector outgoing_literals(l.outgoing.size());
+    load_sat_literals(left_begin, detection_literal, incoming_literals, outgoing_literals);
+
+    sat_literal_vector exit_literals(r.size());
+    load_sat_literals(right_begin, exit_literals);
+
     if(POSITION == exit_constraint_position::lower) {
-      make_sat_var_equal(s, to_literal(left_begin+l.size()-1), to_literal(right_begin));
+      s.make_equal(outgoing_literals[outgoing_literals.size()-1], exit_literals[0]);
     } else {
       // get indicator variable for sum of outgoing edges without last one
-      std::vector<sat_var> outgoing_var(l.outgoing.size()-1);
-      for(INDEX i=0; i<outgoing_var.size(); ++i) {
-        outgoing_var[i] = left_begin+1+l.incoming.size()+i;
-      }
-      auto c = add_at_most_one_constraint_sat(s, outgoing_var.begin(), outgoing_var.end());
-      make_sat_var_equal(s, to_literal(c), to_literal(right_begin+1));
+      auto c = s.add_at_most_one_constraint(outgoing_literals.begin(), outgoing_literals.end()-1);
+      s.make_equal(c, exit_literals[1]);
     }
   }
 };
@@ -1553,8 +1583,8 @@ public:
   // reparametrization
   vector<REAL> detection;
   vector<REAL> incoming_division;
-  matrix<REAL> incoming_transition;
-  matrix<REAL> outgoing_transition;
+  matrix<REAL> incoming_transition; // (edge no, division distance)
+  matrix<REAL> outgoing_transition; // (edge no, division distance)
   vector<REAL> outgoing_division;
 
   // SAT encoding
@@ -1562,57 +1592,48 @@ public:
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
     // create variables
-    const auto detection_active_var = create_sat_variable(s);
-    const auto detection_var = create_sat_variables(s, detection.size());
-
-    const auto incoming_division_var = create_sat_variables(s, incoming_division.size());
-
-    std::vector<decltype(create_sat_variables(s,0))> incoming_transition_var;
-    incoming_transition_var.reserve(division_distance()-1);
-    for(INDEX i=0; i<division_distance()-1; ++i) {
-      incoming_transition_var.push_back(create_sat_variables(s, no_incoming_transition_edges())); 
-    }
-    assert(incoming_transition_var.size() == division_distance()-1);
-
-    std::vector<decltype(create_sat_variables(s,0))> outgoing_transition_var;
-    outgoing_transition_var.reserve(division_distance());
-    for(INDEX i=0; i<division_distance(); ++i) {
-      outgoing_transition_var.push_back(create_sat_variables(s, no_outgoing_transition_edges())); 
-    } 
-    assert(outgoing_transition_var.size() == division_distance());
-
-    const auto outgoing_division_var = create_sat_variables(s, outgoing_division.size());
+    auto detection_active_literal = s.add_literal();
+    auto detection_literals = s.add_literal_vector(detection.size());
+    auto incoming_division_literals = s.add_literal_vector(incoming_division.size());
+    auto incoming_transition_literals = s.add_literal_matrix(incoming_transition.dim1(), incoming_transition.dim2());
+    auto outgoing_transition_literals = s.add_literal_matrix(outgoing_transition.dim1(), outgoing_transition.dim2());
+    auto outgoing_division_literals = s.add_literal_vector(outgoing_division.size());
 
     // constraints
-    const auto _detection_active = add_at_most_one_constraint_sat(s, detection_var.begin(), detection_var.end());
-    make_sat_var_equal(s, to_literal(_detection_active), to_literal(detection_active_var));
+    auto _detection_active_literal = s.add_at_most_one_constraint(detection_literals.begin(), detection_literals.end());
+    s.make_equal(_detection_active_literal, detection_active_literal);
 
     // detection var must be equal to incoming and outgoing var
-    make_sat_var_equal(s, to_literal(detection_var[0]), to_literal( add_at_most_one_constraint_sat(s, incoming_division_var.begin(), incoming_division_var.end()) ));
-    make_sat_var_equal(s, to_literal(detection_var[0]), to_literal( add_at_most_one_constraint_sat(s, outgoing_transition_var[0].begin(), outgoing_transition_var[0].end()) ));
+    s.make_equal(detection_literals[0], s.add_at_most_one_constraint_sat(incoming_division_literals.begin(), incoming_division_literals.end()));
+    s.make_equal(detection_literals[0], s.add_at_most_one_constraint(outgoing_transition_literals.slice2(0).begin(), outgoing_transition_literals.slice2(0).end()));
 
     for(INDEX i=1; i<detection.size()-1; ++i) {
-      make_sat_var_equal(s, to_literal(detection_var[i]), to_literal( add_at_most_one_constraint_sat(s, incoming_transition_var[i-1].begin(), incoming_transition_var[i-1].end()) ));
-      make_sat_var_equal(s, to_literal(detection_var[i]), to_literal( add_at_most_one_constraint_sat(s, outgoing_transition_var[i].begin(), outgoing_transition_var[i].end()) ));
+      auto incoming_slice = incoming_transition_literals.slice2(i-1);
+      auto outgoing_slice = outgoing_transition_literals.slice2(i);
+      s.make_equal( detection_literals[i], s.add_at_most_one_constraint(incoming_slice.begin(), incoming_slice.end()));
+      s.make_equal( detection_literals[i], s.add_at_most_one_constraint(outgoing_slice.begin(), outgoing_slice.end()));
     }
 
-    const auto last_incoming_var = add_at_most_one_constraint_sat(s, incoming_transition_var.back().begin(), incoming_transition_var.back().end());
-    make_sat_var_equal(s, to_literal(detection_var.back()), to_literal( last_incoming_var ));
+    auto last_incoming_slice = incoming_transition_literals.slice2( incoming_transition_literals.dim2()-1 );
+    s.make_equal( detection_literals.back(), s.add_at_most_one_constraint(last_incoming_slice.begin(), last_incoming_slice.end()) );
 
-    const auto last_outgoing_transition_var = add_at_most_one_constraint_sat(s, outgoing_transition_var.back().begin(), outgoing_transition_var.back().end());
-    const auto _outgoing_division_var = add_at_most_one_constraint_sat(s, outgoing_division_var.begin(), outgoing_division_var.end());
-    std::array<sat_var,2> last_outgoing_vars({last_outgoing_transition_var, _outgoing_division_var});
-    const auto last_outgoing_var = add_at_most_one_constraint_sat(s, last_outgoing_vars.begin(), last_outgoing_vars.end());
-    make_sat_var_equal(s, to_literal(detection_var.back()), to_literal(last_outgoing_var));
+    auto last_outgoing_transition_slice = outgoing_transition_literals.slice2( outgoing_transition_literals.dim2()-1 );
+    auto last_outgoing_transition_sum = s.add_at_most_one_constraint( last_outgoing_transition_slice.begin(), last_outgoing_transition_slice.end() );
+    auto outgoing_division_literal = s.add_at_most_one_constraint( outgoing_division_literals.begin(), outgoing_division_literals.end() );
+    std::array<sat_literal,2> last_outgoing_literals({last_outgoing_transition_sum, outgoing_division_literal}); 
+    auto last_outgoing_literal = s.add_at_most_one_constraint(last_outgoing_literals.begin(), last_outgoing_literals.end());
   }
 
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var first_detection_var) const
   {
-    const sat_var first_incoming_division = first_detection_var + 1 + division_distance();
-    const sat_var first_incoming_transition = first_incoming_division + incoming_division.size();
-    const sat_var first_outgoing_transition = first_incoming_transition + incoming_transition.size();
-    const sat_var first_outgoing_division = first_outgoing_transition + outgoing_transition.size();
+    sat_literal detection_active_literal;
+    sat_literal_vector detection_literals(detection);
+    sat_literal_vector incoming_division_literals(incoming_division);
+    sat_literal_matrix incoming_transition_literals(incoming_transition);
+    sat_literal_matrix outgoing_transition_literals(outgoing_transition);
+    sat_literal_vector outgoing_division_literals(outgoing_division);
+    load_sat_literals(detection_active_literal, detection_literals, incoming_division_literals, incoming_transition_literals, outgoing_transition_literals, outgoing_division_literals); 
 
     auto outgoing_transition_min = outgoing_transition.min2();
     assert(outgoing_transition_min.size() == division_distance());
@@ -1658,14 +1679,14 @@ public:
     //std::cout << "\n\n";
 
     if(min_det_cost > th) {
-      assumptions.push_back(-to_literal(first_detection_var));
+      assumptions.push_back(-detection_active_literal);
       //for(INDEX j=0; j<incoming_division.size(); ++j) {
       //  assumptions.push_back(-to_literal(begin + 1 + j));
       //} 
     } else {
       if(min_det_cost <= -th) {
         //std::cout << "detection must be on\n";
-        assumptions.push_back(to_literal(first_detection_var));
+        assumptions.push_back(detection_active_literal);
       }
       const REAL incoming_division_min = incoming_division.min();
       const REAL det_0_cost = detection[0] + incoming_division_min + outgoing_transition_min[0];
@@ -1674,33 +1695,33 @@ public:
         // go over incoming division edges
         for(INDEX i=0; i<incoming_division.size(); ++i) {
           if(incoming_division[i] > incoming_division_min + th) {
-            assumptions.push_back(-to_literal(first_incoming_division+i));
+            assumptions.push_back(-incoming_division_literals[i]);
           }
         }
         for(INDEX i=0; i<no_outgoing_transition_edges(); ++i) {
           if(outgoing_transition(i,0) > outgoing_transition_min[0] + th) {
-            assumptions.push_back(-to_literal(first_outgoing_transition + i));
+            assumptions(-outgoing_transition_literals(i,0));
             //std::cout << "forbid outgoing transition " << i << ",0" << "\n";
           } 
         }
       } else {
-        assumptions.push_back(-to_literal(first_detection_var+1));
+        assumptions.push_back(-detection_literals[0]);
       }
 
       for(INDEX t=1; t<division_distance()-1; ++t) {
         if(detection[t] + incoming_transition_min[t-1] + outgoing_transition_min[t] <= min_det_cost + th) {
           for(INDEX i=0; i<no_incoming_transition_edges(); ++i) {
             if(incoming_transition(i,t-1) > incoming_transition_min[t-1] + th) {
-              assumptions.push_back(-to_literal(first_incoming_transition + (t-1)*no_incoming_transition_edges() + i));
+              assumptions.push_back(-incoming_transition_literals(i,t-1));
             }
           }
           for(INDEX i=0; i<no_outgoing_transition_edges(); ++i) {
             if(outgoing_transition(i,t) > outgoing_transition_min[t] + th) {
-              assumptions.push_back(-to_literal(first_outgoing_transition + t*no_outgoing_transition_edges() + i));
+              assumptions.push_back(-outgoing_transition_literals(i,t));
             }
           } 
         } else {
-          assumptions.push_back(-to_literal(first_detection_var + 1 + t));
+          assumptions.push_back(-detection_literals[t]);
         } 
       }
 
@@ -1709,22 +1730,22 @@ public:
 //        std::cout << "last detection on\n";
         for(INDEX i=0; i<no_incoming_transition_edges(); ++i) {
           if(incoming_transition(i,last-1) > incoming_transition_min[last-1] + th) {
-            assumptions.push_back(-to_literal(first_incoming_transition + (last-1)*no_incoming_transition_edges() + i));
+            assumptions.push_back(-incoming_transition_literals(i,last-1));
           }
         }
         const REAL outgoing_min = std::min(outgoing_transition_min[last], outgoing_division.min());
         for(INDEX i=0; i<no_outgoing_transition_edges(); ++i) {
           if(outgoing_transition(i,last) > outgoing_min + th) {
-            assumptions.push_back(-to_literal(first_outgoing_transition + last*no_outgoing_transition_edges() + i));
+            assumptions.push_back(-outgoing_transition_literals(i,last));
           }
         } 
         for(INDEX i=0; i<outgoing_division.size(); ++i) {
           if(outgoing_division[i] > outgoing_min + th) {
-            assumptions.push_back(-to_literal(first_outgoing_division+i));
+            assumptions.push_back(-outgoing_division_literals[i]);
           }
         }
       } else {
-        assumptions.push_back(-to_literal(first_detection_var + 1 + last));
+        assumptions.push_back(-detection_literals[last]);
       }
     }
     //std::cout << "\n";
@@ -1738,53 +1759,55 @@ public:
     primal().outgoing_edge = no_edge_taken; 
     primal().outgoing_division = false;
 
-    //std::cout << "\nconvert primal from sat\n";
-    const sat_var first_incoming_division = first_detection_var + 1 + division_distance();
-    const sat_var first_incoming_transition = first_incoming_division + incoming_division.size();
-    const sat_var first_outgoing_transition = first_incoming_transition + incoming_transition.size();
-    const sat_var first_outgoing_division = first_outgoing_transition + outgoing_transition.size();
+    sat_literal detection_active_literal;
+    sat_literal_vector detection_literals(detection);
+    sat_literal_vector incoming_division_literals(incoming_division);
+    sat_literal_matrix incoming_transition_literals(incoming_transition);
+    sat_literal_matrix outgoing_transition_literals(outgoing_transition);
+    sat_literal_vector outgoing_division_literals(outgoing_division);
+    load_sat_literals(detection_active_literal, detection_literals, incoming_division_literals, incoming_transition_literals, outgoing_transition_literals, outgoing_division_literals);
 
     //std::cout << first_detection_var << "," << first_incoming_transition << "," << first_outgoing_transition << "\n";
 
-    if(lglderef(s, to_literal(first_detection_var)) == -1) { 
+    if(!s.solution(detection_active_literal)) { 
       //std::cout << "no detection\n";
       return; 
     }
 
     for(INDEX i=0; i<division_distance(); ++i) {
-      if(lglderef(s, to_literal(first_detection_var + 1 + i)) == 1) { // detection at timestep i
+      if(s.solution(detection_literals[i])) { // detection at timestep i
         //std::cout << "detection at time " << i << "\n";
         primal().division = i;
 
         if(i == 0) {
           assert(primal().incoming_edge == no_edge_taken);
           for(INDEX j=0; j<no_incoming_division_edges(); ++j) {
-            if(lglderef(s, to_literal(first_incoming_division + j)) == 1) {
+            if(s.solution(incoming_division_literals[j])) {
               primal().incoming_edge = j;
             }
           } 
           for(INDEX j=0; j<no_outgoing_transition_edges(); ++j) {
-            if(lglderef(s, to_literal(first_outgoing_transition + j)) == 1) {
+            if(s.solution(outgoing_transition_literals(j,0))) {
               primal().outgoing_edge = j;
             } 
           }
         } else {
           // determine incoming edge
           for(INDEX j=0; j<no_incoming_transition_edges(); ++j) {
-            if(lglderef(s, to_literal(first_incoming_transition + (i-1)*no_incoming_transition_edges() + j)) == 1) {
+            if(s.solution(incoming_transition_literals(j, i-1))) {
               primal().incoming_edge = j;
             } 
           }
           // determine outgoing edge
           for(INDEX j=0; j<no_outgoing_transition_edges(); ++j) {
-            if(lglderef(s, to_literal(first_outgoing_transition + i*no_outgoing_transition_edges() + j)) == 1) {
+            if(s.solution(outgoing_transition_literals(j, i))) {
               primal().outgoing_edge = j;
             } 
           }
 
           if( i == division_distance()-1 && primal().outgoing_edge == no_edge_taken) {
             for(INDEX j=0; j<no_outgoing_division_edges(); ++j) {
-              if(lglderef(s, to_literal(first_outgoing_division + j)) == 1) {
+              if(s.solution(outgoing_division_literals[j])) {
                 primal().outgoing_edge = j;
                 primal().outgoing_division = true;
               }
@@ -2047,15 +2070,14 @@ public:
   template<typename SAT_SOLVER>
   void construct_sat_clauses(SAT_SOLVER& s) const
   {
-    const auto vars = create_sat_variables(s, size());
-    const auto active = create_sat_variable(s);
-    const auto _active = add_at_most_one_constraint(s, vars.begin(), vars.end()); // this is possibly not needed after linking with detection factor variables
-    make_sat_var_equal(s, to_literal(active), to_litera(_active));
+    assert(false);
   }
 
   template<typename VEC>
   void reduce_sat(VEC& assumptions, const REAL th, sat_var begin) const
   {
+    assert(false);
+    /*
     const REAL min_cost = this->min();
     if(min_cost > th) {
       assumptions.push_back(-to_literal(begin+size()));
@@ -2069,11 +2091,14 @@ public:
         }
       }
     }
+    */
   }
 
   template<typename SAT_SOLVER>
   void convert_primal(SAT_SOLVER& s, sat_var first)
   {
+    assert(false);
+    /*
     for(INDEX i=0; i<this->size(); ++i) {
       if(lglderef(s, to_literal(first+i)) == 1) {
       //if(s.get_model()[first+i] == CMSat::l_True) {
@@ -2082,6 +2107,7 @@ public:
       }
     }
     primal_ = no_edge_taken;
+    */
   }
 
 private: 
@@ -2204,12 +2230,15 @@ public:
   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
+    assert(false);
+    /*
     const auto first_right_incoming = right_begin + 1 + r.detection.size() + r.no_incoming_division_edges();
     for(INDEX t=0; t<l.division_distance()-1; ++t) {
       const auto left_var = left_begin + t;
       auto right_var = first_right_incoming + t*r.no_incoming_transition_edges() + incoming_edge_index_;
       make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
     }
+    */
   }
 
 private:
@@ -2519,28 +2548,33 @@ public:
   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
+    sat_literal l_detection_active_literal;
+    sat_literal_vector l_detection_literals(l.detection);
+    sat_literal_vector l_incoming_division_literals(l.incoming_division);
+    sat_literal_matrix l_incoming_transition_literals(l.incoming_transition);
+    sat_literal_matrix l_outgoing_transition_literals(l.outgoing_transition);
+    sat_literal_matrix l_outgoing_division_literals(l.outgoing_division);
+    load_sat_literals(left_begin, l_detection_active_literal, l_detection_literals, l_incoming_division_literals, l_incoming_transition_literals, l_outgoing_transition_literals, l_outgoing_division_literals); 
+    sat_literal r_detection_active_literal;
+    sat_literal_vector r_detection_literals(r.detection);
+    sat_literal_vector r_incoming_division_literals(r.incoming_division);
+    sat_literal_matrix r_incoming_transition_literals(r.incoming_transition);
+    sat_literal_matrix r_outgoing_transition_literals(r.outgoing_transition);
+    sat_literal_matrix r_outgoing_division_literals(r.outgoing_division);
+    load_sat_literals(right_begin, r_detection_active_literal, r_detection_literals, r_incoming_division_literals, r_incoming_transition_literals, r_outgoing_transition_literals, r_outgoing_division_literals); 
+
     if(split_) {
-      const auto left_outgoing_division = left_begin + 1 + l.detection.size() + l.incoming_division.size() + l.incoming_transition.size() + l.outgoing_transition.size();
-      const auto right_incoming_division = right_begin + 1 + r.detection.size();
-      make_sat_var_equal(s, to_literal(left_outgoing_division + outgoing_edge_index_), to_literal(right_incoming_division + incoming_edge_index_));
+      s.make_equal(l_outgoing_division_literals[outgoing_edge_index_], r_incoming_division_literals[incoming_edge_index_]);
 
     } else {
-      const auto left_outgoing_transition = left_begin + 1 + l.detection.size() + l.incoming_division.size() + l.incoming_transition.size();
-      const auto right_incoming_transition = right_begin + 1 + r.detection.size() + r.incoming_division.size();
       for(INDEX t=0; t<l.division_distance()-2; ++t) {
-        make_sat_var_equal(s, 
-            to_literal(left_outgoing_transition + t*l.no_outgoing_transition_edges() + outgoing_edge_index_),
-            to_literal(right_incoming_transition + t*r.no_incoming_transition_edges() + incoming_edge_index_));
+        s.make_equal( l_outgoing_transition_literals(outgoing_edge_index_, t), r_incoming_transition_literals(incoming_edge_index_, t) );
       }
 
       const INDEX last = l.division_distance()-1;
-      std::array<sat_var,2> last_outgoing_transitions({
-          sat_var(left_outgoing_transition + (last-1)*l.no_outgoing_transition_edges() + outgoing_edge_index_),
-          sat_var(left_outgoing_transition +  last   *l.no_outgoing_transition_edges() + outgoing_edge_index_) });
-      const auto last_outgoing = add_at_most_one_constraint_sat(s, last_outgoing_transitions.begin(), last_outgoing_transitions.end());
-      make_sat_var_equal(s, 
-          to_literal(last_outgoing), 
-          to_literal(right_incoming_transition + (last-1)*r.no_incoming_transition_edges() + incoming_edge_index_));
+      std::array<sat_var,2> last_outgoing_transitions({l_outgoing_transition_literals(outgoing_edge_index_, last-1), l_outgoing_transition_literals(outgoing_edge_index_, last)});
+      const auto last_outgoing_literal = add_at_most_one_constraint_sat(s, last_outgoing_transitions.begin(), last_outgoing_transitions.end());
+      s.make_equal(last_outgoing_literal, r_incoming_transition_literals(incoming_edge_index_, last-1));
     }
   }
 

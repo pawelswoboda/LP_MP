@@ -347,7 +347,9 @@ int main(int argc, char**argv)
 
 
    //MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
-   Solver<FMC_DT,LP_FW_DS,StandardVisitor> solver;
+   //Solver<FMC_DT,LP_FW_DS,StandardVisitor> solver;
+   //Solver<FMC_DT,LP_FW_TR,StandardVisitor> solver;
+   Solver<FMC_DT,LP_subgradient_ascent,StandardVisitor> solver;
 
    pegtl::file_parser problem(filename);
 
@@ -413,8 +415,8 @@ int main(int argc, char**argv)
       } 
    }
    // decompose mrf into trees automatically. Do this after adding projection, since they can add pairwise factors as well.
-   auto trees = mrf.compute_forest_cover();
-   //auto trees = mrf.compute_forest_cover(not_covered_pairwise);
+   //auto trees = mrf.compute_forest_cover();
+   auto trees = mrf.compute_forest_cover(not_covered_pairwise);
    for(auto& tree : trees) {
       solver.GetLP().add_tree(tree);
    }
