@@ -1,9 +1,9 @@
-include(ExternalProject)
-
-set_property (DIRECTORY PROPERTY EP_BASE Dependencies)
-
-set (DEPENDENCIES)
-set (EXTRA_CMAKE_ARGS)
+#include(ExternalProject)
+#
+#set_property (DIRECTORY PROPERTY EP_BASE Dependencies)
+#
+#set (DEPENDENCIES)
+#set (EXTRA_CMAKE_ARGS)
 
 # SIMD library
 # note: Ubuntu has package vc-dev, but it is old (version 0.7.4), hence unusable
@@ -185,21 +185,21 @@ set (EXTRA_CMAKE_ARGS)
 #ExternalProject_Get_Property(CS2_CPP_Project install_dir)
 
 # lingeling SAT solver
-list(APPEND DEPENDENCIES Lingeling_Project)
-ExternalProject_ADD(
-   Lingeling_Project
-   URL "http://fmv.jku.at/lingeling/lingeling-bal-2293bef-151109.tar.gz"
-   INSTALL_COMMAND ""
-   BUILD_IN_SOURCE 1
-   BUILD_COMMAND "make"
-   CONFIGURE_COMMAND "./configure.sh"
-   )
-ExternalProject_Get_Property(TCLAP_Project install_dir)
+#list(APPEND DEPENDENCIES Lingeling_Project)
+#ExternalProject_ADD(
+#   Lingeling_Project
+#   URL "http://fmv.jku.at/lingeling/lingeling-bal-2293bef-151109.tar.gz"
+#   INSTALL_COMMAND ""
+#   BUILD_IN_SOURCE 1
+#   BUILD_COMMAND "make"
+#   CONFIGURE_COMMAND "./configure.sh"
+#   )
+#ExternalProject_Get_Property(TCLAP_Project install_dir)
 
 
-ExternalProject_Add (LP_MP
-   DEPENDS ${DEPENDENCIES}
-   SOURCE_DIR ${PROJECT_SOURCE_DIR}
-   CMAKE_ARGS -DDOWNLOAD_DEPENDENCIES=OFF ${EXTRA_CMAKE_ARGS}
-   INSTALL_COMMAND ""
-   BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
+#ExternalProject_Add (LP_MP
+#   DEPENDS ${DEPENDENCIES}
+#   SOURCE_DIR ${PROJECT_SOURCE_DIR}
+#   CMAKE_ARGS -DDOWNLOAD_DEPENDENCIES=OFF ${EXTRA_CMAKE_ARGS}
+#   INSTALL_COMMAND ""
+#   BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})

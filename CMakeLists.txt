@@ -38,12 +38,28 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/cpp-sort/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/TCLAP/include")
 #find_library(ARBORICITY NAMES libarboricity.a PATHS "${CMAKE_CURRENT_SOURCE_DIR}/external/arboricity")
 
-if(DOWNLOAD_DEPENDENCIES)
-   # download external projects here 
-   project(DOWNLOAD_DEPENDENCIES_PROJECT NONE)
-   include(cmake/SuperBuild.cmake)
-   return()
-else()
-   project(LP_MP)
-   include(cmake/LP_MP.cmake)
-endif()
+include(ExternalProject)
+list(APPEND DEPENDENCIES lingeling_project)
+ExternalProject_ADD(lingeling_project
+  SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling"
+  CONFIGURE_COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling/configure"
+  BUILD_COMMAND make
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND ""
+  )
+ExternalProject_Get_Property(lingeling_project install_dir)
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling")
+link_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling")
+
+
+
+include(cmake/LP_MP.cmake)
+
+#if(DOWNLOAD_DEPENDENCIES)
+#   # download external projects here 
+#   project(DOWNLOAD_DEPENDENCIES_PROJECT NONE)
+#   include(cmake/SuperBuild.cmake)
+#   return()
+#else()
+#project(LP_MP)
+   #endif()

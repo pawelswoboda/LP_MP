@@ -29,5 +29,5 @@
 	path = external/TCLAP
 	url = https://github.com/eile/tclap.git
 [submodule "lingeling"]
-	path = lingeling
+	path = external/lingeling
 	url = https://github.com/msoos/lingeling-ala.git

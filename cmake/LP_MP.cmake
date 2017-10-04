@@ -28,8 +28,6 @@ add_definitions(-march=native)
 #include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/TCLAP_Project/include")
 #include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/CryptoMiniSat_Project/include")
 #link_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/CryptoMiniSat_Project/lib")
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Lingeling_Project")
-link_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Lingeling_Project")
 
 #add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project")
 #set(LEMON_INCLUDE_DIRS
