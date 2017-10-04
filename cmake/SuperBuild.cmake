@@ -44,43 +44,43 @@ set (EXTRA_CMAKE_ARGS)
 #   )
 
 # meta package for compile time metaprogramming
-list(APPEND DEPENDENCIES meta_Project)
-ExternalProject_Add(
-   meta_Project
-   GIT_REPOSITORY "https://github.com/ericniebler/meta.git"
-   GIT_TAG "master"
-   INSTALL_COMMAND ""
-   BUILD_COMMAND ""
-   CONFIGURE_COMMAND ""
-   )
-ExternalProject_Get_Property(meta_Project install_dir)
-include_directories(${install_dir}/Dependencies/Source/meta_Project/include)
+#list(APPEND DEPENDENCIES meta_Project)
+#ExternalProject_Add(
+#   meta_Project
+#   GIT_REPOSITORY "https://github.com/ericniebler/meta.git"
+#   GIT_TAG "master"
+#   INSTALL_COMMAND ""
+#   BUILD_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(meta_Project install_dir)
+#include_directories(${install_dir}/Dependencies/Source/meta_Project/include)
 
 # unit tests framework
-list(APPEND DEPENDENCIES Catch_Project)
-ExternalProject_Add(
-   Catch_Project
-   GIT_REPOSITORY "https://github.com/philsquared/Catch.git"
-   GIT_TAG "v1.5.6"
-   INSTALL_COMMAND ""
-   BUILD_COMMAND ""
-   CONFIGURE_COMMAND ""
-   )
-ExternalProject_Get_Property(Catch_Project install_dir)
-include_directories(${install_dir}/Dependencies/Source/Catch_Project/include)
+#list(APPEND DEPENDENCIES Catch_Project)
+#ExternalProject_Add(
+#   Catch_Project
+#   GIT_REPOSITORY "https://github.com/philsquared/Catch.git"
+#   GIT_TAG "v1.5.6"
+#   INSTALL_COMMAND ""
+#   BUILD_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(Catch_Project install_dir)
+#include_directories(${install_dir}/Dependencies/Source/Catch_Project/include)
 
 # sorting routines
-list(APPEND DEPENDENCIES cpp_sort_Project)
-ExternalProject_Add(
-   cpp_sort_Project
-   GIT_REPOSITORY "https://github.com/Morwenn/cpp-sort.git"
-   GIT_TAG "master"
-   INSTALL_COMMAND ""
-   BUILD_COMMAND ""
-   CONFIGURE_COMMAND ""
-   )
-ExternalProject_Get_Property(cpp_sort_Project install_dir)
-include_directories(${install_dir}/Dependencies/Source/cpp_sort_Project/include)
+#list(APPEND DEPENDENCIES cpp_sort_Project)
+#ExternalProject_Add(
+#   cpp_sort_Project
+#   GIT_REPOSITORY "https://github.com/Morwenn/cpp-sort.git"
+#   GIT_TAG "master"
+#   INSTALL_COMMAND ""
+#   BUILD_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(cpp_sort_Project install_dir)
+#include_directories(${install_dir}/Dependencies/Source/cpp_sort_Project/include)
 
 # opengm for loading experiments in their hdf5 format
 list(APPEND DEPENDENCIES OpenGM_Project)
@@ -96,44 +96,44 @@ ExternalProject_Get_Property(OpenGM_Project install_dir)
 include_directories(${install_dir}/Dependencies/Source/OpenGM_Project/include)
 
 # PEGTL for building grammars
-list(APPEND DEPENDENCIES PEGTL_Project)
-ExternalProject_Add(
-   PEGTL_Project
-   GIT_REPOSITORY "https://github.com/ColinH/PEGTL.git"
-   GIT_TAG "1.3.1"
-   INSTALL_COMMAND ""
-   BUILD_COMMAND ""
-   CONFIGURE_COMMAND ""
-   )
-ExternalProject_Get_Property(PEGTL_Project install_dir)
-include_directories(${install_dir}/Dependencies/Source/PEGTL_Project/include)
+#list(APPEND DEPENDENCIES PEGTL_Project)
+#ExternalProject_Add(
+#   PEGTL_Project
+#   GIT_REPOSITORY "https://github.com/ColinH/PEGTL.git"
+#   GIT_TAG "1.3.1"
+#   INSTALL_COMMAND ""
+#   BUILD_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(PEGTL_Project install_dir)
+#include_directories(${install_dir}/Dependencies/Source/PEGTL_Project/include)
 
 #IF(BUILD_MULTICUT)
 # Bjoern Andres graph package for multicut
-list(APPEND DEPENDENCIES Andres_Project)
-ExternalProject_Add(
-   Andres_Project
-   GIT_REPOSITORY "https://github.com/bjoern-andres/graph.git"
-   GIT_TAG "master"
-   INSTALL_COMMAND "" 
-   BUILD_COMMAND ""
-   CONFIGURE_COMMAND ""
-   )
-ExternalProject_Get_Property(Andres_Project install_dir)
-include_directories(${install_dir}/Dependencies/Source/Andres_Project/include)
+#list(APPEND DEPENDENCIES Andres_Project)
+#ExternalProject_Add(
+#   Andres_Project
+#   GIT_REPOSITORY "https://github.com/bjoern-andres/graph.git"
+#   GIT_TAG "master"
+#   INSTALL_COMMAND "" 
+#   BUILD_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(Andres_Project install_dir)
+#include_directories(${install_dir}/Dependencies/Source/Andres_Project/include)
 #ENDIF()
 
-list(APPEND DEPENDENCIES Cereal_Project)
-ExternalProject_Add(
-   Cereal_Project
-   GIT_REPOSITORY "https://github.com/USCiLab/cereal.git"
-   GIT_TAG "master"
-   INSTALL_COMMAND "" 
-   BUILD_COMMAND ""
-   CONFIGURE_COMMAND ""
-   )
-ExternalProject_Get_Property(Cereal_Project install_dir)
-include_directories(${install_dir}/Dependencies/Source/Cereal_Project/include)
+#list(APPEND DEPENDENCIES Cereal_Project)
+#ExternalProject_Add(
+#   Cereal_Project
+#   GIT_REPOSITORY "https://github.com/USCiLab/cereal.git"
+#   GIT_TAG "master"
+#   INSTALL_COMMAND "" 
+#   BUILD_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(Cereal_Project install_dir)
+#include_directories(${install_dir}/Dependencies/Source/Cereal_Project/include)
 
 # command line library
 list(APPEND DEPENDENCIES TCLAP_Project)

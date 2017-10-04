@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "solvers/graphical_model/graphical_model.h"
+#include "LP_sat.hxx"
 #include "visitors/standard_visitor.hxx"
 
 #ifdef USE_GUROBI

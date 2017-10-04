@@ -2,8 +2,6 @@
 #define LP_MP_LIFTED_MULTICUT_FACTOR_MESSAGES_HXX
 
 #include "LP_MP.h"
-#include "cereal/types/vector.hpp"
-#include "cereal/types/array.hpp"
 
 namespace LP_MP {
 

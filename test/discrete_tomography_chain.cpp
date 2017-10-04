@@ -2,6 +2,7 @@
 #include <vector>
 #include "visitors/standard_visitor.hxx"
 #include "solvers/discrete_tomography/discrete_tomography.h"
+#include "LP_sat.hxx"
 
 using namespace LP_MP;
 using namespace std;

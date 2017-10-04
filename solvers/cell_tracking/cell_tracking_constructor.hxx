@@ -645,6 +645,7 @@ public:
     // cost of new factors is reparametrized cost of old ones
 
     // detection factors
+    /*
     for(INDEX t=0; t<cdc_.detection_factors_.size(); ++t) {
       for(INDEX i=0; i<cdc_.detection_factors_[i].size(); ++i) {
         auto* fp = cdc_.detection_factors_[i][t];
@@ -686,7 +687,6 @@ public:
     }
 
     // link detections via edges
-    /*
     {
       std::vector<std::vector<std::array<INDEX,2>>> edge_counter(cdc_.detection_factors_.size());
       for(INDEX i=0; i<edge_counter.size(); ++i) {

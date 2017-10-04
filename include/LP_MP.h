@@ -12,6 +12,7 @@
 #include <utility>
 #include <limits>
 #include <exception>
+#include <unordered_map>
 #include "template_utilities.hxx"
 #include <assert.h>
 #include "topological_sort.hxx"
@@ -23,9 +24,9 @@
 #include <thread>
 #include <future>
 #include "memory_allocator.hxx"
-#include "cereal/archives/binary.hpp"
 #include "serialization.hxx"
 #include "tclap/CmdLine.h"
+#include "sat_solver.hxx"
 
 #ifdef LP_MP_PARALLEL
 #include <omp.h>
@@ -479,13 +480,6 @@ public:
 
    bool CheckPrimalConsistency() const;
 
-   template<typename FACTOR_ITERATOR>
-   double EvaluatePrimal(cereal::BinaryInputArchive& primal, FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end) // read in primal solution from primal archive and evaluate cost
-   {
-      assert(std::distance(factor_begin, factor_end) == f_.size());
-      assert(false); 
-      return 0.0;
-   }
    double EvaluatePrimal() {
       const bool consistent = CheckPrimalConsistency();
       if(consistent == false) return std::numeric_limits<REAL>::infinity();
@@ -596,6 +590,13 @@ public:
       }
    }
 protected:
+
+#ifdef LP_MP_PARALLEL
+   template<typename ITERATOR>
+   std::vector<bool> compute_synchronization(ITERATOR factor_begin, ITERATOR factor_end);
+#endif
+
+
    // do zrobienia: possibly hold factors and messages in shared_ptr?
    std::vector<FactorTypeAdapter*> f_; // note that here the factors are stored in the original order they were given. They will be output in this order as well, e.g. by problemDecomposition
    std::vector<MessageTypeAdapter*> m_;
@@ -625,6 +626,8 @@ protected:
 
 #ifdef LP_MP_PARALLEL
    TCLAP::ValueArg<INDEX> num_lp_threads_arg_;
+   std::vector<bool> synchronize_forward_;
+   std::vector<bool> synchronize_backward_;
 #endif
 };
 
@@ -639,8 +642,37 @@ inline void LP::Begin()
 #ifdef LP_MP_PARALLEL
    omp_set_num_threads(num_lp_threads_arg_.getValue());
    if(verbosity >= 2) { std::cout << "number of threads = " << num_lp_threads_arg_.getValue() << "\n"; }
+
+   // determine for which factor updates synchronization must be enabled
+#pragma omp sections
+      {
+#pragma omp section
+        synchronize_forward = compute_synchronization(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end());
+#pragma omp section
+        synchronize_backward = compute_synchronization(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end()); 
+      }
 #endif
 }
+
+#ifdef LP_MP_PARALLEL
+template<typename ITERATOR>
+inline std::vector<bool> LP::compute_synchronization(ITERATOR factor_begin, ITERATOR factor_end)
+{
+  const INDEX n = std::distance(factor_begin, factor_end);
+  std::vector<bool> synchronize(n);
+
+  std::vector<INDEX> factor_to_processor(n);
+#pragma omp parallel for 
+  for(INDEX i=0; i<std::distance(factor_begin, factor_end); ++i) {
+    factor_to_processor[i] = omp_get_thread_num();
+  }
+
+  if(debug()) {
+    std::cout << "\%factors to synchronize = " << REAL(std::count(synchronize.begin(), synchronize.end(), true)) / REAL(synchronize.size()) << "\n";
+  }
+  return std::move(synchronize);
+}
+#endif
 
 inline void LP::ComputePass(const INDEX iteration)
 {

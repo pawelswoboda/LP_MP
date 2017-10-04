@@ -17,7 +17,7 @@ option(BUILD_DISCRETE_TOMOGRAPHY_EVALUATION "Build discrete tomography evaluatio
 option(BUILD_TESTS "Build tests" ON)
 option(WITH_GUROBI "LP interface to gurobi" OFF)
 option(WITH_CPLEX "LP interface to Cplex" OFF)
-option(WITH_SAT_BASED_ROUNDING "Use the glucose SAT solver to decode a primal solution based on reparametrization" OFF)
+option(WITH_SAT_BASED_ROUNDING "Use the lingeling SAT solver to decode a primal solution based on reparametrization" OFF)
 option(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/MQLib/include")
@@ -25,9 +25,14 @@ find_library(MAX_CUT_LIB NAMES MQLib.a PATHS "${CMAKE_CURRENT_SOURCE_DIR}/extern
 #link_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/MQLib/bin/")
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/libsimdpp")
-
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/arboricity")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/arboricity")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/andres_graph/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/Catch/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/meta/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/PEGTL")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/opengm/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/cpp-sort/include")
 #find_library(ARBORICITY NAMES libarboricity.a PATHS "${CMAKE_CURRENT_SOURCE_DIR}/external/arboricity")
 
 if(DOWNLOAD_DEPENDENCIES)

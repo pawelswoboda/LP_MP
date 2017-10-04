@@ -7,3 +7,21 @@
 [submodule "external/arboricity"]
 	path = external/arboricity
 	url = https://github.com/pawelswoboda/arboricity.git
+[submodule "external/meta"]
+	path = external/meta
+	url = https://github.com/ericniebler/meta.git
+[submodule "external/Catch"]
+	path = external/Catch
+	url = https://github.com/philsquared/Catch.git
+[submodule "external/PEGTL"]
+	path = external/PEGTL
+	url = https://github.com/ColinH/PEGTL.git
+[submodule "external/andres_graph"]
+	path = external/andres_graph
+	url = https://github.com/bjoern-andres/graph.git
+[submodule "external/opengm"]
+	path = external/opengm
+	url = https://github.com/opengm/opengm.git
+[submodule "external/cpp-sort"]
+	path = external/cpp-sort
+	url = https://github.com/Morwenn/cpp-sort.git

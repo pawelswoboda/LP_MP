@@ -218,8 +218,6 @@ public:
       global_real_block_allocator.deallocate(pairwise_,1);
    }
    PairwiseSimplexFactor(const PairwiseSimplexFactor& o) : dim_(o.dim_) {
-      std::cout << "copying pairwise simplex\n";
-      assert(false);
       const INDEX size = dim1()*dim2() + dim1() + dim2();
       pairwise_ = global_real_block_allocator.allocate(size);
       //pairwise_ = new REAL[dim1()*dim2() + dim1() + dim2()]; // possibly use block allocator!
