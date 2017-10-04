@@ -12,6 +12,8 @@ add_compile_options(-std=c++14)
 add_definitions(-DIL_STD) # legacy setting for CPLEX
 add_definitions(-march=native)
 
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
 # Options
 option(BUILD_GRAPH_MATCHING "Build graph matching" ON)
 option(BUILD_GRAPH_MATCHING_EVALUATION "Build graph matching evaluation" OFF)
