@@ -647,9 +647,9 @@ inline void LP::Begin()
 #pragma omp sections
       {
 #pragma omp section
-        synchronize_forward = compute_synchronization(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end());
+        synchronize_forward_ = compute_synchronization(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end());
 #pragma omp section
-        synchronize_backward = compute_synchronization(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end()); 
+        synchronize_backward_ = compute_synchronization(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end()); 
       }
 #endif
 }
@@ -687,13 +687,11 @@ template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
 void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
 {
    //assert(std::distance(factorItEnd, factorIt) == std::distance(omegaIt, omegaItEnd));
-#pragma omp parallel for 
-   for(INDEX i=0; i<std::distance(factorIt, factorItEnd); ++i) {
+  const INDEX n = std::distance(factorIt, factorItEnd);
+#pragma omp parallel for schedule(guided)
+   for(INDEX i=0; i<n; ++i) {
       UpdateFactor(*(factorIt + i), *(omegaIt + i));
    }
-   //for(; factorIt!=factorItEnd; ++factorIt, ++omegaIt) {
-   //   UpdateFactor(*factorIt, *omegaIt);
-   //}
 }
 
 inline void LP::ComputeAnisotropicWeights()

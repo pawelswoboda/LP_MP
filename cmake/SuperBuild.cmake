@@ -83,17 +83,17 @@ set (EXTRA_CMAKE_ARGS)
 #include_directories(${install_dir}/Dependencies/Source/cpp_sort_Project/include)
 
 # opengm for loading experiments in their hdf5 format
-list(APPEND DEPENDENCIES OpenGM_Project)
-ExternalProject_Add(
-   OpenGM_Project
-   GIT_REPOSITORY "https://github.com/opengm/opengm.git"
-   GIT_TAG "master"
-   INSTALL_COMMAND ""
-   BUILD_COMMAND ""
-   CONFIGURE_COMMAND ""
-   )
-ExternalProject_Get_Property(OpenGM_Project install_dir)
-include_directories(${install_dir}/Dependencies/Source/OpenGM_Project/include)
+#list(APPEND DEPENDENCIES OpenGM_Project)
+#ExternalProject_Add(
+#   OpenGM_Project
+#   GIT_REPOSITORY "https://github.com/opengm/opengm.git"
+#   GIT_TAG "master"
+#   INSTALL_COMMAND ""
+#   BUILD_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(OpenGM_Project install_dir)
+#include_directories(${install_dir}/Dependencies/Source/OpenGM_Project/include)
 
 # PEGTL for building grammars
 #list(APPEND DEPENDENCIES PEGTL_Project)
@@ -136,16 +136,16 @@ include_directories(${install_dir}/Dependencies/Source/OpenGM_Project/include)
 #include_directories(${install_dir}/Dependencies/Source/Cereal_Project/include)
 
 # command line library
-list(APPEND DEPENDENCIES TCLAP_Project)
-ExternalProject_ADD(
-   TCLAP_Project
-   URL "http://downloads.sourceforge.net/project/tclap/tclap-1.2.1.tar.gz"
-   # or http://kent.dl.sourceforge.net/project/tclap/tclap-1.2.1.tar.gz
-   INSTALL_COMMAND ""
-   BUILD_COMMAND ""
-   CONFIGURE_COMMAND ""
-   )
-ExternalProject_Get_Property(TCLAP_Project install_dir)
+#list(APPEND DEPENDENCIES TCLAP_Project)
+#ExternalProject_ADD(
+#   TCLAP_Project
+#   URL "http://downloads.sourceforge.net/project/tclap/tclap-1.2.1.tar.gz"
+#   # or http://kent.dl.sourceforge.net/project/tclap/tclap-1.2.1.tar.gz
+#   INSTALL_COMMAND ""
+#   BUILD_COMMAND ""
+#   CONFIGURE_COMMAND ""
+#   )
+#ExternalProject_Get_Property(TCLAP_Project install_dir)
 
 # minimum cost flow solvers for e.g. graph matching
 #list(APPEND DEPENDENCIES LEMON_Project)

@@ -1,3 +1,5 @@
+project(LP_MP)
+
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
 
@@ -33,6 +35,7 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/meta/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/PEGTL")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/opengm/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/cpp-sort/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/TCLAP/include")
 #find_library(ARBORICITY NAMES libarboricity.a PATHS "${CMAKE_CURRENT_SOURCE_DIR}/external/arboricity")
 
 if(DOWNLOAD_DEPENDENCIES)
