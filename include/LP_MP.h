@@ -49,6 +49,11 @@ public:
    virtual void UpdateFactor(const weight_vector& omega) = 0;
    virtual void UpdateFactorPrimal(const weight_vector& omega, const INDEX iteration) = 0;
    virtual void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec& assumptions) = 0;
+#ifdef LP_MP_PARALLEL
+   virtual void UpdateFactorSynchronized(const weight_vector& omega) = 0;
+   virtual void UpdateFactorPrimalSynchronized(const weight_vector& omega, const INDEX iteration) = 0;
+   virtual void UpdateFactorSATSynchronized(const weight_vector& omega, const REAL th, sat_var begin, sat_vec& assumptions) = 0;
+#endif
    virtual void reduce_sat(const REAL th, sat_var begin, std::vector<sat_literal>& assumptions) = 0;
    //virtual void convert_primal(Glucose::SimpSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
    //virtual void convert_primal(CMSat::SATSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
@@ -61,7 +66,7 @@ public:
    MessageIterator begin(); 
    MessageIterator end();
    virtual INDEX GetNoMessages() const = 0;
-   virtual INDEX no_send_messages() const = 0; // to do: use this function instead of ComputeSendFactorConnection in weight computation whenever possible
+   virtual INDEX no_send_messages() const = 0;
    virtual MessageTypeAdapter* GetMessage(const INDEX n) const = 0;
    virtual FactorTypeAdapter* GetConnectedFactor(const INDEX i) const = 0;
    virtual bool CanSendMessage(const INDEX i) const = 0;
@@ -108,6 +113,9 @@ public:
    virtual INDEX GetNumberOfAuxVariables() const = 0;
    virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
    virtual void ReduceLp(LpInterfaceAdapter* lpInterface) const = 0;
+
+   // estimate of how long a factor update will take
+   virtual INDEX runtime_estimate() = 0;
 };
 
 class MessageTypeAdapter
@@ -353,6 +361,7 @@ public:
          primalOffset += f->PrimalSize();
       }
    }
+
    void SortFactors(
          const std::vector<std::pair<FactorTypeAdapter*, FactorTypeAdapter*>>& factor_rel,
          std::vector<FactorTypeAdapter*>& ordering,
@@ -420,11 +429,6 @@ public:
       }
    }
 
-   template<typename FACTOR_ITERATOR>
-      std::vector<std::vector<FactorTypeAdapter*> > ComputeFactorConnection(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt);
-   template<typename FACTOR_ITERATOR>
-      std::vector<std::vector<FactorTypeAdapter*> > ComputeSendFactorConnection(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt);
-
    //void ComputeWeights(const LPReparametrizationMode m);
    void set_reparametrization(const LPReparametrizationMode r) 
    {
@@ -490,43 +494,52 @@ public:
          cost += f_[i]->EvaluatePrimal();
       }
 
-      if(verbosity >= 2) { std::cout << "primal cost = " << cost << "\n"; }
+      if(debug()) { std::cout << "primal cost = " << cost << "\n"; }
 
       return cost;
    }
 
-   void UpdateFactor(FactorTypeAdapter* f, const weight_vector& omega) // perform one block coordinate step for factor f
-   {
-      f->UpdateFactor(omega);
-   }
    void ComputePass(const INDEX iteration);
 
    void ComputeForwardPass()
    {
       const auto omega = get_omega();
+#ifdef LP_MP_PARALLEL
+      ComputePassSynchronized(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), synchronize_forward_.begin()); 
+#else
       ComputePass(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin()); 
+#endif
    }
    void ComputeBackwardPass()
    {
       const auto omega = get_omega();
+#ifdef LP_MP_PARALLEL
+      ComputePassSynchronized(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin(), synchronize_backward_.begin());
+#else
       ComputePass(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin());
+#endif
    }
 
 
    void ComputeForwardPassAndPrimal(const INDEX iteration)
    {
       const auto omega = get_omega();
+#ifdef LP_MP_PARALLEL
+      ComputePassAndPrimalSynchronized(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), synchronize_forward_.begin(), 2*iteration+1); // timestamp must be > 0, otherwise in the first iteration primal does not get initialized
+#else
       ComputePassAndPrimal(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), 2*iteration+1); // timestamp must be > 0, otherwise in the first iteration primal does not get initialized
-      //const REAL forward_cost = EvaluatePrimal();
-      //std::cout << "forward cost = " << forward_cost << "\n";
+#endif
    }
    void ComputeBackwardPassAndPrimal(const INDEX iteration)
    {
       const auto omega = get_omega();
+#ifdef LP_MP_PARALLEL
+      ComputePassAndPrimalSynchronized(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin(), synchronize_backward_.begin(), 2*iteration + 2); 
+#else
       ComputePassAndPrimal(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin(), 2*iteration + 2); 
-      //const REAL backward_cost = EvaluatePrimal();
-      //std::cout << "backward cost = " << backward_cost << "\n";
+#endif
    }
+
    void ComputePassAndPrimal(const INDEX iteration)
    {
       ComputeForwardPassAndPrimal(iteration);
@@ -538,15 +551,16 @@ public:
 
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
    void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt);
-   void UpdateFactorPrimal(FactorTypeAdapter* f, const weight_vector& omega, const INDEX iteration)
-   {
-      f->UpdateFactorPrimal(omega, iteration);
-   }
+
+#ifdef LP_MP_PARALLEL
+   template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename SYNCHRONIZATION_ITERATOR>
+   void ComputePassSynchronized(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt, SYNCHRONIZATION_ITERATOR synchronization_begin);
+
+   template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename SYNCHRONIZATION_ITERATOR>
+   void ComputePassAndPrimalSynchronized(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, SYNCHRONIZATION_ITERATOR, const INDEX iteration);
+#endif
 
    const PrimalSolutionStorage& GetBestPrimal() const;
-   template<typename FACTOR_ITERATOR>
-      void WritePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, std::ofstream& fs) const;
-      void WritePrimal(const INDEX factorIndexBegin, const INDEX factorIndexEnd, std::ofstream& fs) const;
 
    LPReparametrizationMode GetRepamMode() const { return repamMode_; }
 
@@ -558,6 +572,9 @@ public:
       omega_isotropic_valid_ = false;
       omega_isotropic_damped_valid_ = false;
       omega_mixed_valid_ = false;
+#ifdef LP_MP_PARALLEL
+      synchronization_valid_ = false;
+#endif
    }
 
    // return type for get_omega
@@ -591,12 +608,6 @@ public:
    }
 protected:
 
-#ifdef LP_MP_PARALLEL
-   template<typename ITERATOR>
-   std::vector<bool> compute_synchronization(ITERATOR factor_begin, ITERATOR factor_end);
-#endif
-
-
    // do zrobienia: possibly hold factors and messages in shared_ptr?
    std::vector<FactorTypeAdapter*> f_; // note that here the factors are stored in the original order they were given. They will be output in this order as well, e.g. by problemDecomposition
    std::vector<MessageTypeAdapter*> m_;
@@ -626,8 +637,23 @@ protected:
 
 #ifdef LP_MP_PARALLEL
    TCLAP::ValueArg<INDEX> num_lp_threads_arg_;
+   bool synchronization_valid_ = false;
    std::vector<bool> synchronize_forward_;
    std::vector<bool> synchronize_backward_;
+
+   template<typename ITERATOR>
+   std::vector<bool> compute_synchronization(ITERATOR factor_begin, ITERATOR factor_end);
+
+   // determine for which factor updates synchronization must be enabled
+   void compute_synchronization()
+   {
+     assert(ordering_valid_);
+     if(synchronization_valid_) { return; }
+     synchronization_valid_ = true;
+
+     synchronize_forward_ = compute_synchronization(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end());
+     synchronize_backward_ = compute_synchronization(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end()); 
+   }
 #endif
 };
 
@@ -639,35 +665,83 @@ inline void LP::Begin()
    repamMode_ = LPReparametrizationMode::Undefined;
    assert(f_.size() > 1); // otherwise we need not perform optimization: Just MaximizePotential f_[0]
 
+   std::cout << "remove these two here!\n";
+   SortFactors();
+
 #ifdef LP_MP_PARALLEL
    omp_set_num_threads(num_lp_threads_arg_.getValue());
-   if(verbosity >= 2) { std::cout << "number of threads = " << num_lp_threads_arg_.getValue() << "\n"; }
-
-   // determine for which factor updates synchronization must be enabled
-#pragma omp sections
-      {
-#pragma omp section
-        synchronize_forward_ = compute_synchronization(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end());
-#pragma omp section
-        synchronize_backward_ = compute_synchronization(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end()); 
-      }
+   if(debug()) { std::cout << "number of threads = " << num_lp_threads_arg_.getValue() << "\n"; }
+   compute_synchronization();
 #endif
+
 }
 
 #ifdef LP_MP_PARALLEL
+// a factor needs to be called with enabled synchronization only if one of its neighbots of distance 2 is updated by another thread
 template<typename ITERATOR>
 inline std::vector<bool> LP::compute_synchronization(ITERATOR factor_begin, ITERATOR factor_end)
 {
   const INDEX n = std::distance(factor_begin, factor_end);
   std::vector<bool> synchronize(n);
+  assert(n > 0);
 
-  std::vector<INDEX> factor_to_processor(n);
-#pragma omp parallel for 
-  for(INDEX i=0; i<std::distance(factor_begin, factor_end); ++i) {
-    factor_to_processor[i] = omp_get_thread_num();
+  std::vector<INDEX> thread_number(this->f_.size(), std::numeric_limits<INDEX>::max());
+  std::cout << "compute " << n << " factors to be synchronized\n";
+#pragma omp parallel num_threads(num_lp_threads_arg_.getValue())
+  {
+    assert(num_lp_threads_arg_.getValue() == omp_get_num_threads());
+    const int nthreads = num_lp_threads_arg_.getValue();
+    const int ithread = omp_get_thread_num();
+    assert(0 <= ithread && ithread < num_lp_threads_arg_.getValue());
+    const int start = (ithread*n)/nthreads;
+    const int finish = ((ithread+1)*n)/nthreads;
+
+    for(INDEX i=start; i<finish; ++i) {
+      const INDEX factor_number = factor_address_to_index_[*(factor_begin+i)];
+      thread_number[factor_number] = ithread;
+    }
+  }
+
+  // check for every factor all its neighbors and see whether more than two possible threads access it.
+  std::vector<bool> conflict_factor(this->f_.size());
+#pragma omp parallel for
+  for(INDEX i=0; i<this->f_.size(); ++i) {
+    auto *f = f_[i];
+    INDEX prev_adjacent_thread_number = thread_number[i];
+    conflict_factor[i] = false;
+    for(auto m_it=f->begin(); m_it!=f->end(); ++m_it) {
+      const INDEX adjacent_factor_number = factor_address_to_index_[m_it.GetConnectedFactor()];
+      const INDEX adjacent_thread_number = thread_number[adjacent_factor_number];
+      if(adjacent_thread_number != std::numeric_limits<INDEX>::max()) {
+        if(prev_adjacent_thread_number != std::numeric_limits<INDEX>::max() && adjacent_thread_number != prev_adjacent_thread_number) {
+          conflict_factor[i] = true;
+        }
+        prev_adjacent_thread_number = adjacent_thread_number;
+      }
+    }
+  }
+  std::cout << "# conflict factors = " << std::count(conflict_factor.begin(), conflict_factor.end(), true) << "\n";
+
+  // if a factor is adjacent to a conflict factor or is itself one, then it needs to be synchronized
+#pragma omp parallel for
+  for(INDEX i=0; i<n; ++i) {
+    auto* f = *(factor_begin+i);
+    const INDEX factor_number = factor_address_to_index_[f];
+    if(conflict_factor[factor_number]) {
+      synchronize[i] = true;
+      continue;
+    }
+    synchronize[i] = false;
+    for(auto m_it=f->begin(); m_it!=f->end(); ++m_it) {
+      const INDEX adjacent_factor_number = factor_address_to_index_[m_it.GetConnectedFactor()];
+      if(conflict_factor[adjacent_factor_number]) {
+        synchronize[i] = true;
+      }
+    }
   }
 
   if(debug()) {
+    std::cout << std::count(synchronize.begin(), synchronize.end(), true) << ";" << synchronize.size() << "\n";
     std::cout << "\%factors to synchronize = " << REAL(std::count(synchronize.begin(), synchronize.end(), true)) / REAL(synchronize.size()) << "\n";
   }
   return std::move(synchronize);
@@ -679,18 +753,50 @@ inline void LP::ComputePass(const INDEX iteration)
    const auto omega = get_omega();
    assert(forwardUpdateOrdering_.size() == omega.forward.size());
    assert(forwardUpdateOrdering_.size() == omega.backward.size());
+#ifdef LP_MP_PARALLEL
+   compute_synchronization();
+#endif
    ComputeForwardPass();
    ComputeBackwardPass();
 }
+
+#ifdef LP_MP_PARALLEL
+template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename SYNCHRONIZATION_ITERATOR>
+void LP::ComputePassSynchronized(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt, SYNCHRONIZATION_ITERATOR synchronization_begin)
+{
+  const INDEX n = std::distance(factorIt, factorItEnd);
+
+#pragma omp parallel num_threads(num_lp_threads_arg_.getValue())
+  {
+    assert(num_lp_threads_arg_.getValue() == omp_get_num_threads());
+    const int nthreads = num_lp_threads_arg_.getValue();
+    const int ithread = omp_get_thread_num();
+    assert(0 <= ithread && ithread < num_lp_threads_arg_.getValue());
+    const int start = (ithread*n)/nthreads;
+    const int finish = ((ithread+1)*n)/nthreads;
+
+    for(INDEX i=start; i<finish; ++i) {
+      auto* f = *(factorIt + i); 
+      if(*(synchronization_begin+i)) {
+        f->UpdateFactorSynchronized(*(omegaIt + i));
+      } else {
+        //f->UpdateFactor(*(omegaIt + i));
+        f->UpdateFactorSynchronized(*(omegaIt + i));
+      }
+    }
+  } 
+}
+#endif
 
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
 void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
 {
    //assert(std::distance(factorItEnd, factorIt) == std::distance(omegaIt, omegaItEnd));
   const INDEX n = std::distance(factorIt, factorItEnd);
-#pragma omp parallel for schedule(guided)
+//#pragma omp parallel for schedule(static)
    for(INDEX i=0; i<n; ++i) {
-      UpdateFactor(*(factorIt + i), *(omegaIt + i));
+     auto* f = *(factorIt + i);
+     f->UpdateFactor(*(omegaIt + i));
    }
 }
 
@@ -771,58 +877,9 @@ inline bool LP::CheckPrimalConsistency() const
          consistent = false;
       }
    }
-   if(verbosity >= 2) { std::cout << "primal solution consistent: " << (consistent ? "true" : "false") << "\n"; }
+   if(debug()) { std::cout << "primal solution consistent: " << (consistent ? "true" : "false") << "\n"; }
    return consistent;
 }
-
-// write primal solutions in bounds [factorIndexBegin,factorIndexEnd) to filestream
-template<typename FACTOR_ITERATOR>
-void LP::WritePrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, std::ofstream& fs) const
-{
-  assert(false); // write primal is implemented in problem constructor
-   for(; factorIt!=factorEndIt; ++factorIt) {
-      (*factorIt)->WritePrimal(fs);
-   }
-}
-
-// only compute factors adjacent to which also messages can be send
-template<typename FACTOR_ITERATOR>
-std::vector<std::vector<FactorTypeAdapter*> > LP::ComputeSendFactorConnection(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt)
-{
-   std::vector<std::vector<FactorTypeAdapter*> > fc;
-   fc.reserve(factorEndIt - factorIt);
-   for(;factorIt != factorEndIt; ++factorIt) {
-      fc.push_back({});
-      for(auto mIt=(*factorIt)->begin(); mIt!=(*factorIt)->end(); ++mIt) {
-         if(mIt.CanSendMessage()) {
-            fc.back().push_back( mIt.GetConnectedFactor() );
-         }
-      }
-   }
-
-   return fc;
-}
-
-template<typename FACTOR_ITERATOR>
-std::vector<std::vector<FactorTypeAdapter*> > LP::ComputeFactorConnection(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt)
-{
-   std::vector<std::vector<FactorTypeAdapter*> > fc;
-   fc.reserve(factorEndIt - factorIt);
-   for(;factorIt != factorEndIt; ++factorIt) {
-      fc.push_back({});
-      for(auto mIt=(*factorIt)->begin(); mIt!=(*factorIt)->end(); ++mIt) {
-         fc.back().push_back( mIt.GetConnectedFactor() );
-      }
-   }
-
-   // note: this need not hold for e.g. global assignment factor
-   //for(INDEX i=0; i<fc.size(); ++i) {
-   //   assert(HasUniqueValues(fc[i]));
-   //}
-
-   return fc;
-}
-
 
 template<typename FACTOR_ITERATOR, typename FACTOR_SORT_ITERATOR>
 void LP::ComputeAnisotropicWeights2(
@@ -1104,11 +1161,29 @@ template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
 void LP::ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, INDEX iteration)
 {
    //possibly do not use parallelization here
-#pragma omp parallel for 
+//#pragma omp parallel for schedule(static)
    for(INDEX i=0; i<std::distance(factorIt, factorEndIt); ++i) {
-      UpdateFactorPrimal(*(factorIt + i), *(omegaIt + i), iteration);
+      auto* f = *(factorIt+i);
+      f->UpdateFactorPrimal(*(omegaIt + i), iteration);
    }
 }
+
+#ifdef LP_MP_PARALLEL
+template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename SYNCHRONIZATION_ITERATOR>
+void LP::ComputePassAndPrimalSynchronized(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, SYNCHRONIZATION_ITERATOR synchronization_begin, INDEX iteration)
+{
+   //possibly do not use parallelization here
+#pragma omp parallel for schedule(static)
+  for(INDEX i=0; i<std::distance(factorIt, factorEndIt); ++i) {
+    auto* f = *(factorIt + i);
+    if(*(synchronization_begin+i)) {
+      f->UpdateFactorPrimalSynchronized(*(omegaIt + i), iteration);
+    } else {
+      f->UpdateFactorPrimal(*(omegaIt + i), iteration);
+    }
+  }
+}
+#endif
 
 
 } // end namespace LP_MP

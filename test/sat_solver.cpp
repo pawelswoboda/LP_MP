@@ -395,5 +395,30 @@ TEST_CASE( "sat solver", "[lingeling sat solver encapsulation]" ) {
       REQUIRE(slice23[1] == tensor_literal(1,3,4));
       REQUIRE(slice23[2] == tensor_literal(2,3,4));
    }
+
+   SECTION("Sorting network") {
+     bool check_sorting(const INDEX no_true, sat_solver& s, sat_vec& sorting)
+     {
+       for(INDEX i=0; i<10-no_true; ++i) {
+         REQUIRE(sat.solution(sorting[i]) == false);
+       }
+       for(INDEX i=10-no_true; i<10; ++i) {
+         REQUIRE(sat.solution(sorting[i]) == true);
+       }
+     }
+
+     auto literal_vector = sat.add_literal_vector(10);
+     auto sorting = sat.odd_even_sort(literal_vector.begin(), literal_vector.end());
+     sat_vec assumptions(literal_vector.begin(), literal_vector.end());
+
+     sat.solve(assumptions);
+     check_sorting(0);
+
+     assumptions[9] *= -1;
+     sat.solve(assumptions);
+     check_sorting(1);
+
+     REQUIRE(false);
+   }
 }
 

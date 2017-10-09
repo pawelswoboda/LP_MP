@@ -96,21 +96,5 @@ struct FMC_CELL_TRACKING_MOTHER_MACHINE {
   using ProblemDecompositionList = meta::list<constructor_mother_machine>;
 };
 
-struct FMC_CONSERVATION_TRACKING {
-  constexpr static char* name = "Conservation tracking";
-
-  using detection_factor_container = FactorContainer<multiple_detection_factor, FMC_CONSERVATION_TRACKING, 0>;
-
-  using transition_message_container = MessageContainer<transition_message_multiple, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_CONSERVATION_TRACKING, 0>;
-
-  using FactorList = meta::list< detection_factor_container >;
-
-  using MessageList = meta::list< transition_message_container >;
-
-  using constructor = conservation_tracking_constructor<detection_factor_container, transition_message_container>;
-
-  using ProblemDecompositionList = meta::list<constructor>;
-};
-
 } // end namespace LP_MP
 #endif // LP_MP_CELL_TRACKING__HXX

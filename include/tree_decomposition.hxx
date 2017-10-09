@@ -89,10 +89,21 @@ public:
       assert(std::abs(lower_bound() - primal_cost()) <= eps);
    }
 
-   template<typename ITERATOR, typename MAPPING_ITERATOR>
-   void compute_subgradient(ITERATOR subgradient_begin, ITERATOR subgradient_end, MAPPING_ITERATOR mapping_begin, MAPPING_ITERATOR mapping_end)
+   template<typename VECTOR1, typename VECTOR2>
+   void compute_subgradient(VECTOR1& subgradient, const VECTOR2& mapping, const REAL step_size)
    {
-      assert(false); 
+      compute_subgradient();
+
+      std::vector<double> local_subgradient(dual_size(),0.0);
+      // write primal solution into subgradient
+      for(auto L : Lagrangean_factors_) {
+         L.copy_fn(&local_subgradient[0]);
+      }
+      assert(mapping.size() >= dual_size());
+      for(INDEX i=0; i<dual_size(); ++i) {
+         assert(mapping[i] < subgradient.size());
+         subgradient[ mapping[i] ] += step_size * local_subgradient[i];
+      } 
    }
 
    bool primal_consistent() const 
@@ -675,6 +686,29 @@ protected:
    INDEX Lagrangean_vars_size_;
 };
 
+struct SVM_FW_visitor {
+
+   bool visit(SVM* svm)
+   { 
+      double lower_bound, upper_bound;
+      svm->GetBounds(lower_bound, upper_bound); // this is expensive! (calls real oracles)
+      const double dual_gap_bound = upper_bound - lower_bound;
+
+      const double cur_cost = svm->Evaluate();
+
+      // early stop if decrease (here increase, because we invert) is large enough.
+      const bool sufficient_decrease = (cur_cost - orig_cost) >= minimum_improvement;
+
+      if (dual_gap_bound < svm->options.gap_threshold) return false;
+      if (sufficient_decrease) return false;
+      return true;
+   }
+
+   const double minimum_improvement;
+   const double orig_cost;
+};
+
+
 // solve problem with Frank Wolfe in trust region fashion
 class LP_FW_TR : public LP_with_trees {
 public:
@@ -687,11 +721,18 @@ public:
       // unfortunately, the SVM solver has to be built up from scratch in every iteration
 
       auto* svm = build_up_solver();
+      const REAL lb = this->LowerBound();
+      SVM_FW_visitor visitor({0.0,lb});
+      auto visitor_func = std::bind(&SVM_FW_visitor::visit, &visitor, std::placeholders::_1);
+      //svm->options.callback_fn = visitor_func;
       double* const w = svm->Solve();
       add_weights(w, -1.0);
       delete svm;
       std::cout << "after lower bound = " << this->LowerBound() << "\n";
    }
+
+private:
+   SVM_FW_visitor* visitor_;
 };
 
 // solve problem with Frank Wolfe with diminishing smoothing term
@@ -750,13 +791,14 @@ public:
    void ComputePass(const INDEX iteration)
    {
       // diminishing step size
-      const INDEX step_size = 1.0/(iteration+1);
+      const REAL step_size = 1.0/(iteration+1);
       std::vector<REAL> subgradient(this->no_Lagrangean_vars(), 0.0);
       for(INDEX i=0; i<trees_.size(); ++i) {
-         trees_[i].compute_subgradient(subgradient.begin(), subgradient.end(), mapping_[i].begin(), mapping_[i].end());
+         trees_[i].compute_subgradient(subgradient, mapping_[i], step_size); // note that mapping has one extra component!
       }
 
-      add_weights(&subgradient[0], -1.0*step_size);
+      std::cout << "absolute value of subgradient = " << std::accumulate(subgradient.begin(), subgradient.end(), 0.0, [](REAL s, REAL x) { return s + std::abs(x); }) << "\n";
+      add_weights(&subgradient[0], 1.0);
 
    }
 

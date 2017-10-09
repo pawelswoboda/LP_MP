@@ -1,6 +1,7 @@
 if(BUILD_TESTS)
    # tests that are compiled unconditionally
    SET(BASE_TEST_FILES 
+     factor_message_containers.cpp
       simplex.cpp
       potts_factor.cpp
       simplex_marginalization.cpp

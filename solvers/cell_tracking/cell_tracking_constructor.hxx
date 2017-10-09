@@ -243,12 +243,15 @@ public:
   template<typename LP_TYPE>
   void order_factors(LP_TYPE& lp) const
   {
+    if(debug()) { std::cout << "order factors\n"; }
+
     for(INDEX t=0; t<detection_factors_.size(); ++t) {
       assert(detection_factors_[t].size() > 0);
       for(INDEX i=0; i<detection_factors_[t].size(); ++i) {
         assert(detection_factors_[t][i] != nullptr);
       }
-      if(t > 0) {
+
+      if(t > 0 && detection_factors_[t-1].size() > 0) {
         lp.AddFactorRelation(detection_factors_[t-1].back(), detection_factors_[t][0]);
       }
       for(INDEX i=1; i<detection_factors_[t].size(); ++i) {

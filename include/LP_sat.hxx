@@ -159,7 +159,7 @@ public:
          compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), omega.forward.begin(), forward_sat_th_);
          cur_sat_reduction_direction_ = Direction::backward; 
       } else {
-         this->ComputePass(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), omega.forward.begin());
+         this->ComputeForwardPass();
       }
    }
    void ComputeBackwardPassAndPrimal(const INDEX iteration)
@@ -172,7 +172,7 @@ public:
          for(auto it = this->backwardUpdateOrdering_.begin(); it != this->backwardUpdateOrdering_.end(); ++it) {
             assert((*it)->no_send_messages() == omega.backward[ std::distance(this->backwardUpdateOrdering_.begin(), it) ].size());
          }
-         this->ComputePass(this->backwardUpdateOrdering_.begin(), this->backwardUpdateOrdering_.end(), omega.backward.begin());
+         this->ComputeBackwardPass();
       }
    }
    void ComputePassAndPrimal(const INDEX iteration)

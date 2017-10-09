@@ -108,6 +108,7 @@ public:
 	void GetBounds(double& lower_bound, double& upper_bound); // of internally stored solution. Expensive - calls n oracles!
 
 	double Evaluate(double* w); // returns the value of the objective function for given w. Expensive - calls n oracles!
+   double Evaluate() { return Evaluate(w); }
 
 	// To get block-coordinate Frank-Wolfe, set cp_max = approx_max = 0.
 	// ('cp' stands for 'cutting plane')

@@ -17,7 +17,7 @@
 
 namespace LP_MP {
 
-static char * default_solver_options[5] { "", "-i", "", "--maxIter", "1000" };
+static char * default_solver_options[5] { "", "-i", "", "--maxIter", "100000" };
 
 // class containing the LP, problem constructor list, input function and visitor
 // binds together problem constructors and solver and organizes input/output
