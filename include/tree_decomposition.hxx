@@ -791,13 +791,13 @@ public:
    void ComputePass(const INDEX iteration)
    {
       // diminishing step size
-      const REAL step_size = 1.0/(iteration+1);
+      const REAL step_size = 1.0/(0.05*iteration+1);
       std::vector<REAL> subgradient(this->no_Lagrangean_vars(), 0.0);
       for(INDEX i=0; i<trees_.size(); ++i) {
          trees_[i].compute_subgradient(subgradient, mapping_[i], step_size); // note that mapping has one extra component!
       }
 
-      std::cout << "absolute value of subgradient = " << std::accumulate(subgradient.begin(), subgradient.end(), 0.0, [](REAL s, REAL x) { return s + std::abs(x); }) << "\n";
+      std::cout << "stepsize = " << step_size << ", absolute value of subgradient = " << std::accumulate(subgradient.begin(), subgradient.end(), 0.0, [=](REAL s, REAL x) { return s + 1.0/step_size*std::abs(x); }) << "\n";
       add_weights(&subgradient[0], 1.0);
 
    }

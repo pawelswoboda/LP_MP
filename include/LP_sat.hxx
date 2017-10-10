@@ -196,7 +196,13 @@ public:
       if(sat_reduction_mode_arg_.getValue() == "interleaved") {
         assumptions = reduce_sat_interleaved(factor_begin, factor_end, omega_begin, th.th);
       } else if(sat_reduction_mode_arg_.getValue() == "static") {
+#ifdef LP_MP_PARALLEL
+        std::cout << "not implemented yet!\n";
+        assert(false);
+        //this->ComputePassSynchronized(factor_begin, factor_end, omega_begin);
+#else
         this->ComputePass(factor_begin, factor_end, omega_begin);
+#endif
         assumptions = reduce_sat_static(th.th);
       }
 

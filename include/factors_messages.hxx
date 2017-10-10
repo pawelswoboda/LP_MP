@@ -548,6 +548,8 @@ public:
      std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock()) {
        msg_op_.send_message_to_left(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega); 
+     } else {
+       std::cout << "locking failed for " << GetLeftFactor() << "\n";
      }
    }
 #endif
@@ -572,6 +574,8 @@ public:
      std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock()) {
        msg_op_.send_message_to_right(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega); 
+     } else {
+       std::cout << "locking failed for " << GetRightFactor() << "\n";
      }
    }
 #endif
@@ -810,6 +814,7 @@ public:
           *lock_it = true;
         } else {
           *lock_it = false; 
+          std::cout << "locking failed for " << (*it)->GetLeftFactor() << "\n";
         }
       }
       assert(lock_it+1 == lock_rec.end());
@@ -861,6 +866,7 @@ public:
           *lock_it = true;
         } else {
           *lock_it = false; 
+          std::cout << "locking failed for " << (*it)->GetRightFactor() << "\n";
         }
       }
       assert(lock_it+1 == lock_rec.end());

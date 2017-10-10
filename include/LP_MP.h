@@ -452,19 +452,19 @@ public:
    void ComputeMixedWeights()
    {
       if(!omega_mixed_valid_) {
-#pragma omp parallel sections
+//#pragma omp parallel sections
          {
-#pragma omp section
+//#pragma omp section
             ComputeDampedUniformWeights();
-#pragma omp section
+//#pragma omp section
             ComputeAnisotropicWeights();
          }
          omega_mixed_valid_ = true;
-#pragma omp sections
+//#pragma omp sections
          {
-#pragma omp section
+//#pragma omp section
             ComputeMixedWeights(omegaForwardAnisotropic_, omegaForwardIsotropicDamped_, omegaForwardMixed_);
-#pragma omp section
+//#pragma omp section
             ComputeMixedWeights(omegaBackwardAnisotropic_, omegaBackwardIsotropicDamped_, omegaBackwardMixed_);
          }
       }
@@ -505,7 +505,7 @@ public:
    {
       const auto omega = get_omega();
 #ifdef LP_MP_PARALLEL
-      ComputePassSynchronized(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), synchronize_forward_.begin()); 
+      ComputePassSynchronized(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), omega.forward.end(), synchronize_forward_.begin(), synchronize_forward_.end()); 
 #else
       ComputePass(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin()); 
 #endif
@@ -514,7 +514,7 @@ public:
    {
       const auto omega = get_omega();
 #ifdef LP_MP_PARALLEL
-      ComputePassSynchronized(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin(), synchronize_backward_.begin());
+      ComputePassSynchronized(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin(), omega.backward.end(), synchronize_backward_.begin(), synchronize_backward_.end()); 
 #else
       ComputePass(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin());
 #endif
@@ -554,7 +554,10 @@ public:
 
 #ifdef LP_MP_PARALLEL
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename SYNCHRONIZATION_ITERATOR>
-   void ComputePassSynchronized(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt, SYNCHRONIZATION_ITERATOR synchronization_begin);
+   void ComputePassSynchronized(
+       FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, 
+       OMEGA_ITERATOR omega_begin, OMEGA_ITERATOR omega_end,
+       SYNCHRONIZATION_ITERATOR synchronization_begin, SYNCHRONIZATION_ITERATOR synchronization_end);
 
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename SYNCHRONIZATION_ITERATOR>
    void ComputePassAndPrimalSynchronized(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, SYNCHRONIZATION_ITERATOR, const INDEX iteration);
@@ -587,6 +590,11 @@ public:
    {
       assert(repamMode_ != LPReparametrizationMode::Undefined);
       SortFactors();
+
+#ifdef LP_MP_PARALLEL
+      compute_synchronization();
+#endif 
+
       if(repamMode_ == LPReparametrizationMode::Anisotropic) {
          ComputeAnisotropicWeights();
          return omega_storage{omegaForwardAnisotropic_, omegaBackwardAnisotropic_};
@@ -665,13 +673,9 @@ inline void LP::Begin()
    repamMode_ = LPReparametrizationMode::Undefined;
    assert(f_.size() > 1); // otherwise we need not perform optimization: Just MaximizePotential f_[0]
 
-   std::cout << "remove these two here!\n";
-   SortFactors();
-
 #ifdef LP_MP_PARALLEL
    omp_set_num_threads(num_lp_threads_arg_.getValue());
    if(debug()) { std::cout << "number of threads = " << num_lp_threads_arg_.getValue() << "\n"; }
-   compute_synchronization();
 #endif
 
 }
@@ -682,7 +686,6 @@ template<typename ITERATOR>
 inline std::vector<bool> LP::compute_synchronization(ITERATOR factor_begin, ITERATOR factor_end)
 {
   const INDEX n = std::distance(factor_begin, factor_end);
-  std::vector<bool> synchronize(n);
   assert(n > 0);
 
   std::vector<INDEX> thread_number(this->f_.size(), std::numeric_limits<INDEX>::max());
@@ -703,12 +706,11 @@ inline std::vector<bool> LP::compute_synchronization(ITERATOR factor_begin, ITER
   }
 
   // check for every factor all its neighbors and see whether more than two possible threads access it.
-  std::vector<bool> conflict_factor(this->f_.size());
+  std::vector<bool> conflict_factor(this->f_.size(), false);
 #pragma omp parallel for
   for(INDEX i=0; i<this->f_.size(); ++i) {
     auto *f = f_[i];
     INDEX prev_adjacent_thread_number = thread_number[i];
-    conflict_factor[i] = false;
     for(auto m_it=f->begin(); m_it!=f->end(); ++m_it) {
       const INDEX adjacent_factor_number = factor_address_to_index_[m_it.GetConnectedFactor()];
       const INDEX adjacent_thread_number = thread_number[adjacent_factor_number];
@@ -723,20 +725,19 @@ inline std::vector<bool> LP::compute_synchronization(ITERATOR factor_begin, ITER
   std::cout << "# conflict factors = " << std::count(conflict_factor.begin(), conflict_factor.end(), true) << "\n";
 
   // if a factor is adjacent to a conflict factor or is itself one, then it needs to be synchronized
+  std::vector<bool> synchronize(n);
 #pragma omp parallel for
   for(INDEX i=0; i<n; ++i) {
     auto* f = *(factor_begin+i);
     const INDEX factor_number = factor_address_to_index_[f];
-    if(conflict_factor[factor_number]) {
-      synchronize[i] = true;
-      continue;
-    }
-    synchronize[i] = false;
     for(auto m_it=f->begin(); m_it!=f->end(); ++m_it) {
       const INDEX adjacent_factor_number = factor_address_to_index_[m_it.GetConnectedFactor()];
       if(conflict_factor[adjacent_factor_number]) {
         synchronize[i] = true;
       }
+    }
+    if(conflict_factor[factor_number]) {
+      synchronize[i] = true;
     }
   }
 
@@ -762,10 +763,20 @@ inline void LP::ComputePass(const INDEX iteration)
 
 #ifdef LP_MP_PARALLEL
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename SYNCHRONIZATION_ITERATOR>
-void LP::ComputePassSynchronized(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt, SYNCHRONIZATION_ITERATOR synchronization_begin)
+void LP::ComputePassSynchronized(
+       FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, 
+       OMEGA_ITERATOR omega_begin, OMEGA_ITERATOR omega_end,
+       SYNCHRONIZATION_ITERATOR synchronization_begin, SYNCHRONIZATION_ITERATOR synchronization_end)
+
 {
   const INDEX n = std::distance(factorIt, factorItEnd);
+  assert(std::distance(factorIt, factorItEnd) == std::distance(omega_begin, omega_end));
+  assert(std::distance(factorIt, factorItEnd) == std::distance(synchronization_begin, synchronization_end));
 
+  //std::cout << "# synchronization calls = " << std::count(synchronization_begin, synchronization_end, true) << "\n";
+  //for(INDEX i=0; i<n; ++i) {
+  //  std::cout << i << ": " << (*(synchronization_begin + i) == true ? "true" : "false") << "\n";
+  //}
 #pragma omp parallel num_threads(num_lp_threads_arg_.getValue())
   {
     assert(num_lp_threads_arg_.getValue() == omp_get_num_threads());
@@ -778,10 +789,11 @@ void LP::ComputePassSynchronized(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR
     for(INDEX i=start; i<finish; ++i) {
       auto* f = *(factorIt + i); 
       if(*(synchronization_begin+i)) {
-        f->UpdateFactorSynchronized(*(omegaIt + i));
+        f->UpdateFactorSynchronized(*(omega_begin + i));
+        //f->UpdateFactor(*(omega_begin + i));
       } else {
-        //f->UpdateFactor(*(omegaIt + i));
-        f->UpdateFactorSynchronized(*(omegaIt + i));
+        f->UpdateFactor(*(omega_begin + i));
+        //f->UpdateFactorSynchronized(*(omegaIt + i));
       }
     }
   } 

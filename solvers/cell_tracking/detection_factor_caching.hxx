@@ -285,6 +285,7 @@ public:
 
   REAL min_incoming() const
   {
+    return incoming.min();
     if(min_incoming_dirty_) {
       min_incoming_ = incoming.min();
       min_incoming_dirty_ = false;
@@ -295,6 +296,7 @@ public:
 
   REAL min_outgoing() const
   {
+    return outgoing.min();
     if(min_outgoing_dirty_) {
       min_outgoing_ = outgoing.min();
       min_outgoing_dirty_ = false;

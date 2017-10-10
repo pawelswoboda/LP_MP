@@ -17,7 +17,11 @@
 
 namespace LP_MP {
 
-static char * default_solver_options[5] { "", "-i", "", "--maxIter", "100000" };
+static std::vector<std::string> default_solver_options = {
+   {""}, 
+   {"-i"}, {""}, 
+   {"--maxIter"}, {"1000000"}
+};
 
 // class containing the LP, problem constructor list, input function and visitor
 // binds together problem constructors and solver and organizes input/output
@@ -33,7 +37,7 @@ public:
 
    // default parameters
 
-   Solver() : Solver(5, default_solver_options) {}
+   Solver() : Solver(default_solver_options) {}
 
    Solver(int argc, char** argv) : Solver(ProblemDecompositionList{}) 
    {

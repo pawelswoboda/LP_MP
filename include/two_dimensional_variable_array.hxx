@@ -102,16 +102,19 @@ public:
    }
    INDEX size() const { return dim1_; }
 
-   struct iterator {
+   struct iterator : public std::iterator< std::random_access_iterator_tag, T* > {
+     iterator(T** x) : x_(x) {}
      void operator++() { ++x_; }
      iterator& operator+=(const INDEX i) { x_+=i; return *this; }
      iterator operator+(const INDEX i) { iterator it({x_ + i}); return it; }
+     iterator operator-(const INDEX i) { iterator it({x_ - i}); return it; }
+     const INDEX operator-(const iterator it) { return x_ - it.x_; }
      ArrayAccessObject operator*() { return ArrayAccessObject(*x_,*(x_+1)); }
      T** x_; // pointer to current
    };
 
-   iterator begin() { return iterator({p_}); }
-   iterator end() { return iterator({p_+dim1_}); }
+   iterator begin() { return iterator(p_); }
+   iterator end() { return iterator(p_+dim1_); }
 
 
 
