@@ -9,7 +9,6 @@ set(LP_MP_VERSION_MINOR 1)
 add_compile_options(-std=c++14)
 
 # compiler options
-add_definitions(-DIL_STD) # legacy setting for CPLEX
 add_definitions(-march=native)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -60,6 +59,10 @@ ExternalProject_ADD(lingeling_project
 ExternalProject_Get_Property(lingeling_project install_dir)
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling")
 link_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling")
+
+if(WITH_GUROBI)
+  add_definitions(-DIL_STD) # legacy setting for CPLEX
+endif()
 
 
 # HDF5 for reading OpenGM and Andres models

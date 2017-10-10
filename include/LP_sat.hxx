@@ -133,12 +133,8 @@ public:
 
       if(!sat_dirty_) {
 
-         for(sat_var i=0; i<sat_.size(); ++i) {
-            //for(sat_var i=0; i<sat_.nVars(); ++i) {
-            //assert(sat_.get_model()[i] == CMSat::l_True || sat_.get_model()[1] == CMSat::l_False);
-            //}
-         }
          // convert sat solution to original solution format and compute primal cost
+#pragma omp parallel for
          for(INDEX i=0; i<this->f_.size(); ++i) {
             assert(this->factor_address_to_index_[this->f_[i]] == i);
             this->f_[i]->convert_primal(sat_, sat_var_[i]);
@@ -156,7 +152,11 @@ public:
    {
       const auto omega = this->get_omega();
       if(cur_sat_reduction_direction_ == Direction::forward && !sat_computation_running()) {
-         compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), omega.forward.begin(), forward_sat_th_);
+         compute_pass_reduce_sat(this->forwardUpdateOrdering_.begin(), this->forwardUpdateOrdering_.end(), omega.forward.begin(), omega.forward.end(),
+#ifdef LP_MP_PARALLEL
+             this->synchronize_forward_.begin(), this->synchronize_forward_.end(),
+#endif 
+             forward_sat_th_);
          cur_sat_reduction_direction_ = Direction::backward; 
       } else {
          this->ComputeForwardPass();
@@ -166,12 +166,13 @@ public:
    {
       const auto omega = this->get_omega();
       if(cur_sat_reduction_direction_ == Direction::backward && !sat_computation_running()) {
-         compute_pass_reduce_sat(this->backwardUpdateOrdering_.begin(), this->backwardUpdateOrdering_.end(), omega.backward.begin(), backward_sat_th_);
+         compute_pass_reduce_sat(this->backwardUpdateOrdering_.begin(), this->backwardUpdateOrdering_.end(), omega.backward.begin(), omega.backward.end(), 
+#ifdef LP_MP_PARALLEL
+             this->synchronize_backward_.begin(), this->synchronize_backward_.end(),
+#endif
+             backward_sat_th_);
          cur_sat_reduction_direction_ = Direction::forward; 
       } else {
-         for(auto it = this->backwardUpdateOrdering_.begin(); it != this->backwardUpdateOrdering_.end(); ++it) {
-            assert((*it)->no_send_messages() == omega.backward[ std::distance(this->backwardUpdateOrdering_.begin(), it) ].size());
-         }
          this->ComputeBackwardPass();
       }
    }
@@ -183,8 +184,19 @@ public:
    }
 
 
-   template<typename FACTOR_ITERATOR, typename WEIGHT_ITERATOR>
-   void compute_pass_reduce_sat(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, WEIGHT_ITERATOR omega_begin, sat_th& th)
+   template<
+     typename FACTOR_ITERATOR, typename WEIGHT_ITERATOR
+#ifdef LP_MP_PARALLEL
+     , typename SYNCHRONIZATION_ITERATOR
+#endif
+     >
+   void compute_pass_reduce_sat(
+       FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, 
+       WEIGHT_ITERATOR omega_begin, WEIGHT_ITERATOR omega_end,
+#ifdef LP_MP_PARALLEL
+       SYNCHRONIZATION_ITERATOR synchronization_begin, SYNCHRONIZATION_ITERATOR synchronization_end,
+#endif 
+       sat_th& th)
    {
       assert(!sat_computation_running());
 
@@ -197,9 +209,7 @@ public:
         assumptions = reduce_sat_interleaved(factor_begin, factor_end, omega_begin, th.th);
       } else if(sat_reduction_mode_arg_.getValue() == "static") {
 #ifdef LP_MP_PARALLEL
-        std::cout << "not implemented yet!\n";
-        assert(false);
-        //this->ComputePassSynchronized(factor_begin, factor_end, omega_begin);
+        this->ComputePassSynchronized(factor_begin, factor_end, omega_begin, omega_end, synchronization_begin, synchronization_end);
 #else
         this->ComputePass(factor_begin, factor_end, omega_begin);
 #endif
@@ -232,8 +242,17 @@ public:
    std::vector<sat_literal> reduce_sat_static(const REAL th)
    {
       sat_vec assumptions;
-      for(INDEX i=0; i<this->f_.size(); ++i) {
-        this->f_[i]->reduce_sat(th, sat_var_[i], assumptions);
+#pragma omp parallel
+      {
+        sat_vec assumptions_per_thread;
+#pragma omp parallel for
+        for(INDEX i=0; i<this->f_.size(); ++i) {
+          this->f_[i]->reduce_sat(th, sat_var_[i], assumptions_per_thread);
+        }
+#pragma omp critical
+        {
+          assumptions.insert(assumptions.end(), assumptions_per_thread.begin(), assumptions_per_thread.end()); 
+        } 
       }
       return std::move(assumptions); 
    }

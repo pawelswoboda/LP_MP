@@ -235,6 +235,7 @@ public:
   {
     const REAL prev_val = incoming[edge_index];
     incoming[edge_index] += delta;
+    return;
     if(min_incoming_dirty_) {
       return; 
     } else {
@@ -251,7 +252,7 @@ public:
   // invoke when we have have computed delta in terms of this factor. We do not need to invalidate min_incoming in any case
   void update_incoming_valid(const INDEX edge_index, const REAL delta)
   {
-    if(incoming[edge_index] == min_incoming_) { min_incoming_ += delta; }
+    //if(incoming[edge_index] == min_incoming_) { min_incoming_ += delta; }
     incoming[edge_index] += delta; 
     //if(!min_incoming_dirty_) { assert(min_incoming_ == incoming.min()); }
   }
@@ -261,6 +262,7 @@ public:
   {
     const REAL prev_val = outgoing[edge_index];
     outgoing[edge_index] += delta;
+    return;
     if(min_outgoing_dirty_) {
       return; 
     } else {
@@ -277,7 +279,7 @@ public:
   // invoke when we have have computed delta in terms of this factor. We do not need to invalidate min_outgoing in any case
   void update_outgoing_valid(const INDEX edge_index, const REAL delta)
   {
-    if(outgoing[edge_index] == min_outgoing_) { min_outgoing_ += delta; }
+    //if(outgoing[edge_index] == min_outgoing_) { min_outgoing_ += delta; }
     outgoing[edge_index] += delta; 
     //if(!min_outgoing_dirty_) { assert(min_outgoing_ == outgoing.min()); }
   }

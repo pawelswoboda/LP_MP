@@ -452,21 +452,11 @@ public:
    void ComputeMixedWeights()
    {
       if(!omega_mixed_valid_) {
-//#pragma omp parallel sections
-         {
-//#pragma omp section
-            ComputeDampedUniformWeights();
-//#pragma omp section
-            ComputeAnisotropicWeights();
-         }
-         omega_mixed_valid_ = true;
-//#pragma omp sections
-         {
-//#pragma omp section
-            ComputeMixedWeights(omegaForwardAnisotropic_, omegaForwardIsotropicDamped_, omegaForwardMixed_);
-//#pragma omp section
-            ComputeMixedWeights(omegaBackwardAnisotropic_, omegaBackwardIsotropicDamped_, omegaBackwardMixed_);
-         }
+        ComputeDampedUniformWeights();
+        ComputeAnisotropicWeights();
+        omega_mixed_valid_ = true;
+        ComputeMixedWeights(omegaForwardAnisotropic_, omegaForwardIsotropicDamped_, omegaForwardMixed_);
+        ComputeMixedWeights(omegaBackwardAnisotropic_, omegaBackwardIsotropicDamped_, omegaBackwardMixed_);
       }
    }
 
@@ -816,41 +806,26 @@ inline void LP::ComputeAnisotropicWeights()
 {
    if(!omega_anisotropic_valid_) {
       omega_anisotropic_valid_ = true;
-#pragma omp sections
-      {
-#pragma omp section
-         ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic_);
-#pragma omp section
-         ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic_);
-      }
+      ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic_);
+      ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic_);
    }
 }
 
 inline void LP::ComputeAnisotropicWeights2()
 {
-   if(!omega_anisotropic2_valid_) {
-      omega_anisotropic2_valid_ = true;
-#pragma omp sections
-      {
-#pragma omp section
-         ComputeAnisotropicWeights2(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic2_);
-#pragma omp section
-         ComputeAnisotropicWeights2(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic2_);
-      }
-   }
+  if(!omega_anisotropic2_valid_) {
+    omega_anisotropic2_valid_ = true;
+    ComputeAnisotropicWeights2(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic2_);
+    ComputeAnisotropicWeights2(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic2_);
+  }
 }
 
 inline void LP::ComputeUniformWeights()
 {
    if(!omega_isotropic_valid_) {
       omega_isotropic_valid_ = true;
-#pragma omp sections
-      {
-#pragma omp section
-         ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropic_, 0.0);
-#pragma omp section
-         ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropic_, 0.0);
-      }
+      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropic_, 0.0);
+      ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropic_, 0.0);
 
       assert(this->backwardUpdateOrdering_.size() == omegaBackwardIsotropic_.size());
       for(auto it = this->backwardUpdateOrdering_.begin(); it != this->backwardUpdateOrdering_.end(); ++it) {
@@ -867,13 +842,8 @@ inline void LP::ComputeDampedUniformWeights()
 {
    if(!omega_isotropic_damped_valid_) {
       omega_isotropic_damped_valid_ = true;
-#pragma omp sections
-      {
-#pragma omp section
-         ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1.0);
-#pragma omp section
-         ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropicDamped_, 1.0);
-      }
+      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1.0);
+      ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropicDamped_, 1.0);
    }
 }
 
