@@ -12,7 +12,7 @@ class LP_sat : public BASE_LP_CLASS
 private:
   struct sat_th {
     sat_th() 
-      : th(5.0)
+      : th(0.5)
     {}
 
     void adjust_th(const bool feasible)
@@ -248,6 +248,7 @@ public:
 #pragma omp parallel for
         for(INDEX i=0; i<this->f_.size(); ++i) {
           this->f_[i]->reduce_sat(th, sat_var_[i], assumptions_per_thread);
+          //this->f_[i]->reduce_sat(th, sat_var_[i], assumptions);
         }
 #pragma omp critical
         {

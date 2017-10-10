@@ -35,6 +35,7 @@ namespace LP_MP {
             // xor those //
             //boundComputationIntervalArg_("","boundComputationInterval","lower bound computation performed every x-th iteration, default = 5",false,5,"positive integer",cmd),
             primalComputationIntervalArg_("","primalComputationInterval","primal computation performed every x-th iteration, default = 5",false,5,&posIntegerConstraint_,cmd),
+            primalComputationStartArg_("","primalComputationStart","iteration when to start primal computation, default = 1",false,1,&posIntegerConstraint_,cmd),
             lowerBoundComputationIntervalArg_("","lowerBoundComputationInterval","lower bound computation performed every x-th iteration, default = 1",false,1, &posIntegerConstraint_,cmd),
             ///////////////
             minDualImprovementArg_("","minDualImprovement","minimum dual improvement between iterations of LP_MP",false,0.0,&posRealConstraint_,cmd),
@@ -55,6 +56,7 @@ namespace LP_MP {
             timeout_ = timeoutArg_.getValue();
             //boundComputationInterval_ = boundComputationIntervalArg_.getValue();
             primalComputationInterval_ = primalComputationIntervalArg_.getValue();
+            primalComputationStart_ = primalComputationStartArg_.getValue();
             lowerBoundComputationInterval_ = lowerBoundComputationIntervalArg_.getValue();
 
             standardReparametrization_ = LPReparametrizationModeConvert( standardReparametrizationArg_.getValue() );
@@ -96,8 +98,8 @@ namespace LP_MP {
 
 
          LpControl ret;
-         ret.repam = roundingReparametrization_;
-         ret.computePrimal = true;
+         ret.repam = standardReparametrization_;
+         ret.computePrimal = false;
          ret.computeLowerBound = true;
          return ret;
       }
@@ -175,18 +177,13 @@ namespace LP_MP {
 
 
          // determine next steps of solver
-         if(curIter_ % primalComputationInterval_ == 0 && curIter_ % lowerBoundComputationInterval_ == 0) {
-            ret.computePrimal = true;
-            ret.computeLowerBound = true;
+         ret.repam = standardReparametrization_;
+         if(curIter_ >= primalComputationStart_ && (curIter_ - primalComputationStart_) % primalComputationInterval_ == 0) {
+            ret.computePrimal = true; 
             ret.repam = roundingReparametrization_;
-         } else if(curIter_ % primalComputationInterval_ == 0) {
-            ret.computePrimal = true;
-            ret.repam = roundingReparametrization_;
-         } else if(curIter_ % lowerBoundComputationInterval_ == 0) {
-            ret.computeLowerBound = true;
-            ret.repam = standardReparametrization_;
-         } else {
-            ret.repam = standardReparametrization_;
+         }
+         if(curIter_ % lowerBoundComputationInterval_ == 0) {
+           ret.computeLowerBound = true;
          }
          return ret;
       }
@@ -214,6 +211,7 @@ namespace LP_MP {
       TCLAP::ValueArg<INDEX> timeoutArg_;
       //TCLAP::ValueArg<INDEX> boundComputationIntervalArg_;
       TCLAP::ValueArg<INDEX> primalComputationIntervalArg_;
+      TCLAP::ValueArg<INDEX> primalComputationStartArg_;
       TCLAP::ValueArg<INDEX> lowerBoundComputationIntervalArg_;
       TCLAP::ValueArg<REAL> minDualImprovementArg_;
       TCLAP::ValueArg<INDEX> minDualImprovementIntervalArg_;
@@ -226,6 +224,7 @@ namespace LP_MP {
       INDEX timeout_;
       //INDEX boundComputationInterval_;
       INDEX primalComputationInterval_;
+      INDEX primalComputationStart_;
       INDEX lowerBoundComputationInterval_;
       REAL minDualImprovement_;
       INDEX minDualImprovementInterval_;
