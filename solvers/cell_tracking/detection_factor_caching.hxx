@@ -51,13 +51,6 @@ public:
     assert(incoming.size() > 0);
     assert(outgoing.size() > 0);
     return detection + min_incoming() + min_outgoing();
-    REAL lb = detection;
-    lb += incoming.min();
-    //lb += *std::min_element(incoming.begin(),incoming.end()); 
-    lb += outgoing.min();
-    //lb += *std::min_element(outgoing.begin(),outgoing.end()); 
-    //std::cout << lb << "\n";
-    return lb;
   }
 
   void MaximizePotentialAndComputePrimal() {
@@ -187,14 +180,14 @@ public:
       assumptions.push_back(detection_literal);
     }
     if(cost <= th) {
-      const REAL incoming_min = incoming.min(); //*std::min_element(incoming.begin(), incoming.end());
+      const REAL incoming_min = min_incoming(); //*std::min_element(incoming.begin(), incoming.end());
       for(INDEX i=0; i<incoming.size(); ++i) {
         if(incoming[i] > incoming_min + th) { 
            assumptions.push_back(-incoming_literals[i]);
          }
       }
 
-      const REAL outgoing_min = outgoing.min(); //*std::min_element(outgoing.begin(), outgoing.end());
+      const REAL outgoing_min = min_outgoing(); //*std::min_element(outgoing.begin(), outgoing.end());
       for(INDEX i=0; i<outgoing.size(); ++i) {
         if(outgoing[i] > outgoing_min + th) { 
            assumptions.push_back(-outgoing_literals[i]);
@@ -235,7 +228,6 @@ public:
   {
     const REAL prev_val = incoming[edge_index];
     incoming[edge_index] += delta;
-    return;
     if(min_incoming_dirty_) {
       return; 
     } else {
@@ -252,6 +244,7 @@ public:
   // invoke when we have have computed delta in terms of this factor. We do not need to invalidate min_incoming in any case
   void update_incoming_valid(const INDEX edge_index, const REAL delta)
   {
+    return update_incoming(edge_index, delta);
     //if(incoming[edge_index] == min_incoming_) { min_incoming_ += delta; }
     incoming[edge_index] += delta; 
     //if(!min_incoming_dirty_) { assert(min_incoming_ == incoming.min()); }
@@ -262,7 +255,6 @@ public:
   {
     const REAL prev_val = outgoing[edge_index];
     outgoing[edge_index] += delta;
-    return;
     if(min_outgoing_dirty_) {
       return; 
     } else {
@@ -279,6 +271,7 @@ public:
   // invoke when we have have computed delta in terms of this factor. We do not need to invalidate min_outgoing in any case
   void update_outgoing_valid(const INDEX edge_index, const REAL delta)
   {
+    return update_outgoing(edge_index, delta);
     //if(outgoing[edge_index] == min_outgoing_) { min_outgoing_ += delta; }
     outgoing[edge_index] += delta; 
     //if(!min_outgoing_dirty_) { assert(min_outgoing_ == outgoing.min()); }
@@ -287,23 +280,23 @@ public:
 
   REAL min_incoming() const
   {
-    return incoming.min();
+    //return incoming.min();
     if(min_incoming_dirty_) {
       min_incoming_ = incoming.min();
       min_incoming_dirty_ = false;
     }
-    //assert(min_incoming_ == incoming.min());
+    assert(min_incoming_ == incoming.min());
     return min_incoming_;
   }
 
   REAL min_outgoing() const
   {
-    return outgoing.min();
+    //return outgoing.min();
     if(min_outgoing_dirty_) {
       min_outgoing_ = outgoing.min();
       min_outgoing_dirty_ = false;
     }
-    //assert(min_outgoing_ == outgoing.min());
+    assert(min_outgoing_ == outgoing.min());
     return min_outgoing_;
   } 
 
@@ -313,6 +306,7 @@ public:
 
     const REAL incoming_min = min_incoming();
     const REAL incoming_val = incoming[edge_index];
+    assert(incoming_val >= incoming_min);
 
     if(incoming_val != incoming_min) {
       return detection_outgoing_cost + incoming_val - std::min(detection_outgoing_cost + incoming_min, REAL(0.0)); 
@@ -331,6 +325,7 @@ public:
 
     const REAL outgoing_min = min_outgoing();
     const REAL outgoing_val = outgoing[edge_index];
+    assert(outgoing_val >= outgoing_min);
 
     if(outgoing_val != outgoing_min) {
       return detection_incoming_cost + outgoing_val - std::min(detection_incoming_cost + outgoing_min, REAL(0.0));
@@ -350,10 +345,11 @@ public:
 private:
   // for efficient computation of messages, keep track of smallest and second smallest element in incoming and outgoing vector
   mutable REAL min_incoming_, min_outgoing_;
-  mutable bool min_incoming_dirty_ = true, min_outgoing_dirty_ = true;
-  
+
   // primal  
   INDEX incoming_edge_, outgoing_edge_;
+
+  mutable bool min_incoming_dirty_ = true, min_outgoing_dirty_ = true; 
 };
 
 class mapping_edge_factor {

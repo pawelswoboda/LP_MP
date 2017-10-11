@@ -1,6 +1,9 @@
 if(BUILD_TESTS)
+  # we build two types of tests:
+  # 1) regular unit tests for checking proper functioning of LP_MP.
+  # 2) performance test on test problems to see whether solvers reach specified primal and dual values after given number of iterations.
    # tests that are compiled unconditionally
-   SET(BASE_TEST_FILES 
+   SET(REGULAR_TEST_FILES 
      factor_message_containers.cpp
       simplex.cpp
       potts_factor.cpp
@@ -18,17 +21,24 @@ if(BUILD_TESTS)
       discrete_tomography_chain.cpp
       sat_solver.cpp
       )
+    SET(PERFORMANCE_TEST_FILES
+      cell_tracking_performance.cpp
+      )
    enable_testing()
 
    add_library(Catch INTERFACE)
-   add_executable(test_main test_main.cpp ${headers} ${sources} ${BASE_TEST_FILES})
+   add_executable(test_main test_main.cpp ${headers} ${sources} ${REGULAR_TEST_FILES})
    target_link_libraries(test_main m stdc++ pthread lgl ${HDF5_LIBRARIES}) # do zrobienia: include GUROBI in general?
    target_link_libraries(test_main Catch)
 
 
+   add_executable(performance_test performance_test.cpp ${headers} ${sources} ${PERFORMANCE_TEST_FILES})
+   target_link_libraries(performance_test m stdc++ pthread lgl ${HDF5_LIBRARIES}) # do zrobienia: include GUROBI in general?
+   target_link_libraries(performance_test Catch)
+
    #add_executable(test_main test_main.cpp ${headers} ${sources})
 
-   #target_sources(test_main PUBLIC ${BASE_TEST_FILES})
+   #target_sources(test_main PUBLIC ${REGULAR_TEST_FILES})
 
    if(BUILD_GRAPHICAL_MODEL)
       #target_sources(test_main PUBLIC graphical_model.cpp)

@@ -743,13 +743,13 @@ public:
    };
 
 #ifdef LP_MP_PARALLEL
-   template<Chirality CHIRALITY, typename MESSAGE_ITERATOR>
+   template<Chirality CHIRALITY, typename MESSAGE_ITERATOR, typename LOCK_ITERATOR>
    struct MessageIteratorViewSynchronized {
-     MessageIteratorViewSynchronized(MESSAGE_ITERATOR it, std::vector<bool>::iterator lock_it) : it_(it), lock_it_(lock_it) {}
+     MessageIteratorViewSynchronized(MESSAGE_ITERATOR it, LOCK_ITERATOR lock_it) : it_(it), lock_it_(lock_it) {}
      MessageContainerView<CHIRALITY>& operator*() const {
        return *(static_cast<MessageContainerView<CHIRALITY>*>( *it_ )); 
      }
-     MessageIteratorViewSynchronized<CHIRALITY,MESSAGE_ITERATOR>& operator++() {
+     MessageIteratorViewSynchronized<CHIRALITY,MESSAGE_ITERATOR,LOCK_ITERATOR>& operator++() {
        ++it_;
        ++lock_it_;
        while(*lock_it_ == false) { // this will always terminate: the lock_rec has one more entry than there are msgs and last entry is always true
@@ -758,21 +758,21 @@ public:
        }
        return *this;
      }
-     bool operator==(const MessageIteratorViewSynchronized<CHIRALITY,MESSAGE_ITERATOR>& o) const {
+     bool operator==(const MessageIteratorViewSynchronized<CHIRALITY,MESSAGE_ITERATOR,LOCK_ITERATOR>& o) const {
        return it_ == o.it_; 
      }
-     bool operator!=(const MessageIteratorViewSynchronized<CHIRALITY,MESSAGE_ITERATOR>& o) const {
+     bool operator!=(const MessageIteratorViewSynchronized<CHIRALITY,MESSAGE_ITERATOR,LOCK_ITERATOR>& o) const {
        return it_ != o.it_; 
      }
      private:
      MESSAGE_ITERATOR it_;
-     std::vector<bool>::iterator lock_it_;
+     LOCK_ITERATOR lock_it_;
    };
 #endif
 
-   template<typename IT>
+   template<typename IT, typename LOCK_ITERATOR>
    struct omega_iterator_with_lock {
-     omega_iterator_with_lock(IT it, std::vector<bool>::const_iterator lock_it) : it_(it), lock_it_(lock_it) {}
+     omega_iterator_with_lock(IT it, LOCK_ITERATOR lock_it) : it_(it), lock_it_(lock_it) {}
      omega_iterator_with_lock(const omega_iterator_with_lock& o) : it_(o.it_), lock_it_(o.lock_it_) {}
      omega_iterator_with_lock& operator++() {
        ++it_;
@@ -791,12 +791,12 @@ public:
         return o;
      }
      auto operator*() const { return *it_; }
-     bool operator==(const omega_iterator_with_lock<IT>& o) const { return it_ == o.it_; }
-     bool operator!=(const omega_iterator_with_lock<IT>& o) const { return it_ != o.it_; }
+     bool operator==(const omega_iterator_with_lock<IT,LOCK_ITERATOR>& o) const { return it_ == o.it_; }
+     bool operator!=(const omega_iterator_with_lock<IT,LOCK_ITERATOR>& o) const { return it_ != o.it_; }
 
      private:
      IT it_;
-     std::vector<bool>::const_iterator lock_it_;
+     LOCK_ITERATOR lock_it_;
    };
 
    // rename to send_messages_to_left_container
@@ -808,12 +808,9 @@ public:
    }
 
 #ifdef LP_MP_PARALLEL
-   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessagesToLeftContainerSynchronized(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR, typename LOCK_VECTOR>
+   static void SendMessagesToLeftContainerSynchronized_impl(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin, LOCK_VECTOR& lock_rec) 
    {
-      // record which factors were locked here
-      std::vector<bool> lock_rec(msgs.size()+1); // replace with own vector
-      lock_rec[msgs.size()] = true;
       // first lock as many adjacent factors as possible.
       auto lock_it = lock_rec.begin();
       for(auto it=msgs.begin(); it!=msgs.end(); ++it, ++lock_it) {
@@ -832,8 +829,8 @@ public:
       assert(lock_it+1 == lock_rec.end());
       //std::fill(lock_rec.begin(), lock_rec.end(), true);
 
-      using MessageIteratorType = MessageIteratorViewSynchronized<Chirality::right, decltype(msgs.begin())>;
-      omega_iterator_with_lock<decltype(omegaBegin)> omega_it(omegaBegin, lock_rec.cbegin()) ;
+      using MessageIteratorType = MessageIteratorViewSynchronized<Chirality::right, decltype(msgs.begin()), decltype(lock_it)>;
+      omega_iterator_with_lock<decltype(omegaBegin), decltype(lock_rec.cbegin())> omega_it(omegaBegin, lock_rec.cbegin()) ;
       MessageType::SendMessagesToLeft(rightFactor, MessageIteratorType(msgs.begin(), lock_rec.begin()), MessageIteratorType(msgs.end(), lock_rec.end()-1), omega_it);
 
       // unlock those factors which were locked above
@@ -846,6 +843,20 @@ public:
       assert(lock_it+1 == lock_rec.end());
    }
 #endif
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   static void SendMessagesToLeftContainerSynchronized(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   {
+     // record which factors were locked here
+     if(msgs.size() <= 63) {
+       std::array<bool,64> lock_rec;
+       lock_rec[msgs.size()] = true;
+       SendMessagesToLeftContainerSynchronized_impl(rightFactor, msgs, omegaBegin, lock_rec);
+     } else {
+       std::vector<bool> lock_rec(msgs.size()+1); // replace with own vector
+       lock_rec[msgs.size()] = true;
+       SendMessagesToLeftContainerSynchronized_impl(rightFactor, msgs, omegaBegin, lock_rec);
+     }
+   }
 
    constexpr static bool CanCallSendMessagesToRightContainer()
    {
@@ -865,12 +876,9 @@ public:
    }
 
 #ifdef LP_MP_PARALLEL
-   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessagesToRightContainerSynchronized(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR, typename LOCK_VECTOR>
+   static void SendMessagesToRightContainerSynchronized_impl(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin, LOCK_VECTOR& lock_rec) 
    {
-      // record which factors were locked here
-      std::vector<bool> lock_rec(msgs.size()+1); // replace with own vector
-      lock_rec[msgs.size()] = true;
       // first lock as many adjacent factors as possible.
       auto lock_it = lock_rec.begin();
       for(auto it=msgs.begin(); it!=msgs.end(); ++it, ++lock_it) {
@@ -888,8 +896,8 @@ public:
       assert(lock_it+1 == lock_rec.end());
       //std::fill(lock_rec.begin(), lock_rec.end(), true);
 
-      using MessageIteratorType = MessageIteratorViewSynchronized<Chirality::left, decltype(msgs.begin())>;
-      omega_iterator_with_lock<decltype(omegaBegin)> omega_it(omegaBegin, lock_rec.begin()) ;
+      using MessageIteratorType = MessageIteratorViewSynchronized<Chirality::left, decltype(msgs.begin()), decltype(lock_it)>;
+      omega_iterator_with_lock<decltype(omegaBegin), decltype(lock_rec.cbegin())> omega_it(omegaBegin, lock_rec.cbegin()) ;
       MessageType::SendMessagesToRight(leftFactor, MessageIteratorType(msgs.begin(), lock_rec.begin()), MessageIteratorType(msgs.end(), lock_rec.end()-1), omega_it);
 
       // unlock those factors which were locked above
@@ -900,6 +908,20 @@ public:
         }
       }
       assert(lock_it+1 == lock_rec.end());
+   }
+   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   static void SendMessagesToRightContainerSynchronized(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   {
+     // record which factors were locked here
+     if(msgs.size() <= 63) {
+       std::array<bool,64> lock_rec;
+       lock_rec[msgs.size()] = true;
+       SendMessagesToRightContainerSynchronized_impl(leftFactor, msgs, omegaBegin, lock_rec);
+     } else {
+       std::vector<bool> lock_rec(msgs.size()+1); // replace with own vector
+       lock_rec[msgs.size()] = true;
+       SendMessagesToRightContainerSynchronized_impl(leftFactor, msgs, omegaBegin, lock_rec);
+     }
    }
 #endif
 

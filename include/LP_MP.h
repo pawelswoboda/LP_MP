@@ -967,7 +967,7 @@ void LP::ComputeAnisotropicWeights(
 #else
    std::vector<INDEX> no_send_factors(f_.size(),0);
    std::vector<INDEX> no_send_factors_later(f_.size(),0);
-   std::vector<INDEX> no_receiving_factors_later(f_.size(),0); // numer of factors later than current one receiving message from current one
+   std::vector<INDEX> no_receiving_factors_later(f_.size(),0); // number of factors later than current one receiving message from current one
    std::vector<INDEX> last_receiving_factor(f_.size(), 0); // what is the last (in the order given by factor iterator) factor that receives a message?
 #endif
 
