@@ -1,1 +1,1 @@
-add_library( SVM SVM.cpp ) 
+add_library( SVM SVM.cpp Solve.cpp) 

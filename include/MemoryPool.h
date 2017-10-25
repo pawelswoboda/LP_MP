@@ -26,7 +26,8 @@
 #include <climits>
 #include <cstddef>
 
-template <typename T, size_t BlockSize = 1024*(sizeof(T)+sizeof(void*))>
+constexpr static size_t NO_ELEMENTS_IN_MEMORY_POOL = 1024;
+template <typename T, size_t BlockSize = NO_ELEMENTS_IN_MEMORY_POOL*(sizeof(T)+sizeof(void*))>
 class MemoryPool
 {
   public:

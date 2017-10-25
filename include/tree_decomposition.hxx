@@ -53,6 +53,7 @@ public:
       }
       factors_.assign( factor_set.begin(), factor_set.end() );
       std::sort(factors_.begin(), factors_.end());
+      assert(factors_.size() == tree_messages_.size() + 1);
 
       primal_size_in_bytes_ =  compute_primal_size_in_bytes();
       dual_size_in_bytes_ = compute_dual_size_in_bytes();
@@ -89,8 +90,8 @@ public:
       assert(std::abs(lower_bound() - primal_cost()) <= eps);
    }
 
-   template<typename VECTOR1, typename VECTOR2>
-   void compute_subgradient(VECTOR1& subgradient, const VECTOR2& mapping, const REAL step_size)
+   template<typename VECTOR1>
+   void compute_mapped_subgradient(VECTOR1& subgradient, const REAL step_size)
    {
       compute_subgradient();
 
@@ -99,11 +100,23 @@ public:
       for(auto L : Lagrangean_factors_) {
          L.copy_fn(&local_subgradient[0]);
       }
-      assert(mapping.size() >= dual_size());
+      assert(mapping_.size() >= dual_size());
       for(INDEX i=0; i<dual_size(); ++i) {
-         assert(mapping[i] < subgradient.size());
-         subgradient[ mapping[i] ] += step_size * local_subgradient[i];
+         assert(mapping_[i] < subgradient.size());
+         subgradient[ mapping_[i] ] += step_size * local_subgradient[i];
       } 
+   }
+
+   template<typename VECTOR>
+   void compute_subgradient(VECTOR& subgradient, const REAL step_size)
+   {
+      compute_subgradient();
+
+      std::fill(subgradient.begin(), subgradient.end(), 0.0);
+      // write primal solution into subgradient
+      for(auto L : Lagrangean_factors_) {
+         L.copy_fn(&subgradient[0]);
+      }
    }
 
    bool primal_consistent() const 
@@ -122,6 +135,9 @@ public:
       REAL cost = 0.0;
       for(auto* f : factors_) {
          cost += f->EvaluatePrimal();
+         if(cost == std::numeric_limits<REAL>::infinity()) {
+            assert(false);
+         }
       }
       return cost;
       /*
@@ -216,21 +232,19 @@ public:
    // to do: Lagrangean factors are shared between trees. Hence, one must in each tree use these factors with costs divided by number of appearances in different trees.
    // _y is the primal labeling to be computed
    // wi is the Lagrangean variables
-   static double max_fn(double* wi, YPtr _y, const double kappa, TermData term_data)
+   static double max_fn(double* wi, YPtr _y, TermData term_data)
    {
-      //assert(kappa == 1.0);
-      assert(kappa >= eps);
       LP_tree* t = (LP_tree*) term_data;
 
       // first add weights to problem
       // we only need to add Lagrange variables to Lagrangean_factors_ (others are not shared)
-      t->add_weights(wi, -1.0/kappa);
+      t->add_weights(wi, -1.0);
 
       // compute optimal labeling
       t->compute_subgradient();
 
       // remove weights again
-      t->add_weights(wi, +1.0/kappa);
+      t->add_weights(wi, +1.0);
 
       // store primal solution in archive
       void* y = (void*) _y;
@@ -296,12 +310,11 @@ public:
       return v;
    }
 
-   void add_weights(double* wi, const double scaling)
+   void add_weights(const double* wi, const double scaling)
    {
       for(auto& L : Lagrangean_factors_) {
          L.serialize_Lagrangean(wi, scaling);
       }
-
    }
 
   // dual size of Lagrangeans connected to current tree
@@ -375,10 +388,10 @@ public:
       }
 
       // +1 is for loading, -1 is for unloading
-      void serialize_Lagrangean(double* wi, const double scaling)
+      void serialize_Lagrangean(const double* wi, const double scaling)
       {
          for(INDEX i=0; i<pos; ++i) {
-            double* w = wi+offset(i);
+            const double* w = wi+offset(i);
             serialization_archive ar(w, Lagrangean_vars_size_in_bytes());
             addition_archive l_ar(ar, 1.0*scaling);
             f->serialize_dual(l_ar);
@@ -386,7 +399,7 @@ public:
          }
          for(INDEX i=pos+1; i<no_trees; ++i) {
             //double* w = wi+offset(pos, i);
-            double* w = wi+offset(i-1);
+            const double* w = wi+offset(i-1);
             serialization_archive ar(w, Lagrangean_vars_size_in_bytes());
             addition_archive l_ar(ar, -1.0*scaling);
             f->serialize_dual(l_ar);
@@ -421,11 +434,17 @@ public:
          return d;
       }
    };
+
+   const std::vector<int>& mapping() const { return mapping_; }
+   std::vector<int>& mapping() { return mapping_; }
+
    // we have Lagrangean variables for every pair of factors that are identical but occur in different trees, hence can be indexed by factor and their pos
    // Lagrangean variables are stored contiguosly for each factor in lexicographic order of pos
 
    std::vector<Lagrangean_msg> Lagrangean_factors_;
    INDEX subgradient_size;
+   std::vector<int> mapping_;
+
    //serialization_archive potentials_archive_; // possibly only Lagrangean factors need to be stored here
 };
 
@@ -560,12 +579,12 @@ public:
       }
 
       // construct mapping from Lagrangean variables of each tree to whole Lagrangean variables
-      mapping_.reserve(trees_.size());
+      //mapping_.reserve(trees_.size());
       for(auto& t : trees_) {
          //std::cout << "tree " << mapping_.size() << "\n";
          INDEX local_offset = 0;
          std::vector<int> m;
-         m.reserve(t.dual_size()+1); // +1 becauso of requirement in SVM that last entry is equal to total size of Lagrangean variables
+         m.reserve(t.dual_size()+1); // +1 because of requirement in SVM that last entry is equal to total size of Lagrangean variables
          for(auto& L : t.Lagrangean_factors_) {
 
             // change global offset currently stored into local offset
@@ -599,20 +618,19 @@ public:
          assert(m.size() == t.dual_size());
          m.push_back(Lagrangean_vars_size_);
          //assert(local_offset == m.size());
-         mapping_.push_back(std::move(m));
+         t.mapping_ = m;
       } 
-      assert(mapping_.size() == trees_.size()); 
 
       // check map validity: each entry in m (except last one) must occur exactly twice
-      assert(mapping_valid(mapping_)); 
+      assert(mapping_valid()); 
    }
 
-   bool mapping_valid(const std::vector<std::vector<int>>& mapping) const
+   bool mapping_valid() const
    {
       std::vector<INDEX> mapping_count(Lagrangean_vars_size_,0);
-      for(const auto& m : mapping) {
-         for(INDEX i=0; i<m.size()-1; ++i) {
-            mapping_count[m[i]]++;
+      for(const auto& t : trees_) {
+         for(INDEX i=0; i<t.mapping().size()-1; ++i) {
+            mapping_count[t.mapping()[i]]++;
          }
       }
       for(auto i : mapping_count) {
@@ -628,13 +646,13 @@ public:
    SVM* build_up_solver(const REAL lambda = 0.1)
    {
       auto* svm = new SVM(no_Lagrangean_vars(), trees_.size(), LP_tree::max_fn, LP_tree::copy_fn, LP_tree::compare_fn, LP_tree::dot_product_fn, nullptr, false);//int d, int n, MaxFn max_fn, CopyFn copy_fn, CompareFn compare_fn, DotProductFn dot_product_fn, DotProductKernelFn dot_product_kernel_fn, bool zero_lower_bound);
-      svm->SetParams(lambda, 1.0, 1.0); // lambda, mu, kappa
+      //svm->SetParams(lambda, 1.0, 1.0); // lambda, mu, kappa
 
       for(INDEX i=0; i<trees_.size(); ++i) {
          auto& t = trees_[i];
          const INDEX primal_size_in_bytes = t.primal_size_in_bytes();
 
-         svm->SetTerm(i, &t, mapping_[i].size()-1, t.primal_size_in_bytes(), &mapping_[i][0]); // although mapping is of length di + 1 (the last entry being di itself, its length must be given as di!
+         svm->SetTerm(i, &t, t.mapping().size()-1, t.primal_size_in_bytes(), &t.mapping()[0]); // although mapping is of length di + 1 (the last entry being di itself, its length must be given as di!
       }
 
       svm->options.gap_threshold = 0.0001;
@@ -669,23 +687,23 @@ public:
    {
       for(INDEX i=0; i<trees_.size(); ++i) {
          auto& tree = trees_[i];
-         const auto& m = mapping_[i];
+         const auto& m = tree.mapping();
          std::vector<double> local_weights;
-         local_weights.reserve(mapping_[i].size()-1);
+         local_weights.reserve(m.size()-1);
          for(INDEX idx=0; idx<m.size()-1; ++idx) {
             local_weights.push_back(w[m[idx]]);
          }
          tree.add_weights(&local_weights[0], scaling);
       }
-
    }
+
 
 protected:
    std::vector<LP_tree> trees_;
-   std::vector<std::vector<int>> mapping_;
    INDEX Lagrangean_vars_size_;
 };
 
+/*
 struct SVM_FW_visitor {
 
    bool visit(SVM* svm)
@@ -707,7 +725,7 @@ struct SVM_FW_visitor {
    const double minimum_improvement;
    const double orig_cost;
 };
-
+*/
 
 // solve problem with Frank Wolfe in trust region fashion
 class LP_FW_TR : public LP_with_trees {
@@ -722,8 +740,8 @@ public:
 
       auto* svm = build_up_solver();
       const REAL lb = this->LowerBound();
-      SVM_FW_visitor visitor({0.0,lb});
-      auto visitor_func = std::bind(&SVM_FW_visitor::visit, &visitor, std::placeholders::_1);
+      //SVM_FW_visitor visitor({0.0,lb});
+      //auto visitor_func = std::bind(&SVM_FW_visitor::visit, &visitor, std::placeholders::_1);
       //svm->options.callback_fn = visitor_func;
       double* const w = svm->Solve();
       add_weights(w, -1.0);
@@ -732,7 +750,7 @@ public:
    }
 
 private:
-   SVM_FW_visitor* visitor_;
+   //SVM_FW_visitor* visitor_;
 };
 
 // solve problem with Frank Wolfe with diminishing smoothing term
@@ -762,7 +780,8 @@ public:
    {
       const REAL lambda = 1.0/REAL(iteration + 1+1);
       //auto* svm = build_up_solver(lambda);
-      svm_->SetParams(lambda, 1.0, 1.0); // lambda, mu, kappa
+      assert(false); // no diminishing smoothing suppoted anymore
+      //svm_->SetParams(lambda, 1.0, 1.0); // lambda, mu, kappa
       double* const w = svm_->Solve();
       add_weights(w, -1.0); // *lambda);
       std::cout << "lambda = " << lambda << "\n";
@@ -794,7 +813,7 @@ public:
       const REAL step_size = 1.0/(0.05*iteration+1);
       std::vector<REAL> subgradient(this->no_Lagrangean_vars(), 0.0);
       for(INDEX i=0; i<trees_.size(); ++i) {
-         trees_[i].compute_subgradient(subgradient, mapping_[i], step_size); // note that mapping has one extra component!
+         trees_[i].compute_mapped_subgradient(subgradient, step_size); // note that mapping has one extra component!
       }
 
       std::cout << "stepsize = " << step_size << ", absolute value of subgradient = " << std::accumulate(subgradient.begin(), subgradient.end(), 0.0, [=](REAL s, REAL x) { return s + 1.0/step_size*std::abs(x); }) << "\n";
@@ -803,8 +822,6 @@ public:
    }
 
 };
-
-
 
 } // end namespace LP_MP
 

@@ -81,6 +81,14 @@ public:
    {
       //ArrayAccessObject(T** p) : p_(p) {}
       ArrayAccessObject(T* begin, T* end) : begin_(begin), end_(end) { assert(begin <= end); }
+      template<typename VEC>
+      void operator=(const VEC& o) 
+      { 
+        assert(o.size() == this->size());
+        for(INDEX i=0; i<this->size(); ++i) {
+          (*this)[i] = o[i];
+        }
+      }
       T operator[](const INDEX i) const { return begin_[i]; } // possibly do not implement this function but return reference, for copying elements may be costly for sizeof(T) big. Look up std::vector
       T& operator[](const INDEX i) { return begin_[i]; }
       INDEX size() const {  return (end_ - begin_); }
@@ -127,7 +135,7 @@ private:
       INDEX neededMem = (dim1_+1)*sizeof(T*);
       for(INDEX i=0; i<s.size(); ++i) {
         assert(s[i] >= 0);
-         neededMem += s[i]*sizeof(T);
+        neededMem += s[i]*sizeof(T);
       }
       p_ = static_cast<T**>(malloc(neededMem)); // what about new ... ?
       if(p_ == nullptr) throw std::runtime_error("Not enough memory");

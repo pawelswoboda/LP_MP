@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include "SVM.h"
 #include "SVMutils.h"
 #include "timer.h"
@@ -46,8 +47,8 @@ void SVM::InitSolver()
 {
 	int i, k;
 
-	SetZero(neg_phi_sum, d+1);
 	SetZero(w, d);
+	SetZero(z, d+1);
 
 	total_plane_num = 0;
 	timestamp = 0;
@@ -71,15 +72,15 @@ void SVM::InitSolver()
 		{
 			double* wi = terms[i]->ComputeRestriction(w);
 			YPtr y = (copy_fn) ? y_buf : phi;
-			phi[terms[i]->di] = *terms[i]->GetFreeTermPtr(y) = (*max_fn)(wi, y, kappa, terms[i]->term_data);
+			phi[terms[i]->di] = *terms[i]->GetFreeTermPtr(y) = (*max_fn)(wi, y, terms[i]->term_data);
 			if (copy_fn) (*copy_fn)(phi, y, terms[i]->term_data);
 			if (!terms[i]->mapping)
 			{
-				for (k=0; k<=d; k++) neg_phi_sum[k] -= phi[k];
+				for (k=0; k<=d; k++) z[k] -= c*phi[k];
 			}
 			else
 			{
-				for (k=0; k<=terms[i]->di; k++) neg_phi_sum[terms[i]->mapping[k]] -= phi[k];
+				for (k=0; k<=terms[i]->di; k++) z[terms[i]->mapping[k]] -= c*phi[k];
 			}
 			AddCuttingPlane(i, y);
 		}
@@ -93,6 +94,7 @@ double* SVM::Solve()
 {
 	time_start = get_time();
 
+	c = options.c_init;
 	InitSolver();
 	int _i, i, k;
 	
@@ -101,7 +103,6 @@ double* SVM::Solve()
 	// instead, restore this only when calling external functions and upon termination.
 
 	//Multiply(w, neg_phi_sum, lambda_mu_inv, d);
-	neg_phi_sum_norm = NOT_YET_COMPUTED;
 	lower_bound_last = GetCurrentLowerBound();
 
 	int di_sum = 0;
@@ -114,8 +115,10 @@ double* SVM::Solve()
 		case 0: avg_num = 0; break;
 		case 1:
 		case 2: avg_num = 1; break;
-		default: avg_num = 2; break;
+		default: printf("avg_flag not implemented\n"); exit(1); avg_num = 2; break;
 	}
+
+	if (options.avg_flag != 0) { printf("avg_flag not implemented\n"); exit(1); }
 
 	int vec_size = (d+1)*sizeof(double);
 	int alloc_size = (1+avg_num)*vec_size + y_size_in_bytes_max;
@@ -125,42 +128,32 @@ double* SVM::Solve()
 
 	YPtr y_new_buf = (YPtr) _buf; _buf += y_size_in_bytes_max;
 	double* phi_new = (double*) _buf; _buf += vec_size;
-	MovingAverage* neg_avg;
-	if (di_sum > d*n / 2) neg_avg = new MovingAverageNaive(neg_phi_sum, d, avg_num);
-	else                  neg_avg = new MovingAverageLowDim(neg_phi_sum, d, avg_num);
+	MovingAverage* z_avg;
+	if (di_sum > d*n / 2) z_avg = new MovingAverageNaive(z, d, avg_num);
+	else                  z_avg = new MovingAverageLowDim(z, d, avg_num);
 	int* permutation = NULL;
 	if (options.randomize_method >= 1 && options.randomize_method <= 3)	{ permutation = (int*) _buf; _buf += n*sizeof(int); }
-	double* neg_avg_buf = (double*) _buf;
-
+	double* z_avg_buf = (double*) _buf;
 
 	int k_avg[2] = { 0, 0 };
-	callback_time = 0;
 
 	if (options.randomize_method == 1) generate_permutation(permutation, n);
 
+	double v_serious_start, v_serious_prev;
+	double t_serious_start, t_serious_prev;
+
+	t_serious_start = t_serious_prev = get_time();
+	v_serious_start = v_serious_prev = Evaluate(w);
+
+	double* w_best = new double[d];
+	memcpy(w_best, w, d*sizeof(double));
+	double v_best = v_serious_start;
+
+	int serious_counter = 0;
+	int serious_iter_max = options.serious_iter_init;
+
 	for (iter=total_pass=0; iter<options.iter_max; iter++)
 	{
-		// recompute current_sum every 10 iterations for numerical stability.
-		// Just in case, the extra runtime should be negligible.
-		// For experiments in the paper this was not used (numerical stability was not an issue)
-		if (iter > 0 && (iter % 10) == 0)
-		{
-			SetZero(neg_phi_sum, d+1);
-			for (i=0; i<n; i++)
-			{
-				if (!terms[i]->mapping)
-				{
-					for (k=0; k<=terms[i]->di; k++) neg_phi_sum[k] -= terms[i]->phi[k];
-				}
-				else
-				{
-					for (k=0; k<=terms[i]->di; k++) neg_phi_sum[terms[i]->mapping[k]] -= terms[i]->phi[k];
-				}
-			}
-		}
-
-		////////////////////////////////////////////////////////////////////////////////////
-
 		timestamp = (float)(((int)timestamp) + 1); // When a plane is accessed, it is marked with 'timestamp'.
 		                                           // Throughout the outer iteration, this counter will be gradually
 		                                           // increased from 'iter+1' to 'iter+1.5', so that we
@@ -189,14 +182,14 @@ double* SVM::Solve()
 				else                                    i = RandomInteger(n);
 			
 				double* phi = terms[i]->phi;
-				double* wi_scaled = terms[i]->ComputeRestriction(neg_phi_sum); // = wi * lambda_mu
+				double* zi = terms[i]->ComputeRestriction(z);
 				int di = terms[i]->di;
 				int* mapping = terms[i]->mapping;
 				YPtr y_new = (copy_fn) ? y_new_buf : phi_new;
 
 				// averaging
 				double avg_gamma[2] = { 0, 0 };
-				neg_avg->StartUpdate(di, mapping);
+				z_avg->StartUpdate(di, mapping);
 				int p = (approx_pass < 0 || options.avg_flag == 1) ? 0 : 1;
 				if (p < avg_num)
 				{
@@ -205,11 +198,12 @@ double* SVM::Solve()
 
 				if (approx_pass < 0) // call real oracle
 				{
-					*terms[i]->GetFreeTermPtr(y_new) = (*max_fn)(wi_scaled, y_new, kappa*lambda_mu, terms[i]->term_data);
+					*terms[i]->GetFreeTermPtr(y_new) = (*max_fn)(zi, y_new, terms[i]->term_data);
 					AddCuttingPlane(i, y_new);
 				}
 				else  // call approximate oracle
 				{
+#ifdef NOT_IMPLEMENTED
 					if (options.kernel_max > 1)
 					{
 						SolveWithKernel(i, options.kernel_max);
@@ -220,21 +214,18 @@ double* SVM::Solve()
 
 						continue;
 					}
+#endif
 
-					int t = terms[i]->Maximize(wi_scaled, kappa*lambda_mu);
+					int t = terms[i]->Maximize(zi);
 					terms[i]->UpdateStats(t);
 					memcpy(y_new, terms[i]->y_arr[t], terms[i]->y_size_in_bytes_plus);
 					terms[i]->RemoveUnusedPlanes();
 				}
-				if (copy_fn) 
-            {
-               (*copy_fn)(phi_new, y_new, terms[i]->term_data);
-               phi_new[di] = *terms[i]->GetFreeTermPtr(y_new); 
-            }
+				if (copy_fn) { (*copy_fn)(phi_new, y_new, terms[i]->term_data); phi_new[di] = *terms[i]->GetFreeTermPtr(y_new); }
 
 				// min_{gamma \in [0,1]} B*gamma*gamma - 2*A*gamma
-				double A = -Op1(phi, phi_new, neg_phi_sum, mapping, di) + (phi_new[di] - phi[di])*kappa*lambda_mu; // <phi-phi_new,phi_sum> + (b_new - b) * kappa * lambda
-				double B = Op2(phi, phi_new, di); // ||current-current_new||^2
+				double A = Op1(phi_new, phi, zi, di) + (phi_new[di] - phi[di]); // <phi_new-phi,zi> + (b_new - b)
+				double B = c*Op2(phi, phi_new, di); // c*||current-current_new||^2
 				double gamma;
 				if (B<=0) gamma = (A <= 0) ? 0 : 1;
 				else
@@ -250,7 +241,7 @@ double* SVM::Solve()
 					{
 						double old = phi[k];
 						phi[k] = (1-gamma)*phi[k] + gamma*phi_new[k];
-						neg_phi_sum[k] -= phi[k] - old;
+						z[k] -= c*(phi[k] - old);
 					}
 				}
 				else
@@ -259,15 +250,13 @@ double* SVM::Solve()
 					{
 						double old = phi[k];
 						phi[k] = (1-gamma)*phi[k] + gamma*phi_new[k];
-						neg_phi_sum[mapping[k]] -= phi[k] - old;
+						z[mapping[k]] -= c*(phi[k] - old);
 					}
 				}
-				//Multiply(w, neg_phi_sum, lambda_mu_inv, d);
 
 				// averaging
-				neg_avg->FinishUpdate(avg_gamma);
+				z_avg->FinishUpdate(avg_gamma);
 			}
-			neg_phi_sum_norm = NOT_YET_COMPUTED;
 
 			double t = get_time();
 			lower_bound_last = GetCurrentLowerBound();
@@ -282,44 +271,67 @@ double* SVM::Solve()
 			_lower_bound[1] = lower_bound_last;
 		}
 
-		time_from_start = get_time() - time_start;
-		if (options.callback_fn && (iter % options.callback_freq) == 0)
+		if ((iter % options.callback_freq) == 0)
 		{
-			double t0 = get_time();
-
-			bool res;
-			double* w_tmp;
-			double* neg_phi_sum_tmp;
-
-			if (avg_num == 1)
+			double t = get_time();
+			double v = Evaluate(z);
+			double p = 0;
+			for (k=0; k<d; k++) p += (w[k]-z[k])*(w[k]-z[k]);
+			p /= 2*c;
+			
+			printf("iter=%d t=%fs v=%f v-v_serious_start=%f, p=%f, c=%f", iter, t - time_start, v, v-v_serious_start, p, c);
+			if (v < v_best)
 			{
-				neg_phi_sum_tmp = neg_phi_sum; w_tmp = w;
-				neg_phi_sum = neg_avg->GetAverage(0); w = neg_avg_buf;
-				Multiply(w, neg_phi_sum, lambda_mu_inv, d);
-				res = (*options.callback_fn)(this);
-				neg_phi_sum = neg_phi_sum_tmp; w = w_tmp;
+				v_best = v;
+				memcpy(w_best, z, d*sizeof(double));
+				printf("!");
 			}
-			else if (avg_num == 2)
+			printf("\n");
+
+			if (serious_counter ++ >= serious_iter_max)
 			{
-				neg_phi_sum_tmp = neg_phi_sum; w_tmp = w;
-				neg_phi_sum = neg_avg_buf; w = neg_avg_buf + d+1;
-				InterpolateBest(neg_avg->GetAverage(0), neg_avg->GetAverage(1), neg_phi_sum);
-				Multiply(w, neg_phi_sum, lambda_mu_inv, d);
-				res = (*options.callback_fn)(this);
-				neg_phi_sum = neg_phi_sum_tmp; w = w_tmp;
+				printf("*\n");
+
+				serious_counter = 0;
+
+				if (p < 0.1*fabs(v_serious_start - v)) c *= options.c_decrease_factor; 
+				else                                   c *= options.c_increase_factor; 
+				if (c < options.c_min) c = options.c_min;
+				if (c > options.c_max) c = options.c_max;
+
+				if (v < v_serious_start)            serious_iter_max = (int)(serious_iter_max*options.serious_iter_decrease_factor);
+				else if (v_best == v_serious_start) serious_iter_max = (int)(serious_iter_max*options.serious_iter_increase_factor);
+				if (serious_iter_max < options.serious_iter_min) serious_iter_max = options.serious_iter_min;
+				if (serious_iter_max > options.serious_iter_max) serious_iter_max = options.serious_iter_max;
+
+				double* zz = w_best;
+				if (avg_num == 1) zz = z_avg->GetAverage(0);
+				for (i=0; i<d; i++) z[i] = w[i] = zz[i];
+				z[d] = 0;
+				for (i=0; i<n; i++)
+				{
+					if (!terms[i]->mapping)
+					{
+						for (k=0; k<=terms[i]->di; k++) z[k] -= c*terms[i]->phi[k];
+					}
+					else
+					{
+						for (k=0; k<=terms[i]->di; k++) z[terms[i]->mapping[k]] -= c*terms[i]->phi[k];
+					}
+				}
+
+				t_serious_start = t_serious_prev = t;
+				v_serious_start = v_serious_prev = (avg_num == 0) ? v_best : Evaluate(w);
 			}
 			else
 			{
-				Multiply(w, neg_phi_sum, lambda_mu_inv, d);
-				res = (*options.callback_fn)(this);
+				t_serious_prev = t;
+				v_serious_prev = v;
 			}
-
-			callback_time += get_time() - t0;
-
-			if (!res) break;
 		}
 	}
 
+	/*
 	if (avg_num == 1)
 	{
 		memcpy(neg_phi_sum, neg_avg->GetAverage(0), vec_size);
@@ -330,12 +342,15 @@ double* SVM::Solve()
 		InterpolateBest(neg_avg->GetAverage(0), neg_avg->GetAverage(1), neg_phi_sum);
 		Multiply(w, neg_phi_sum, lambda_mu_inv, d);
 	}
+	*/
 
+	delete [] w_best;
 	delete [] _buf0;
-	delete neg_avg;
+	delete z_avg;
 	return w;
 }
 
+#ifdef NOT_IMPLEMENTED
 void SVM::SolveWithKernel(int _i, int iter_max)
 {
 	Term* T = terms[_i];
@@ -436,7 +451,9 @@ void SVM::SolveWithKernel(int _i, int iter_max)
 		for (i=0; i<=di; i++) neg_phi_sum[T->mapping[i]] -= T->phi[i];
 	}
 }
+#endif
 
+#ifdef NOT_IMPLEMENTED
 void SVM::InterpolateBest(double* s1, double* s2, double* s_best)
 {
 	double A = Op1(s1, s2, d) - (s2[d] - s1[d])*kappa*lambda_mu;
@@ -456,4 +473,4 @@ void SVM::InterpolateBest(double* s1, double* s2, double* s_best)
 		s_best[k] = (1-gamma)*s1[k] + gamma*s2[k];
 	}
 }
-
+#endif

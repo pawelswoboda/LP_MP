@@ -14,6 +14,8 @@
 #include "discrete_tomography_message_counting_pairwise.hxx"
 #include "discrete_tomography_tree_constructor.hxx"
 #include "discrete_tomography_counting_naive.hxx"
+#include "discrete_tomography_cardinality_factor.hxx"
+#include "discrete_tomography_cardinality_factor_constructor.hxx"
 #include "dt_sequential.hxx"
 
 #include "parse_rules.h"
@@ -126,32 +128,33 @@ namespace LP_MP{
 	  
   };
 
-  /*
   struct FMC_DT_NAIVE {
     static constexpr char* name = "Discrete Tomography, naive LP model";
 
-    using FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 0, false> UnaryFactor;
-    using FactorContainer<Simplex, ExplicitRepamStorage, FMC_DT_NAIVE, 1> PairwiseFactor;
-    using FactorContainer<DiscreteTomographyFactorCountingNaive, ExplicitRepamStorage, FMC_DT_NAIVE, 2> DiscreteTomographyCountingFactorContainer;
+    using unary_factor = FactorContainer<UnarySimplexFactor, FMC_DT_NAIVE, 0, false>;
+    using pairwise_factor = FactorContainer<PairwiseSimplexFactor, FMC_DT_NAIVE, 1>;
+    using dt_cardinality_factor_container = FactorContainer<discrete_tomography_cardinality_factor, FMC_DT_NAIVE, 2>;
    
-    using MessageContainer<LeftMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_NAIVE, 0 > UnaryPairwiseMessageLeft;
-    using MessageContainer<RightMargMessage, 0, 1, variableMessageNumber, 1, variableMessageSize, FMC_DT_NAIVE, 1 > UnaryPairwiseMessageRight;
+    using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,true>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT_NAIVE, 0 >;
+    using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,true>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_DT_NAIVE, 1 >;
+    using unary_dt_cardinality_message_container = MessageContainer<unary_simplex_discrete_tomography_cardinality_message , 0, 2, message_passing_schedule::left, variableMessageNumber, atMostTwoMessages, FMC_DT_NAIVE, 2>;
+    using dt_cardinality_message_container = MessageContainer<discrete_tomography_cardinality_message, 2, 2, message_passing_schedule::left, atMostOneMessage, atMostTwoMessages, FMC_DT_NAIVE, 3>;
     
-    using MessageContainer<DiscreteTomographyUnaryToFactorCountingNaiveMessage, 0, 2, variableMessageNumber, variableMessageNumber, variableMessageSize, FMC_DT_NAIVE, 2>
-      DiscreteTomographyCountingMessage;
 
-    using FactorList = meta::list< UnaryFactor, PairwiseFactor, DiscreteTomographyCountingFactorContainer >;
+    using FactorList = meta::list< unary_factor, pairwise_factor, dt_cardinality_factor_container >;
     using MessageList = meta::list<
-      UnaryPairwiseMessageLeft,
-      UnaryPairwiseMessageRight,
-      DiscreteTomographyCountingMessage
+      UnaryPairwiseMessageLeftContainer,
+      UnaryPairwiseMessageRightContainer,
+      unary_dt_cardinality_message_container,
+      dt_cardinality_message_container 
       >;
 
     using mrf = StandardMrfConstructor<FMC_DT_NAIVE,0,1,0,1>;
-    using dt = DiscreteTomographyNaiveConstructor<FMC_DT_NAIVE,0,0,2,2>;
+    using dt = discrete_tomography_cardinality_factor_constructor<FMC_DT_NAIVE,0,dt_cardinality_factor_container,unary_dt_cardinality_message_container,dt_cardinality_message_container>;
     using ProblemDecompositionList = meta::list<mrf,dt>;
   };
 
+  /*
 
   struct FMC_DT_COMBINED {
     static constexpr char* name = "Discrete Tomography, naive LP and tight model combined";
@@ -329,7 +332,67 @@ namespace LP_MP{
        return true;
     }
 
-  }
+    template<typename SOLVER>
+    inline bool ParseProblemDD(const std::string& filename, SOLVER& s) {
+
+       auto& mrf = s.template GetProblemConstructor<0>();
+       auto& dt = s.template GetProblemConstructor<1>();
+
+       std::cout << "parsing " << filename << "\n";
+       pegtl::file_parser problem(filename);
+
+       UaiMrfInput::MrfInput mrfInput;
+       bool ret = problem.parse< UaiMrfInput::grammar, UaiMrfInput::action>(mrfInput);
+       if(ret != true) {
+          throw std::runtime_error("could not read mrf problem in uai format for discrete tomography");
+          return false;
+       }
+       UaiMrfInput::build_mrf(mrf, mrfInput);
+
+       dt.SetNumberOfLabels(mrfInput.cardinality_[0]);
+
+       Projections p;
+       ret = problem.parse< grammar, action>(p);
+       if(ret != true) {
+          throw std::runtime_error("could not read projection constraints for discrete tomography");
+          return false;
+       } 
+
+       std::set<std::array<INDEX,2>> covered_pairwise;
+       for(INDEX i=0; i<p.projectionVar.size(); ++i) {
+          LP_tree t;
+          // this is for exact summation only
+          const INDEX sum = std::find_if(p.projectionCost[i].begin(), p.projectionCost[i].end(), [](auto& x){ return x < std::numeric_limits<REAL>::infinity(); }) - p.projectionCost[i].begin();
+          assert(p.projectionCost[i][sum] == 0);
+          dt.AddProjection(p.projectionVar[i].begin(), p.projectionVar[i].end(), sum, &t);
+          s.GetLP().add_tree(t);
+
+          for(INDEX j=0; j<p.projectionVar[i].size()-1; ++j) {
+             const INDEX v1 = p.projectionVar[i][j];
+             const INDEX v2 = p.projectionVar[i][j+1];
+             covered_pairwise.insert(std::array<INDEX,2>({std::min(v1,v2), std::max(v1,v2)}));
+          }
+       }
+
+       // compute pairwise elements that are not covered
+       std::vector<std::array<INDEX,2>> not_covered_pairwise;
+       for(INDEX i=0; i<mrf.GetNumberOfPairwiseFactors(); ++i) {
+          if(covered_pairwise.find(mrf.GetPairwiseVariables(i)) == covered_pairwise.end()) {
+             not_covered_pairwise.push_back(mrf.GetPairwiseVariables(i));
+          } 
+       }
+
+       // decompose mrf into trees automatically. Do this after adding projection, since they can add pairwise factors as well.
+       //auto trees = mrf.compute_forest_cover(not_covered_pairwise);
+       auto trees = mrf.compute_forest_cover();
+       for(auto& tree : trees) {
+          s.GetLP().add_tree(tree);
+       }
+
+       return true;
+    }
+
+  } // end namespace DisceteTomographyTextInput
 
 } // end namespace LP_MP
 #endif // LP_MP_TOMOGRAPHY_H

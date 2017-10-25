@@ -147,7 +147,7 @@ public:
      o.cur_ = nullptr;
   }
 
-  serialization_archive(void* mem, INDEX size_in_bytes)
+  serialization_archive(const void* mem, INDEX size_in_bytes)
   {
      assert(mem != nullptr);
      archive_ = (char*) mem;

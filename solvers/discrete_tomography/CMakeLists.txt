@@ -1,3 +1,5 @@
+add_executable(discrete_tomography_bundle_cardinality_factors discrete_tomography_bundle_cardinality_factors.cpp  ${headers} ${sources})
+target_link_libraries(discrete_tomography_bundle_cardinality_factors m stdc++ pthread lgl arboricity cb) # strictly, lgl should not be needed
 
 add_executable(discrete_tomography discrete_tomography.cpp  ${headers} ${sources})
 target_link_libraries(discrete_tomography m stdc++ pthread lgl) # strictly, lgl should not be needed
@@ -58,4 +60,4 @@ endif()
 
 
 add_executable(discrete_tomography_fw discrete_tomography_fw.cpp ${headers} ${sources})
-target_link_libraries(discrete_tomography_fw m stdc++ pthread SVM lgl arboricity)
+target_link_libraries(discrete_tomography_fw m stdc++ pthread SVM lgl arboricity cb)

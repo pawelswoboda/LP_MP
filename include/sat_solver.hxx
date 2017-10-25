@@ -136,6 +136,8 @@ struct sat_literal_matrix {
    }
 
    INDEX size() const { return dim_[0]*dim_[1]; }
+   INDEX dim1() const { return dim_[0]; }
+   INDEX dim2() const { return dim_[1]; }
    INDEX dim(const INDEX d) const { assert(d<2); return dim_[d]; }
    const sat_literal operator[](const INDEX i) const 
    {
@@ -367,11 +369,13 @@ public:
       add_clause(-i,j);
    }
 
+   // delete: external_solver_interface implements it
    void make_equal(const sat_literal i, const sat_literal j)
    {
       add_implication(i,j);
       add_implication(j,i);
    }
+   // delete: external_solver_interface implements it
    template<typename ITERATOR_1, typename ITERATOR_2>
    void make_equal(ITERATOR_1 begin_1, ITERATOR_1 end_1, ITERATOR_2 begin_2, ITERATOR_2 end_2)
    {

@@ -33,7 +33,6 @@ SVM::SVM(int _d, int _n, MaxFn _max_fn, CopyFn _copy_fn, CompareFn _compare_fn, 
 	d(_d), n(_n), 
 	max_fn(_max_fn), copy_fn(_copy_fn), compare_fn(_compare_fn), dot_product_fn(_dot_product_fn), dot_product_kernel_fn(_dot_product_kernel_fn),
 	zero_lower_bound(_zero_lower_bound),
-	neg_phi_sum_norm(NOT_YET_COMPUTED),
 	buf(1024)
 {
 	int i;
@@ -41,7 +40,7 @@ SVM::SVM(int _d, int _n, MaxFn _max_fn, CopyFn _copy_fn, CompareFn _compare_fn, 
 	wi_buf = (double*) buf.Alloc(d*sizeof(double));
 	terms = new Term*[n];
 	for (i=0; i<n; i++) terms[i] = NULL;
-	neg_phi_sum = (double*) buf.Alloc((d+1)*sizeof(double));
+	z = (double*) buf.Alloc((d+1)*sizeof(double));
 }
 
 SVM::~SVM()
@@ -55,21 +54,6 @@ SVM::~SVM()
 		}
 		delete [] terms;
 	}
-}
-
-void SVM::SetParams(double _lambda, double _mu, double _kappa)
-{
-	mu = _mu;
-	kappa = _kappa;
-
-	lambda_mu = _lambda/mu;
-	lambda_mu_inv = mu/_lambda;
-}
-
-double SVM::GetNegPhiSumNorm()
-{
-	if (neg_phi_sum_norm == NOT_YET_COMPUTED) neg_phi_sum_norm = Norm(neg_phi_sum, d);
-	return neg_phi_sum_norm;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -90,12 +74,12 @@ double SVM::Evaluate(double* _w)
 	if (w != _w) memcpy(w, _w, d*sizeof(double));
 	YPtr y = new char[y_size_in_bytes_max];
 
-	double v0 = Norm(w, d), v1 = 0;
+	double v1 = 0;
 
 	for (i=0; i<n; i++)
 	{
 		double* wi = terms[i]->ComputeRestriction(w);
-		v1 += (*max_fn)(wi, y, kappa, terms[i]->term_data)*kappa;
+		v1 += (*max_fn)(wi, y, terms[i]->term_data);
 		v1 += (*dot_product_fn)(wi, y, terms[i]->term_data);
 	}
 
@@ -104,10 +88,10 @@ double SVM::Evaluate(double* _w)
 	delete [] w_bak;
 	delete [] (char*)y;
 
-	return mu * (v0*lambda_mu/2 + v1);
+	return v1;
 }
 
-
+/*
 void SVM::GetBounds(double& lower_bound, double& upper_bound)
 {
 	int i;
@@ -130,7 +114,7 @@ void SVM::GetBounds(double& lower_bound, double& upper_bound)
 
 	delete [] (char*)y;
 }
-
+*/
 
 
 
@@ -275,13 +259,13 @@ void SVM::Term::DeletePlane(int t)
 	}
 }
 
-int SVM::Term::Maximize(double* wi, double kappa)
+int SVM::Term::Maximize(double* wi)
 {
 	int t_best, t;
 	double v_best;
 	for (t=0; t<num; t++)
 	{
-		double v = (*svm->dot_product_fn)(wi, y_arr[t], term_data) + (*GetFreeTermPtr(y_arr[t]))*kappa;
+		double v = (*svm->dot_product_fn)(wi, y_arr[t], term_data) + (*GetFreeTermPtr(y_arr[t]));
 		if (t == 0 || v_best <= v) { v_best = v; t_best = t; }
 	}
 	return t_best;

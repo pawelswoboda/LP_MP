@@ -74,6 +74,21 @@ public:
       return w[primal_];
    }
 
+   // example for constructing constraints
+   // note: this function can also be used to reduce sat constraints: Implement a second solver that implements this in terms of external_solver_interface functions!
+   // the same holds for LP-interface
+   template<typename EXTERNAL_SOLVER>
+   void construct_constraints(EXTERNAL_SOLVER& s) const
+   {
+      auto variables = s.add_vector(*this);
+      s.add_simplex_constraint(variables.begin(), variables.end());
+   }
+   template<typename EXTERNAL_SOLVER>
+   void convert_primal_test(EXTERNAL_SOLVER& s)
+   {
+      auto variables = s.load_vector(*this);
+      primal() = s.first_active(variables);
+   }
 #ifdef WITH_SAT
    template<typename SAT_SOLVER>
    void construct_sat_clauses(SAT_SOLVER& s) const
@@ -90,7 +105,7 @@ public:
          if((*this)[i] > lb + th) { 
             assumptions.push_back(-(begin+i));
          }
-      } 
+      }
    }
 
    template<typename SAT_SOLVER>

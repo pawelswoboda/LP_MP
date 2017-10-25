@@ -7,12 +7,170 @@
 #include <queue>
 #include <stdexcept>
 #include <algorithm>
+#include <tuple>
 #include <cassert>
 #include "vector.hxx"
 
 namespace LP_MP {
    namespace discrete_tomo{
 
+      // functions naively computing min convolutions
+      // possibly encapsulate in class as for efficient min conv
+
+      template<typename ITERATOR_1, typename ITERATOR_2>
+      void min_conv_naive(ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end, vector<REAL>& result)
+      {
+         const INDEX a_size = std::distance(a_begin, a_end);
+         assert(a_size > 1);
+         const INDEX b_size = std::distance(b_begin, b_end);
+         assert(b_size > 1);
+         assert(result.size() <= a_size + b_size - 1);
+         std::fill(result.begin(), result.end(), std::numeric_limits<REAL>::infinity());
+         for(INDEX i=0; i<std::min(result.size(), a_size); ++i) {
+            //assert(false); // bounds below correct?
+            for(INDEX j=0; j<std::min(b_size, result.size() - i); ++j) {
+               result[i+j] = std::min(result[i+j], a_begin[i] + b_begin[j]); 
+            }
+         }
+      }
+
+      template<typename ITERATOR_1, typename ITERATOR_2>
+      vector<REAL> min_conv_naive(ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end, const INDEX sum)
+      {
+         vector<REAL> result(sum);
+         min_conv_naive(a_begin, a_end, b_begin, b_end, result);
+         return result;
+      }
+
+      template<typename ITERATOR_1, typename ITERATOR_2>
+      vector<REAL> min_conv_naive(ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end)
+      {
+         const INDEX a_size = std::distance(a_begin, a_end);
+         const INDEX b_size = std::distance(b_begin, b_end);
+         return min_conv_naive(a_begin, a_end, b_begin, b_end, a_size + b_size - 1); 
+      }
+
+      using arg_min_conv_vector = std::vector<std::array<unsigned char,2>>;
+
+      using arg_min_conv_type = vector<std::array<INDEX,2>>;
+
+      // returns the min convolution and extends the given vector with the indices that result in the given min convolution
+      template<typename ITERATOR_1, typename ITERATOR_2>
+      std::tuple<vector<REAL>, arg_min_conv_type> arg_min_conv_naive( ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end, const INDEX min_conv_size)
+      {
+         const INDEX a_size = std::distance(a_begin, a_end);
+         assert(a_size > 1);
+         const INDEX b_size = std::distance(b_begin, b_end);
+         assert(b_size > 1);
+         vector<REAL> result(min_conv_size, std::numeric_limits<REAL>::infinity());
+         vector<std::array<INDEX,2>> arg_result(min_conv_size);
+         assert(result.size() <= a_size + b_size - 1);
+         for(INDEX i=0; i<std::min(result.size(), a_size); ++i) {
+            for(INDEX j=0; j<std::min(b_size, result.size() - i); ++j) {
+               const REAL cur_val = a_begin[i] + b_begin[j];
+               if(cur_val <= result[i+j]) {
+                  result[i+j] = a_begin[i] + b_begin[j];
+                  arg_result[i+j] = std::array<INDEX,2>({i,j});
+               }
+            }
+         } 
+         return std::make_tuple(std::move(result), std::move(arg_result));
+      }
+
+
+
+
+
+      template<typename ITERATOR_1, typename ITERATOR_2>
+      REAL min_sum(ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end, const INDEX sum)
+      {
+         REAL val = std::numeric_limits<REAL>::infinity();
+
+         const INDEX a_size = std::distance(a_begin, a_end);
+         assert(a_size > 1);
+         const INDEX b_size = std::distance(b_begin, b_end);
+         assert(b_size > 1);
+
+         assert(sum <= a_size-1 + b_size-1);
+
+         for(INDEX i=std::max(0, int(b_size)-int(sum)-1); i<std::min(sum+1, a_size); ++i) {
+            val = std::min(val, a_begin[i] + b_begin[sum-i]);
+         }
+         return val;
+      }
+
+      // find out the two indices (left,right) whose sum is minimal
+      template<typename ITERATOR_1, typename ITERATOR_2>
+      std::tuple<INDEX,INDEX> arg_min_sum(ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end, const INDEX sum)
+      {
+         REAL val = std::numeric_limits<REAL>::infinity();
+         INDEX a = std::numeric_limits<INDEX>::max();
+         INDEX b = std::numeric_limits<INDEX>::max();
+
+         const INDEX a_size = std::distance(a_begin, a_end);
+         assert(a_size > 1);
+         const INDEX b_size = std::distance(b_begin, b_end);
+         assert(b_size > 1);
+
+         assert(sum <= a_size-1 + b_size-1);
+
+         for(INDEX i=0; i<std::min(a_size, sum+1); ++i) {
+            const INDEX j = sum-i;
+            if(j < b_size) { // more efficient is possible
+               const REAL cur_val = a_begin[i] + b_begin[sum-i];
+               if(cur_val <= val) {
+                  a = i;
+                  b = sum - i;
+                  val = cur_val;
+               }
+            }
+         }
+         assert(a < std::numeric_limits<INDEX>::max() && b < std::numeric_limits<INDEX>::max());
+         return std::make_tuple(a,b);;
+      }
+
+      /*
+      // matrix has dimensions no_variables/cardinality
+      // we want to compute the minimum cost configuration so that \sum_{i} x_i = sum
+
+      // compute cost of each possible value of sub sum
+      // iteratively equipartition cost matrix into left and right part and compute via min convolution cost of sub sums
+      vector<REAL> min_sub_sum_naive(const matrix<REAL>& m, const INDEX start_col, const INDEX end_col)
+      {
+         assert(end_col < m.dim2() && start_col < end_col);
+         const INDEX n = end_col - start_col;
+
+         // allocate result already here, so intermediate vectors can be released immediately (remember: we use a stack allocator)
+         vector<REAL> result((m.dim1()-1) * n + 1, std::numeric_limits<REAL>::infinity());
+
+         if(n == 2) {
+            //return discrete_tomo::min_conv_naive(&m(start_col,0), &m(start_col, m.dim2()-1), &m(start_col+1, 0), &m(start_col+1, m.dim2()-1));
+            auto slice_1 = m.slice_left(start_col);
+            auto slice_2 = m.slice_left(start_col+1);
+            discrete_tomo::min_conv_naive(slice_1.begin(), slice_1.end(), slice_2.begin(), slice_2.end(), result);
+         } else if(n == 3) {
+            const auto left_sum = sub_sum(m, start_col+1, end_col);
+            auto slice = m.slice_left(start_col);
+            discrete_tomo::min_conv_naive(left_sum.begin(), left_sum.end(), slice.begin(), slice.end(), result); 
+         } else {
+            assert(n > 3);
+            const auto left_sum = sub_sum(m, start_col, start_col + n/2);
+            const auto right_sum = sub_sum(m, start_col + n/2, end_col);
+            discrete_tomo::min_conv_naive(left_sum.begin(), left_sum.end(), right_sum.begin(), right_sum.end(), result);
+         }
+
+         return std::move(result);
+      }
+
+      REAL min_sum_naive(const matrix<REAL>& m, const INDEX sum)
+      {
+         auto left = min_sub_sum_naive(m, 0, m.dim2()/2);
+         auto right = min_sub_sum_naive(m, m.dim2()/2, m.dim2());
+         return min_sum_naive(left.begin(), left.end(), right.begin(), right.end(), sum); 
+      }
+      */
+
+      // class for more efficient computation of min convolution. Algorithm by Bauschke et al.  
       template<class Value,class Index = int>
          class MinConv
          {
@@ -31,7 +189,7 @@ namespace LP_MP {
                   void CalcConv(T1 op,T2 a,T3 b,bool onlyMin = false);
 
             private:
-               // do zrobienia: replace by own vector or by one large memory chung, which is then subdivided -> faster allocation and deallocation
+               // do zrobienia: replace by own vector or by one large memory chunk, which is then subdivided -> faster allocation and deallocation
                std::vector<Index> idxa_;
                std::vector<Index> idxb_;
                std::vector<Index> outA_;
@@ -234,7 +392,15 @@ namespace LP_MP {
             }
             //assert(open == 1 || open == 0);
          }
-   }
-}
+
+      // automatically choose between naive and efficient version of min convolution
+      template<typename ITERATOR_1, typename ITERATOR_2>
+      void min_conv(ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end, vector<REAL>& result)
+      {
+      }
+
+
+   } // end namespace discrete_tomo
+} // end namespace LP_MP
 
 #endif

@@ -67,9 +67,10 @@ public:
   vector(ITERATOR begin, ITERATOR end)
   {
     const INDEX size = std::distance(begin,end);
-    const INDEX padding = (REAL_ALIGNMENT-(size%REAL_ALIGNMENT))%REAL_ALIGNMENT;
     assert(size > 0);
-    begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size+padding,32);
+    const INDEX padding = std::is_same<REAL,T>::value ? (REAL_ALIGNMENT-(size%REAL_ALIGNMENT))%REAL_ALIGNMENT : 0;
+    //begin_ = (T*) global_real_block_allocator_array[stack_allocator_index].allocate(size+padding,32);
+    begin_ = (T*) global_real_block_arena_array[stack_allocator_index].allocate((size+padding)*sizeof(T),32);
     assert(begin_ != nullptr);
     end_ = begin_ + size;
     for(auto it=this->begin(); begin!=end; ++begin, ++it) {
@@ -82,16 +83,18 @@ public:
 
   vector(const INDEX size) 
   {
-    const INDEX padding = (REAL_ALIGNMENT-(size%REAL_ALIGNMENT))%REAL_ALIGNMENT;
-    assert((padding + size)%REAL_ALIGNMENT == 0);
-    begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size+padding,32);
+    const INDEX padding = std::is_same<REAL,T>::value ? (REAL_ALIGNMENT-(size%REAL_ALIGNMENT))%REAL_ALIGNMENT : 0;
+    if(std::is_same<REAL,T>::value) {
+       assert((padding + size)%REAL_ALIGNMENT == 0);
+    }
+    //begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(size+padding,32);
+    //begin_ = (T*) global_real_block_allocator_array[stack_allocator_index].allocate(size+padding,32);
+    begin_ = (T*) global_real_block_arena_array[stack_allocator_index].allocate((size+padding)*sizeof(T),32);
     assert(size > 0);
     assert(begin_ != nullptr);
     end_ = begin_ + size;
     // infinities in padding
-    if(padding != 0) {
-      std::fill(end_, end_ + padding, std::numeric_limits<REAL>::infinity());
-    }
+    pad_infinity<T>();
   }
   vector(const INDEX size, const T value) 
      : vector(size)
@@ -99,28 +102,71 @@ public:
      assert(size > 0);
      std::fill(begin_, end_, value);
   }
+  vector()
+     : begin_(nullptr),
+     end_(nullptr)
+   {}
   ~vector() {
      if(begin_ != nullptr) {
-        global_real_block_allocator_array[stack_allocator_index].deallocate(begin_,1);
+        //global_real_block_allocator_array[stack_allocator_index].deallocate((void*)begin_,1);
+        global_real_block_arena_array[stack_allocator_index].deallocate((void*)begin_);
      }
+     static_assert(sizeof(T) % sizeof(int) == 0,"");
   }
-   vector(const vector& o)  {
-     const INDEX padding = (REAL_ALIGNMENT-(o.size()%REAL_ALIGNMENT))%REAL_ALIGNMENT;
-     begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(o.size()+padding,32);
-     end_ = begin_ + o.size();
+   vector(const vector& o)  
+      : vector(o.size())
+   {
+      //const INDEX size = o.size();
+      //const INDEX padding = std::is_same<REAL,T>::value ? (REAL_ALIGNMENT-(size%REAL_ALIGNMENT))%REAL_ALIGNMENT : 0;
+     //begin_ = global_real_block_allocator_array[stack_allocator_index].allocate(o.size()+padding,32);
+     //begin_ = (T*) global_real_block_allocator_array[stack_allocator_index].allocate(size+padding,32);
+     //begin_ = (T*) global_real_block_arena_array[stack_allocator_index].allocate((size+padding)*sizeof(T),32);
+     //end_ = begin_ + o.size();
      assert(begin_ != nullptr);
      auto it = begin_;
      for(auto o_it = o.begin(); o_it!=o.end(); ++it, ++o_it) { *it = *o_it; }
-     if(padding != 0) {
-       std::fill(end_, end_ + padding, std::numeric_limits<REAL>::infinity());
-     }
+     //pad_infinity<T>();
    }
-   vector(vector&& o) {
+   template<typename Q=T>
+   typename std::enable_if<std::is_same<Q,REAL>::value>::type pad_infinity()
+   {
+      const INDEX padding = (REAL_ALIGNMENT-(size()%REAL_ALIGNMENT))%REAL_ALIGNMENT;
+      std::fill(end_, end_+padding, std::numeric_limits<REAL>::infinity());
+   }
+   template<typename Q=T>
+   typename std::enable_if<!std::is_same<Q,REAL>::value>::type pad_infinity()
+   {}
+
+   vector(vector&& o)
+   {
       begin_ = o.begin_;
       end_ = o.end_;
       o.begin_ = nullptr;
       o.end_ = nullptr;
    }
+
+   vector& operator=(const vector<T>& o)
+   {
+      assert(size() == o.size());
+      for(INDEX i=0; i<o.size(); ++i) { 
+         (*this)[i] = o[i]; 
+      } 
+      return *this;
+   }
+
+   vector& operator=(vector&& o)
+   {
+      std::swap(begin_, o.begin_);
+      std::swap(end_, o.end_);
+      return *this;
+   }
+
+   void share(const vector& o)
+   {
+      begin_ = o.begin_;
+      end_ = o.end_; 
+   }
+
    template<typename E>
    bool operator==(const vector_expression<T,E>& o) {
       assert(size() == o.size());
@@ -135,7 +181,8 @@ public:
    void operator=(const vector_expression<T,E>& o) {
       assert(size() == o.size());
       for(INDEX i=0; i<o.size(); ++i) { 
-         (*this)[i] = o[i]; }
+         (*this)[i] = o[i]; 
+      }
    }
    template<typename E>
    void operator-=(const vector_expression<T,E>& o) {
@@ -174,14 +221,14 @@ public:
 
    INDEX size() const { return end_ - begin_; }
 
-   T operator[](const INDEX i) const {
+   const T& operator[](const INDEX i) const {
       assert(i<size());
-      assert(!std::isnan(begin_[i]));
+      //assert(!std::isnan(begin_[i]));
       return begin_[i];
    }
    T& operator[](const INDEX i) {
       assert(i<size());
-      assert(!std::isnan(begin_[i]));
+      //assert(!std::isnan(begin_[i]));
       return begin_[i];
    }
    using iterator = T*;
@@ -221,6 +268,7 @@ public:
        return simdpp::reduce_min(min_val);
 
      } else {
+       assert(false);
        return *std::min_element(begin(), end());
      }
    }
@@ -358,7 +406,7 @@ public:
 
    T operator[](const INDEX i) const {
       assert(i<size());
-      assert(!std::isnan(array_[i]));
+      //assert(!std::isnan(array_[i]));
       return array_[i];
    }
    T& operator[](const INDEX i) {
@@ -542,9 +590,9 @@ public:
       vec_ = o.vec_;
    }
    T& operator()(const INDEX x1, const INDEX x2) { assert(x1<dim1() && x2<dim2()); return vec_[x1*padded_dim2() + x2]; }
-   T operator()(const INDEX x1, const INDEX x2) const { assert(x1<dim1() && x2<dim2()); return vec_[x1*padded_dim2() + x2]; }
+   const T& operator()(const INDEX x1, const INDEX x2) const { assert(x1<dim1() && x2<dim2()); return vec_[x1*padded_dim2() + x2]; }
    T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) { assert(x3 == 0); return (*this)(x1,x2); } // sometimes we treat a matrix as a tensor with trivial last dimension
-   T operator()(const INDEX x1, const INDEX x2, const INDEX x3) const { assert(x3 == 0); return (*this)(x1,x2); } // sometimes we treat a matrix as a tensor with trivial last dimension
+   const T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) const { assert(x3 == 0); return (*this)(x1,x2); } // sometimes we treat a matrix as a tensor with trivial last dimension
 
    const INDEX dim1() const { return vec_.size()/padded_dim2(); }
    const INDEX dim2() const { return dim2_; }
@@ -557,6 +605,47 @@ public:
          }
       }
    }
+
+   // get rows and columns of matrix
+   struct matrix_slice_left {
+      matrix_slice_left(const INDEX idx, const matrix<T>& _m) : idx_(idx), m(_m) {}
+      T& operator[](const INDEX i) const { return m(idx_, i); }
+      //T& operator[](const INDEX i) { return m(idx_, i); }
+
+      const T* begin() { return &m(idx_,0); }
+      const T* end() { return &m(idx_,m.dim2()-1); }
+
+      private:
+      const INDEX idx_;
+      const matrix<T>& m;
+   };
+
+   matrix_slice_left slice_left(const INDEX dim1) const { return matrix_slice_left(dim1, *this); }
+
+   struct matrix_slice_right {
+      matrix_slice_right(const INDEX idx, const matrix<T>& _m) : idx_(idx), m(_m) {}
+      T operator[](const INDEX i) const { return m(i, idx_); }
+      //T& operator[](const INDEX i) { return m(i, idx_); }
+
+      struct strided_iterator {
+         strided_iterator(T* _x, const INDEX _stride) : x(_x), stride(_stride) { assert(stride > 0); }
+         T operator*() const { return *x; }
+         //T& operator*() { return *x; }
+         strided_iterator operator+(const INDEX n) { return strided_iterator(x + stride*n, stride); }
+         private:
+         T* x;
+         const INDEX stride;
+      };
+
+      strided_iterator begin() { return strided_iterator(&m(idx_, 0), m.padded_dim2()); }
+      strided_iterator end() { return  strided_iterator(&m(idx_, m.padded_dim2()), m.padded_dim2()); }
+
+      private:
+      const INDEX idx_;
+      const matrix<T>& m;
+   };
+
+   matrix_slice_right slice_right(const INDEX dim2) const { return matrix_slice_right({dim2, *this}); }
 
    // should these functions be members?
    // minima along second dimension

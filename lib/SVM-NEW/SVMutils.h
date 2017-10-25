@@ -103,6 +103,15 @@ inline double Op1(double* u, double* v, int d)
 }
 
 // returns <u-v,w>
+inline double Op1(double* u, double* v, double* w, int d)
+{
+	int k;
+	double val = 0;
+	for (k=0; k<d; k++) val += (u[k]-v[k])*w[k];
+	return val;
+}
+
+// returns <u-v,w>
 inline double Op1(double* u, double* v, double* w, int* w_mapping, int d)
 {
 	int k;

@@ -144,7 +144,9 @@ public:
   template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( detection, incoming, outgoing ); }
 
   INDEX outgoing_edge() const { return outgoing_edge_; }
+  INDEX& outgoing_edge() { return outgoing_edge_; }
   INDEX incoming_edge() const { return incoming_edge_; }
+  INDEX& incoming_edge() { return incoming_edge_; }
 
   bool detection_active() const {
     return (incoming_edge_ < incoming.size() || outgoing_edge_ < outgoing.size());
@@ -1160,7 +1162,7 @@ public:
       //assert(msg.GetLeftFactor()->GetFactor()->operator[](0) > 10000); 
     }
   }
-  /*
+
   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
   static void SendMessagesToLeft(const RIGHT_FACTOR& rightFactor, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
   {
@@ -1170,15 +1172,35 @@ public:
     }
     assert(omega <= 1.0 + eps);
 
-    INDEX c=0;
-    for(auto it = msg_begin; it!=msg_end; ++it) ++c;
-    assert(rightFactor.size() == c);
+    std::vector<bool> edge_taken(rightFactor.size(), false);
+    for(auto it=msg_begin; it!=msg_end; ++it) {
+      assert(edge_taken[ (*msg_begin).GetMessageOp().at_most_one_cell_factor_index_ ] == false);
+      edge_taken[ (*msg_begin).GetMessageOp().at_most_one_cell_factor_index_ ] = true;
+    }
+
+    REAL smallest_taken = std::numeric_limits<REAL>::infinity();
+    REAL second_smallest_taken = std::numeric_limits<REAL>::infinity();
+    REAL smallest_not_taken = 0.0;
+    
+    for(INDEX i=0; i<rightFactor.size(); ++i) {
+      const REAL val = rightFactor[i];
+      if(edge_taken[i]) {
+        const REAL min = std::min(smallest_taken, val);
+        const REAL max = std::max(smallest_taken, val);
+        smallest_taken = min;
+        second_smallest_taken = std::min(max, second_smallest_taken);
+      } else {
+        smallest_not_taken = std::min(val, smallest_not_taken); 
+      }
+    }
+
+    REAL set_to_cost = std::min(smallest_not_taken, second_smallest_taken);
 
     for(; msg_begin!=msg_end; ++msg_begin) {
-      (*msg_begin)[0] -= omega*rightFactor[ (*msg_begin).GetMessageOp().at_most_one_cell_factor_index_ ];
+      (*msg_begin)[0] -= omega*( rightFactor[ (*msg_begin).GetMessageOp().at_most_one_cell_factor_index_ ] - set_to_cost );
     }
   }
-  */
+
 
   template<typename LEFT_FACTOR, typename G2>
   void send_message_to_right(const LEFT_FACTOR& l, G2& msg, const REAL omega = 1.0)
@@ -1612,7 +1634,7 @@ public:
     s.make_equal(_detection_active_literal, detection_active_literal);
 
     // detection var must be equal to incoming and outgoing var
-    s.make_equal(detection_literals[0], s.add_at_most_one_constraint_sat(incoming_division_literals.begin(), incoming_division_literals.end()));
+    s.make_equal(detection_literals[0], s.add_at_most_one_constraint(incoming_division_literals.begin(), incoming_division_literals.end()));
     s.make_equal(detection_literals[0], s.add_at_most_one_constraint(outgoing_transition_literals.slice2(0).begin(), outgoing_transition_literals.slice2(0).end()));
 
     for(INDEX i=1; i<detection.size()-1; ++i) {
@@ -1708,7 +1730,7 @@ public:
         }
         for(INDEX i=0; i<no_outgoing_transition_edges(); ++i) {
           if(outgoing_transition(i,0) > outgoing_transition_min[0] + th) {
-            assumptions(-outgoing_transition_literals(i,0));
+            assumptions.push_back(-outgoing_transition_literals(i,0));
             //std::cout << "forbid outgoing transition " << i << ",0" << "\n";
           } 
         }
@@ -2053,7 +2075,8 @@ class mapping_edge_factor_dd : public vector<REAL> {
 public:
   static constexpr INDEX no_edge_taken = std::numeric_limits<INDEX>::max()-1;
 
-  mapping_edge_factor_dd(const INDEX _size) : vector<REAL>(_size,0.0) {}
+  //mapping_edge_factor_dd(const INDEX _size) : vector<REAL>(_size,0.0) {}
+  mapping_edge_factor_dd(const REAL cost, const INDEX _size) : vector<REAL>(_size-1,cost) { assert(_size > 1); }
 
   REAL LowerBound() const
   { 
@@ -2106,26 +2129,40 @@ public:
   void convert_primal(SAT_SOLVER& s, sat_var first)
   {
     assert(false);
-    /*
-    for(INDEX i=0; i<this->size(); ++i) {
-      if(lglderef(s, to_literal(first+i)) == 1) {
-      //if(s.get_model()[first+i] == CMSat::l_True) {
-        primal_ = i;
-        return;
-      }
-    }
-    primal_ = no_edge_taken;
-    */
   }
 
 private: 
   INDEX primal_;
 };
 
-// left is mapping_edge_factor_dd, right is detection_factor_dd
-class cell_incoming_edge_detection_factor_dd {
+class division_edge_factor_dd {
 public:
-  cell_incoming_edge_detection_factor_dd(const INDEX incoming_edge_index) : incoming_edge_index_(incoming_edge_index) {}
+  division_edge_factor_dd(const INDEX _cost) : cost(_cost) {}
+  REAL cost;
+  REAL LowerBound() const { return std::min(cost, REAL(0.0)); }
+  REAL EvaluatePrimal() const {
+    if(primal_) {
+      return cost;
+    } else {
+      return 0.0;
+    }
+  }
+  INDEX size() const { return 1; }
+
+  void init_primal() {}
+  template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+  template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( cost ); }
+
+private:
+  bool primal_;
+
+};
+
+// left is mapping_edge_factor_dd, right is detection_factor_dd
+class cell_incoming_mapping_edge_detection_factor_dd {
+public:
+  cell_incoming_mapping_edge_detection_factor_dd(const INDEX incoming_edge_index, const bool split) : incoming_edge_index_(incoming_edge_index) {}
+  cell_incoming_mapping_edge_detection_factor_dd(const INDEX incoming_edge_index) : incoming_edge_index_(incoming_edge_index) {}
   
   template<typename LEFT_FACTOR, typename MSG>
   void RepamLeft(LEFT_FACTOR& l, const MSG& msg)
@@ -2140,7 +2177,7 @@ public:
   {
     assert(msg.size() == r.division_distance()-1);
     for(INDEX t=0; t<msg.size(); ++t) {
-      r.incoming_transition(incoming_edge_index_, t);
+      r.incoming_transition(incoming_edge_index_, t) += msg[t];
     }
   }
 
@@ -2159,7 +2196,7 @@ public:
 
   // send messages from detection factor along incoming edges
   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-  static void SendMessagesToLeft(const RIGHT_FACTOR& r, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omega_begin)
+  static void SendMessagesToLeft_deactivated(const RIGHT_FACTOR& r, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omega_begin)
   {
     REAL omega = 0.0;
     auto omega_it = omega_begin;
@@ -2239,20 +2276,233 @@ public:
   void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
   {
     assert(false);
-    /*
-    const auto first_right_incoming = right_begin + 1 + r.detection.size() + r.no_incoming_division_edges();
-    for(INDEX t=0; t<l.division_distance()-1; ++t) {
-      const auto left_var = left_begin + t;
-      auto right_var = first_right_incoming + t*r.no_incoming_transition_edges() + incoming_edge_index_;
-      make_sat_var_equal(s, to_literal(left_var), to_literal(right_var));
-    }
-    */
   }
 
 private:
   const INDEX incoming_edge_index_; 
 };
 
+// left is mapping_edge_factor_dd, right is detection_factor_dd
+class cell_outgoing_mapping_edge_detection_factor_dd {
+public:
+  cell_outgoing_mapping_edge_detection_factor_dd(const INDEX outgoing_edge_index, const bool split) : outgoing_edge_index_(outgoing_edge_index) {}
+  cell_outgoing_mapping_edge_detection_factor_dd(const INDEX outgoing_edge_index) : outgoing_edge_index_(outgoing_edge_index) {}
+  
+  template<typename LEFT_FACTOR, typename MSG>
+  void RepamLeft(LEFT_FACTOR& l, const MSG& msg)
+  {
+    assert(msg.size() == l.size());
+    for(INDEX i=0; i<msg.size(); ++i) {
+      l[i] += msg[i];
+    }
+  }
+  template<typename RIGHT_FACTOR, typename MSG>
+  void RepamRight(RIGHT_FACTOR& r, const MSG& msg)
+  {
+    assert(msg.size() == r.division_distance()-1);
+    for(INDEX t=0; t<msg.size(); ++t) {
+      r.outgoing_transition(outgoing_edge_index_, t) += msg[t];
+    }
+    r.outgoing_transition(outgoing_edge_index_, r.outgoing_transition.dim2()-1) += msg[msg.size()-1];
+  }
+
+  template<typename LEFT_FACTOR, typename G2>
+  void send_message_to_right(LEFT_FACTOR& l, G2& msg, const REAL omega)
+  { 
+    msg -= omega*l;
+  }
+
+  template<typename RIGHT_FACTOR, typename G2>
+  void send_message_to_left(RIGHT_FACTOR& r, G2& msg, const REAL omega)
+  {
+    auto diff = r.min_outgoing_transition_marginal_diff(outgoing_edge_index_);
+    msg -= omega*diff;
+  } 
+
+  // send messages from detection factor along incoming edges
+  template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+  static void SendMessagesToLeft_deactivated(const RIGHT_FACTOR& r, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omega_begin)
+  {
+    REAL omega = 0.0;
+    auto omega_it = omega_begin;
+    for(auto it = msg_begin; it!=msg_end; ++it, ++omega_it) {
+      omega += *omega_it;
+    }
+    assert(omega <= 1.0 + eps);
+    assert(omega > 0.0);
+    //std::cout << "send messages to left with omega = " << omega << "\n";
+
+    // check #messages+1 = no incoming edges
+    {
+      INDEX c=0;
+      for(auto it = msg_begin; it!=msg_end; ++it)  ++c;
+      assert(c+1 == r.outgoing.size());
+    }
+
+    const REAL detection_outgoing_cost = r.detection + r.min_outgoing();
+
+    /*
+    std::vector<bool> edge_taken(r.incoming.size(), false);
+    omega_it = omega_begin;
+    for(auto msg_it = msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
+      if(*omega_it > 0.0) {
+        edge_taken[(*msg_it).GetMessageOp().incoming_edge_index_] = true;
+      }
+    }
+    for(INDEX i=0; i<edge_taken.size()-1; ++i) { edge_taken[i] = true; }
+
+
+    REAL smallest_taken = std::numeric_limits<REAL>::infinity();
+    REAL second_smallest_taken = std::numeric_limits<REAL>::infinity();
+    REAL smallest_not_taken = std::numeric_limits<REAL>::infinity();
+    for(INDEX i=0; i<r.incoming.size(); ++i) {
+      const REAL val = r.incoming[i];
+      if(edge_taken[i]) {
+        const REAL min = std::min(smallest_taken, val);
+        const REAL max = std::max(smallest_taken, val);
+        smallest_taken = min;
+        second_smallest_taken = std::min(max, second_smallest_taken);
+      } else {
+        smallest_not_taken = std::min(val, smallest_not_taken); 
+      }
+    }
+
+    REAL set_to_cost;
+    if(smallest_not_taken < smallest_taken) {
+      set_to_cost = std::min(detection_outgoing_cost + smallest_not_taken, REAL(0.0));
+    } else {
+      set_to_cost = std::min({detection_outgoing_cost + second_smallest_taken, detection_outgoing_cost + smallest_not_taken, REAL(0.0)});
+    }
+
+    omega_it = omega_begin;
+    for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
+      if(*omega_it > 0.0) {
+        const REAL msg = detection_outgoing_cost + r.incoming[ (*msg_it).GetMessageOp().incoming_edge_index_ ] - set_to_cost;
+        (*msg_it)[0] -= omega*msg;
+      }
+    } 
+    return;
+    */
+
+    const auto smallest_outgoing = two_smallest_elements<REAL>(r.outgoing.begin(), r.outgoing.end()); // do not take into account disappearance cost 
+
+    assert(false); // wrong message computation?
+    const REAL set_to_cost = std::min(detection_outgoing_cost + smallest_outgoing[1], REAL(0.0));
+    //const REAL set_to_cost = std::min(detection_outgoing_cost + smallest_incoming[0], REAL(0.0));
+    omega_it = omega_begin;
+    for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
+      const REAL msg = detection_outgoing_cost + r.outgoing[ (*msg_it).GetMessageOp().outgoing_edge_index_ ] - set_to_cost;
+      (*msg_it)[1] -= omega*msg;
+    } 
+  }
+
+
+  template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+  void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+  {
+    assert(false);
+  }
+
+private:
+  const INDEX outgoing_edge_index_; 
+};
+
+// left is division_mapping_edge_factor_dd, right is detection_factor_dd
+class cell_incoming_division_edge_detection_factor_dd {
+public:
+  cell_incoming_division_edge_detection_factor_dd(const INDEX incoming_edge_index, const bool split) : incoming_edge_index_(incoming_edge_index) {}
+  cell_incoming_division_edge_detection_factor_dd(const INDEX incoming_edge_index) : incoming_edge_index_(incoming_edge_index) {}
+  
+  template<typename LEFT_FACTOR>
+  void RepamLeft(LEFT_FACTOR& l, const REAL msg, const INDEX msg_dim)
+  {
+    assert(msg_dim == 0);
+    l.cost += msg;
+  }
+  template<typename RIGHT_FACTOR>
+  void RepamRight(RIGHT_FACTOR& r, const REAL msg, const INDEX msg_dim)
+  {
+    assert(msg_dim == 0);
+    r.incoming_division[incoming_edge_index_] += msg;
+  }
+
+  template<typename LEFT_FACTOR, typename G2>
+  void send_message_to_right(LEFT_FACTOR& l, G2& msg, const REAL omega)
+  { 
+    msg[0] -= omega*l.cost;
+  }
+
+  template<typename RIGHT_FACTOR, typename G2>
+  void send_message_to_left(RIGHT_FACTOR& r, G2& msg, const REAL omega)
+  {
+    const REAL diff = r.min_incoming_division_marginal_diff(incoming_edge_index_);
+    msg[0] -= omega*diff;
+  } 
+
+  // send messages from detection factor along incoming edges
+  template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+  static void SendMessagesToLeft_deactivated(const RIGHT_FACTOR& r, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omega_begin)
+  {
+  }
+
+
+  template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+  void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+  {
+  }
+
+private:
+  const INDEX incoming_edge_index_; 
+};
+
+// left is division_mapping_edge_factor_dd, right is detection_factor_dd
+class cell_outgoing_division_edge_detection_factor_dd {
+public:
+  cell_outgoing_division_edge_detection_factor_dd(const INDEX outgoing_edge_index, const bool split) : outgoing_edge_index_(outgoing_edge_index) {}
+  cell_outgoing_division_edge_detection_factor_dd(const INDEX outgoing_edge_index) : outgoing_edge_index_(outgoing_edge_index) {}
+  
+  template<typename LEFT_FACTOR>
+  void RepamLeft(LEFT_FACTOR& l, const REAL msg, const INDEX msg_dim)
+  {
+    assert(msg_dim == 0);
+    l.cost += msg;
+  }
+  template<typename RIGHT_FACTOR>
+  void RepamRight(RIGHT_FACTOR& r, const REAL msg, const INDEX msg_dim)
+  {
+    assert(msg_dim == 0);
+    r.outgoing_division[outgoing_edge_index_] += msg;
+  }
+
+  template<typename LEFT_FACTOR, typename G2>
+  void send_message_to_right(LEFT_FACTOR& l, G2& msg, const REAL omega)
+  { 
+    msg[0] -= omega*l.cost;
+  }
+
+  template<typename RIGHT_FACTOR, typename G2>
+  void send_message_to_left(RIGHT_FACTOR& r, G2& msg, const REAL omega)
+  {
+    const REAL diff = r.min_outgoing_division_marginal_diff(outgoing_edge_index_);
+    msg[0] -= omega*diff;
+  } 
+
+  // send messages from detection factor along incoming edges
+  template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+  static void SendMessagesToLeft_deactivated(const RIGHT_FACTOR& r, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omega_begin)
+  {
+  }
+
+
+  template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
+  void construct_sat_clauses(SAT_SOLVER& s, LEFT_FACTOR& l, RIGHT_FACTOR& r, sat_var left_begin, sat_var right_begin) const
+  {
+    assert(false);
+  }
+
+private:
+  const INDEX outgoing_edge_index_; 
+};
 
 class transition_message_dd {
 public:
@@ -2561,14 +2811,14 @@ public:
     sat_literal_vector l_incoming_division_literals(l.incoming_division);
     sat_literal_matrix l_incoming_transition_literals(l.incoming_transition);
     sat_literal_matrix l_outgoing_transition_literals(l.outgoing_transition);
-    sat_literal_matrix l_outgoing_division_literals(l.outgoing_division);
+    sat_literal_vector l_outgoing_division_literals(l.outgoing_division);
     load_sat_literals(left_begin, l_detection_active_literal, l_detection_literals, l_incoming_division_literals, l_incoming_transition_literals, l_outgoing_transition_literals, l_outgoing_division_literals); 
     sat_literal r_detection_active_literal;
     sat_literal_vector r_detection_literals(r.detection);
     sat_literal_vector r_incoming_division_literals(r.incoming_division);
     sat_literal_matrix r_incoming_transition_literals(r.incoming_transition);
     sat_literal_matrix r_outgoing_transition_literals(r.outgoing_transition);
-    sat_literal_matrix r_outgoing_division_literals(r.outgoing_division);
+    sat_literal_vector r_outgoing_division_literals(r.outgoing_division);
     load_sat_literals(right_begin, r_detection_active_literal, r_detection_literals, r_incoming_division_literals, r_incoming_transition_literals, r_outgoing_transition_literals, r_outgoing_division_literals); 
 
     if(split_) {
@@ -2581,7 +2831,7 @@ public:
 
       const INDEX last = l.division_distance()-1;
       std::array<sat_var,2> last_outgoing_transitions({l_outgoing_transition_literals(outgoing_edge_index_, last-1), l_outgoing_transition_literals(outgoing_edge_index_, last)});
-      const auto last_outgoing_literal = add_at_most_one_constraint_sat(s, last_outgoing_transitions.begin(), last_outgoing_transitions.end());
+      const auto last_outgoing_literal = s.add_at_most_one_constraint(last_outgoing_transitions.begin(), last_outgoing_transitions.end());
       s.make_equal(last_outgoing_literal, r_incoming_transition_literals(incoming_edge_index_, last-1));
     }
   }
@@ -2623,8 +2873,6 @@ private:
   const INDEX incoming_edge_index_;
   const bool split_;
 };
-
-
 
 } // end namespace LP_MP
 

@@ -263,8 +263,8 @@ public:
    void push_back(T* t) {
       // do zrobienia: possibly use binary search when NO_ELEMENTS is bigger than some threshold
       for(INDEX i=0; i<NO_ELEMENTS; ++i) {
-         if(this->operator[](i) == nullptr) {
-            this->operator[](i) = t;
+         if((*this)[i] == nullptr) {
+            (*this)[i] = t;
             return;
          }
       }
@@ -283,7 +283,7 @@ public:
    }
    void push_back(T* t) {
       assert(size_ < NO_ELEMENTS);
-      this->operator[](size_) = t;
+      (*this)[size_] = t;
       ++size_;
    }
    INDEX size() const { return size_; }
@@ -512,7 +512,9 @@ public:
    void* operator new(std::size_t size)
    {
       assert(size == sizeof(MessageContainerType));
-      //return (void*) global_real_block_allocator.allocate(size/sizeof(REAL),1);
+      //INDEX s = size/sizeof(REAL);
+      //if(size % sizeof(REAL) != 0) { s++; }
+      //return (void*) global_real_block_allocator.allocate(s,1);
       return Allocator::get().allocate(1);
    }
    void operator delete(void* mem)
@@ -1575,8 +1577,10 @@ public:
    // overloaded new so that factor containers are allocated by global block allocator consecutively
    void* operator new(std::size_t size)
    {
-      //assert(size == sizeof(FactorContainerType));
-      //return (void*) global_real_block_allocator.allocate(size/sizeof(REAL)+1,1);
+      assert(size == sizeof(FactorContainerType));
+      //INDEX s = size/sizeof(REAL);
+      //if(size % sizeof(REAL) != 0) { s++; }
+      //return (void*) global_real_block_allocator.allocate(s,1);
       return Allocator::get().allocate(1);
    }
    void operator delete(void* mem)

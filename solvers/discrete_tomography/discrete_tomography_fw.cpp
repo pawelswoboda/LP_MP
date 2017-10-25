@@ -1,4 +1,5 @@
 #include "tree_decomposition.hxx"
+#include "LP_conic_bundle.hxx"
 #include <iostream>
 #include <array>
 #include "assert.h"
@@ -349,7 +350,8 @@ int main(int argc, char**argv)
    //MpRoundingSolver<Solver<FMC_DT,LP_sat<LP>,StandardVisitor>> solver;
    //Solver<FMC_DT,LP_FW_DS,StandardVisitor> solver;
    //Solver<FMC_DT,LP_FW_TR,StandardVisitor> solver;
-   Solver<FMC_DT,LP_subgradient_ascent,StandardVisitor> solver;
+   //Solver<FMC_DT,LP_subgradient_ascent,StandardVisitor> solver;
+   Solver<FMC_DT,LP_conic_bundle,StandardVisitor> solver;
 
    pegtl::file_parser problem(filename);
 
@@ -373,8 +375,6 @@ int main(int argc, char**argv)
       throw std::runtime_error("could not read projection constraints for discrete tomography");
    }
 
-   SVM* s = new SVM(mrf.GetNumberOfVariables()*no_labels, p.projectionVar.size(), max_fn, copy_fn, compare_fn, dot_product_fn, nullptr, false);//int d, int n, MaxFn max_fn, CopyFn copy_fn, CompareFn compare_fn, DotProductFn dot_product_fn, DotProductKernelFn dot_product_kernel_fn, bool zero_lower_bound);
-	s->SetParams(lambda, mu / mu_SCALE, kappa / kappa_SCALE);
    assert(mu/mu_SCALE == 1.0);
 
    assert(p.projectionVar.size() == p.projectionCost.size());
@@ -397,7 +397,6 @@ int main(int argc, char**argv)
 
       sp->unaries = p.projectionVar[i];
 
-      s->SetTerm(i, sp, mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
       sp_vec.push_back(sp); 
 
       for(INDEX j=0; j<p.projectionVar[i].size()-1; ++j) {
@@ -425,88 +424,6 @@ int main(int argc, char**argv)
    std::cout << "number of factors = " << solver.GetLP().GetNumberOfFactors() << "\n";
 
    solver.Solve();
-   return 0;
-
-   s->options.gap_threshold = 0.000001;
-	s->options.iter_max = 1000;
-
-   // push pairwise into dt factors
-   for(INDEX i=0; i<mrf.GetNumberOfPairwiseFactors(); ++i) {
-      auto* f = mrf.GetPairwiseFactor(i);
-      for(INDEX x1=0; x1<no_labels; ++x1) {
-         for(INDEX x2=0; x2<no_labels; ++x2) {
-            f->GetFactor()->cost(x1,x2) *= scaling;
-         }
-      }
-      for(INDEX m=0; m<f->GetNoMessages(); ++m) {
-         auto * msg = f->GetMessage(m);
-         if(auto* msg_t = dynamic_cast<typename FMC_DT::dt_pairwise_pairwise_message*> (msg)) {
-            msg_t->ReceiveMessageFromLeftContainer();
-         }
-      } 
-   }
-
-   //solver.Solve();
-
-   double* w = s->Solve();
-
-   //std::cout << "final Lagrange mulp = ";
-   //for(INDEX i=0; i<no_labels*mrf.GetNumberOfVariables(); ++i) {
-   //   std::cout << w[i] << ",";
-   //}
-   //std::cout << "\n";
-   //REAL mult_norm = 0.0;
-   //for(INDEX i=0; i<no_labels*mrf.GetNumberOfVariables(); ++i) {
-   //   mult_norm += w[i]*w[i];
-   //}
-   //std::cout << "Lagrange mult. norm = " << mult_norm << "\n";
-
-   for(INDEX iter=0; iter<400; ++iter) {
-      // put weights into trees
-      for(INDEX i=0; i<sp_vec.size(); ++i) {
-         sp_vec[i]->add_weights(w, -1.0);
-      }
-
-      delete s;
-
-      /*
-      solver.Solve();
-      for(INDEX i=0; i<mrf.GetNumberOfPairwiseFactors(); ++i) {
-         auto* f = mrf.GetPairwiseFactor(i);
-         for(INDEX m=0; m<f->GetNoMessages(); ++m) {
-            auto * msg = f->GetMessage(m);
-            if(auto* msg_t = dynamic_cast<typename FMC_DT::dt_pairwise_pairwise_message*> (msg)) {
-               msg_t->ReceiveMessageFromLeftContainer();
-            }
-         } 
-      }
-      */ 
-
-      s = new SVM(mrf.GetNumberOfVariables()*no_labels, p.projectionVar.size(), max_fn, copy_fn, compare_fn, dot_product_fn, nullptr, false);
-      s->SetParams(lambda, mu / mu_SCALE, kappa / kappa_SCALE);
-      //s->SetParams(lambda/REAL(iter+2), mu / mu_SCALE, kappa / kappa_SCALE);
-      for(INDEX i=0; i<sp_vec.size(); ++i) {
-         s->SetTerm(i, sp_vec[i], mrf.GetNumberOfVariables()*no_labels, p.projectionVar[i].size()*sizeof(INDEX), nullptr );
-      }
-      s->options.gap_threshold = 0.000001;
-      s->options.iter_max = 100;
-      w = s->Solve();
-
-   }
-
-
-
-   //INDEX y[mrf.GetNumberOfVariables()];
-   //double lb = 0.0;
-   //for(INDEX i=0; i<sp_vec.size(); ++i) {
-   //   lb += max_fn(w, y, 1.0, sp_vec[i]) + dot_product_fn(w,y,sp_vec[i]);
-   //}
-   //std::cout << "\n\nlower bound for original problem = " << -lb << "\n";
-
-
-   solver.Solve();
-   //std::cout << "optimal lower bound for original problem = " << solver.lower_bound() << "\n";
-   delete s;
    return 0;
 }
 
