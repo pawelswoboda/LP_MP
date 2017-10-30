@@ -396,6 +396,7 @@ TEST_CASE( "sat solver", "[lingeling sat solver encapsulation]" ) {
       REQUIRE(slice23[2] == tensor_literal(2,3,4));
    }
 
+   /*
    SECTION("Sorting network") {
      bool check_sorting(const INDEX no_true, sat_solver& s, sat_vec& sorting)
      {
@@ -420,5 +421,6 @@ TEST_CASE( "sat solver", "[lingeling sat solver encapsulation]" ) {
 
      REQUIRE(false);
    }
+   */
 }
 

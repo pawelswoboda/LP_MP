@@ -45,6 +45,7 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/PEGTL")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/opengm/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/cpp-sort/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/TCLAP/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/tropical-convolution")
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/ConicBundle/include")
 link_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/ConicBundle/lib")

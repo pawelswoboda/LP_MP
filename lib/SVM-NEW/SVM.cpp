@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include "SVM.h"
 #include "SVMutils.h"
 
@@ -60,35 +61,35 @@ SVM::~SVM()
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-
 double SVM::Evaluate(double* _w)
 {
 	int i;
 
-	double* w_bak = new double[d+1];
-	memcpy(w_bak, w, d*sizeof(double));
-	if (w != _w) memcpy(w, _w, d*sizeof(double));
+	double* w_bak = NULL;
+	if (_w == wi_buf) // since wi_buf is used in ComputeRestriction()
+	{
+		w_bak = new double[d+1];
+		memcpy(w_bak, _w, d*sizeof(double));
+	}
 	YPtr y = new char[y_size_in_bytes_max];
 
-	double v1 = 0;
+	double v = 0;
 
 	for (i=0; i<n; i++)
 	{
-		double* wi = terms[i]->ComputeRestriction(w);
-		v1 += (*max_fn)(wi, y, terms[i]->term_data);
-		v1 += (*dot_product_fn)(wi, y, terms[i]->term_data);
+		double* wi = terms[i]->ComputeRestriction(_w);
+		v += (*max_fn)(wi, y, terms[i]->term_data);
+		v += (*dot_product_fn)(wi, y, terms[i]->term_data);
 	}
 
-	memcpy(w, w_bak, d*sizeof(double));
-
-	delete [] w_bak;
+	if (w_bak)
+	{
+		memcpy(_w, w_bak, d*sizeof(double));
+		delete [] w_bak;
+	}
 	delete [] (char*)y;
 
-	return v1;
+	return v;
 }
 
 /*

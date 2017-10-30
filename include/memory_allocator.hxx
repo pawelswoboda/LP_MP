@@ -299,17 +299,17 @@ template<typename T>
       }
 		assert(empty() || is_block_used(_beg + overhead));
   }
-	void stack_arena::load(char * filename){
+	inline void stack_arena::load(char * filename){
 		//FILE * f = fopen(filename,"rb");
 		//int sz_used;
 		//fread(&sz_used,sizeof(sz_used),1,f);
 		//if(sz_used<capacity())throw std::bad_alloc("cant load");
    }
 
-	void stack_arena::unload(char * filename){
+	inline void stack_arena::unload(char * filename){
    }
 
-	void stack_arena::check_integrity(){
+	inline void stack_arena::check_integrity(){
 		if (empty())return;
 		int * P = _beg + overhead;
 		int alive = 0;
@@ -361,7 +361,7 @@ template<typename T>
 		current_reserved -= size_bytes;
    }
 
-	void block_arena::error_allocate(big_size n, const char * caller){
+	inline void block_arena::error_allocate(big_size n, const char * caller){
 		//char s[200];
 		printf("Error: memory allocation in %s\n", caller);
 		printf("memory requested: %lli\n", big_size(n));
@@ -401,7 +401,7 @@ template<typename T>
    }
 
 	//!clean unused blocks in the buffers and drop empty buffers
-	void block_arena::clean_garbage(){
+	inline void block_arena::clean_garbage(){
 		while (!buffers.empty()){
 			buffers.back().clean_garbage();
 			if (buffers.back().empty()){//top buffer is empty
@@ -412,7 +412,7 @@ template<typename T>
       }
    }
 
-	block_arena::block_arena(size_t default_buffer_size) :buffer_size(default_buffer_size) {
+	inline block_arena::block_arena(size_t default_buffer_size) :buffer_size(default_buffer_size) {
 		current_reserved = 0;
 		peak_reserved = 0;
 		current_used = 0;
@@ -421,7 +421,7 @@ template<typename T>
    }
 
 	//inline
-	void block_arena::reserve(size_t reserve_buffer_size){
+	inline void block_arena::reserve(size_t reserve_buffer_size){
     std::lock_guard<spinlock> lock(lock_);
 //#pragma omp critical(mem_allocation)
 		{
@@ -430,20 +430,20 @@ template<typename T>
       }
    }
 
-	block_arena::block_arena(const block_arena & x) :buffer_size(x.buffer_size){
+	inline block_arena::block_arena(const block_arena & x) :buffer_size(x.buffer_size){
 		current_reserved = 0;
 		peak_reserved = 0;
 		current_used = 0;
 		alloc_count = 0;
    }
 
-	void block_arena::operator=(const block_arena & x){
+	inline void block_arena::operator=(const block_arena & x){
 		current_reserved = 0;
 		peak_reserved = 0;
 		current_used = 0;
    }
 
-	block_arena::~block_arena(){
+	inline block_arena::~block_arena(){
     std::lock_guard<spinlock> lock(lock_);
 //#pragma omp critical (mem_allocation)
 		{
@@ -469,17 +469,17 @@ template<typename T>
       }
    }
 
-	size_t block_arena::mem_used()const{
+	inline size_t block_arena::mem_used()const{
 		return current_used;
    }
 
-	size_t block_arena::mem_reserved()const{
+	inline size_t block_arena::mem_reserved()const{
 		size_t m = current_reserved - spare.cap_free()*sizeof(int);
 		if (!buffers.empty())m -= buffers.back().cap_free()*sizeof(int);
 		return m;
    }
 
-	size_t block_arena::mem_peak_reserved()const{
+	inline size_t block_arena::mem_peak_reserved()const{
 		return peak_reserved;
    }
 
@@ -493,7 +493,7 @@ template<typename T>
 		return ((size_bytes + 15) >> 4)<< 4;
    }
 
-	void* block_arena::protect_allocate(size_t n, int align){
+	inline void* block_arena::protect_allocate(size_t n, int align){
 		void* P;
 		int size_bytes = round_up(n);
 		++alloc_count;
@@ -537,7 +537,7 @@ template<typename T>
 		return P;
       }
 
-	void * block_arena::allocate(size_t n, int align){
+	inline void * block_arena::allocate(size_t n, int align){
 		void* P;
     std::lock_guard<spinlock> lock(lock_);
 //#pragma omp critical (mem_allocation)
@@ -560,7 +560,7 @@ template<typename T>
    }
 
 	//inline
-	void block_arena::protect_deallocate(void * vP){
+	inline void block_arena::protect_deallocate(void * vP){
 		//if(x==0)throw debug_exception("Invalid pointer.");
 		if (vP == 0){
 			perror("Deallocation failed: zero pointer\n"); fflush(stdout);
@@ -598,14 +598,14 @@ template<typename T>
 		throw std::bad_alloc();
    }
 
-	void block_arena::deallocate(void * vP){
+	inline void block_arena::deallocate(void * vP){
     std::lock_guard<spinlock> lock(lock_);
 //#pragma omp critical (mem_allocation)
 		protect_deallocate(vP);
    }
 
 	//inline
-	void* block_arena::realloc(void * vP, size_t size_bytes){
+	inline void* block_arena::realloc(void * vP, size_t size_bytes){
 		if (!vP)return allocate(size_bytes);
 		size_t sz = object_size(vP);
 		void * vQ = allocate(size_bytes);
@@ -615,7 +615,7 @@ template<typename T>
 		return vQ;
    }
 
-	void block_arena::check_integrity(){
+	inline void block_arena::check_integrity(){
 		for (int b = 0; b<buffers.size(); ++b){
 			buffers[b].check_integrity();
       }

@@ -656,7 +656,7 @@ public:
       }
 
       svm->options.gap_threshold = 0.0001;
-      svm->options.iter_max = 500;
+      svm->options.iter_max = 100000;
 
       return svm;
    }

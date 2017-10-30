@@ -20,30 +20,22 @@
 */
 
 /*
-	Implements the MP-BCFW algorithm for training structural SVMs described in
-
-		Neel Shah, Vladimir Kolmogorov, Christoph H. Lampert
-		A Multi-Plane Block-Coordinate Frank-Wolfe Algorithm for Structural SVMs with a Costly max-Oracle
-		Technical report arXiv:1408.6804, August 2014
-
-	With parameters cp_max = approx_max = 0 reduces to the BCFW algorithm described in
-
-		S. Lacoste-Julien, M. Jaggi, M. Schmidt, P. Pletscher
-		Block-Coordinate Frank-Wolfe Optimization for Structural SVMs
-		ICML 2013, Atlanta, USA, June 2013
-
-	If you use this software for research purposes you should cite the aforementioned paper(s) in any resulting publication.
-
-	///////////////////////////////////////////////////////////////////////////////////////////////
-
-	Solves the following problem:
-		min  1/2 \sum_{i=1}^n H_i(w)
+	Minimizes function
+		H(w) = \sum_{i=1}^n H_i(w)
 	where 
 		H_i(w) = \max_y <a^{iy},[w 1]>
 
 	It is assumed H_i(w) can be evaluated efficiently, i.e. the problem
 		\max_y <a^{iy},[w 1]>
 	can be solved efficiently for a given i and w.
+
+	////////////////////////////////////
+
+	Uses a proximal method, where each subproblem is solved (approximately) with the MP-BCFW algorithm:
+
+	Neel Shah, Vladimir Kolmogorov, Christoph H. Lampert
+	A Multi-Plane Block-Coordinate Frank-Wolfe Algorithm for Structural SVMs with a Costly max-Oracle
+	CVPR 2015
 */
 
 #ifndef OAISJNHFOASFASFASFASFNVASF
@@ -79,7 +71,9 @@ typedef double (*MaxFn)(double* wi, YPtr y, TermData term_data); // maximization
 typedef void (*CopyFn)(double* ai, YPtr y, TermData term_data); // copies non-zero components of a^{iy} to 'ai' (excluding the free term; note, in this case 'ai' is of size di, not di+1).
                                                                 // 'copy_fn' in the constructor can be NULL, then 'y' is exacly the same as ai[0:di-1] and y_size_in_bytes=di*sizeof(double).
 typedef bool (*CompareFn)(YPtr y1, YPtr y2, TermData term_data); // returns true if y1==y2
-typedef double (*DotProductFn)(double* wi, YPtr y, TermData term_data); // returns <PAD(wi), a^{iy}>. Note, the free term is excluded.
+typedef double (*DotProductFn)(double* wi, YPtr y, TermData term_data); // returns <[PAD(wi) 0], a^{iy}>. Note, the free term is excluded.
+
+// the next function can be skipped - currently not implemented
 typedef double (*DotProductKernelFn)(YPtr y1, YPtr y2, TermData term_data); // returns <a^{iy1}, a^{iy2}>. Can be NULL, if options.kernel_max == 1.
 
 class SVM
@@ -94,7 +88,6 @@ public:
 	SVM(int d, int n, MaxFn max_fn, CopyFn copy_fn, CompareFn compare_fn, DotProductFn dot_product_fn, DotProductKernelFn dot_product_kernel_fn, bool zero_lower_bound);
 	~SVM();
 
-
 	// 'term_data' will be passed to all user-defined functions.
 	// if mapping==NULL, then must have di==d.
 	void SetTerm(int i, TermData term_data, int di, int y_size_in_bytes, int* mapping=NULL);
@@ -102,19 +95,25 @@ public:
 	double* Solve(); // returns a pointer to an array of size 'd' containing solution (vector w).
 	                 // For options to Solve(), see SVM::options below
 
-	//void GetBounds(double& lower_bound, double& upper_bound); // of internally stored solution. Expensive - calls n oracles!
-
 	double Evaluate(double* w); // returns the value of the objective function for given w. Expensive - calls n oracles!
 
-	// To get block-coordinate Frank-Wolfe, set cp_max = approx_max = 0.
-	// ('cp' stands for 'cutting plane')
 	struct Options
 	{
 		Options() :
-			randomize_method(2),
-			avg_flag(0),
-
+			/////////////////////////////
+			// 1. TERMINATION CRITERIA //
+			/////////////////////////////
 			iter_max(100000),
+			time_max(3600), // 1 hour
+			gap_threshold(1e-5), 
+			g1_threshold(1e-5), 
+			g2_threshold(1e-5),
+
+			//////////////////////////////
+			// 2. PARAMETERS of MP-BCFW //
+			//////////////////////////////
+			randomize_method(2),
+
 			approx_max(1000), // <--- probably will not be reached (due to the param below)
 			approx_limit_ratio(1.0),
 			kernel_max(1),
@@ -123,7 +122,14 @@ public:
 			cp_inactive_iter_max(10), // <--- PERHAPS THE MOST IMPORTANT PARAMETER:
 			                          //      for how many iterations inactive planes are kept in memory
 
-			callback_freq(5),
+			//////////////////////////////////////////
+			// 3. PARAMETERS OF THE PROXIMAL METHOD //
+			//////////////////////////////////////////
+			check_w_freq(5),
+
+			proximal_method(0), // parameter 1 seems to be best initially, parameter 2 shows strange convergence behaviour, parameter 0 gives ultimately highest bound
+			proximal_method_alpha(0.5),
+
 			c_min(1e-5),
 			c_max(1e5),
 			c_init(1),
@@ -134,12 +140,31 @@ public:
 			serious_iter_max(10),
 			serious_iter_init(50),
 			serious_iter_increase_factor(1.1),
-			serious_iter_decrease_factor(0.9),
+			serious_iter_decrease_factor(0.9)
 
-			gap_threshold(1e-10), 
-			print_flag(2)
 		{
 		};
+
+		/////////////////////////////
+		// 1. TERMINATION CRITERIA //
+		/////////////////////////////
+
+		int iter_max; // maximum total number of 'MP-BCFW' iterations (where one 'MP-BCFW' iteration consists of one exact pass and up to 'approx_max' approximate passes)
+		double time_max; // maximum allowed time in seconds
+
+		// the code computes values gap, g1, g2 such that
+		//     f(w) - f_opt <= gap + g1*||w-w_opt||_1
+		//     f(w) - f_opt <= gap + g2*||w-w_opt||_2
+		// for any optimal solution w_opt, where w is the current solution and f(w) = \sum_{i=1}^n H_i(w).
+		//
+		// terminate if gap < gap_threshold and either (1) g1 < g1_threshold, or (2) g2 < g2_threshold.
+		double gap_threshold;
+		double g1_threshold;
+		double g2_threshold;
+
+		//////////////////////////////
+		// 2. PARAMETERS of MP-BCFW //
+		//////////////////////////////
 
 		int randomize_method; // 0: use default order for every iteration (0,1,...,n-1)
 		                      // 1: generate a random permutation, use it for every iteration
@@ -147,14 +172,6 @@ public:
 		                      // 3: generate a new random permutation at every exact & approximate pass
 		                      // 4: for every step sample example in {0,1,...,n-1} uniformly at random
 
-		int avg_flag; // 0: don't use averaging
-		              // 1: compute weighted average of vectors after each update, as described in (Lacoste-Julien et al. ICML'13)
-		              // 2: compute weighted average of vectors after each exact update, as described in (Lacoste-Julien et al. ICML'13)
-		              // (NOT IMPLEMENTED) 3: compute two vectors: avg_exact - weighted average of vectors after each exact update
-		              //                         avg_approx - weighted average of vectors after each approx update
-		              //    return their best interpolation
-
-		int iter_max;
 		int approx_max; // >= 0. Each iter first performs one pass with calls to the 'real' oracle,
 		                //       and then up to 'approx_max' passes with calls to the 'approximate' oracle
 		                //       It is recommended to set it to a large number and rely on the criterion below.
@@ -178,59 +195,34 @@ public:
 		int cp_max; // >= 0. 
 		int cp_inactive_iter_max;  // if == 0 then this option is not used (so 0 corresponds to +\infty)
 
-		///////////////////////////////////////////////
-		// stopping criteria and printed information //
-		///////////////////////////////////////////////
+		//////////////////////////////////////////
+		// 3. PARAMETERS OF THE PROXIMAL METHOD //
+		//////////////////////////////////////////
+								   
+		// Note, the method minimizes function
+		//   f(z) = ||z-w||^2 / (2c) + H(z)
+		// by calling 'serious_iter_max' MP-BCFW iterations
 
-		// if callback_fn != NULL then this function will be called after every 'callback_freq' iterations (=callback_freq*n calls to max_fn).
-		// If this function returns 0: Solve() will terminate.
-		//                         -1: update w and continue
-		//                          1: continue
-		// TODO    The default function checks the duality gap and prints all bounds.
+		int check_w_freq; // compute the cost H(z) after every 'check_w_freq' iterations of MP-BCFW
 
-		int callback_freq;
+		int proximal_method; // specifies how to update w
+		                     // 0: standard proximal method
+		                     // 1, 2: relaxed version (take a mixture of new and old vectors, see SVM::Solve())
+		double proximal_method_alpha; // used when proximal_method==1 or proximal_method==2
+
+		// updates of parameter 'c'. For details, see SVM::Solve()
 		double c_min;
 		double c_max;
 		double c_init;
 		double c_increase_factor;
 		double c_decrease_factor;
 
+		// updates of parameter 'serious_iter_max'. For details, see SVM::Solve()
 		int serious_iter_min;
 		int serious_iter_max;
 		int serious_iter_init;
 		double serious_iter_increase_factor;
 		double serious_iter_decrease_factor;
-
-
-		double gap_threshold;
-		int print_flag; // 0: don't print anything
-		                // 1: print bounds and gap
-		                // 2: print bounds and gap + average # of planes per term + # approx passes in the last outer iter
-
-		//static int default_callback_fn(SVM* svm)
-		//{
-		//	printf("%d, %.2f sec:   %f %f, ||phi*||=%f\n", svm->iter, svm->time_from_start, svm->GetCurrentLowerBound(), svm->Evaluate(svm->z), svm->GetPhiStarNorm());
-		//	if (svm->iter_since_last_update > 200)
-		//	{
-		//		return -1;
-		//	}
-		//	return 1;
-			/*
-			double lower_bound, upper_bound;
-			svm->GetBounds(lower_bound, upper_bound); // this is expensive! (calls real oracles)
-			if (lower_bound < svm->lower_bound_last) lower_bound = svm->lower_bound_last; // can happen if averaging is used
-			double dual_gap_bound = upper_bound - lower_bound;
-
-			double t = svm->time_from_start; if (svm->options.exclude_callback_time) t -= svm->callback_time;
-
-			if (svm->options.print_flag>0) printf("%d, %.2f sec:   %f %f, gap %f", svm->iter, t, lower_bound, upper_bound, dual_gap_bound);
-			if (svm->options.print_flag>1) printf("   %.1f cp, %d it.", (double)svm->total_plane_num / svm->n, svm->approx_pass);
-			printf("\n");
-
-			if (dual_gap_bound < svm->options.gap_threshold) return false;
-			return true;
-			*/
-		//}
 	} options;
 
 
@@ -327,8 +319,6 @@ private:
 	double* w; // of size d
 	double* wi_buf; // of size d
 	double* z; // of size d+1. = [w_prox - c*phi_sum, -c*phi_sum[d]]
-	//double neg_phi_sum_norm; // can be NOT_YET_COMPUTED
-	//double GetNegPhiSumNorm();
 	double GetCurrentLowerBound()
 	{
 		int i;

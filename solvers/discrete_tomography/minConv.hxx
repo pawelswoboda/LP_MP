@@ -11,6 +11,8 @@
 #include <cassert>
 #include "vector.hxx"
 
+// do zrobienia: possibly make own project out of min convolution, but then used vector class and associated memory allocator also needs to be a separate project
+
 namespace LP_MP {
    namespace discrete_tomo{
 
@@ -171,7 +173,7 @@ namespace LP_MP {
       */
 
       // class for more efficient computation of min convolution. Algorithm by Bauschke et al.  
-      template<class Value,class Index = int>
+      template<typename ITERATOR1, typename ITERATOR2>
          class MinConv
          {
             public:
@@ -189,13 +191,12 @@ namespace LP_MP {
                   void CalcConv(T1 op,T2 a,T3 b,bool onlyMin = false);
 
             private:
-               // do zrobienia: replace by own vector or by one large memory chunk, which is then subdivided -> faster allocation and deallocation
-               std::vector<Index> idxa_;
-               std::vector<Index> idxb_;
-               std::vector<Index> outA_;
-               std::vector<Index> outB_;
+               vector<Index> idxa_;
+               vector<Index> idxb_;
+               vector<Index> outA_;
+               vector<Index> outB_;
                vector<REAL> c_;
-               std::vector<Index> cp_;
+               vector<Index> cp_;
                Value minimum_ = std::numeric_limits<Value>::infinity();
 
                template<class T>
@@ -213,8 +214,8 @@ namespace LP_MP {
          }
 
       template<class Value,class Index>
-         template<class T1,class T2>
-         MinConv<Value,Index>::MinConv(T1 a, T2 b, Index n, Index m,Index t)
+         template<class VEC1,class VEC2>
+         MinConv<Value,Index>::MinConv(VEC1 a, VEC2 b, Index n, Index m,Index t)
          : c_(t+1)
          {
             if( n < 1 || m < 1 || t < 1){ 
@@ -393,11 +394,49 @@ namespace LP_MP {
             //assert(open == 1 || open == 0);
          }
 
+      static const INDEX min_conv_threshold = 500; // when more elements than indicated by threshold need to be computed, use heuristic, otherwise use naive implementation.
+
       // automatically choose between naive and efficient version of min convolution
       template<typename ITERATOR_1, typename ITERATOR_2>
       void min_conv(ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end, vector<REAL>& result)
       {
+         if(result.size() < min_conv_threshold) {
+            return min_conv_naive(a_begin, a_end, b_begin, b_end, result);
+         } else {
+            assert(false);
+         }
       }
+
+      template<typename ITERATOR_1, typename ITERATOR_2>
+      vector<REAL> min_conv(ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end, const INDEX sum)
+      {
+         if(sum < min_conv_threshold) {
+            return min_conv_naive(a_begin, a_end, b_begin, b_end, sum);
+         } else {
+            assert(false);
+         }
+      }
+
+      template<typename ITERATOR_1, typename ITERATOR_2>
+      vector<REAL> min_conv(ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end)
+      {
+         if(std::distance(a_begin, a_end) + std::distance(b_begin, b_end) < min_conv_threshold) {
+            return min_conv_naive(a_begin, a_end, b_begin, b_end);
+         } else {
+            assert(false);
+         }
+      }
+
+      template<typename ITERATOR_1, typename ITERATOR_2>
+      std::tuple<vector<REAL>, arg_min_conv_type> arg_min_conv( ITERATOR_1 a_begin, ITERATOR_1 a_end, ITERATOR_2 b_begin, ITERATOR_2 b_end, const INDEX min_conv_size)
+      {
+         if(min_conv_size < min_conv_threshold) {
+            return min_conv_naive(a_begin, a_end, b_begin, b_end, min_conv_size);
+         } else {
+            assert(false);
+         }
+      }
+
 
 
    } // end namespace discrete_tomo

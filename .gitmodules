@@ -31,3 +31,8 @@
 [submodule "lingeling"]
 	path = external/lingeling
 	url = https://github.com/msoos/lingeling-ala.git
+[submodule "external/tropical-convolution"]
+	path = external/tropical-convolution
+	url = https://github.com/pawelswoboda/tropical-convolution.git
+[submodule "external/PEGTL.1.3"]
+	x = 1.3.x

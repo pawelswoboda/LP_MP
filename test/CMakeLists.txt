@@ -12,13 +12,13 @@ if(BUILD_TESTS)
       vector.cpp
       labeling_factor_messages.cpp
       #min_cost_flow.cpp
-      #min_conv.cpp
+      min_conv.cpp
       shortest_path.cpp
       cycle_inequalities.cpp
       graphical_model.cpp
       #graph_matching.cpp
       multicut.cpp
-      discrete_tomography_chain.cpp
+      #discrete_tomography_chain.cpp
       sat_solver.cpp
       )
     SET(PERFORMANCE_TEST_FILES

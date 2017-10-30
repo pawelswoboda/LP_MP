@@ -5,7 +5,7 @@ namespace LP_MP {
 
 #include <algorithm>
 #include "vector.hxx"
-#include "minConv.hxx"
+#include "tropical_convolution.hxx"
 
 // build factors recursively. Share reparametrization between factors
 class discrete_tomography_cardinality_factor {
@@ -30,7 +30,8 @@ public:
    REAL LowerBound() const
    {
       // compute min convolution of left and right potential;
-      auto mc = discrete_tomo::min_conv_naive(left.begin(), left.end() ,right.begin(), right.end(), min_conv.size());
+      vector<REAL> mc(min_conv.size());
+      tropical_convolution::min_conv(left.begin(), left.end() ,right.begin(), right.end(), mc.begin(), mc.end());
       REAL x = std::numeric_limits<REAL>::infinity();
       for(INDEX i=0; i<min_conv.size(); ++i) {
          x = std::min(x, mc[i] - min_conv[i]);
@@ -55,24 +56,25 @@ public:
    void MaximizePotentialAndComputePrimal()
    {
       if(primal_sum == std::numeric_limits<INDEX>::max() && primal_left == std::numeric_limits<INDEX>::max() && primal_right == std::numeric_limits<INDEX>::max()) {
-         vector<REAL> mc;//(min_conv.size());
-         discrete_tomo::arg_min_conv_type arg_mc;//(min_conv.size());
-         std::tie(mc, arg_mc) = discrete_tomo::arg_min_conv_naive(left.begin(), left.end() ,right.begin(), right.end(), min_conv.size());
-         assert(mc.size() == arg_mc.size() && mc.size() == min_conv.size());
+         vector<REAL> mc(min_conv.size());
+         vector<INDEX> mc_a(min_conv.size());;
+         tropical_convolution::min_conv(left.begin(), left.end() ,right.begin(), right.end(), mc.begin(), mc.end(), mc_a.begin());
 
          REAL val = std::numeric_limits<REAL>::infinity();
          for(INDEX i=0; i<min_conv.size(); ++i) {
             const REAL cur_val = mc[i] - min_conv[i];
             if(cur_val <= val) {
                val = cur_val;
-               primal_left = arg_mc[i][0];
-               primal_right = arg_mc[i][1];
+               primal_left = mc_a[i];
+               assert(mc_a[i] <= i);
+               primal_right = i - primal_left;
             }
          }
          primal_sum = primal_left + primal_right;
          assert(EvaluatePrimal() < std::numeric_limits<REAL>::infinity());
       } else if(primal_sum != std::numeric_limits<INDEX>::max() && primal_left == std::numeric_limits<INDEX>::max() && primal_right == std::numeric_limits<INDEX>::max()) {
-         std::tie(primal_left, primal_right) = discrete_tomo::arg_min_sum_naive(left.begin(), left.end(), right.begin(), right.end(), primal_sum); 
+         REAL val;
+         std::tie(val, primal_left, primal_right) = tropical_convolution::arg_min_sum(left.begin(), left.end(), right.begin(), right.end(), primal_sum); 
          assert(EvaluatePrimal() < std::numeric_limits<REAL>::infinity());
       } else if(primal_sum == std::numeric_limits<INDEX>::max() && primal_left != std::numeric_limits<INDEX>::max() && primal_right != std::numeric_limits<INDEX>::max()) {
          primal_sum = primal_left + primal_right;
@@ -133,7 +135,8 @@ public:
       auto& left = f_left.left;
       auto& right = f_left.right;
       const auto& min_conv = f_left.min_conv;
-      auto msg_val = discrete_tomo::min_conv_naive(left.begin(), left.end(), right.begin(), right.end(), min_conv.size());
+      vector<REAL> msg_val(min_conv.size());
+      tropical_convolution::min_conv(left.begin(), left.end(), right.begin(), right.end(), msg_val.begin(), msg_val.end());
       assert(msg_val.size() == min_conv.size());
 
       for(INDEX i=0; i<min_conv.size(); ++i) {

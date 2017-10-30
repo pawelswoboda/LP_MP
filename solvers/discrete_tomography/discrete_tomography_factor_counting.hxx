@@ -2,13 +2,12 @@
 #define LPMP_DTOMOGRAPHY_FACTOR_COUNTING_HXX
 
 #include "LP_MP.h"
-#include "minConv.hxx"
+#include "tropical_convolution.hxx"
 #include <math.h> 
 
 namespace LP_MP{
 
   constexpr static INDEX MinSumConvolutionThreshold = 1000000;
-  using MinConv = discrete_tomo::MinConv<REAL,INDEX>;
 
   class DiscreteTomographyFactorCounting2{
   public:
@@ -85,8 +84,8 @@ namespace LP_MP{
               auto z_left = [&](INDEX k){ return left_(x_l,x_cl, k); };
               auto z_right = [&](INDEX k){ return right_(x_cr, x_r, k); }; 
 
-              MinConv mc(z_left, z_right, left_sum_size(), right_sum_size(), max_sum_size);
-              mc.CalcConv(op,z_left,z_right);
+              vector<REAL> mc(max_sum_size);
+              tropical_concolution::min_conv(z_left.begin(), z_left.end(), z_right.begin(), z_right.end(), mc.begin(), mc.end());
 
               const INDEX sum_max = std::min(max_sum_size, up_sum_size() - x_cl - x_cr);
               for(INDEX sum=0; sum<sum_max; sum++){

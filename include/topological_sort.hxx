@@ -33,13 +33,13 @@ Graph::Graph(INDEX V)
 }
 
 // add directed edge from v to w
-void Graph::addEdge(INDEX v, INDEX w)
+inline void Graph::addEdge(INDEX v, INDEX w)
 {
    assert(v<V && w<V);
    adj[v].push_back(w); 
 }
 
-bool Graph::sorting_valid(const std::vector<INDEX>& ordering) const
+inline bool Graph::sorting_valid(const std::vector<INDEX>& ordering) const
 {
   std::vector<INDEX> inverse_ordering(ordering.size());
   for(INDEX i=0; i<ordering.size(); ++i) {
@@ -59,7 +59,7 @@ bool Graph::sorting_valid(const std::vector<INDEX>& ordering) const
 }
 
 
-std::vector<INDEX> Graph::topologicalSort()
+inline std::vector<INDEX> Graph::topologicalSort()
 {
   if(debug()) {
     std::cout << "sort " << adj.size() << " elements subject to " << std::accumulate(adj.begin(), adj.end(), INDEX(0), [](INDEX s, auto& a) { return s + a.size(); }) << " ordering constraints\n";

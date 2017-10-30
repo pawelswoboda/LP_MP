@@ -109,48 +109,40 @@ double* SVM::Solve()
 	for (i=0; i<n; i++) di_sum += terms[i]->di;
 
 	int approx_max = (options.cp_max <= 0) ? 0 : options.approx_max;
-	int avg_num; // maintain 'avg_num' averaged vectors
-	switch (options.avg_flag)
-	{
-		case 0: avg_num = 0; break;
-		case 1:
-		case 2: avg_num = 1; break;
-		default: printf("avg_flag not implemented\n"); exit(1); avg_num = 2; break;
-	}
-
-	if (options.avg_flag != 0) { printf("avg_flag not implemented\n"); exit(1); }
 
 	int vec_size = (d+1)*sizeof(double);
-	int alloc_size = (1+avg_num)*vec_size + y_size_in_bytes_max;
+	int alloc_size = vec_size + y_size_in_bytes_max;
 	if (options.randomize_method >= 1 || options.randomize_method <= 3)	alloc_size += n*sizeof(int);
 	char* _buf = new char[alloc_size];
 	char* _buf0 = _buf;
 
 	YPtr y_new_buf = (YPtr) _buf; _buf += y_size_in_bytes_max;
 	double* phi_new = (double*) _buf; _buf += vec_size;
-	MovingAverage* z_avg;
-	if (di_sum > d*n / 2) z_avg = new MovingAverageNaive(z, d, avg_num);
-	else                  z_avg = new MovingAverageLowDim(z, d, avg_num);
 	int* permutation = NULL;
 	if (options.randomize_method >= 1 && options.randomize_method <= 3)	{ permutation = (int*) _buf; _buf += n*sizeof(int); }
-	double* z_avg_buf = (double*) _buf;
-
-	int k_avg[2] = { 0, 0 };
 
 	if (options.randomize_method == 1) generate_permutation(permutation, n);
 
-	double v_serious_start, v_serious_prev;
-	double t_serious_start, t_serious_prev;
+	double v_serious_start;
+	double t_serious_start;
 
-	t_serious_start = t_serious_prev = get_time();
-	v_serious_start = v_serious_prev = Evaluate(w);
+	t_serious_start = get_time();
+	v_serious_start = Evaluate(w);
 
-	double* w_best = new double[d];
+	double* w_best = new double[d + ((options.proximal_method == 1) ? d : 0)];
 	memcpy(w_best, w, d*sizeof(double));
+	double* u = NULL;
+	if (options.proximal_method == 1)
+	{
+		u = w_best + d;
+		memcpy(u, w, d*sizeof(double));
+	}
 	double v_best = v_serious_start;
 
 	int serious_counter = 0;
 	int serious_iter_max = options.serious_iter_init;
+
+	double A_IAPPA1 = 1;
 
 	for (iter=total_pass=0; iter<options.iter_max; iter++)
 	{
@@ -167,6 +159,7 @@ double* SVM::Solve()
 		double _lower_bound[2]; // index 1: after calling real oracle
 
 		_t[0] = get_time();
+		if (_t[0] - time_start > options.time_max) break;
 		_lower_bound[0] = GetCurrentLowerBound();
 
 		for (approx_pass=-1; approx_pass<approx_max; approx_pass++, total_pass++)
@@ -187,15 +180,6 @@ double* SVM::Solve()
 				int* mapping = terms[i]->mapping;
 				YPtr y_new = (copy_fn) ? y_new_buf : phi_new;
 
-				// averaging
-				double avg_gamma[2] = { 0, 0 };
-				z_avg->StartUpdate(di, mapping);
-				int p = (approx_pass < 0 || options.avg_flag == 1) ? 0 : 1;
-				if (p < avg_num)
-				{
-					avg_gamma[p] = 2.0 / (2 + (k_avg[p] ++));
-				}
-
 				if (approx_pass < 0) // call real oracle
 				{
 					*terms[i]->GetFreeTermPtr(y_new) = (*max_fn)(zi, y_new, terms[i]->term_data);
@@ -209,8 +193,6 @@ double* SVM::Solve()
 						SolveWithKernel(i, options.kernel_max);
 						//Multiply(w, neg_phi_sum, lambda_mu_inv, d);
 						terms[i]->RemoveUnusedPlanes();
-
-						neg_avg->FinishUpdate(avg_gamma);
 
 						continue;
 					}
@@ -253,9 +235,6 @@ double* SVM::Solve()
 						z[mapping[k]] -= c*(phi[k] - old);
 					}
 				}
-
-				// averaging
-				z_avg->FinishUpdate(avg_gamma);
 			}
 
 			double t = get_time();
@@ -271,15 +250,25 @@ double* SVM::Solve()
 			_lower_bound[1] = lower_bound_last;
 		}
 
-		if ((iter % options.callback_freq) == 0)
+		if ((iter % options.check_w_freq) == 0)
 		{
 			double t = get_time();
 			double v = Evaluate(z);
-			double p = 0;
-			for (k=0; k<d; k++) p += (w[k]-z[k])*(w[k]-z[k]);
+			double p = 0, g1 = 0, v0 = 0;
+			for (k=0; k<d; k++)
+			{
+				p += (w[k]-z[k])*(w[k]-z[k]);
+				v0 += z[k]*(w[k]-z[k]);
+				g1 += fabs(w[k]-z[k]);
+			}
+			double g2 = sqrt(p) / c;
 			p /= 2*c;
+			g1 /= c;
+			v0 = (v0 - z[d]) / c;
+			double gap = v-v0;
 			
-			printf("iter=%d t=%fs v=%f v-v_serious_start=%f, p=%f, c=%f", iter, t - time_start, v, v-v_serious_start, p, c);
+			//printf("iter=%d t=%fs v=%f v-v_serious_start=%f, p=%f, c=%f", iter, t - time_start, v, v-v_serious_start, p, c);
+			printf("iter=%d t=%fs v=%f gaps=(%f %f %f), c=%f", iter, t - time_start, v, gap, g1, g2, c);
 			if (v < v_best)
 			{
 				v_best = v;
@@ -288,25 +277,60 @@ double* SVM::Solve()
 			}
 			printf("\n");
 
+			if (gap < options.gap_threshold && (g1 < options.g1_threshold || g2 < options.g2_threshold)) break;
+
 			if (serious_counter ++ >= serious_iter_max)
 			{
 				printf("*\n");
 
 				serious_counter = 0;
 
+				// update c
 				if (p < 0.1*fabs(v_serious_start - v)) c *= options.c_decrease_factor; 
 				else                                   c *= options.c_increase_factor; 
 				if (c < options.c_min) c = options.c_min;
 				if (c > options.c_max) c = options.c_max;
 
+				// update serious_iter_max
 				if (v < v_serious_start)            serious_iter_max = (int)(serious_iter_max*options.serious_iter_decrease_factor);
 				else if (v_best == v_serious_start) serious_iter_max = (int)(serious_iter_max*options.serious_iter_increase_factor);
 				if (serious_iter_max < options.serious_iter_min) serious_iter_max = options.serious_iter_min;
 				if (serious_iter_max > options.serious_iter_max) serious_iter_max = options.serious_iter_max;
 
-				double* zz = w_best;
-				if (avg_num == 1) zz = z_avg->GetAverage(0);
-				for (i=0; i<d; i++) z[i] = w[i] = zz[i];
+				// update w, set z accordingly
+				if (options.proximal_method == 0 || v_best == v_serious_start)
+				{
+					for (i=0; i<d; i++) z[i] = w[i] = w_best[i];
+					v_serious_start = v_best;
+				}
+				else
+				{
+					if (options.proximal_method == 1)
+					{
+						double a = options.proximal_method_alpha;
+						for (i=0; i<d; i++)
+						{
+							u[i] -= (1/a) * (w[i] - w_best[i]);
+							w[i] = (1-a)*w_best[i] + a*u[i];
+							z[i] = w[i];
+						}
+					}
+					else if (options.proximal_method == 2)
+					{
+						double a = options.proximal_method_alpha;
+						for (i=0; i<d; i++)
+						{
+							w[i] = (1-a)*w_best[i] + a*w[i];
+							z[i] = w[i];
+						}
+					}
+					v_serious_start = Evaluate(z);
+					if (v_serious_start < v_best)
+					{
+						v_best = v_serious_start;
+						memcpy(w_best, z, d*sizeof(double));
+					}
+				}
 				z[d] = 0;
 				for (i=0; i<n; i++)
 				{
@@ -320,33 +344,15 @@ double* SVM::Solve()
 					}
 				}
 
-				t_serious_start = t_serious_prev = t;
-				v_serious_start = v_serious_prev = (avg_num == 0) ? v_best : Evaluate(w);
-			}
-			else
-			{
-				t_serious_prev = t;
-				v_serious_prev = v;
+				t_serious_start = t;
 			}
 		}
 	}
 
-	/*
-	if (avg_num == 1)
-	{
-		memcpy(neg_phi_sum, neg_avg->GetAverage(0), vec_size);
-		Multiply(w, neg_phi_sum, lambda_mu_inv, d);
-	}
-	else if (avg_num == 2)
-	{
-		InterpolateBest(neg_avg->GetAverage(0), neg_avg->GetAverage(1), neg_phi_sum);
-		Multiply(w, neg_phi_sum, lambda_mu_inv, d);
-	}
-	*/
+	memcpy(w, w_best, d*sizeof(double));
 
 	delete [] w_best;
 	delete [] _buf0;
-	delete z_avg;
 	return w;
 }
 

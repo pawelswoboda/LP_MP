@@ -9,11 +9,11 @@
 #include "messages/simplex_marginalization_message.hxx"
 #include "problem_constructors/mrf_problem_construction.hxx"
 
-#include "discrete_tomography_factor_counting.hxx"
-#include "discrete_tomography_message_counting.hxx"
-#include "discrete_tomography_message_counting_pairwise.hxx"
-#include "discrete_tomography_tree_constructor.hxx"
-#include "discrete_tomography_counting_naive.hxx"
+//#include "discrete_tomography_factor_counting.hxx"
+//#include "discrete_tomography_message_counting.hxx"
+//#include "discrete_tomography_message_counting_pairwise.hxx"
+//#include "discrete_tomography_tree_constructor.hxx"
+//#include "discrete_tomography_counting_naive.hxx"
 #include "discrete_tomography_cardinality_factor.hxx"
 #include "discrete_tomography_cardinality_factor_constructor.hxx"
 #include "dt_sequential.hxx"
@@ -26,6 +26,7 @@
 
 namespace LP_MP{
 
+   /*
   struct FMC_DT {
     static constexpr char* name = "Discrete Tomography with MRF and Counting Factors";
 
@@ -127,6 +128,7 @@ namespace LP_MP{
     //using ProblemDecompositionList = meta::list<tighteningMrf,dt_combined>;
 	  
   };
+*/
 
   struct FMC_DT_NAIVE {
     static constexpr char* name = "Discrete Tomography, naive LP model";
