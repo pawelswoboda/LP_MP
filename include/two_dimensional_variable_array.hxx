@@ -89,8 +89,8 @@ public:
           (*this)[i] = o[i];
         }
       }
-      T operator[](const INDEX i) const { return begin_[i]; } // possibly do not implement this function but return reference, for copying elements may be costly for sizeof(T) big. Look up std::vector
-      T& operator[](const INDEX i) { return begin_[i]; }
+      T operator[](const INDEX i) const { assert(i < size()); return begin_[i]; } // possibly do not implement this function but return reference, for copying elements may be costly for sizeof(T) big. Look up std::vector
+      T& operator[](const INDEX i) { assert(i < size()); return begin_[i]; }
       INDEX size() const {  return (end_ - begin_); }
       T* begin() { return begin_; }
       T* end() { return end_; }

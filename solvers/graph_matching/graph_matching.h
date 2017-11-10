@@ -12,6 +12,7 @@
 #include "problem_constructors/mrf_problem_construction.hxx"
 //#include "factors/min_cost_flow_factor_lemon.hxx"
 #include "factors/min_cost_flow_factor_cs2.hxx"
+#include "tree_decomposition.hxx"
 
 #include "problem_constructors/cycle_inequalities.hxx"
 
@@ -65,8 +66,8 @@ struct FMC_MP {
    constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::right : Chirality::left;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction>;
    using AssignmentConstraintMessage = MessageContainer<EqualityMessageType, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_MP_PARAM, 0 >;
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 1 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 2 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 1 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 2 >;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor>;
    using MessageList = meta::list< AssignmentConstraintMessage, UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer>;//, UnaryMcfLabelingMessage >;
@@ -93,8 +94,8 @@ struct FMC_MP_T {
    constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::right : Chirality::left;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction>;
    using AssignmentConstraintMessage = MessageContainer<EqualityMessageType, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_MP_PARAM, 0 >;
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 1 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 2 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 1 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 2 >;
 
    using EmptyTripletFactor = FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_MP_PARAM, 2 >;
    using PairwiseTriplet12MessageContainer = MessageContainer<PairwiseTripletMessage<0,1>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MP_PARAM, 3>;
@@ -142,12 +143,12 @@ struct FMC_MCF {
    using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_MCF_PARAM, 1, true >;
    using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_MCF_PARAM, 2 >;
 
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 0 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 1, 2,  message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 1 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 1, 2,  message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 1 >;
    //typedef MessageContainer<LeftMargMessage, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 0 > UnaryPairwiseMessageLeft;
    //typedef MessageContainer<RightMargMessage, 1, 2, variableMessageNumber, 1, FMC_MCF_PARAM, 1 > UnaryPairwiseMessageRight;
    using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor>;
-   using UnaryToAssignmentMessageContainer = MessageContainer<UnaryToAssignmentMessageType, 1, 0,  message_passing_schedule::left, 1, variableMessageNumber, FMC_MCF_PARAM, 2>;
+   using UnaryToAssignmentMessageContainer = MessageContainer<UnaryToAssignmentMessageType, 1, 0,  message_passing_schedule::right, 1, variableMessageNumber, FMC_MCF_PARAM, 2>;
 
    constexpr static const Chirality primal_propagation_direction = (PAIRWISE_CONSTRUCTION == PairwiseConstruction::Left || PAIRWISE_CONSTRUCTION == PairwiseConstruction::BothSides) ? Chirality::left : Chirality::right;
    using EqualityMessageType = EqualityMessage<primal_propagation_direction,false>;
@@ -188,8 +189,8 @@ struct FMC_MCF_T {
    using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_MCF_PARAM, 2 >;
    using EmptyTripletFactor = FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_MCF_PARAM, 3 >;
 
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 0 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 1 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 1, 2, message_passing_schedule::left, variableMessageNumber, 1, FMC_MCF_PARAM, 1 >;
    using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor>;
    using UnaryToAssignmentMessageContainer = MessageContainer<UnaryToAssignmentMessageType, 1, 0, message_passing_schedule::left, 1, variableMessageNumber, FMC_MCF_PARAM, 2>;
 
@@ -233,8 +234,8 @@ struct FMC_GM {
    using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_GM_PARAM, 0, true >; // make true, if primal rounding similar to TRW-S is required
    using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_GM_PARAM, 1, false >;
 
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 0 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 1 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 1 >;
 
    using FactorList = meta::list< UnaryFactor, PairwiseFactor>;//, McfLabelingFactor >;
    using MessageList = meta::list< UnaryPairwiseMessageLeftContainer, UnaryPairwiseMessageRightContainer>;//, UnaryMcfLabelingMessage >;
@@ -257,8 +258,8 @@ struct FMC_GM_T {
    using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_GM_PARAM, 0, true >; // make true, if primal rounding similar to TRW-S is required
    using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_GM_PARAM, 1, false >;
 
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 0 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 1 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 0, 1, message_passing_schedule::left, variableMessageNumber, 1, FMC_GM_PARAM, 1 >;
 
    // tightening
    using EmptyTripletFactor = FactorContainer<SimpleTighteningTernarySimplexFactor, FMC_GM_PARAM, 2 >;
@@ -299,8 +300,8 @@ struct FMC_HUNGARIAN_BP {
    using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_PARAM, 1, false >;
    using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_PARAM, 2 >;
 
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 0 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 1 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 1 >;
    using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor>;
    using UnaryToAssignmentMessageContainer = MessageContainer<UnaryToAssignmentMessageType, 1, 0, message_passing_schedule::right, 1, variableMessageNumber, FMC_PARAM, 2>;
 
@@ -334,8 +335,8 @@ struct FMC_HUNGARIAN_BP_T {
    using UnaryFactor = FactorContainer<UnarySimplexFactor, FMC_PARAM, 1, false >;
    using PairwiseFactor = FactorContainer<PairwiseSimplexFactor, FMC_PARAM, 2 >;
 
-   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessageLeft<>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 0 >;
-   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessageRight<>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 1 >;
+   using UnaryPairwiseMessageLeftContainer = MessageContainer<UnaryPairwiseMessage<Chirality::left,false>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 0 >;
+   using UnaryPairwiseMessageRightContainer = MessageContainer<UnaryPairwiseMessage<Chirality::right,false>, 1, 2, message_passing_schedule::right, variableMessageNumber, 1, FMC_PARAM, 1 >;
    using UnaryToAssignmentMessageType = UnaryToAssignmentMessageCS2<McfCoveringFactor>;
    using UnaryToAssignmentMessageContainer = MessageContainer<UnaryToAssignmentMessageType, 1, 0, message_passing_schedule::right, 1, variableMessageNumber, FMC_PARAM, 2>;
 
@@ -725,7 +726,7 @@ namespace TorresaniEtAlInput {
 
    // add mcf factor, but assume graphical model has already been built.
    template<typename SOLVER>
-   void construct_mcf(SOLVER& s, GraphMatchingInput& gm_input)
+   void construct_mcf(SOLVER& s, GraphMatchingInput& gm_input, LP_tree* tree = nullptr)
    {
       using FMC = typename SOLVER::FMC;
       // build assignment problem
@@ -783,6 +784,10 @@ namespace TorresaniEtAlInput {
          //auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i), mcf->NoArcs(i)), u, f, mrf_left.GetNumberOfLabels(i));
          auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(edgeId[i]), u, f);
          s.GetLP().AddMessage(m);
+
+         if(tree) {
+            tree->AddMessage(m,Chirality::right);
+         }
       }
       }
       // right side
@@ -808,7 +813,15 @@ namespace TorresaniEtAlInput {
          //auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(mcf->StartingArc(i + no_left_nodes), mcf->NoArcs(i + no_left_nodes)), u, f, mrf_right.GetNumberOfLabels(i));
          auto *m = new typename FMC::UnaryToAssignmentMessageContainer( MessageType(edgeId[i]), u, f);
          s.GetLP().AddMessage(m);
+
+         if(tree) {
+            tree->AddMessage(m,Chirality::right);
+         }
       }
+      }
+
+      if(tree) {
+         tree->init();
       }
    }
 
@@ -1015,6 +1028,30 @@ namespace TorresaniEtAlInput {
       construct_gm( s, input );
       construct_mp( s, input );
       construct_mcf( s, input );
+      return true;
+   }
+
+   template<typename SOLVER>
+   bool ParseProblemMCF_trees(const std::string& filename, SOLVER& s)
+   {
+      auto input = ParseFile(filename);
+      construct_gm( s, input );
+      construct_mp( s, input );
+      LP_tree mcf_tree;
+      construct_mcf( s, input, &mcf_tree );
+      s.GetLP().add_tree(mcf_tree);
+
+      auto& mrf_left = s.template GetProblemConstructor<0>();
+      auto& mrf_right = s.template GetProblemConstructor<1>();
+      auto trees_left = mrf_left.compute_forest_cover();
+      for(auto& tree : trees_left) {
+         s.GetLP().add_tree(tree);
+      }
+
+      auto trees_right = mrf_left.compute_forest_cover();
+      for(auto& tree : trees_right) {
+         s.GetLP().add_tree(tree);
+      }
       return true;
    }
 

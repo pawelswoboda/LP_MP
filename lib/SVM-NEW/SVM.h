@@ -127,17 +127,17 @@ public:
 			//////////////////////////////////////////
 			check_w_freq(5),
 
-			proximal_method(0), // parameter 1 seems to be best initially, parameter 2 shows strange convergence behaviour, parameter 0 gives ultimately highest bound
+			proximal_method(1), // parameter 1 seems to be best initially, parameter 2 shows strange convergence behaviour, parameter 0 gives ultimately highest bound
 			proximal_method_alpha(0.5),
 
-			c_min(1e-5),
-			c_max(1e5),
+			c_min(1e-1), //1e-5
+			c_max(1e1), // 1e5
 			c_init(1),
 			c_increase_factor(2.0),
 			c_decrease_factor(0.5),
 
-			serious_iter_min(200),
-			serious_iter_max(10),
+			serious_iter_min(10),
+			serious_iter_max(200),
 			serious_iter_init(50),
 			serious_iter_increase_factor(1.1),
 			serious_iter_decrease_factor(0.9)

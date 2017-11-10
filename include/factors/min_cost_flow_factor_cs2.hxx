@@ -4,10 +4,8 @@
 //#include "mcmf.hxx"
 #include "lib/MinCost/MinCost.h"
 #include "config.hxx"
-#include "cereal/types/vector.hpp"
 
-//do zrobienia: remove again
-//#include <ilcplex/ilocplex.h>
+// do zrobienia: rename
 
 namespace LP_MP {
 
@@ -41,7 +39,7 @@ public:
       }
       //minCostFlow_->SortArcs();
       minCostFlow_->Solve(); // to initialize data structures
-      primal_.resize(edges.size());
+      primal_.resize(this->size()); //edges.size());
       //repamUpdateFlow_->SortArcs();
       //repamUpdateFlow_->run_cs2(); // to initialize data structures
    }
@@ -56,6 +54,7 @@ public:
    REAL EvaluatePrimal() const
    {
       assert(primal_.size() == this->size());
+      // the below is only correct if non-binary edges carry no cost.
       REAL cost = 0.0;
       for(INDEX i=0; i<primal_.size(); ++i) {
          cost += primal_[i]*minCostFlow_->GetCost(i);
@@ -129,8 +128,8 @@ public:
 
    void MaximizePotentialAndComputePrimal()
    { 
-      std::cout << "round mcf\n";
-      std::cout << "problem is with infinities!\n";
+      //std::cout << "round mcf\n";
+      //std::cout << "problem is with infinities!\n";
       // we assume here that repam is the current one as well
       //MaximizePotential(repam);
       //for(INDEX e; e<repam.size(); ++e) {
@@ -142,6 +141,7 @@ public:
          // but there may be edges that are not 0/1, e.g. slack edges, which are auxiliary ones
          //assert(-1 <= minCostFlow_->GetFlow(e) && minCostFlow_->GetFlow(e) <= 1);
          primal_[e] = minCostFlow_->GetFlow(e);
+         assert(minCostFlow_->GetFlow(e) == 0.0 || minCostFlow_->GetFlow(e) == 1.0);
          //std::cout << INDEX(primal_[e]) << ",";
       }
       //std::cout << std::endl;
@@ -568,18 +568,14 @@ public:
    //}
 
    // to do: update this, remove RIGHT_REPAM
-   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename RIGHT_REPAM, typename ITERATOR>
-   static void
-   SendMessagesToLeft(const RIGHT_FACTOR& rightFactor, const RIGHT_REPAM& rightRepam, MSG_ARRAY msg_begin, const MSG_ARRAY msg_end, ITERATOR omegaIt)
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   static void SendMessagesToLeft(const RIGHT_FACTOR& r, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omega_begin)
    {
-      auto* mcf = rightFactor.GetMinCostFlowSolver();
-      assert(rightRepam.size() == rightFactor.size());
-      for(INDEX i=0; i<rightFactor.size(); ++i) {
-         assert(std::abs(rightRepam[i] - rightFactor[i]) <= eps);
-      }
+      auto* mcf = r.GetMinCostFlowSolver();
+
       REAL omega_sum = 0.0; //std::accumulate(omegaIt, omegaIt+msgs.size(),0.0); 
-      for(auto it= msg_begin; it!=msg_end; ++it, ++omegaIt) {
-        omega_sum += *omegaIt;
+      for(auto it= msg_begin; it!=msg_end; ++it, ++omega_begin) {
+        omega_sum += *omega_begin;
       }
            
       assert(0.0 <= omega_sum && omega_sum < 1.0 + eps);
@@ -598,7 +594,7 @@ public:
 
       // the technique applied in Max-Weight Bipartite Matching ... CVPR16
       //for(INDEX i=0; i<msgs.size(); ++i, ++omegaIt) {
-      for(; msg_begin != msg_end; ++msg_begin, ++omegaIt) {
+      for(; msg_begin != msg_end; ++msg_begin) {
 
          /*
          INDEX start_arc = msgs[i].GetMessageOp().start_arc_;
@@ -616,7 +612,7 @@ public:
          }
          */
          //for(INDEX l=0; l<msgs[i].size(); ++l) {
-         for(INDEX l=0; l<(*msg_begin).size(); ++l) {
+         for(INDEX l=0; l<(*msg_begin).GetMessageOp().edges_.size(); ++l) {
             //msgs[i][l] -= omega_sum*1.0/REAL(COVERING_FACTOR)*(-mcf->GetReducedCost(start_arc + l) + mcf->GetCost(start_arc + l));
             /*
             const INDEX e = start_arc + l;

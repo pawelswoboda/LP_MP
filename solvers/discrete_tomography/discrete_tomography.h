@@ -131,7 +131,7 @@ namespace LP_MP{
 */
 
   struct FMC_DT_NAIVE {
-    static constexpr char* name = "Discrete Tomography, naive LP model";
+    static constexpr char* name = "Discrete Tomography, simple LP model";
 
     using unary_factor = FactorContainer<UnarySimplexFactor, FMC_DT_NAIVE, 0, false>;
     using pairwise_factor = FactorContainer<PairwiseSimplexFactor, FMC_DT_NAIVE, 1>;
@@ -384,8 +384,7 @@ namespace LP_MP{
           } 
        }
 
-       // decompose mrf into trees automatically. Do this after adding projection, since they can add pairwise factors as well.
-       //auto trees = mrf.compute_forest_cover(not_covered_pairwise);
+       // decompose mrf into trees automatically.
        auto trees = mrf.compute_forest_cover();
        for(auto& tree : trees) {
           s.GetLP().add_tree(tree);

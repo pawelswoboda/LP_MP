@@ -767,6 +767,8 @@ public:
 
    void Begin()
    {
+      assert(false);
+      std::cout << "not supported anymore, remove this class\n";
       LP_with_trees::Begin();
 
       // set up SVM solver once

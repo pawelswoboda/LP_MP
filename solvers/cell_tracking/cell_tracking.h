@@ -1,5 +1,5 @@
-#ifndef LP_MP_CELL_TRACKING__HXX
-#define LP_MP_CELL_TRACKING__HXX
+#ifndef LP_MP_CELL_TRACKING_HXX
+#define LP_MP_CELL_TRACKING_HXX
 
 #include "factors_messages.hxx"
 //#include "detection_factor.hxx"
@@ -19,7 +19,7 @@ struct FMC_CELL_TRACKING {
   using at_most_one_hypothesis_container = FactorContainer<at_most_one_cell_factor, FMC_CELL_TRACKING, 1, false>;
 
   using transition_message_container = MessageContainer<transition_message, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING, 0>;
-  using at_most_one_cell_message_container = MessageContainer<at_most_one_cell_message, 0, 1, message_passing_schedule::left, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING, 1>;
+  using at_most_one_cell_message_container = MessageContainer<at_most_one_cell_message, 0, 1, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING, 1>;
 
   using FactorList = meta::list<detection_factor_container, at_most_one_hypothesis_container>;
   using MessageList = meta::list<transition_message_container, at_most_one_cell_message_container>;
@@ -116,7 +116,6 @@ struct FMC_CELL_TRACKING_MOTHER_MACHINE {
   using FactorList = meta::list< detection_factor_container, at_most_one_hypothesis_container, exit_constraint >;
   using MessageList = meta::list< transition_message_container, at_most_one_cell_message_container, exit_constraint_lower_message, exit_constraint_upper_message >;
 
-
   using base_constructor = basic_cell_tracking_constructor< detection_factor_container, at_most_one_hypothesis_container, at_most_one_cell_message_container >;
   using transition_constructor = transition_message_cell_tracking_constructor< base_constructor, transition_message_container>;
   using constructor = cell_tracking_constructor<transition_constructor>;
@@ -130,4 +129,4 @@ struct FMC_CELL_TRACKING_MOTHER_MACHINE {
 };
 
 } // end namespace LP_MP
-#endif // LP_MP_CELL_TRACKING__HXX
+#endif // LP_MP_CELL_TRACKING_HXX

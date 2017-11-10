@@ -40,8 +40,8 @@ namespace LP_MP {
             ///////////////
             minDualImprovementArg_("","minDualImprovement","minimum dual improvement between iterations of LP_MP",false,0.0,&posRealConstraint_,cmd),
             minDualImprovementIntervalArg_("","minDualImprovementInterval","the interval between which at least minimum dual improvement must occur",false,10,&posIntegerConstraint_,cmd),
-            standardReparametrizationArg_("","standardReparametrization","mode of reparametrization: {anisotropic,uniform}",false,"anisotropic","{anisotropic|uniform}",cmd),
-            roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution: {anisotropic|uniform}",false,"uniform","{anisotropic|uniform}",cmd),
+            standardReparametrizationArg_("","standardReparametrization","mode of reparametrization",false,"anisotropic","{anisotropic|damped_uniform|uniform}",cmd),
+            roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution:",false,"damped_uniform","{anisotropic|damped_uniform|uniform}",cmd),
             primalTime_(0)
       {}
 

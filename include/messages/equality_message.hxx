@@ -20,12 +20,12 @@ public:
    template<typename G1, typename G2>
    void send_message_to_left(const G1& rightPot, G2& msg, const REAL omega)
    {
-      MakeFactorUniform(rightPot, msg, omega);
+      MakeFactorUniform(rightPot, msg, rightVar_, omega);
    }
    template<typename G1, typename G2>
    void send_message_to_right(const G1& leftPot, G2& msg, const REAL omega)
    {
-      MakeFactorUniform(leftPot, msg, omega);
+      MakeFactorUniform(leftPot, msg, leftVar_, omega);
    }
 
    template<typename REPAM_ARRAY, typename MSG>

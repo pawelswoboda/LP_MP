@@ -10,10 +10,10 @@ namespace LP_MP {
 // build factors recursively. Share reparametrization between factors
 class discrete_tomography_cardinality_factor {
 public:
-   discrete_tomography_cardinality_factor(const INDEX left_size, const INDEX right_size, const INDEX sum_size)
+   discrete_tomography_cardinality_factor(const INDEX left_size, const INDEX right_size, const INDEX min_conv_size)
       : left(left_size, 0.0), 
       right(right_size, 0.0),
-      min_conv(sum_size, 0.0)
+      min_conv(min_conv_size, 0.0)
    {}
 
    discrete_tomography_cardinality_factor(const INDEX left_size, const INDEX right_size)
@@ -34,23 +34,16 @@ public:
       tropical_convolution::min_conv(left.begin(), left.end() ,right.begin(), right.end(), mc.begin(), mc.end());
       REAL x = std::numeric_limits<REAL>::infinity();
       for(INDEX i=0; i<min_conv.size(); ++i) {
-         x = std::min(x, mc[i] - min_conv[i]);
+         x = std::min(x, normalize(mc[i] - min_conv[i]));
       }
       return x; 
    }
 
    REAL EvaluatePrimal() const 
    {
-      if(primal_left == std::numeric_limits<INDEX>::max() || primal_right == std::numeric_limits<INDEX>::max() || primal_left + primal_right >= min_conv.size()) {
-         assert(false);
-         return std::numeric_limits<REAL>::infinity();
-      }
-      if(primal_left + primal_right != primal_sum) {
-         assert(false);
-         return std::numeric_limits<REAL>::infinity();
-      }
+      if(!primal_valid()) { return std::numeric_limits<REAL>::infinity(); }
       assert(left[primal_left] + right[primal_right] - min_conv[primal_sum] < std::numeric_limits<REAL>::infinity());
-      return left[primal_left] + right[primal_right] - min_conv[primal_sum]; 
+      return normalize(left[primal_left] + right[primal_right] - min_conv[primal_sum]);
    }
 
    void MaximizePotentialAndComputePrimal()
@@ -62,7 +55,7 @@ public:
 
          REAL val = std::numeric_limits<REAL>::infinity();
          for(INDEX i=0; i<min_conv.size(); ++i) {
-            const REAL cur_val = mc[i] - min_conv[i];
+            const REAL cur_val = normalize(mc[i] - min_conv[i]);
             if(cur_val <= val) {
                val = cur_val;
                primal_left = mc_a[i];
@@ -71,19 +64,21 @@ public:
             }
          }
          primal_sum = primal_left + primal_right;
+         assert(primal_valid());
          assert(EvaluatePrimal() < std::numeric_limits<REAL>::infinity());
       } else if(primal_sum != std::numeric_limits<INDEX>::max() && primal_left == std::numeric_limits<INDEX>::max() && primal_right == std::numeric_limits<INDEX>::max()) {
          REAL val;
          std::tie(val, primal_left, primal_right) = tropical_convolution::arg_min_sum(left.begin(), left.end(), right.begin(), right.end(), primal_sum); 
-         assert(EvaluatePrimal() < std::numeric_limits<REAL>::infinity());
+         assert(primal_valid());
       } else if(primal_sum == std::numeric_limits<INDEX>::max() && primal_left != std::numeric_limits<INDEX>::max() && primal_right != std::numeric_limits<INDEX>::max()) {
          primal_sum = primal_left + primal_right;
+         assert(primal_valid());
          assert(EvaluatePrimal() < std::numeric_limits<REAL>::infinity());
       } else {
          assert(false);
          std::cout << "maximize potential with given partial information not implemented yet\n";
       } 
-      assert(primal_left < left.size() && primal_right < right.size() && primal_sum < min_conv.size() && primal_left + primal_right == primal_sum);
+      assert(primal_valid());
    }
 
    INDEX size() const { return 1; }
@@ -95,6 +90,15 @@ public:
    vector<REAL> left, right, min_conv; // those vectors are shared with factors left below and right below and above respectively.
    // min conv here is taken with negative sing, and becomes left or right potential in the factor above
    INDEX primal_left, primal_right, primal_sum;
+
+   bool primal_valid() const 
+   {
+      if(primal_left >= left.size()) { return false; }
+      if(primal_right >= right.size()) { return false; }
+      if(primal_sum >= min_conv.size()) { return false; }
+      if(primal_left + primal_right != primal_sum) { return false; }
+      return true;
+   } 
 
 private:
 };
@@ -140,7 +144,7 @@ public:
       assert(msg_val.size() == min_conv.size());
 
       for(INDEX i=0; i<min_conv.size(); ++i) {
-         msg_val[i] -= min_conv[i];
+         msg_val[i] = normalize(msg_val[i] - min_conv[i]);
       }
 
       msg -= omega*msg_val;

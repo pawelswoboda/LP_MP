@@ -41,7 +41,10 @@ public:
           const INDEX next_var = *(projection_var_begin+i+1);
           auto* u1 = mrf_constructor_.GetUnaryFactor(var);
           auto* u2 = mrf_constructor_.GetUnaryFactor(next_var);
-          auto* f = new cardinality_factor_type(mrf_constructor_.GetNumberOfLabels(var), mrf_constructor_.GetNumberOfLabels(next_var));
+          const INDEX l1 = mrf_constructor_.GetNumberOfLabels(var);
+          const INDEX l2 = mrf_constructor_.GetNumberOfLabels(next_var);
+          const INDEX min_conv_size = std::max({std::min(sum+1, l1 + l2 - 1), l1, l2});
+          auto* f = new cardinality_factor_type(l1, l2, min_conv_size);
           lp_->AddFactor(f);
           queue.push_back(f);
           auto* m1 = new unary_cardinality_message_type(u1, f, Chirality::left);
@@ -55,7 +58,7 @@ public:
           }
        }
 
-       // if last variable was not civered (#variables is odd) connect last variable and last cardinality factor to each other
+       // if last variable was not covered (# variables is odd) connect last variable and last cardinality factor to each other
        if(no_variables%2 == 1) {
           const INDEX var = *(projection_var_begin + no_variables-1);
           auto* u2 = mrf_constructor_.GetUnaryFactor(var);
@@ -63,7 +66,10 @@ public:
           auto* f_left = queue.back();
           queue.pop_back();
 
-          auto* f = new cardinality_factor_type(f_left->GetFactor()->min_conv.size(), mrf_constructor_.GetNumberOfLabels(var));
+          const INDEX l1 = f_left->GetFactor()->min_conv.size();
+          const INDEX l2 = mrf_constructor_.GetNumberOfLabels(var);
+          const INDEX min_conv_size = std::max({std::min(sum+1, l1 + l2 - 1), l1, l2});
+          auto* f = new cardinality_factor_type(l1, l2, min_conv_size);
           f_left->GetFactor()->set_reference_to_min_conv(f->GetFactor()->left);
           lp_->AddFactor(f);
           queue.push_back(f);
@@ -93,7 +99,11 @@ public:
              auto* f_right = queue.front();
              queue.pop_front();
 
-             auto* f = new cardinality_factor_type(f_left->GetFactor()->min_conv.size(), f_right->GetFactor()->min_conv.size());
+             const INDEX l1 = f_left->GetFactor()->min_conv.size();
+             const INDEX l2 = f_right->GetFactor()->min_conv.size();
+             const INDEX min_conv_size = std::max({std::min(sum+1, l1 + l2 - 1), l1, l2});
+
+             auto* f = new cardinality_factor_type(l1, l2, min_conv_size);
              f_left->GetFactor()->set_reference_to_min_conv(f->GetFactor()->left);
              f_right->GetFactor()->set_reference_to_min_conv(f->GetFactor()->right);
              lp_->AddFactor(f);
@@ -119,9 +129,11 @@ public:
 
        // possibly do something more effective at top level: only min sum needs to be computed.
        auto& cost_vec = f_top->GetFactor()->min_conv;
-       const INDEX sum_top_size = f_top->GetFactor()->left.size() + f_top->GetFactor()->right.size() -1;
-       assert(sum+1 <= sum_top_size);
-       cost_vec = vector<REAL>(sum_top_size,-std::numeric_limits<REAL>::infinity());
+       const INDEX l1 = f_top->GetFactor()->left.size();
+       const INDEX l2 = f_top->GetFactor()->right.size();
+       const INDEX min_conv_size = std::max({std::min(sum+1, l1 + l2 - 1), l1, l2});
+       assert(sum < min_conv_size);
+       cost_vec = vector<REAL>(min_conv_size,-std::numeric_limits<REAL>::infinity()); // - is correct, because of how sharing potentials currently works
        cost_vec[sum] = 0.0;
 
        if(tree != nullptr) {

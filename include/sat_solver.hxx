@@ -29,6 +29,7 @@ struct sat_literal_vector_iterator : std::iterator< std::random_access_iterator_
    const sat_literal operator*() const { return l; }
    int operator-(sat_literal_vector_iterator o) const { return l - o.l; }
    sat_literal_vector_iterator operator+(const INDEX n) const { return sat_literal_vector_iterator(l + n); }
+   sat_literal_vector_iterator operator-(const INDEX n) const { return sat_literal_vector_iterator(l - n); }
    private:
    sat_literal l;
 };

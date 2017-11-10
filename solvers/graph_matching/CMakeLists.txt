@@ -24,6 +24,14 @@ foreach( source_file ${SOURCE_FILES} )
    target_link_libraries( ${executable_file} m stdc++ pthread lgl)
 endforeach( source_file ${SOURCE_FILES} )
 
+# with proximal bundle
+add_executable(graph_matching_mcf_proximal_bundle graph_matching_mcf_proximal_bundle.cpp ${headers} ${sources})
+target_link_libraries( graph_matching_mcf_proximal_bundle m stdc++ pthread lgl SVM arboricity)
+
+# with conic bundle
+add_executable(graph_matching_mcf_conic_bundle graph_matching_mcf_conic_bundle.cpp ${headers} ${sources})
+target_link_libraries( graph_matching_mcf_conic_bundle m stdc++ pthread lgl SVM arboricity cb)
+
 if(WITH_GUROBI)
    SET(GUROBI_FILES
       # lp solver

@@ -123,10 +123,26 @@ public:
     }
   }
 
-  void set_incoming_transition_cost(const INDEX edge_index, const REAL cost) { assert(incoming[edge_index] == 0.0); incoming[edge_index] = cost; } 
-  void set_outgoing_transition_cost(const INDEX edge_index, const REAL cost) { assert(outgoing[edge_index] == 0.0); outgoing[edge_index] = cost; }
-  void set_incoming_division_cost(const INDEX edge_index, const REAL cost) { assert(incoming[edge_index] == 0.0); incoming[edge_index] = cost; } 
-  void set_outgoing_division_cost(const INDEX edge_index, const REAL cost) { assert(outgoing[edge_index] == 0.0); outgoing[edge_index] = cost; }
+  void set_incoming_transition_cost(const INDEX no_incoming_transition_edges, const INDEX no_incoming_division_edges, const INDEX edge_index, const REAL cost) 
+  { 
+    assert(incoming[edge_index] == 0.0); 
+    incoming[edge_index] = cost; 
+  } 
+  void set_outgoing_transition_cost(const INDEX no_outgoing_transition_edges, const INDEX no_outgoing_division_edges, const INDEX edge_index, const REAL cost) 
+  { 
+    assert(outgoing[edge_index] == 0.0);
+    outgoing[edge_index] = cost;
+  }
+  void set_incoming_division_cost(const INDEX no_incoming_transition_edges, const INDEX no_incoming_division_edges, const INDEX edge_index, const REAL cost) 
+  { 
+    assert(incoming[no_incoming_transition_edges + edge_index] == 0.0);
+    incoming[no_incoming_transition_edges + edge_index] = cost; 
+  } 
+  void set_outgoing_division_cost(const INDEX no_outgoing_transition_edges, const INDEX no_outgoing_division_edges, const INDEX edge_index, const REAL cost) 
+  { 
+    assert(outgoing[no_outgoing_transition_edges + edge_index] == 0.0);
+    outgoing[no_outgoing_transition_edges + edge_index] = cost; 
+  }
 
   REAL detection_cost() const { return detection; }
   REAL appearance_cost() const { return incoming[incoming.size()-1]; }
@@ -983,6 +999,8 @@ public:
     sat_literal_vector right_outgoing_literal(r.outgoing.size());
     load_sat_literals(right_begin, right_detection_literal, right_incoming_literal, right_outgoing_literal);
 
+    assert(outgoing_edge_index_ < l.outgoing.size());
+    assert(incoming_edge_index_ < r.incoming.size());
     s.make_equal(left_outgoing_literal[outgoing_edge_index_], right_incoming_literal[incoming_edge_index_]);
   }
 private:
@@ -1174,6 +1192,8 @@ public:
 
     std::vector<bool> edge_taken(rightFactor.size(), false);
     for(auto it=msg_begin; it!=msg_end; ++it) {
+      assert(false); // edge_taken should act on rightFactor.incoming!
+      assert( (*msg_begin).GetMessageOp().at_most_one_cell_factor_index_ < edge_taken.size() );
       assert(edge_taken[ (*msg_begin).GetMessageOp().at_most_one_cell_factor_index_ ] == false);
       edge_taken[ (*msg_begin).GetMessageOp().at_most_one_cell_factor_index_ ] = true;
     }
@@ -1330,10 +1350,10 @@ public:
     assert(msg_dim == 0);
     if(POSITION == exit_constraint_position::lower) {
       const INDEX i = l.outgoing.size()-1;
-      l.outgoing(i) += msg;
+      l.update_outgoing(i, msg);
     } else {
       for(INDEX i=0; i<l.outgoing.size()-1; ++i) {
-        l.outgoing(i) += msg;
+        l.update_outgoing(i, msg);
       }
     }
   }
@@ -1365,7 +1385,7 @@ public:
   template<typename LEFT_FACTOR, typename MSG>
   void send_message_to_right(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
   { 
-    REAL detection_incoming_cost = l[0];
+    REAL detection_incoming_cost = l.detection;
     detection_incoming_cost += l.incoming.min(); //*std::min_element(l.incoming.begin(), l.incoming.end());
     REAL outgoing_cost = std::numeric_limits<REAL>::infinity();
     assert(l.outgoing.size() > 0);
@@ -1374,9 +1394,9 @@ public:
     } 
 
     if(POSITION == exit_constraint_position::lower) {
-      msg[0] -= omega*( l.outgoing( l.outgoing.size()-1 ) - std::min( -detection_incoming_cost, outgoing_cost ) );
+      msg[0] -= omega*( l.outgoing[ l.outgoing.size()-1 ] - std::min( -detection_incoming_cost, outgoing_cost ) );
     } else {
-      msg[0] -= omega*( outgoing_cost - std::min( -detection_incoming_cost, l.outgoing( l.outgoing.size()-1 ) ) );
+      msg[0] -= omega*( outgoing_cost - std::min( -detection_incoming_cost, l.outgoing[ l.outgoing.size()-1 ] ) );
     }
   }
 
@@ -1384,7 +1404,7 @@ public:
   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
   static void SendMessagesToRight(const LEFT_FACTOR& l, MSG_ARRAY msg_begin, MSG_ARRAY msg_end, ITERATOR omegaIt)
   {
-    REAL detection_incoming_cost = l[0];
+    REAL detection_incoming_cost = l.detection;
     detection_incoming_cost += l.incoming.min(); //*std::min_element(l.incoming.begin(), l.incoming.end());
     REAL outgoing_cost = std::numeric_limits<REAL>::infinity();
     assert(l.outgoing.size() > 0);
@@ -1393,11 +1413,11 @@ public:
     } 
 
     if(POSITION == exit_constraint_position::lower) {
-      const REAL delta = l.outgoing( l.outgoing.size()-1 ) - std::min( -detection_incoming_cost, outgoing_cost );
+      const REAL delta = l.outgoing[ l.outgoing.size()-1 ] - std::min( -detection_incoming_cost, outgoing_cost );
       assert(!std::isnan(delta));
       for(; msg_begin!=msg_end; ++msg_begin, ++omegaIt) { (*msg_begin)[0] -=  (*omegaIt)*delta; }
     } else {
-      const REAL delta = outgoing_cost - std::min( -detection_incoming_cost, l.outgoing( l.outgoing.size()-1 ) );
+      const REAL delta = outgoing_cost - std::min( -detection_incoming_cost, l.outgoing[ l.outgoing.size()-1 ] );
       assert(!std::isnan(delta));
       for(; msg_begin!=msg_end; ++msg_begin, ++omegaIt) { (*msg_begin)[0] -=  (*omegaIt)*delta; }
     }
@@ -1504,34 +1524,34 @@ public:
     //return division_distance() + no_incoming_transition_edges()*(division_distance()-1) + no_incoming_division_edges() + no_outgoing_transition_edges()*division_edges() + no_outgoing_division_edges();
   }
 
-  void set_incoming_transition_cost(const INDEX edge_index, const REAL cost)
+  void set_incoming_transition_cost(const INDEX no_incoming_transition_edges, const INDEX no_incoming_division_edges, const INDEX edge_index, const REAL cost)
   {
-    assert(edge_index < no_incoming_transition_edges()-1);
+    assert(edge_index < this->no_incoming_transition_edges()-1);
     for(INDEX i=0; i<division_distance()-1; ++i) {
       assert(incoming_transition(edge_index, i) == std::numeric_limits<REAL>::infinity());
       incoming_transition(edge_index, i) = cost;
     }
   }
 
-  void set_outgoing_transition_cost(const INDEX edge_index, const REAL cost)
+  void set_outgoing_transition_cost(const INDEX no_outgoing_transition_edges, const INDEX no_outgoing_division_edges, const INDEX edge_index, const REAL cost)
   {
-    assert(edge_index < no_outgoing_transition_edges()-1);
+    assert(edge_index < this->no_outgoing_transition_edges()-1);
     for(INDEX i=0; i<division_distance(); ++i) {
       assert(outgoing_transition(edge_index, i) == std::numeric_limits<REAL>::infinity());
       outgoing_transition(edge_index, i) = cost;
     }
   }
 
-  void set_incoming_division_cost(const INDEX edge_index, const REAL cost)
+  void set_incoming_division_cost(const INDEX no_incoming_transition_edges, const INDEX no_incoming_division_edges, const INDEX edge_index, const REAL cost)
   {
-    assert(edge_index < no_incoming_division_edges()-1);
+    assert(edge_index < this->no_incoming_division_edges()-1);
     assert(incoming_division[edge_index] == std::numeric_limits<REAL>::infinity());
     incoming_division[edge_index] = cost;
   }
 
-  void set_outgoing_division_cost(const INDEX edge_index, const REAL cost)
+  void set_outgoing_division_cost(const INDEX no_outgoing_transition_edges, const INDEX no_outgoing_division_edges, const INDEX edge_index, const REAL cost)
   {
-    assert(edge_index < no_outgoing_division_edges()-1);
+    assert(edge_index < this->no_outgoing_division_edges()-1);
     assert(outgoing_division[edge_index] == std::numeric_limits<REAL>::infinity());
     outgoing_division[edge_index] = cost;
   }

@@ -54,6 +54,7 @@ public:
    virtual void UpdateFactorPrimalSynchronized(const weight_vector& omega, const INDEX iteration) = 0;
    virtual void UpdateFactorSATSynchronized(const weight_vector& omega, const REAL th, sat_var begin, sat_vec& assumptions) = 0;
 #endif
+   virtual bool SendsMessage(const INDEX msg_idx) const = 0;
    virtual void reduce_sat(const REAL th, sat_var begin, std::vector<sat_literal>& assumptions) = 0;
    //virtual void convert_primal(Glucose::SimpSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
    //virtual void convert_primal(CMSat::SATSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
@@ -61,15 +62,12 @@ public:
    virtual void convert_primal(sat_solver&, sat_var) = 0; // this is not nice: the solver should be templatized
    virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
    // to do: remove both
-   virtual INDEX size() const = 0;
-   virtual INDEX PrimalSize() const = 0;
    MessageIterator begin(); 
    MessageIterator end();
-   virtual INDEX GetNoMessages() const = 0;
+   virtual INDEX no_messages() const = 0;
    virtual INDEX no_send_messages() const = 0;
    virtual MessageTypeAdapter* GetMessage(const INDEX n) const = 0;
    virtual FactorTypeAdapter* GetConnectedFactor(const INDEX i) const = 0;
-   virtual bool CanSendMessage(const INDEX i) const = 0;
    virtual REAL LowerBound() const = 0;
    virtual void init_primal() = 0;
    virtual void MaximizePotentialAndComputePrimal() = 0;
@@ -161,14 +159,14 @@ public:
    MessageTypeAdapter& operator*() const { return *(factor_->GetMessage(msg_idx_)); }
    MessageTypeAdapter& operator->() const { return *(factor_->GetMessage(msg_idx_)); }
    FactorTypeAdapter* GetConnectedFactor() const { return factor_->GetConnectedFactor(msg_idx_); }
-   bool CanSendMessage() const  { return factor_->CanSendMessage(msg_idx_); }
+   bool SendsMessage() const  { return factor_->SendsMessage(msg_idx_); }
 private:
    FactorTypeAdapter* const factor_;
    INDEX msg_idx_;
 };
 
 inline MessageIterator FactorTypeAdapter::begin() { return MessageIterator(this,0); }
-inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, GetNoMessages()); }
+inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, no_messages()); }
 
 
 class LP {
@@ -289,7 +287,6 @@ public:
 
    INDEX GetNumberOfFactors() const { return f_.size(); }
    FactorTypeAdapter* GetFactor(const INDEX i) const { return f_[i]; }
-   INDEX size() const { INDEX size=0; for(auto* f : f_) { size += f->size(); } return size; }
 
    virtual INDEX AddMessage(MessageTypeAdapter* m)
    {
@@ -352,15 +349,6 @@ public:
    }
 
    void Begin(); // must be called after all messages and factors have been added
-
-   void CalculatePrimalOffsets()
-   {
-      INDEX primalOffset = 0;
-      for(auto* f : f_) {
-         f->SetPrimalOffset(primalOffset);
-         primalOffset += f->PrimalSize();
-      }
-   }
 
    void SortFactors(
          const std::vector<std::pair<FactorTypeAdapter*, FactorTypeAdapter*>>& factor_rel,
@@ -658,8 +646,6 @@ protected:
 
 inline void LP::Begin()
 {
-   CalculatePrimalOffsets();
-
    repamMode_ = LPReparametrizationMode::Undefined;
    assert(f_.size() > 1); // otherwise we need not perform optimization: Just MaximizePotential f_[0]
 
@@ -917,7 +903,7 @@ void LP::ComputeAnisotropicWeights2(
          if((*it)->FactorUpdated()) {
             INDEX k=0;
             for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
-               if(mIt.CanSendMessage()) {
+               if(mIt.SendsMessage()) {
                   auto* f_connected = mIt.GetConnectedFactor();
                   const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
                   assert(i != j);
@@ -1053,7 +1039,7 @@ void LP::ComputeAnisotropicWeights(
          if((*it)->FactorUpdated()) {
             INDEX k=0;
             for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
-               if(mIt.CanSendMessage()) {
+               if(mIt.SendsMessage()) {
                   auto* f_connected = mIt.GetConnectedFactor();
                   const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
                   assert(i != j);
@@ -1065,6 +1051,7 @@ void LP::ComputeAnisotropicWeights(
                   ++k;
                }
             }
+            assert(std::accumulate(omega[c].begin(), omega[c].end(), 0.0) <= 1.0 + eps);
             ++c;
          }
       }
@@ -1072,10 +1059,10 @@ void LP::ComputeAnisotropicWeights(
 
 
    // check whether all messages were added to m_. Possibly, this can be automated: Traverse all factors, get all messages, add them to m_ and avoid duplicates along the way.
-   assert(2*m_.size() == std::accumulate(f_.begin(), f_.end(), 0, [](INDEX sum, auto* f){ return sum + f->GetNoMessages(); }));
+   assert(2*m_.size() == std::accumulate(f_.begin(), f_.end(), 0, [](INDEX sum, auto* f){ return sum + f->no_messages(); }));
    assert(HasUniqueValues(m_));
    for(INDEX i=0; i<omega.size(); ++i) {
-      //assert(omega[i].size() <= (*(factorIt+i))->GetNoMessages());
+      //assert(omega[i].size() <= (*(factorIt+i))->no_messages());
       //const REAL omega_sum = std::accumulate(omega[i].begin(), omega[i].end(), 0.0); 
       assert(std::accumulate(omega[i].begin(), omega[i].end(), 0.0) <= 1.0 + eps);
    }
