@@ -1838,7 +1838,7 @@ public:
       auto omegaIt = omega.begin();
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&omegaIt](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            static_if<l.ReceiviesMessage()>([&](auto f) {
+            static_if<l.ReceivesMessage()>([&](auto f) {
                   
                   for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
                      //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
@@ -1949,7 +1949,7 @@ public:
      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
          // check whether the message supports batch updates. If so, call batch update.
          // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
-         if(l.SendMessage()) {
+         if(l.SendsMessage()) {
          static_if<l.CanCallSendMessages()>([&](auto f) {
              constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
              const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
@@ -2455,6 +2455,48 @@ public:
    // if no two messages have the same endpoints, an ordinary mutex is enough.
    std::recursive_mutex mutex_;
 #endif
+
+
+   /*
+   // functions for interfacing with external solver interface DD_ILP
+   template<EXTERNAL_SOLVER, typename T>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, T&);
+
+   template<EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, REAL x)
+   { return s.add_variable(); }
+
+   template<EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const vector<REAL>& v)
+   { return s.add_vector(v); }
+
+   template<EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const matrix<REAL>& m)
+   { return s.add_matrix(m); }
+
+   template<EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const tensor<REAL>& t)
+   { return s.add_tensor(t); }
+
+   // functions for implementing external solver interface
+   template<typename EXTERNAL_SOLVER>
+   auto create_constraints(EXTERNAL_SOLVER& s)
+   {
+      // transform exported variables to external solver variables
+      auto vars = factor_.export();
+      auto external_vars = std::apply([&s](auto ...x){ std::make_tuple(convert_variables_to_external(s, x)...);}, vars);
+
+      // unpack tuple and call create_constraints function of factor
+      auto create_constraints_fun = [&factor_,&s](auto... x) { factor_.create_constraints(s, x...); };
+      std::apply(create_constraints_fun, external_vars);
+   }
+
+   template<typename EXTERNAL_SOLVER>
+   auto reduce_constraints(EXTERNAL_SOLVER& s)
+   {
+
+   }
+   */
 };
 
 } // end namespace LP_MP

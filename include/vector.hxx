@@ -322,6 +322,7 @@ public:
      const auto min3 = two_smallest_elements<T>(min_array.begin(), min_array.end());
      //const REAL min = simdpp::reduce_min(min2);
      const REAL second_min = std::min({simdpp::reduce_min(second_min_val), simdpp::reduce_min(max2), min3[1]});
+     assert(second_min >= min3[0]);
      return std::array<T,2>({min3[0], second_min});
      /*
      simdpp::float32<2> x2;

@@ -19,7 +19,7 @@ struct FMC_CELL_TRACKING {
   using at_most_one_hypothesis_container = FactorContainer<at_most_one_cell_factor, FMC_CELL_TRACKING, 1, false>;
 
   using transition_message_container = MessageContainer<transition_message, 0, 0, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING, 0>;
-  using at_most_one_cell_message_container = MessageContainer<at_most_one_cell_message, 0, 1, message_passing_schedule::full, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING, 1>;
+  using at_most_one_cell_message_container = MessageContainer<at_most_one_cell_message, 0, 1, message_passing_schedule::left, variableMessageNumber, variableMessageNumber, FMC_CELL_TRACKING, 1>;
 
   using FactorList = meta::list<detection_factor_container, at_most_one_hypothesis_container>;
   using MessageList = meta::list<transition_message_container, at_most_one_cell_message_container>;

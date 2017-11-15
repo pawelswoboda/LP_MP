@@ -152,7 +152,7 @@ public:
    }
    INDEX GetNumberOfPairwiseFactors() const { return pairwiseFactor_.size(); }
    std::array<INDEX,2> GetPairwiseVariables(const INDEX factorNo) const { return pairwiseIndices_[factorNo]; }
-   INDEX GetNumberOfLabels(const INDEX i) const { return unaryFactor_[i]->size(); }
+   INDEX GetNumberOfLabels(const INDEX i) const { return unaryFactor_[i]->GetFactor()->size(); }
    REAL GetPairwiseValue(const INDEX factorId, const INDEX i1, const INDEX i2) const
    {
       assert(i1 < GetNumberOfLabels( GetPairwiseVariables(factorId)[0] ));
@@ -393,8 +393,8 @@ public:
       //using RightUnaryLoopType = typename RightMessageType::LeftLoopType;
       //using RightPairwiseLoopType = typename RightMessageType::RightLoopType;
 
-      const INDEX rightDim = right->size();
-      const INDEX leftDim = p->size() / rightDim;
+      const INDEX rightDim = right->GetFactor()->size();
+      const INDEX leftDim = p->GetFactor()->dim1();
 
       //RightUnaryLoopType rightUnaryLoop(rightDim);
       //std::array<INDEX,2> pairwiseDim = {{leftDim, rightDim}};
@@ -407,8 +407,8 @@ public:
       //using LeftUnaryLoopType = typename LeftMessageType::LeftLoopType;
       //using LeftPairwiseLoopType = typename LeftMessageType::RightLoopType;
 
-      const INDEX leftDim = left->size();
-      const INDEX rightDim = p->size() / leftDim;
+      const INDEX leftDim = left->GetFactor()->size();
+      const INDEX rightDim = p->GetFactor()->dim2();
 
       //LeftUnaryLoopType leftUnaryLoop(leftDim);
       //std::array<INDEX,2> pairwiseDim = {{leftDim, rightDim}};

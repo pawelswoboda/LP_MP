@@ -951,8 +951,8 @@ void LP::ComputeAnisotropicWeights(
    std::atomic<INDEX>* last_receiving_factor = new std::atomic<INDEX>[f_.size()];
    std::fill(last_receiving_factor, last_receiving_factor + f_.size(), 0);
 #else
-   std::vector<INDEX> no_send_factors(f_.size(),0);
-   std::vector<INDEX> no_send_factors_later(f_.size(),0);
+   std::vector<INDEX> no_send_factors(f_.size(),0); // no of messages over which messages can be sent from given factor
+   std::vector<INDEX> no_send_factors_later(f_.size(),0); // no of messages over which messages are sent from given factor in given direction
    std::vector<INDEX> no_receiving_factors_later(f_.size(),0); // number of factors later than current one receiving message from current one
    std::vector<INDEX> last_receiving_factor(f_.size(), 0); // what is the last (in the order given by factor iterator) factor that receives a message?
 #endif
@@ -1044,7 +1044,13 @@ void LP::ComputeAnisotropicWeights(
                   const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
                   assert(i != j);
                   if(i<j || last_receiving_factor[j] > i) {
-                     omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                     //omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                    if(no_receiving_factors_later[i] > 0) {
+                      omega[c][k] = (1.0/REAL(1 + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                    } else {
+                      omega[c][k] = (1.0/REAL(no_send_factors_later[i]));
+                    }
+                    // omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
                   } else {
                      omega[c][k] = 0.0;
                   } 

@@ -48,6 +48,8 @@ public:
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector<REAL>*>(this) ); }
 
+   auto export() { return std::tie(*static_cast<vector<REAL>*>(this)); }
+
    void init_primal() { primal_ = size(); }
    INDEX primal() const { return primal_; }
    INDEX& primal() { return primal_; }
@@ -78,16 +80,14 @@ public:
    // note: this function can also be used to reduce sat constraints: Implement a second solver that implements this in terms of external_solver_interface functions!
    // the same holds for LP-interface
    template<typename EXTERNAL_SOLVER>
-   void construct_constraints(EXTERNAL_SOLVER& s) const
+   void construct_constraints(EXTERNAL_SOLVER& s, typename EXTERNAL_SOLVER::vector v) const
    {
-      auto variables = s.add_vector(*this);
-      s.add_simplex_constraint(variables.begin(), variables.end());
+      s.add_simplex_constraint(v.begin(), v.end());
    }
    template<typename EXTERNAL_SOLVER>
-   void convert_primal_test(EXTERNAL_SOLVER& s)
+   void convert_to_primal(EXTERNAL_SOLVER& s, typename EXTERNAL_SOLVER::vector v)
    {
-      auto variables = s.load_vector(*this);
-      primal() = s.first_active(variables);
+      primal_ = s.first_active(v.begin(), v.end());
    }
 #ifdef WITH_SAT
    template<typename SAT_SOLVER>
@@ -163,10 +163,18 @@ public:
    template<class ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar(primal_); }
    template<class ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<vector<REAL>*>(this) ); }
 
+   auto export() { return std::tie(*static_cast<vector<REAL>*>(this)); }
+
    void init_primal() { primal_ = std::numeric_limits<INDEX>::max(); }
    INDEX primal() const { return primal_; }
    INDEX& primal() { return primal_; }
    void primal(const INDEX p) { primal_ = p; }
+
+   REAL sensitivity() const
+   {
+      auto minima = two_smallest_elements<REAL>(this->begin(), this->end());
+      return minima[1] - minima[0];
+   }
 
 #ifdef WITH_SAT
    template<typename SAT_SOLVER>
