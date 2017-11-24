@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "test.h"
 #include "serialization.hxx"
 
 using namespace LP_MP;
@@ -11,7 +11,8 @@ const INDEX archive_size(T&& e)
    return ar.size();
 }
 
-TEST_CASE( "serialization", "[serialization]" ) {
+int main()
+{
 
    // INDEX valued types
    INDEX i=10;
@@ -38,22 +39,22 @@ TEST_CASE( "serialization", "[serialization]" ) {
    a_ar(r_r);
    a_ar(m_r);
 
-   SECTION("allocate archive") {
-      REQUIRE(archive_size(i) == sizeof(INDEX));
-      REQUIRE(archive_size(a) == 2*sizeof(INDEX));
-      REQUIRE(archive_size(v) == 3*sizeof(INDEX));
-      REQUIRE(archive_size(binary_data<INDEX>(p, 4)) == 4*sizeof(INDEX));
+    { // allocate archive
+      test(archive_size(i) == sizeof(INDEX));
+      test(archive_size(a) == 2*sizeof(INDEX));
+      test(archive_size(v) == 3*sizeof(INDEX));
+      test(archive_size(binary_data<INDEX>(p, 4)) == 4*sizeof(INDEX));
 
-      REQUIRE(archive_size(i_r) == sizeof(REAL));
-      REQUIRE(archive_size(a_r) == 2*sizeof(REAL));
-      REQUIRE(archive_size(v_r) == 3*sizeof(REAL));
-      REQUIRE(archive_size(binary_data<REAL>(p_r, 4)) == 4*sizeof(REAL));
-      REQUIRE(archive_size(r_r) == 3*sizeof(REAL));
-      REQUIRE(archive_size(m_r) == 15*sizeof(REAL));
+      test(archive_size(i_r) == sizeof(REAL));
+      test(archive_size(a_r) == 2*sizeof(REAL));
+      test(archive_size(v_r) == 3*sizeof(REAL));
+      test(archive_size(binary_data<REAL>(p_r, 4)) == 4*sizeof(REAL));
+      test(archive_size(r_r) == 3*sizeof(REAL));
+      test(archive_size(m_r) == 15*sizeof(REAL));
    }
 
 
-   SECTION("individual saving") {
+   { // individual saving
       serialization_archive ar(a_ar);
 
       save_archive s_ar(ar);
@@ -68,33 +69,33 @@ TEST_CASE( "serialization", "[serialization]" ) {
 
       decltype(i) i_test;
       l_ar(i_test);
-      REQUIRE(i_test == i);
+      test(i_test == i);
 
       decltype(a) a_test;
       l_ar(a_test);
-      REQUIRE(a_test == a);
+      test(a_test == a);
 
       decltype(v) v_test(v.size());
       l_ar(v_test);
-      REQUIRE(v_test == v);
+      test(v_test == v);
 
       decltype(p) p_test = {0,0,0,0};
       l_ar( binary_data<INDEX>(p_test, 4) );
-      REQUIRE(p_test[0] == p[0]);
-      REQUIRE(p_test[1] == p[1]);
-      REQUIRE(p_test[2] == p[2]);
-      REQUIRE(p_test[3] == p[3]);
+      test(p_test[0] == p[0]);
+      test(p_test[1] == p[1]);
+      test(p_test[2] == p[2]);
+      test(p_test[3] == p[3]);
 
       decltype(r_r) r_test(3);
       l_ar( r_test );
-      REQUIRE(r_test == r_r);
+      test(r_test == r_r);
 
       decltype(m_r) m_test(m_r.dim1(), m_r.dim2());
       l_ar( m_test );
-      REQUIRE(m_test == m_r);
+      test(m_test == m_r);
    }
 
-   SECTION("collective saving") {
+   { // collective saving
       serialization_archive ar(a_ar);
 
       save_archive s_ar(ar);
@@ -111,15 +112,15 @@ TEST_CASE( "serialization", "[serialization]" ) {
 
       l_ar(i_test, a_test, v_test, binary_data<INDEX>(p_test,4), r_test, m_test);
 
-      REQUIRE(i_test == i);
-      REQUIRE(a_test == a);
-      REQUIRE(v_test == v);
-      REQUIRE(p_test[0] == p[0]);
-      REQUIRE(p_test[1] == p[1]);
-      REQUIRE(p_test[2] == p[2]);
-      REQUIRE(p_test[3] == p[3]);
-      REQUIRE(r_test == r_r);
-      REQUIRE(m_test == m_r);
+      test(i_test == i);
+      test(a_test == a);
+      test(v_test == v);
+      test(p_test[0] == p[0]);
+      test(p_test[1] == p[1]);
+      test(p_test[2] == p[2]);
+      test(p_test[3] == p[3]);
+      test(r_test == r_r);
+      test(m_test == m_r);
    } 
 }
 

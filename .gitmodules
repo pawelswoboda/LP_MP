@@ -4,9 +4,6 @@
 [submodule "external/meta"]
 	path = external/meta
 	url = https://github.com/ericniebler/meta.git
-[submodule "external/Catch"]
-	path = external/Catch
-	url = https://github.com/philsquared/Catch.git
 [submodule "external/cpp-sort"]
 	path = external/cpp-sort
 	url = https://github.com/Morwenn/cpp-sort.git
