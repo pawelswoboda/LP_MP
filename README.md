@@ -1,7 +1,7 @@
 LP_MP
 ========
 
-LP_MP is a C++ framework for developing scalable monotonuously improving dual block coordinate ascent (also known as message passing) solvers for a wide range of LP-relaxations to discrete optimization problems.
+LP_MP is a C++ framework for developing scalable dual (Lagrangean) decomposition based algorithms solvers for a wide range of LP-relaxations to discrete optimization problems.
 For a theoretical introduction to the techniques used and the class of problems that can be optimized see [here](https://arxiv.org/abs/1612.05460).
 
 ## Solvers
