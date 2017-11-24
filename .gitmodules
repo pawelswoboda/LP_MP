@@ -16,9 +16,6 @@
 [submodule "lingeling"]
 	path = external/lingeling
 	url = https://github.com/msoos/lingeling-ala.git
-[submodule "external/MCF-SSP"]
-	path = external/MCF-SSP
-	url = https://github.com/pawelswoboda/MCF-SSP.git
 [submodule "external/BCFW-Bundle"]
 	path = external/BCFW-Bundle
 	url = https://github.com/pawelswoboda/BCFW-Bundle.git
