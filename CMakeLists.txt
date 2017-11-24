@@ -13,6 +13,7 @@ add_definitions(-march=native)
 
 option(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
 option(WITH_SAT_BASED_ROUNDING "SAT based rounding" ON)
+option(LP_MP_TEST "build tests" OFF)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/libsimdpp")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/Catch/include")
@@ -82,5 +83,8 @@ else()
 endif()
 
 include_directories(include)
-add_subdirectory(test)
+
+if(LP_MP_TEST)
+  add_subdirectory(test)
+endif()
 

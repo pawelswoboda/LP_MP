@@ -32,7 +32,7 @@
 
 // do zrobienia: remove these
 //#include "factors/reparametrization_storage.hxx"  // also delete file
-#include "messages/message_storage.hxx"
+//#include "messages/message_storage.hxx"
 #include <fstream>
 #include <sstream>
 #include <valarray> // do zrobienia: do not use
