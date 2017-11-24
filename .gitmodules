@@ -1,24 +1,12 @@
-[submodule "external/MQLib"]
-	path = external/MQLib
-	url = git://github.com/pawelswoboda/MQLib.git
 [submodule "external/libsimdpp"]
 	path = external/libsimdpp
 	url = https://github.com/p12tic/libsimdpp.git
-[submodule "external/arboricity"]
-	path = external/arboricity
-	url = https://github.com/pawelswoboda/arboricity.git
 [submodule "external/meta"]
 	path = external/meta
 	url = https://github.com/ericniebler/meta.git
 [submodule "external/Catch"]
 	path = external/Catch
 	url = https://github.com/philsquared/Catch.git
-[submodule "external/andres_graph"]
-	path = external/andres_graph
-	url = https://github.com/bjoern-andres/graph.git
-[submodule "external/opengm"]
-	path = external/opengm
-	url = https://github.com/opengm/opengm.git
 [submodule "external/cpp-sort"]
 	path = external/cpp-sort
 	url = https://github.com/Morwenn/cpp-sort.git
@@ -28,12 +16,9 @@
 [submodule "lingeling"]
 	path = external/lingeling
 	url = https://github.com/msoos/lingeling-ala.git
-[submodule "external/tropical-convolution"]
-	path = external/tropical-convolution
-	url = https://github.com/pawelswoboda/tropical-convolution.git
-[submodule "external/PEGTL.1.3"]
-	x = 1.3.x
-[submodule "external/PEGTL"]
-	path = external/PEGTL
-	url = https://github.com/taocpp/PEGTL.git
-	branch = 1.3.x
+[submodule "external/MCF-SSP"]
+	path = external/MCF-SSP
+	url = https://github.com/pawelswoboda/MCF-SSP.git
+[submodule "external/BCFW-Bundle"]
+	path = external/BCFW-Bundle
+	url = https://github.com/pawelswoboda/BCFW-Bundle.git

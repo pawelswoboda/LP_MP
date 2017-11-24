@@ -161,8 +161,22 @@ public:
       return *this;
    }
 
+   vector& operator+=(vector<T> o)
+   {
+     static_assert(std::is_same<T,double>::value,"");
+      assert(size() == o.size());
+      for(INDEX i=0; i<size(); i+=REAL_ALIGNMENT) {
+         REAL_VECTOR tmp = simdpp::load( begin_+i );
+         REAL_VECTOR v = simdpp::load(o.begin() + i);
+         simdpp::store(begin_ + i, tmp + v);
+       }
+      return *this;
+   }
+
    void share(const vector& o)
    {
+      // memory leak here!
+      assert(false);
       begin_ = o.begin_;
       end_ = o.end_; 
    }
@@ -664,7 +678,19 @@ public:
        assert(false);
      }
 
-     return std::move(min);
+     return min;
+   }
+
+   //minimum along second dimension, such that to each row of matrix v is added.
+   vector<T> min1(const vector<T>& v) const
+   {
+      assert(v.size() == dim2());
+      static_assert(std::is_same<T,REAL>::value, "");
+      vector<T> min(dim1());
+      for(INDEX x1=0; x1<dim1(); ++x1) {
+         min[x1] = col_min(x1, v);
+      }
+      return min; 
    }
 
    // minima along first dimension
@@ -691,7 +717,32 @@ public:
        assert(false);
      }
 
-     return std::move(min); 
+     return min; 
+   }
+
+   // possibly make free function!
+   vector<T> min2(const vector<T>& v) const
+   {
+     static_assert(std::is_same<T,REAL>::value, "");
+     assert(v.size() == dim1());
+     vector<T> min(dim2());
+
+     for(INDEX x2=0; x2<dim2(); x2+=REAL_ALIGNMENT) {
+        REAL_VECTOR tmp = simdpp::load( vec_.begin() + x2 );
+        REAL_VECTOR _v = simdpp::load(v.begin() + x2);
+        simdpp::store(&min[x2], tmp + _v);
+     }
+     for(INDEX x1=1; x1<dim1(); ++x1) {
+        for(INDEX x2=0; x2<dim2(); x2+=REAL_ALIGNMENT) {
+           REAL_VECTOR tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
+           REAL_VECTOR _v = simdpp::load(v.begin() + x2);
+           REAL_VECTOR cur_min = simdpp::load( &min[x2] );
+           auto updated_min = simdpp::min(cur_min, tmp + _v);
+           simdpp::store(&min[x2], updated_min);
+        } 
+     }
+
+     return min;
    }
 
    T min() const
@@ -709,6 +760,22 @@ public:
      }
      return simdpp::reduce_min(cur_min); 
    }
+
+   T col_min(const INDEX x1, const vector<T>& v) const
+   {
+     assert(x1<dim1());
+     REAL_VECTOR cur_min = simdpp::load( vec_.begin() + x1*padded_dim2() );
+     REAL_VECTOR _v = simdpp::load(v.begin());
+     cur_min = cur_min + _v;
+     for(INDEX x2=REAL_ALIGNMENT; x2<dim2(); x2+=REAL_ALIGNMENT) {
+       REAL_VECTOR tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
+       REAL_VECTOR _v = simdpp::load(v.begin() + x2);
+       tmp = tmp + _v;
+       cur_min = simdpp::min(cur_min, tmp); 
+     }
+     return simdpp::reduce_min(cur_min); 
+   }
+
 protected:
    vector<T> vec_;
    const INDEX dim2_;

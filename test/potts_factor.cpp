@@ -22,13 +22,12 @@ void test_factor_equal(pairwise_potts_factor& p1, PairwiseSimplexFactor p2)
 {
    REQUIRE( p1.LowerBound() == p2.LowerBound() ); 
 
-   std::array<REAL,3> msg;
-   std::array<REAL,3> msg2;
-
-   p1.min_marginal_1(msg); p2.min_marginal_1(msg2);
+   auto msg = p1.min_marginal_1();
+   auto msg2 =  p2.min_marginal_1();
    REQUIRE(msg == msg2);
 
-   p1.min_marginal_2(msg); p2.min_marginal_2(msg2);
+   msg = p1.min_marginal_2(); 
+   msg2 = p2.min_marginal_2();
    REQUIRE(msg == msg2);
 }
 

@@ -3,27 +3,8 @@
 
 #include "LP_MP.h"
 #include "serialization.hxx"
-#include "SVM-NEW/SVM.h"
 
 namespace LP_MP {
-
-   /*
-   struct tree_node {
-      FactorTypeAdapter* f; // do zrobienia: possibly only store the factor itself, not the whole FactorContainer
-      tree_node* child = nullptr; // leftmost child
-      MessageTypeAdapter* child_msg = nullptr;
-      tree_node *right = nullptr; // right sibling
-      MessageTypeAdapter* right_msg = nullptr;
-   };
-
-   struct shared_factor {
-      const INDEX idx; // index in array holding tree nodes 
-      INDEX no_occurences;
-      INDEX pos;
-      INDEX Lagrangean_vars_offset; // at which offset are the Lagrangean variables for factor f stored?
-   };
-   */
-
 
 // factors are arranged in trees.
 class LP_tree
@@ -59,7 +40,7 @@ public:
       dual_size_in_bytes_ = compute_dual_size_in_bytes();
    }
 
-   void compute_subgradient()
+   REAL compute_subgradient()
    {
       assert(factors_.size() == tree_messages_.size() + 1); // otherwise call init
       // send messages up the tree
@@ -70,31 +51,46 @@ public:
       }
       // compute primal for topmost factor
       // also init primal for top factor, all other primals were initialized already by send_message_up
-      if(std::get<1>(tree_messages_.back()) == Chirality::right) {
-         // init primal for right factor!
-         std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->init_primal();
-         std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->MaximizePotentialAndComputePrimal();
-      } else {
-         std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->init_primal(); 
-         std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->MaximizePotentialAndComputePrimal(); 
+      REAL subgradient_value = 0.0;
+      {
+         auto* msg = std::get<0>(tree_messages_.back());
+         Chirality c = std::get<1>(tree_messages_.back());
+         if(c == Chirality::right) {
+            // init primal for right factor!
+            msg->GetRightFactorTypeAdapter()->init_primal();
+            msg->GetRightFactorTypeAdapter()->MaximizePotentialAndComputePrimal();
+            subgradient_value = msg->GetRightFactorTypeAdapter()->EvaluatePrimal();
+         } else {
+            assert(c == Chirality::left);
+            msg->GetLeftFactorTypeAdapter()->init_primal(); 
+            msg->GetLeftFactorTypeAdapter()->MaximizePotentialAndComputePrimal(); 
+            subgradient_value = msg->GetLeftFactorTypeAdapter()->EvaluatePrimal();
+         }
       }
       // track down optimal primal solution
       for(auto it = tree_messages_.rbegin(); it!= tree_messages_.rend(); ++it) {
-         auto* m = std::get<0>(*it);
+         auto* msg = std::get<0>(*it);
          Chirality c = std::get<1>(*it);
-         m->track_solution_down(c);
+         msg->track_solution_down(c);
+         if(c == Chirality::right) {
+            subgradient_value += msg->GetLeftFactorTypeAdapter()->EvaluatePrimal();
+         } else {
+            assert(c == Chirality::left);
+            subgradient_value += msg->GetRightFactorTypeAdapter()->EvaluatePrimal();
+         }
       } 
 
       // check if primal cost is equal to lower bound
       assert(primal_consistent());
       assert(std::abs(lower_bound() - primal_cost()) <= eps);
+      assert(std::abs(subgradient_value - primal_cost()) <= eps);
+      return subgradient_value;
    }
 
    template<typename VECTOR1>
-   void compute_mapped_subgradient(VECTOR1& subgradient, const REAL step_size)
+   REAL compute_mapped_subgradient(VECTOR1& subgradient)
    {
-      compute_subgradient();
-
+      const REAL subgradient_value = compute_subgradient();
       std::vector<double> local_subgradient(dual_size(),0.0);
       // write primal solution into subgradient
       for(auto L : Lagrangean_factors_) {
@@ -103,20 +99,22 @@ public:
       assert(mapping_.size() >= dual_size());
       for(INDEX i=0; i<dual_size(); ++i) {
          assert(mapping_[i] < subgradient.size());
-         subgradient[ mapping_[i] ] += step_size * local_subgradient[i];
+         subgradient[ mapping_[i] ] += local_subgradient[i];
       } 
+      return subgradient_value;
    }
 
    template<typename VECTOR>
-   void compute_subgradient(VECTOR& subgradient, const REAL step_size)
+   REAL compute_subgradient(VECTOR& subgradient, const REAL step_size)
    {
-      compute_subgradient();
+      const REAL subgradient_value = compute_subgradient();
 
       std::fill(subgradient.begin(), subgradient.end(), 0.0);
       // write primal solution into subgradient
       for(auto L : Lagrangean_factors_) {
          L.copy_fn(&subgradient[0]);
       }
+      return subgradient_value;
    }
 
    bool primal_consistent() const 
@@ -224,90 +222,6 @@ public:
    { 
       assert(primal_size_in_bytes_ == compute_primal_size_in_bytes());
       return primal_size_in_bytes_; 
-   }
-
-
-   // for the Frank Wolfe implementation
-   // to do: change the SVM implementation and make these methods virtual instead of static.
-   // to do: Lagrangean factors are shared between trees. Hence, one must in each tree use these factors with costs divided by number of appearances in different trees.
-   // _y is the primal labeling to be computed
-   // wi is the Lagrangean variables
-   static double max_fn(double* wi, YPtr _y, TermData term_data)
-   {
-      LP_tree* t = (LP_tree*) term_data;
-
-      // first add weights to problem
-      // we only need to add Lagrange variables to Lagrangean_factors_ (others are not shared)
-      t->add_weights(wi, -1.0);
-
-      // compute optimal labeling
-      t->compute_subgradient();
-
-      // remove weights again
-      t->add_weights(wi, +1.0);
-
-      // store primal solution in archive
-      void* y = (void*) _y;
-      serialization_archive ar(y, t->primal_size_in_bytes());
-      save_archive s_ar(ar);
-      for(auto f : t->factors_) {
-         f->serialize_primal(s_ar);
-      }
-      ar.release_memory(); // so that memory will not be automatically deallocated
-
-      return -t->primal_cost(); // SVN considers maximization problem!
-   }
-
-   static bool compare_fn(YPtr _y1, YPtr _y2, TermData term_data)
-   {
-      // the primal is a binary archive constructed by serializing the primal solutions
-      LP_tree* t = (LP_tree*) term_data;
-      const INDEX size = t->primal_size_in_bytes();
-      return std::memcmp((void*) _y1, (void*) _y2, size) == 0;
-   }
-
-   // copy values provided by subgradient from all factors into ai
-   static void copy_fn(double* ai, YPtr _y, TermData term_data)
-   {
-      LP_tree* t = (LP_tree*) term_data;
-
-      std::fill(ai, ai+t->dual_size(), double(0.0));
-
-      // read in primal solution from which to compute subgradient
-      char* mem = (char*) _y;
-      serialization_archive ar(_y, t->primal_size_in_bytes());
-      load_archive l_ar(ar);
-      for(auto f : t->factors_) { // theoretically, we would only need to load primals of Lagrangean factors!
-         f->serialize_primal(l_ar);
-      } 
-      ar.release_memory();
-
-      for(auto L : t->Lagrangean_factors_) {
-         L.copy_fn(ai);
-      }
-   }
-
-   static double dot_product_fn(double* wi, YPtr _y, TermData term_data)
-   {
-      LP_tree* t = (LP_tree*) term_data;
-
-      // read in primal solution
-      // to do: only primal solution associated with Lagrangean factors needs to be read in
-      char* mem = (char*) _y;
-      serialization_archive ar(_y, t->primal_size_in_bytes());
-      load_archive l_ar(ar);
-      for(auto f : t->factors_) {
-         f->serialize_primal(l_ar);
-      }
-
-      double v = 0.0;
-      for(auto L : t->Lagrangean_factors_) {
-         v += L.dot_product_fn(wi);
-      }
-
-      ar.release_memory();
-
-      return v;
    }
 
    void add_weights(const double* wi, const double scaling)
@@ -643,24 +557,7 @@ public:
 
    INDEX no_Lagrangean_vars() const { return Lagrangean_vars_size_; }
 
-   SVM* build_up_solver(const REAL lambda = 0.1)
-   {
-      auto* svm = new SVM(no_Lagrangean_vars(), trees_.size(), LP_tree::max_fn, LP_tree::copy_fn, LP_tree::compare_fn, LP_tree::dot_product_fn, nullptr, false);//int d, int n, MaxFn max_fn, CopyFn copy_fn, CompareFn compare_fn, DotProductFn dot_product_fn, DotProductKernelFn dot_product_kernel_fn, bool zero_lower_bound);
-      //svm->SetParams(lambda, 1.0, 1.0); // lambda, mu, kappa
-
-      for(INDEX i=0; i<trees_.size(); ++i) {
-         auto& t = trees_[i];
-         const INDEX primal_size_in_bytes = t.primal_size_in_bytes();
-
-         svm->SetTerm(i, &t, t.mapping().size()-1, t.primal_size_in_bytes(), &t.mapping()[0]); // although mapping is of length di + 1 (the last entry being di itself, its length must be given as di!
-      }
-
-      svm->options.gap_threshold = 0.0001;
-      svm->options.iter_max = 100000;
-
-      return svm;
-   }
-
+   
    void ComputeForwardPassAndPrimal(const INDEX iteration) 
    {
       assert(false);
@@ -703,126 +600,38 @@ protected:
    INDEX Lagrangean_vars_size_;
 };
 
-/*
-struct SVM_FW_visitor {
-
-   bool visit(SVM* svm)
-   { 
-      double lower_bound, upper_bound;
-      svm->GetBounds(lower_bound, upper_bound); // this is expensive! (calls real oracles)
-      const double dual_gap_bound = upper_bound - lower_bound;
-
-      const double cur_cost = svm->Evaluate();
-
-      // early stop if decrease (here increase, because we invert) is large enough.
-      const bool sufficient_decrease = (cur_cost - orig_cost) >= minimum_improvement;
-
-      if (dual_gap_bound < svm->options.gap_threshold) return false;
-      if (sufficient_decrease) return false;
-      return true;
-   }
-
-   const double minimum_improvement;
-   const double orig_cost;
-};
-*/
-
-// solve problem with Frank Wolfe in trust region fashion
-class LP_FW_TR : public LP_with_trees {
-public:
-   using LP_with_trees::LP_with_trees;
-
-   void ComputePass(const INDEX iteration)
-   {
-      std::cout << "compute pass fw\n";
-      // compute descent with quadratic term centered at current reparametrization.
-      // unfortunately, the SVM solver has to be built up from scratch in every iteration
-
-      auto* svm = build_up_solver();
-      const REAL lb = this->LowerBound();
-      //SVM_FW_visitor visitor({0.0,lb});
-      //auto visitor_func = std::bind(&SVM_FW_visitor::visit, &visitor, std::placeholders::_1);
-      //svm->options.callback_fn = visitor_func;
-      double* const w = svm->Solve();
-      add_weights(w, -1.0);
-      delete svm;
-      std::cout << "after lower bound = " << this->LowerBound() << "\n";
-   }
-
-private:
-   //SVM_FW_visitor* visitor_;
-};
-
-// solve problem with Frank Wolfe with diminishing smoothing term
-class LP_FW_DS : public LP_with_trees {
-public:
-   using LP_with_trees::LP_with_trees;
-
-   ~LP_FW_DS()
-   {
-      if(svm_) {
-         delete svm_;
-      } 
-   }
-
-   void Begin()
-   {
-      assert(false);
-      std::cout << "not supported anymore, remove this class\n";
-      LP_with_trees::Begin();
-
-      // set up SVM solver once
-      svm_ = build_up_solver();
-
-      // set up storage for Lagrangeans
-      w_.resize(Lagrangean_vars_size_, 0.0); 
-   }
-
-   void ComputePass(const INDEX iteration)
-   {
-      const REAL lambda = 1.0/REAL(iteration + 1+1);
-      //auto* svm = build_up_solver(lambda);
-      assert(false); // no diminishing smoothing suppoted anymore
-      //svm_->SetParams(lambda, 1.0, 1.0); // lambda, mu, kappa
-      double* const w = svm_->Solve();
-      add_weights(w, -1.0); // *lambda);
-      std::cout << "lambda = " << lambda << "\n";
-      std::cout << "after lower bound = " << this->LowerBound() << "\n";
-      add_weights(w, +1.0);
-
-      std::copy(w, w+Lagrangean_vars_size_, w_.begin());
-   }
-
-   void End()
-   {
-      //add_weights(&w_[0], -1.0);
-      //LP_with_trees::End();
-   }
-
-private:
-   SVM* svm_ = nullptr;
-   std::vector<double> w_;
-};
-
-// perform subgradient ascent with either diminishing step size or Polyak's step size
+// perform subgradient ascent with Polyak's step size with estimated optimum
 class LP_subgradient_ascent : public LP_with_trees {
 public:
    using LP_with_trees::LP_with_trees;
 
-   void ComputePass(const INDEX iteration)
+   void Begin()
    {
-      // diminishing step size
-      const REAL step_size = 1.0/(0.05*iteration+1);
-      std::vector<REAL> subgradient(this->no_Lagrangean_vars(), 0.0);
-      for(INDEX i=0; i<trees_.size(); ++i) {
-         trees_[i].compute_mapped_subgradient(subgradient, step_size); // note that mapping has one extra component!
-      }
-
-      std::cout << "stepsize = " << step_size << ", absolute value of subgradient = " << std::accumulate(subgradient.begin(), subgradient.end(), 0.0, [=](REAL s, REAL x) { return s + 1.0/step_size*std::abs(x); }) << "\n";
-      add_weights(&subgradient[0], 1.0);
-
+      best_lower_bound = -std::numeric_limits<REAL>::infinity();
+      LP_with_trees::Begin(); 
    }
 
+   void ComputePass(const INDEX iteration)
+   {
+      REAL current_lower_bound = 0.0;
+      std::vector<REAL> subgradient(this->no_Lagrangean_vars(), 0.0);
+      for(INDEX i=0; i<trees_.size(); ++i) {
+         current_lower_bound += trees_[i].compute_mapped_subgradient(subgradient); // note that mapping has one extra component!
+         //trees_[i].primal_cost();
+      }
+      best_lower_bound = std::max(current_lower_bound, best_lower_bound);
+      assert(std::find_if(subgradient.begin(), subgradient.end(), [](auto x) { return x != 0.0 && x != 1.0 && x != -1.0; }) == subgradient.end());
+      const REAL subgradient_one_norm = std::accumulate(subgradient.begin(), subgradient.end(), 0.0, [=](REAL s, REAL x) { return s + std::abs(x); });
+
+      const REAL step_size = (best_lower_bound - current_lower_bound + subgradient.size())/(10.0 + iteration) / subgradient_one_norm;
+
+      std::cout << "stepsize = " << step_size << ", absolute value of subgradient = " << subgradient_one_norm << "\n";
+      add_weights(&subgradient[0], step_size);
+   }
+
+private:
+   REAL best_lower_bound;
+   REAL step_size;
 };
 
 } // end namespace LP_MP

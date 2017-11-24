@@ -480,6 +480,12 @@ public:
       return true;
    }
 
+   const std::vector<INDEX>& assignment_nodes(const INDEX i) const
+   {
+      assert(i<graph_.size());
+      return graph_[i];
+   }
+
 private:
    std::vector<std::vector<INDEX>> graph_;
 
@@ -562,7 +568,7 @@ public:
       const INDEX tripletDim2 = this->GetNumberOfLabels(tripletVar2);
       const INDEX tripletDim3 = this->GetNumberOfLabels(tripletVar3);
          
-      assert(pairwiseDim1*pairwiseDim2 == p->size());
+      assert(pairwiseDim1*pairwiseDim2 == p->GetFactor()->size());
 
       using MessageType = typename PAIRWISE_TRIPLET_MESSAGE_CONTAINER::MessageType;
       MessageType m = MessageType(tripletDim1, tripletDim2, tripletDim3);

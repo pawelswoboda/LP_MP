@@ -255,9 +255,6 @@ private:
    INDEX flag1, flag2;
 };
 
-
-
-
-};
+} // namespace LP_MP
 
 #endif

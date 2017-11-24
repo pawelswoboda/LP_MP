@@ -2483,7 +2483,7 @@ public:
    auto create_constraints(EXTERNAL_SOLVER& s)
    {
       // transform exported variables to external solver variables
-      auto vars = factor_.export();
+      auto vars = factor_.export_variables();
       auto external_vars = std::apply([&s](auto ...x){ std::make_tuple(convert_variables_to_external(s, x)...);}, vars);
 
       // unpack tuple and call create_constraints function of factor

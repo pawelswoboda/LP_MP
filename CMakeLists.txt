@@ -11,49 +11,19 @@ add_compile_options(-std=c++14)
 # compiler options
 add_definitions(-march=native)
 
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-
-# Options
-option(BUILD_GRAPH_MATCHING "Build graph matching" ON)
-option(BUILD_GRAPH_MATCHING_EVALUATION "Build graph matching evaluation" OFF)
-option(BUILD_MULTICUT "Build multicut" ON)
-option(BUILD_MULTICUT_EVALUATION "Build multicut evaluation" OFF)
-option(BUILD_MAX_CUT "Build max-cut" ON)
-option(BUILD_GRAPHICAL_MODEL "Build graphical model" ON)
-option(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" ON)
-option(BUILD_CELL_TRACKING "Build cell tracking solver" OFF)
-option(BUILD_MORAL_LINEAGE_TRACING "Build moral lineage tracing solver" OFF)
-option(BUILD_CANDIDATE_MULTICUT "Build candidate multicut solver" OFF)
-option(BUILD_DISCRETE_TOMOGRAPHY_EVALUATION "Build discrete tomography evaluation" OFF)
-option(BUILD_TESTS "Build tests" ON)
-option(WITH_GUROBI "LP interface to gurobi" OFF)
-option(WITH_CPLEX "LP interface to Cplex" OFF)
-option(WITH_SAT_BASED_ROUNDING "Use the lingeling SAT solver to decode a primal solution based on reparametrization" OFF)
 option(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
-
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/MQLib/include")
-find_library(MAX_CUT_LIB NAMES MQLib.a PATHS "${CMAKE_CURRENT_SOURCE_DIR}/external/MQLib/bin")
-#link_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/MQLib/bin/")
+option(WITH_SAT_BASED_ROUNDING "SAT based rounding" ON)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/libsimdpp")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/arboricity")
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/arboricity")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/andres_graph/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/Catch/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/meta/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/PEGTL")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/opengm/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/cpp-sort/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/TCLAP/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/tropical-convolution")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/ConicBundle/include")
 link_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/ConicBundle/lib")
-
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/open-pls/src")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/genneteq")
-
-#find_library(ARBORICITY NAMES libarboricity.a PATHS "${CMAKE_CURRENT_SOURCE_DIR}/external/arboricity")
 
 include(ExternalProject)
 list(APPEND DEPENDENCIES lingeling_project)
@@ -83,18 +53,6 @@ if(BUILD_MULTICUT OR BUILD_MULTICUT_EVALUATION OR BUILD_GRAPHICAL_MODEL)
    message(STATUS ${HDF5_INCLUDE_DIR})
 endif()
 
-# GUROBI
-if(WITH_GUROBI)
-   find_package(Gurobi REQUIRED)
-   add_definitions(-DWITH_GUROBI)
-endif(WITH_GUROBI)
-
-# CPLEX
-if(WITH_CPLEX)
-   find_package(Cplex REQUIRED)
-   add_definitions(-DWITH_CPLEX)
-endif(WITH_CPLEX)
-
 if(WITH_SAT_BASED_ROUNDING)
    add_definitions(-DWITH_SAT)
 endif()
@@ -123,11 +81,6 @@ else()
    message(STATUS "Linking to RT is disabled")
 endif()
 
-file(GLOB_RECURSE headers include/*.hxx)
 include_directories(include)
-include_directories(lib)
-include_directories(.)
-add_subdirectory(solvers)
-add_subdirectory(lib)
 add_subdirectory(test)
 
