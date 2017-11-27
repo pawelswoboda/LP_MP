@@ -13,18 +13,7 @@ add_definitions(-march=native)
 
 option(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
 option(WITH_SAT_BASED_ROUNDING "SAT based rounding" ON)
-option(LP_MP_TEST "build tests" OFF)
 
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/libsimdpp")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/Catch/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/meta/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/cpp-sort/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/TCLAP/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
-
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/ConicBundle/include")
-link_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/ConicBundle/lib")
 
 include(ExternalProject)
 list(APPEND DEPENDENCIES lingeling_project)
@@ -36,23 +25,35 @@ ExternalProject_ADD(lingeling_project
   INSTALL_COMMAND ""
   )
 ExternalProject_Get_Property(lingeling_project install_dir)
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling")
-link_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling")
+add_library(LINGELING STATIC IMPORTED)
+set_target_properties(LINGELING PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling/liblgl.a")
+set_target_properties(LINGELING PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling/")
 
-if(WITH_GUROBI)
-  add_definitions(-DIL_STD) # legacy setting for CPLEX
-endif()
+include(ExternalProject)
+externalproject_add( conicBundle_Project
+  URL http://www-user.tu-chemnitz.de/~helmberg/ConicBundle/CB_v0.3.11.tgz
+  PATCH_COMMAND patch -s -d ${PROJECT_BINARY_DIR}/ConicBundle -p1 < ${PROJECT_SOURCE_DIR}/external/ConicBundle-v0.3.11.patch -N -r -
+  SOURCE_DIR "${PROJECT_BINARY_DIR}/ConicBundle"
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND "make"
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND ""
+  )
+
+add_library(CONIC_BUNDLE STATIC IMPORTED)
+set_target_properties(CONIC_BUNDLE PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/external/ConicBundle/include")
+set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/external/ConicBundle/lib/libcb.a")
 
 
 # HDF5 for reading OpenGM and Andres models
 # set (HDF5_USE_STATIC_LIBRARIES ON)
-if(BUILD_MULTICUT OR BUILD_MULTICUT_EVALUATION OR BUILD_GRAPHICAL_MODEL)
-   find_package(HDF5 1.8.15 REQUIRED)
-   include_directories (${HDF5_INCLUDE_DIR})
-   add_definitions(${HDF5_DEFINITIONS})
-   message(STATUS ${HDF5_LIBRARIES})
-   message(STATUS ${HDF5_INCLUDE_DIR})
-endif()
+#if(BUILD_MULTICUT OR BUILD_MULTICUT_EVALUATION OR BUILD_GRAPHICAL_MODEL)
+#   find_package(HDF5 1.8.15 REQUIRED)
+#   include_directories (${HDF5_INCLUDE_DIR})
+#   add_definitions(${HDF5_DEFINITIONS})
+#   message(STATUS ${HDF5_LIBRARIES})
+#   message(STATUS ${HDF5_INCLUDE_DIR})
+#endif()
 
 if(WITH_SAT_BASED_ROUNDING)
    add_definitions(-DWITH_SAT)
@@ -73,18 +74,26 @@ if(PARALLEL_OPTIMIZATION)
 
 endif(PARALLEL_OPTIMIZATION)
 
-IF(UNIX AND NOT APPLE)
-   find_library(TR rt)
-   set(LINK_RT true)
-   message(STATUS "Linking to RT is enabled")
-else()
-   set(LINK_RT false)
-   message(STATUS "Linking to RT is disabled")
-endif()
+#IF(UNIX AND NOT APPLE)
+#   find_library(TR rt)
+#   set(LINK_RT true)
+#   message(STATUS "Linking to RT is enabled")
+#else()
+#   set(LINK_RT false)
+#   message(STATUS "Linking to RT is disabled")
+#endif()
 
-include_directories(include)
 
-if(LP_MP_TEST)
-  add_subdirectory(test)
-endif()
+add_library(LP_MP INTERFACE)
+target_include_directories(LP_MP INTERFACE include)
+target_include_directories(LP_MP INTERFACE external/TCLAP/include)
 
+target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external/libsimdpp")
+target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external/Catch/include")
+target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external/meta/include")
+target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external/cpp-sort/include")
+target_include_directories(LP_MP INTERFACE "external/TCLAP/include")
+target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
+
+add_subdirectory(test) 
