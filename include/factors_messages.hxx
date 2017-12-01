@@ -16,8 +16,6 @@
 #include <assert.h>
 #include <cxxabi.h>
 
-#include "sat_solver.hxx"
-
 #include <mutex>
 
 #include "template_utilities.hxx"
@@ -35,8 +33,10 @@
 //#include "messages/message_storage.hxx"
 #include <fstream>
 #include <sstream>
-#include <valarray> // do zrobienia: do not use
 #include <vector>
+#include "vector"
+
+#include "DD_ILP.hxx"
 
 // this file provides message and factor containers. The factors and messages are plugged into the container and then every method call is dispatched correctly with static polymorphism and template tricks.
 
@@ -55,9 +55,6 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveMessageFromLeft, ReceiveMessageFromLeft
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromRight,ReceiveRestrictedMessageFromRight)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromLeft, ReceiveRestrictedMessageFromLeft)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessageToRight,SendMessageToRight)
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessageToLeft, SendMessageToLeft)
-
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessagesToRight,SendMessagesToRight)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessagesToLeft, SendMessagesToLeft)
 
@@ -68,19 +65,14 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeLeftFromRightPrimal, ComputeLeftFromRig
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeRightFromLeftPrimal, ComputeRightFromLeftPrimal)
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency, CheckPrimalConsistency)
-LP_MP_FUNCTION_EXISTENCE_CLASS(has_reduce_sat, reduce_sat)
-LP_MP_FUNCTION_EXISTENCE_CLASS(has_convert_primal, convert_primal)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasPrimalSize,PrimalSize)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotentialAndComputePrimal, MaximizePotentialAndComputePrimal)
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(has_apply, apply)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints)
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables)
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasReduceLp, ReduceLp)
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_create_constraints, create_constraints)
 
 LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(IsAssignable, operator[])
 }
@@ -695,9 +687,6 @@ public:
    CanCallSendMessageToLeftContainer()
    { 
       return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full || MPS == message_passing_schedule::only_send;
-      // obsolete
-      return FunctionExistence::HasSendMessageToLeft<MessageType, void, 
-      RightFactorType, MessageContainerType, REAL>(); 
    }
 
    void SendMessageToLeftContainer(RightFactorType* r, const REAL omega)
@@ -962,6 +951,20 @@ public:
    void ComputeRightFromLeftPrimal() 
    {
       rightFactor_->conditionally_init_primal(leftFactor_->primal_access_);
+
+      if constexpr (CanComputeRightFromLeftPrimalWithoutReturn()) {
+        msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+        rightFactor_->PropagatePrimal();
+        rightFactor_->ComputePrimalThroughMessages(); 
+      } else if constexpr (MessageContainerType::CanComputeRightFromLeftPrimalWithReturn()) {
+        const bool changed = msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+        if(changed) {
+          rightFactor_->PropagatePrimal();
+          rightFactor_->ComputePrimalThroughMessages();
+        }
+      }
+
+      /*
       static_if<CanComputeRightFromLeftPrimalWithoutReturn()>([&](auto f) {
         f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
         rightFactor_->PropagatePrimal();
@@ -975,6 +978,7 @@ public:
                }
          });
       });
+      */
    }
 
    void ComputeLeftFromRightPrimal()
@@ -1358,18 +1362,9 @@ public:
    virtual bool ReceivesMessageFromLeft() const final { return receives_message_from_left_constexpr(); }
    virtual bool ReceivesMessageFromRight() const final { return receives_message_from_right_constexpr(); }
 
-   // do zrobienia: remove
-   constexpr static bool CanCreateConstraints()
-   {
-      //return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
-      return FunctionExistence::HasCreateConstraints<MessageType,void, LpInterfaceAdapter*, LeftFactorType*, RightFactorType*>();
-   }
-
-   // sat related functions
-   LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_sat_clauses,construct_sat_clauses)
-
+   /*
    constexpr static bool
-   can_construct_sat_clauses()
+   can_construct_constraints()
    {
       return has_construct_sat_clauses<MessageType,void,sat_solver&, LeftFactorType, RightFactorType, sat_var, sat_var>();
    }
@@ -1383,18 +1378,8 @@ public:
          assert(false);
       }
    }
-
-
+   */ 
    
-   virtual void CreateConstraints(LpInterfaceAdapter* l) final
-   {
-      static_if<CanCreateConstraints()>([&](auto f) {
-            f(msg_op_).CreateConstraints(l,leftFactor_->GetFactor(),rightFactor_->GetFactor());
-      }).else_([&](auto) {
-         throw std::runtime_error("create constraints not implemented by message");
-      });
-   }
-
    // for traversing a tree
    virtual void send_message_up(Chirality c) final
    {
@@ -1518,6 +1503,40 @@ public:
       }
    }
 
+   // construct constraints
+   template<typename SOLVER>
+   void construct_constraints_impl(SOLVER& s, const typename DD_ILP::variable_counters& left_variable_counters, const typename DD_ILP::variable_counters& right_variable_counters)
+   {
+      auto current_variable_counters = s.get_variable_counters();
+
+      auto left_vars = leftFactor_->GetFactor()->export_variables();
+      s.set_variable_counters(left_variable_counters);
+      auto left_external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->leftFactor_->load_external_variables(s, x)...); }, left_vars);
+
+      auto right_vars = rightFactor_->GetFactor()->export_variables();
+      s.set_variable_counters(right_variable_counters);
+      auto right_external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->rightFactor_->load_external_variables(s, x)...); }, right_vars);
+
+      auto t = std::tuple_cat(std::tie(*leftFactor_), left_external_vars, std::tie(*rightFactor_), right_external_vars);
+      auto construct_constraints_fun = [this,&s](auto... x) { this->msg_op_.construct_constraints(s, x...); };
+      std::apply(construct_constraints_fun, t);
+
+      s.set_variable_counters(current_variable_counters);
+   }
+
+   virtual void construct_constraints(
+       DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s, 
+       const typename DD_ILP::variable_counters& left_variable_counters,
+       const typename DD_ILP::variable_counters& right_variable_counters 
+       ) final
+   { construct_constraints_impl(s, left_variable_counters, right_variable_counters); }
+   virtual void construct_constraints(
+       DD_ILP::external_solver_interface<DD_ILP::problem_export>& s, 
+       const typename DD_ILP::variable_counters& left_variable_counters,
+       const typename DD_ILP::variable_counters& right_variable_counters 
+       ) final
+   { construct_constraints_impl(s, left_variable_counters, right_variable_counters); }
+
 protected:
    MessageType msg_op_; // possibly inherit privately from MessageType to apply empty base optimization when applicable
    LeftFactorContainer* leftFactor_;
@@ -1634,11 +1653,6 @@ public:
      //std::cout << "not implemented\n";
      //assert(false);
    }
-   void UpdateFactorSATSynchronized(const weight_vector& omega, const REAL th, sat_var begin, sat_vec& assumptions) final
-   {
-     //std::cout << "not implemented\n";
-     //assert(false);
-   }
 #endif
 
    // do zrobienia: possibly also check if method present
@@ -1673,68 +1687,6 @@ public:
       return FunctionExistence::HasMaximizePotential<FactorType,void>();
    }
 
-   // sat related functions
-   LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_sat_clauses,construct_sat_clauses)
-
-   constexpr static bool
-   can_construct_sat_clauses()
-   {
-      return has_construct_sat_clauses<FactorType,void,sat_solver&>();
-   }
-
-   void construct_sat_clauses(sat_solver& s) 
-   {
-      static_if<can_construct_sat_clauses()>([&](auto f) {
-            f(factor_).construct_sat_clauses(s);
-            });
-      if(!can_construct_sat_clauses()) {
-         assert(false);
-      }
-   }
-
-
-   template<typename SAT_SOLVER>
-   constexpr static bool can_convert_primal()
-   {
-      return FunctionExistence::has_convert_primal<FactorType,void, SAT_SOLVER, sat_var>(); 
-   }
-   //void convert_primal(Glucose::SimpSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
-   //void convert_primal(CMSat::SATSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
-   void convert_primal(sat_solver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
-   {
-      static_if<can_convert_primal<decltype(sat)>()>([&](auto f) { 
-            f(factor_).convert_primal(sat, sat_begin);
-            });
-      assert(can_convert_primal<decltype(sat)>);
-   }
-
-   constexpr static bool
-   can_reduce_sat()
-   {
-      return FunctionExistence::has_reduce_sat<FactorType, void, sat_vec, REAL, sat_var>(); 
-   }
-
-   void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec& assumptions) final
-   {
-     return;
-#ifdef LP_MP_PARALLEL
-     std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
-#endif
-
-     ReceiveMessages(omega);
-     MaximizePotential();
-     reduce_sat(th, begin, assumptions);
-     SendMessages(omega);
-   }
-
-   void reduce_sat(const REAL th, sat_var begin, std::vector<sat_literal>& assumptions) final
-   {
-     static_if<can_reduce_sat()>([&](auto f) {
-       f(factor_).reduce_sat(assumptions, th, begin);
-     }).else_([&](auto) {
-       assert(false);  
-     }); 
-   }
 
    void UpdateFactorPrimal(const weight_vector& omega, INDEX primal_access) final
    {
@@ -1987,6 +1939,14 @@ public:
         assert(omega.size() == 0.0);
       }
    } 
+
+   // choose order of messages to be sent and immediately reparametrize after each send message call and increase the remaining weights
+   template<typename WEIGHT_VEC>
+   void send_messages_(const WEIGHT_VEC& omega)
+   {
+     auto send_msg_fun = [this]() {};
+     std::apply(send_msg_fun, MESSAGE_DISPATCHER_TYPELIST{}); 
+   }
 
 #ifdef LP_MP_PARALLEL
    template<typename WEIGHT_VEC>
@@ -2395,108 +2355,145 @@ public:
       return factor_.EvaluatePrimal();
    }
 
-   constexpr static bool CanCreateConstraints()
-   {
-      return FunctionExistence::HasCreateConstraints<FactorType,void,LpInterfaceAdapter*>();
-   }
-
-   constexpr static bool CanReduceLp()
-   {
-      return FunctionExistence::HasReduceLp<FactorType,void,LpInterfaceAdapter*, FactorContainerType&>();
-   }
-   template<bool ENABLE = CanReduceLp()>
-   typename std::enable_if<!ENABLE>::type
-   ReduceLpImpl(LpInterfaceAdapter* l) const
-   {}  
-   template<bool ENABLE = CanReduceLp()>
-   typename std::enable_if<ENABLE>::type
-   ReduceLpImpl(LpInterfaceAdapter* l) const
-   {
-           factor_.ReduceLp(l, factor_); 
-   }  
-   void ReduceLp(LpInterfaceAdapter* l) const {
-           ReduceLpImpl(l);
-   }
-  
-   constexpr static bool CanCallGetNumberOfAuxVariables()
-   {
-      return FunctionExistence::HasGetNumberOfAuxVariables<FactorType,INDEX>();
-   }
-   template<bool ENABLE = CanCallGetNumberOfAuxVariables()>
-   typename std::enable_if<!ENABLE,INDEX>::type
-   GetNumberOfAuxVariablesImpl() const
-   {
-      return 0;
-   }
-   template<bool ENABLE = CanCallGetNumberOfAuxVariables()>
-   typename std::enable_if<ENABLE,INDEX>::type
-   GetNumberOfAuxVariablesImpl() const
-   {
-      return factor_.GetNumberOfAuxVariables();
-   }
-  
-   INDEX GetNumberOfAuxVariables() const 
-   { 
-    return GetNumberOfAuxVariablesImpl();
-   }
-
-   void CreateConstraints(LpInterfaceAdapter* l) const final
-   {
-      static_if<CanCreateConstraints()>([&](auto f) {
-            f(factor_).CreateConstraints(l);
-      }).else_([&](auto) {
-         throw std::runtime_error("create constraints not implemented by factor");
-      });
-   }
-
-
 #ifdef LP_MP_PARALLEL
    // a recursive mutex is required only for SendMessagesTo{Left|Right}, as multiple messages may be have the same endpoints. Then the corresponding lock is acquired multiple times.
    // if no two messages have the same endpoints, an ordinary mutex is enough.
    std::recursive_mutex mutex_;
 #endif
 
-
-   /*
    // functions for interfacing with external solver interface DD_ILP
-   template<EXTERNAL_SOLVER, typename T>
-   auto convert_variables_to_external(EXTERNAL_SOLVER& s, T&);
 
-   template<EXTERNAL_SOLVER>
+   template<typename EXTERNAL_SOLVER>
    auto convert_variables_to_external(EXTERNAL_SOLVER& s, REAL x)
    { return s.add_variable(); }
 
-   template<EXTERNAL_SOLVER>
+   template<typename EXTERNAL_SOLVER>
    auto convert_variables_to_external(EXTERNAL_SOLVER& s, const vector<REAL>& v)
    { return s.add_vector(v); }
 
-   template<EXTERNAL_SOLVER>
+   template<typename EXTERNAL_SOLVER>
    auto convert_variables_to_external(EXTERNAL_SOLVER& s, const matrix<REAL>& m)
    { return s.add_matrix(m); }
 
-   template<EXTERNAL_SOLVER>
-   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const tensor<REAL>& t)
+   template<typename EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const tensor3<REAL>& t)
    { return s.add_tensor(t); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto load_external_variables(EXTERNAL_SOLVER& s, REAL x)
+   { return s.load_variable(); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto load_external_variables(EXTERNAL_SOLVER& s, vector<REAL>& x)
+   { return s.load_vector(); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto load_external_variables(EXTERNAL_SOLVER& s, matrix<REAL>& x)
+   { return s.load_matrix(); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto load_external_variables(EXTERNAL_SOLVER& s, tensor3<REAL>& x)
+   { return s.load_tensor(); }
+
+   template<typename EXTERNAL_SOLVER>
+   void add_objective(EXTERNAL_SOLVER& s, REAL cost)
+   { s.add_variable_objective(cost); }
+
+   template<typename EXTERNAL_SOLVER>
+   void add_objective(EXTERNAL_SOLVER& s, const vector<REAL>& cost)
+   { s.add_vector_objective(cost); }
+
+   template<typename EXTERNAL_SOLVER>
+   void add_objective(EXTERNAL_SOLVER& s, const matrix<REAL>& cost)
+   { s.add_matrix_objective(cost); }
+
+   template<typename EXTERNAL_SOLVER>
+   void add_objective(EXTERNAL_SOLVER& s, const tensor3<REAL>& cost)
+   { s.add_tensor_objective(cost); }
 
    // functions for implementing external solver interface
    template<typename EXTERNAL_SOLVER>
-   auto create_constraints(EXTERNAL_SOLVER& s)
+   void construct_constraints_impl(EXTERNAL_SOLVER& s)
    {
       // transform exported variables to external solver variables
       auto vars = factor_.export_variables();
-      auto external_vars = std::apply([&s](auto ...x){ std::make_tuple(convert_variables_to_external(s, x)...);}, vars);
+      auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->convert_variables_to_external(s, x)...); }, vars);
 
-      // unpack tuple and call create_constraints function of factor
-      auto create_constraints_fun = [&factor_,&s](auto... x) { factor_.create_constraints(s, x...); };
-      std::apply(create_constraints_fun, external_vars);
+      // unpack tuple and call construct_constraints function of factor
+      auto construct_constraints_fun = [this,&s](auto... x) { this->factor_.construct_constraints(s, x...); };
+      std::apply(construct_constraints_fun, external_vars);
    }
 
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final
+   { construct_constraints_impl(s); }
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::problem_export>& s) final
+   { construct_constraints_impl(s); }
+
    template<typename EXTERNAL_SOLVER>
-   auto reduce_constraints(EXTERNAL_SOLVER& s)
+   auto reduce_constraints_impl(EXTERNAL_SOLVER& s)
    {
 
    }
+
+   template<typename EXTERNAL_SOLVER>
+   void load_costs_impl(EXTERNAL_SOLVER& s)
+   {
+      // load external solver variables corresponding to reparametrization ones and add reparametrization as cost
+      auto vars = factor_.export_variables();
+      std::apply([this,&s](auto x){ return this->add_objective(s, x); }, vars);
+   }
+
+   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final
+   {  }
+   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::problem_export>& s) final
+   { load_costs_impl(s); }
+
+   /*
+   // sat related functions
+   LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_constraints,construct_constraints)
+
+   constexpr static bool
+   can_construct_constraints()
+   {
+      return has_construct_constraints<FactorType,void,sat_solver&>();
+   }
+
+   void construct_sat_clauses(sat_solver& s) 
+   {
+      static_if<can_construct_sat_clauses()>([&](auto f) {
+            f(factor_).construct_sat_clauses(s);
+            });
+      if(!can_construct_sat_clauses()) {
+         assert(false);
+      }
+   }
+
+
+   template<typename SAT_SOLVER>
+   constexpr static bool can_convert_primal()
+   {
+      return FunctionExistence::has_convert_primal<FactorType,void, SAT_SOLVER, sat_var>(); 
+   }
+   //void convert_primal(Glucose::SimpSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   //void convert_primal(CMSat::SATSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   void convert_primal(sat_solver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   {
+      static_if<can_convert_primal<decltype(sat)>()>([&](auto f) { 
+            f(factor_).convert_primal(sat, sat_begin);
+            });
+      assert(can_convert_primal<decltype(sat)>);
+   }
+
+   void reduce_sat(const REAL th, sat_var begin, std::vector<sat_literal>& assumptions) final
+   {
+     static_if<can_reduce_sat()>([&](auto f) {
+       f(factor_).reduce_sat(assumptions, th, begin);
+     }).else_([&](auto) {
+       assert(false);  
+     }); 
+   }
    */
+
 };
 
 } // end namespace LP_MP

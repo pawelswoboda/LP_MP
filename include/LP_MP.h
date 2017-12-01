@@ -26,7 +26,7 @@
 #include "memory_allocator.hxx"
 #include "serialization.hxx"
 #include "tclap/CmdLine.h"
-#include "sat_solver.hxx"
+#include "DD_ILP.hxx"
 
 #ifdef LP_MP_PARALLEL
 #include <omp.h>
@@ -48,18 +48,11 @@ public:
    virtual FactorTypeAdapter* clone() const = 0;
    virtual void UpdateFactor(const weight_vector& omega) = 0;
    virtual void UpdateFactorPrimal(const weight_vector& omega, const INDEX iteration) = 0;
-   virtual void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec& assumptions) = 0;
 #ifdef LP_MP_PARALLEL
    virtual void UpdateFactorSynchronized(const weight_vector& omega) = 0;
    virtual void UpdateFactorPrimalSynchronized(const weight_vector& omega, const INDEX iteration) = 0;
-   virtual void UpdateFactorSATSynchronized(const weight_vector& omega, const REAL th, sat_var begin, sat_vec& assumptions) = 0;
 #endif
    virtual bool SendsMessage(const INDEX msg_idx) const = 0;
-   virtual void reduce_sat(const REAL th, sat_var begin, std::vector<sat_literal>& assumptions) = 0;
-   //virtual void convert_primal(Glucose::SimpSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
-   //virtual void convert_primal(CMSat::SATSolver&, sat_var) = 0; // this is not nice: the solver should be templatized
-   virtual void construct_sat_clauses(sat_solver&) = 0;
-   virtual void convert_primal(sat_solver&, sat_var) = 0; // this is not nice: the solver should be templatized
    virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
    // to do: remove both
    MessageIterator begin(); 
@@ -107,10 +100,12 @@ public:
    // do zrobienia: this function is not needed. Evaluation can be performed automatically
    virtual REAL EvaluatePrimal() const = 0;
 
-   // for the LP interface
-   virtual INDEX GetNumberOfAuxVariables() const = 0;
-   virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) const = 0;
-   virtual void ReduceLp(LpInterfaceAdapter* lpInterface) const = 0;
+   // external ILP-interface
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& solver) = 0;
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::problem_export>& solver) = 0;
+
+   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& solver) = 0;
+   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::problem_export>& solver) = 0;
 
    // estimate of how long a factor update will take
    virtual INDEX runtime_estimate() = 0;
@@ -137,14 +132,9 @@ public:
    virtual void send_message_up(Chirality c) = 0;
    virtual void track_solution_down(Chirality c) = 0;
    
-   // Also true, if SendMessagesTo{Left|Right} is active. Used for weight computation. Disregard message in weight computation if it does not send messages at all
-   // do zrobienia: throw them out again
-   //virtual bool CanSendMessageToLeft() const = 0;
-   //virtual bool CanSendMessageToRight() const = 0;
-
-   virtual void construct_sat_clauses(sat_solver&, sat_literal, sat_literal) = 0;
-   // for the LP interface
-   virtual void CreateConstraints(LpInterfaceAdapter* lpInterface) = 0;
+   // external ILP-interface
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::sat_solver>&, const DD_ILP::variable_counters&, const DD_ILP::variable_counters&) = 0;
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::problem_export>&, const DD_ILP::variable_counters&, const DD_ILP::variable_counters&) = 0;
 };
 
 // primitive iterator class. Access may be slow. A more direct implementation would be more complicated, though.

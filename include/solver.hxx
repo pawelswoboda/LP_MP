@@ -20,7 +20,7 @@ namespace LP_MP {
 static std::vector<std::string> default_solver_options = {
    {""}, 
    {"-i"}, {""}, 
-   {"--maxIter"}, {"1000000"}
+   {"--maxIter"}, {"1000"}
 };
 
 // class containing the LP, problem constructor list, input function and visitor

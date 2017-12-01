@@ -6,7 +6,7 @@ set(LP_MP_VERSION_MAJOR 0)
 set(LP_MP_VERSION_MINOR 1)
 
 # C++11
-add_compile_options(-std=c++14)
+add_compile_options(-std=c++17)
 
 # compiler options
 add_definitions(-march=native)
@@ -14,20 +14,6 @@ add_definitions(-march=native)
 option(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
 option(WITH_SAT_BASED_ROUNDING "SAT based rounding" ON)
 
-
-include(ExternalProject)
-list(APPEND DEPENDENCIES lingeling_project)
-ExternalProject_ADD(lingeling_project
-  SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling"
-  CONFIGURE_COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling/configure"
-  BUILD_COMMAND make
-  BUILD_IN_SOURCE 1
-  INSTALL_COMMAND ""
-  )
-ExternalProject_Get_Property(lingeling_project install_dir)
-add_library(LINGELING STATIC IMPORTED)
-set_target_properties(LINGELING PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling/liblgl.a")
-set_target_properties(LINGELING PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling/")
 
 include(ExternalProject)
 externalproject_add( conicBundle_Project
@@ -95,5 +81,7 @@ target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external
 target_include_directories(LP_MP INTERFACE "external/TCLAP/include")
 target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
+
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/DD_ILP")
 
 add_subdirectory(test) 
