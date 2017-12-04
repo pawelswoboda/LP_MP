@@ -77,5 +77,6 @@ target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
 
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/DD_ILP")
+target_link_libraries(LP_MP INTERFACE DD_ILP)
 
 add_subdirectory(test) 

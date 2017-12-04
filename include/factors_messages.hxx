@@ -2440,7 +2440,9 @@ public:
    {
       // load external solver variables corresponding to reparametrization ones and add reparametrization as cost
       auto vars = factor_.export_variables();
-      std::apply([this,&s](auto x){ return this->add_objective(s, x); }, vars);
+      std::apply([this,&s](auto... x){ ((this->add_objective(s,x)), ...); },  vars);
+      //auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->leftFactor_->load_external_variables(s, x)...); }, vars);
+      // for all variables,
    }
 
    virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final

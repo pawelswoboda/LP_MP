@@ -70,7 +70,7 @@ public:
    std::vector<INDEX> get_contiguous_ids()
    {
       std::vector<INDEX> contiguous_ids(N);
-      std::vector<INDEX> id_mapping(N, std::numeric_limits<REAL>::max());
+      std::vector<INDEX> id_mapping(N, std::numeric_limits<INDEX>::max());
       //INDEX* id_mapping = new INDEX[N];
       //std::fill(contiguous_ids.begin(), contiguous_idx.end(), std::numeric_limits<INDEX>::max());
       for(INDEX i=0; i<N; ++i) {
