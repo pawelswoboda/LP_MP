@@ -1,0 +1,83 @@
+#ifndef LP_MP_LP_CONIC_BUNDLE_HXX
+#define LP_MP_LP_CONIC_BUNDLE_HXX
+
+#include "CBSolver.hxx"
+
+namespace LP_MP {
+
+class LP_conic_bundle : public LP_with_trees, public ConicBundle::FunctionOracle {
+public:
+   using LP_with_trees::LP_with_trees;
+
+   void Begin()
+   {
+      LP_with_trees::Begin();
+      std::cout << "no of Lagrangean vars: " << this->no_Lagrangean_vars() << "\n";
+
+      cb_solver_.set_max_bundlesize(*this,10);
+      //cb_solver_.set_eval_limit(1250); // recommendation by Jan Kuske
+
+      // set up problem for conic bundle
+      cb_solver_.init_problem(this->no_Lagrangean_vars());
+      cb_solver_.set_out(&std::cout,1);
+      cb_solver_.add_function(*this);
+   }
+
+   void ComputePass(const INDEX iteration)
+   {
+      cb_solver_.do_descent_step();
+
+      if(cb_solver_.termination_code()) {
+         std::cout << "\nconic bundle has terminated\n\n";
+         cb_solver_.print_termination_code(std::cout);
+      }
+   }
+
+   int evaluate(const ConicBundle::DVector& x, double relprec, 
+         double& objective_value,
+         ConicBundle::DVector&  cut_vals,std::vector<ConicBundle::DVector>&  subgradients,
+         std::vector<ConicBundle::PrimalData*>&  primal_solutions,
+         ConicBundle::PrimalExtender*&)
+   {
+      // load Lagrangean variables
+      this->add_weights(&x[0], -1.0);
+
+      // compute subgradient
+      objective_value = 0.0;
+      ConicBundle::DVector subg(x.size(), 0.0); // this is not so nice!
+      for(auto& t : this->trees_) {
+         t.compute_mapped_subgradient(subg);
+         objective_value -= t.primal_cost();
+      }
+      cut_vals.push_back(objective_value);
+      subgradients.push_back(subg);
+
+      // remove Lagrangean variables again
+      this->add_weights(&x[0], +1.0);
+
+      return 0;
+   }
+
+   REAL LowerBound()
+   {
+      assert(cb_solver_.get_dim() == this->no_Lagrangean_vars() && cb_solver_.get_dim() > 0);
+      ConicBundle::DVector Lagrangean_vars;
+      cb_solver_.get_center(Lagrangean_vars);
+      // load Lagrangean variables
+      this->add_weights(&Lagrangean_vars[0], -1.0);
+
+      const REAL lb = LP_with_trees::LowerBound();
+      // remove Lagrangean variables again
+      this->add_weights(&Lagrangean_vars[0], +1.0);
+
+      return lb;
+   }
+
+private:
+   ConicBundle::CBSolver cb_solver_;
+
+};
+
+} // end namespace LP_MP
+
+#endif // LP_MP_LP_CONIC_BUNDLE_HXX
