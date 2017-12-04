@@ -12,8 +12,6 @@ add_compile_options(-std=c++17)
 add_definitions(-march=native)
 
 option(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
-option(WITH_SAT_BASED_ROUNDING "SAT based rounding" ON)
-
 
 include(ExternalProject)
 externalproject_add( conicBundle_Project
@@ -40,10 +38,6 @@ set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT
 #   message(STATUS ${HDF5_LIBRARIES})
 #   message(STATUS ${HDF5_INCLUDE_DIR})
 #endif()
-
-if(WITH_SAT_BASED_ROUNDING)
-   add_definitions(-DWITH_SAT)
-endif()
 
 # Parallelisation support
 if(PARALLEL_OPTIMIZATION)

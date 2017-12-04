@@ -727,18 +727,16 @@ public:
      assert(v.size() == dim1());
      vector<T> min(dim2());
 
-     {
-     REAL_VECTOR _v = simdpp::load_splat(v.begin());
      for(INDEX x2=0; x2<dim2(); x2+=REAL_ALIGNMENT) {
         REAL_VECTOR tmp = simdpp::load( vec_.begin() + x2 );
+        REAL_VECTOR _v = simdpp::load_splat(v.begin());
         REAL_VECTOR _sum = tmp + _v;
         simdpp::store(&min[x2], _sum);
      }
-     }
      for(INDEX x1=1; x1<dim1(); ++x1) {
-       REAL_VECTOR _v = simdpp::load_splat(v.begin() + x1);
         for(INDEX x2=0; x2<dim2(); x2+=REAL_ALIGNMENT) {
            REAL_VECTOR tmp = simdpp::load( vec_.begin() + x1*padded_dim2() + x2 );
+           REAL_VECTOR _v = simdpp::load_splat(v.begin() + x1);
            REAL_VECTOR _sum = tmp + _v;
            REAL_VECTOR cur_min = simdpp::load( &min[x2] );
            auto updated_min = simdpp::min(cur_min, _sum);
