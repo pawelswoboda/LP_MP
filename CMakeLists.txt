@@ -73,7 +73,7 @@ target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external
 target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external/meta/include")
 target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external/cpp-sort/include")
 target_include_directories(LP_MP INTERFACE "external/TCLAP/include")
-target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
+target_include_directories(LP_MP INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle/include")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/BCFW-Bundle")
 
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/DD_ILP")
