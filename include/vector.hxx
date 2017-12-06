@@ -608,8 +608,8 @@ public:
    void operator=(const matrix<T>& o) {
      if(!(this->size() == o.size() && o.dim2_ == dim2_)) {
        matrix copy(o.dim1(), o.dim2());
-       std::swap(vec_, o.vec_);
-       std::swap(dim2_, o.dim2_);
+       std::swap(vec_, copy.vec_);
+       std::swap(dim2_, copy.dim2_);
      }
       assert(this->size() == o.size() && o.dim2_ == dim2_);
       vec_ = o.vec_;
