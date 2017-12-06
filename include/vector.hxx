@@ -147,7 +147,7 @@ public:
 
    vector& operator=(const vector<T>& o)
    {
-     if(size != o.size()) {
+     if(size() != o.size()) {
        vector copy(o.size());
        std::swap(begin_, copy.begin_);
        std::swap(end_, copy.begin_);
