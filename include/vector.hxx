@@ -147,6 +147,11 @@ public:
 
    vector& operator=(const vector<T>& o)
    {
+     if(size != o.size()) {
+       vector copy(o.size());
+       std::swap(begin_, copy.begin_);
+       std::swap(end_, copy.begin_);
+     }
       assert(size() == o.size());
       for(INDEX i=0; i<o.size(); ++i) { 
          (*this)[i] = o[i]; 
@@ -601,6 +606,11 @@ public:
       return vec_ == o.vec_; 
    }
    void operator=(const matrix<T>& o) {
+     if(!(this->size() == o.size() && o.dim2_ == dim2_)) {
+       matrix copy(o.dim1(), o.dim2());
+       std::swap(vec_, o.vec_);
+       std::swap(dim2_, o.dim2_);
+     }
       assert(this->size() == o.size() && o.dim2_ == dim2_);
       vec_ = o.vec_;
    }

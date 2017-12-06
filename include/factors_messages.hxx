@@ -2450,6 +2450,21 @@ public:
    virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::problem_export>& s) final
    { load_costs_impl(s); }
 
+   template<typename SOLVER>
+   void convert_primal_impl(SOLVER& s)
+   {
+      auto vars = factor_.export_variables();
+      auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->convert_variables_to_external(s, x)...); }, vars); 
+
+      auto convert_primal_fun = [this,&s](auto... x) { this->factor_.convert_primal(s, x...); };
+      std::apply(convert_primal_fun, external_vars);
+   }
+
+   virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& solver)
+   { convert_primal_impl(solver); }
+   virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::problem_export>& solver)
+   { convert_primal_impl(solver); }
+
    /*
    // sat related functions
    LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_constraints,construct_constraints)
