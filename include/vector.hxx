@@ -610,6 +610,7 @@ public:
        matrix copy(o.dim1(), o.dim2());
        std::swap(vec_, copy.vec_);
        std::swap(dim2_, copy.dim2_);
+       std::swap(padded_dim2_, copy.padded_dim2_);
      }
       assert(this->size() == o.size() && o.dim2_ == dim2_);
       vec_ = o.vec_;
@@ -790,8 +791,8 @@ public:
 
 protected:
    vector<T> vec_;
-   const INDEX dim2_;
-   const INDEX padded_dim2_; // possibly do not store but compute when needed?
+   INDEX dim2_;
+   INDEX padded_dim2_; // possibly do not store but compute when needed?
 };
 
 template<typename T=REAL>
