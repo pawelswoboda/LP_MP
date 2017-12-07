@@ -213,7 +213,7 @@ public:
    {  
       // why not allocate_archive?
       INDEX size = 0;
-      for(auto* f : factors_) {
+      for(auto* f : Lagrangean_factors_) {
          size += f->primal_size_in_bytes();
       }
       return size;

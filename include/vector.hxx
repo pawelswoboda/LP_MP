@@ -591,6 +591,7 @@ public:
       std::fill(vec_.begin(), vec_.end(), val);
       fill_padding();
    }
+   matrix() : vec(), dim2_(0), padded_dim2_(0) {}
    matrix(const matrix& o) 
       : vec_(o.vec_),
       dim2_(o.dim2_),

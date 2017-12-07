@@ -12,8 +12,10 @@ namespace LP_MP {
     public:
 
 
-    void determine_consistent_factors() const
+    virtual void End() const
     {
+      BASE_LP_SOLVER::End();
+
       bool consistent = true;
       //std::vector<bool> factor_consistent(this->GetNumberOfFactors()), true; // possibly not needed
       std::vector<FactorTypeAdapter*> ILP_factors;
@@ -50,7 +52,6 @@ namespace LP_MP {
         } 
       };
 
-
       // check wheter factor is locally optimal
       for(INDEX i=0; i<this->GetNumberOfFactors(); ++i) {
         auto* f = this->f_[i];
@@ -86,7 +87,7 @@ namespace LP_MP {
         s.solve();
         s.init_variable_loading();
         for(auto* f : ILP_factors) {
-          f->convert_to_primal(s);
+          f->convert_primal(s);
         } 
 
         // check whether solutions agree between ILP and LP part
@@ -103,8 +104,6 @@ namespace LP_MP {
         }
       }
     }
-
-    
   };
 
 } // namespace LP_MP

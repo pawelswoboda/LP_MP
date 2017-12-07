@@ -2424,16 +2424,6 @@ public:
       std::apply(construct_constraints_fun, external_vars);
    }
 
-   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final
-   { construct_constraints_impl(s); }
-   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::problem_export>& s) final
-   { construct_constraints_impl(s); }
-
-   template<typename EXTERNAL_SOLVER>
-   auto reduce_constraints_impl(EXTERNAL_SOLVER& s)
-   {
-
-   }
 
    template<typename EXTERNAL_SOLVER>
    void load_costs_impl(EXTERNAL_SOLVER& s)
@@ -2445,10 +2435,6 @@ public:
       // for all variables,
    }
 
-   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final
-   {  }
-   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::problem_export>& s) final
-   { load_costs_impl(s); }
 
    template<typename SOLVER>
    void convert_primal_impl(SOLVER& s)
@@ -2460,11 +2446,19 @@ public:
       std::apply(convert_primal_fun, external_vars);
    }
 
-   virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& solver)
-   { convert_primal_impl(solver); }
-   virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::problem_export>& solver)
-   { convert_primal_impl(solver); }
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final { construct_constraints_impl(s); }
+   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final {  }
+   virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& solver) { convert_primal_impl(solver); }
 
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::problem_export>& s) final { construct_constraints_impl(s); }
+   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::problem_export>& s) final { load_costs_impl(s); } 
+   virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::problem_export>& solver) { convert_primal_impl(solver); }
+
+#ifdef WITH_GUROBI
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& s) final { construct_constraints_impl(s); }
+   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& s) final { load_costs_impl(s); } 
+   virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& solver) { convert_primal_impl(solver); }
+#endif
    /*
    // sat related functions
    LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_constraints,construct_constraints)
