@@ -79,7 +79,7 @@ public:
   void operator()(T_REST&&... types)
   {}
   template<typename T, typename... T_REST>
-  void operator()(T&& t, T_REST... types)
+  void operator()(T&& t, T_REST&&... types)
   {
      size_in_bytes_ += serialize(t);
      (*this)(types...);
