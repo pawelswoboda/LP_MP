@@ -582,7 +582,6 @@ public:
       compute_synchronization();
 #endif 
 
-      assert(false); // remove flags handling in individual omega computation functions
       if(repamMode_ == LPReparametrizationMode::Anisotropic) {
         if(!omega_anisotropic_valid_) {
           ComputeAnisotropicWeights();
