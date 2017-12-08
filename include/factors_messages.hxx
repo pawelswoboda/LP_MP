@@ -1636,6 +1636,16 @@ public:
       SendMessages(omega);
    }
 
+   void update_factor_residual(const weight_vector& omega)
+   {
+      assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
+      assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
+      assert(std::distance(omega.begin(), omega.end()) == no_send_messages());
+      ReceiveMessages(omega);
+      MaximizePotential();
+      send_messages_residual(omega); // other message passing type shall be called "shared"
+   }
+
 #ifdef LP_MP_PARALLEL
    void UpdateFactorSynchronized(const weight_vector& omega) final
    {
@@ -1730,7 +1740,6 @@ public:
          MaximizePotential();
          SendMessages(omega);
       }  
-
    }
 
    void MaximizePotential()
@@ -1874,23 +1883,37 @@ public:
      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
          // check whether the message supports batch updates. If so, call batch update.
          // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
-         if(l.SendsMessage()) {
-         static_if<l.CanCallSendMessages()>([&](auto f) {
-             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+         constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+         if constexpr(l.SendsMessage()) {
+           if constexpr(l.CanCallSendMessages()) {
              const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
              if(omega_sum > 0.0) { 
                f(l).SendMessages(factor, std::get<n>(msg_), omegaIt);
-             }
-             omegaIt += std::get<n>(msg_).size();
-          }).else_([&](auto) {
-             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+             } 
+           } else {
              for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
                if(*omegaIt != 0.0) {
                  l.SendMessage(&factor, *(*it), *omegaIt); 
                }
              }
-          });
+           }
          }
+         //if(l.SendsMessage()) {
+         //static_if<l.CanCallSendMessages()>([&](auto f) {
+         //    const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
+         //    if(omega_sum > 0.0) { 
+         //      f(l).SendMessages(factor, std::get<n>(msg_), omegaIt);
+         //    }
+         //    omegaIt += std::get<n>(msg_).size();
+         // }).else_([&](auto) {
+         //    constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+         //    for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
+         //      if(*omegaIt != 0.0) {
+         //        l.SendMessage(&factor, *(*it), *omegaIt); 
+         //      }
+         //    }
+         // });
+         //}
      });
    }
 
@@ -1939,6 +1962,12 @@ public:
         assert(omega.size() == 0.0);
       }
    } 
+
+   template<typename WEIGHT_VEC>
+   void send_messages_residual(const WEIGHT_VEC& omega)
+   {
+     CallSendMessages(factor_, omega.begin());
+   }
 
    // choose order of messages to be sent and immediately reparametrize after each send message call and increase the remaining weights
    template<typename WEIGHT_VEC>
@@ -2454,7 +2483,7 @@ public:
    virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::problem_export>& s) final { load_costs_impl(s); } 
    virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::problem_export>& solver) { convert_primal_impl(solver); }
 
-#ifdef WITH_GUROBI
+#ifdef DD_ILP_WITH_GUROBI
    virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& s) final { construct_constraints_impl(s); }
    virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& s) final { load_costs_impl(s); } 
    virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& solver) { convert_primal_impl(solver); }

@@ -47,6 +47,7 @@ public:
    virtual ~FactorTypeAdapter() {}
    virtual FactorTypeAdapter* clone() const = 0;
    virtual void UpdateFactor(const weight_vector& omega) = 0;
+   virtual void update_factor_residual(const weight_vector& omega) = 0;
    virtual void UpdateFactorPrimal(const weight_vector& omega, const INDEX iteration) = 0;
 #ifdef LP_MP_PARALLEL
    virtual void UpdateFactorSynchronized(const weight_vector& omega) = 0;
@@ -109,7 +110,7 @@ public:
    virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::problem_export>& solver) = 0; 
    virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::problem_export>& solver) = 0;
 
-#ifdef WITH_DUROBI
+#ifdef DD_ILP_WITH_GUROBI
    virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& solver) = 0;
    virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& solver) = 0;
    virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& solver) = 0;
@@ -170,8 +171,9 @@ inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, 
 class LP {
 public:
    LP(TCLAP::CmdLine& cmd) 
+     : reparametrization_type("","reparametrizationType","message sending type: ", false, "shared", "{shared|residual}", cmd)
 #ifdef LP_MP_PARALLEL
-      : num_lp_threads_arg_("","numLpThreads","number of threads for message passing, default = 1",false,1,&positiveIntegerConstraint,cmd)
+      , num_lp_threads_arg_("","numLpThreads","number of threads for message passing, default = 1",false,1,&positiveIntegerConstraint,cmd)
 #endif
    {}
 
@@ -183,8 +185,9 @@ public:
 
    // make a deep copy of factors and messages. Adjust pointers to messages and factors
    LP(LP& o) // no const because of o.num_lp_threads_arg_.getValue() not being const!
+     : reparametrization_type("","reparametrizationType","message sending type: ", false, o.reparametrization_type.getValue(), "{shared|residual}" )
 #ifdef LP_MP_PARALLEL
-      : num_lp_threads_arg_("","numLpThreads","number of threads for message passing, default = 1",false,o.num_lp_threads_arg_.getValue(),&positiveIntegerConstraint)
+      , num_lp_threads_arg_("","numLpThreads","number of threads for message passing, default = 1",false,o.num_lp_threads_arg_.getValue(),&positiveIntegerConstraint)
 #endif
    {
       f_.reserve(o.f_.size());
@@ -347,6 +350,7 @@ public:
    }
 
    void Begin(); // must be called after all messages and factors have been added
+   void End() {};
 
    void SortFactors(
          const std::vector<std::pair<FactorTypeAdapter*, FactorTypeAdapter*>>& factor_rel,
@@ -437,13 +441,17 @@ public:
    void ComputeMixedWeights(const two_dim_variable_array<REAL>& omega_anisotropic, const two_dim_variable_array<REAL>& omega_damped_uniform, two_dim_variable_array<REAL>& omega); 
    void ComputeMixedWeights()
    {
-      if(!omega_mixed_valid_) {
-        ComputeDampedUniformWeights();
-        ComputeAnisotropicWeights();
-        omega_mixed_valid_ = true;
-        ComputeMixedWeights(omegaForwardAnisotropic_, omegaForwardIsotropicDamped_, omegaForwardMixed_);
-        ComputeMixedWeights(omegaBackwardAnisotropic_, omegaBackwardIsotropicDamped_, omegaBackwardMixed_);
-      }
+     ComputeDampedUniformWeights();
+     ComputeAnisotropicWeights();
+     ComputeMixedWeights(omegaForwardAnisotropic_, omegaForwardIsotropicDamped_, omegaForwardMixed_);
+     ComputeMixedWeights(omegaBackwardAnisotropic_, omegaBackwardIsotropicDamped_, omegaBackwardMixed_);
+   }
+
+   void shared_weights_to_residual(two_dim_variable_array<REAL>& omega)
+   {
+     for(INDEX i=0; i<omega.size(); ++i) {
+       std::partial_sum(omega[i].begin(), omega[i].end(), omega[i].begin());
+     }
    }
 
    double LowerBound() const
@@ -571,23 +579,59 @@ public:
       compute_synchronization();
 #endif 
 
+      assert(false); // remove flags handling in individual omega computation functions
       if(repamMode_ == LPReparametrizationMode::Anisotropic) {
-         ComputeAnisotropicWeights();
-         return omega_storage{omegaForwardAnisotropic_, omegaBackwardAnisotropic_};
+        if(!omega_anisotropic_valid_) {
+          ComputeAnisotropicWeights();
+          omega_anisotropic_valid_ = true;
+          if(reparametrization_type.getValue() == "residual") {
+            shared_weights_to_residual(omegaForwardAnisotropic_);
+            shared_weights_to_residual(omegaBackwardAnisotropic_);
+          }
+        }
+        return omega_storage{omegaForwardAnisotropic_, omegaBackwardAnisotropic_};
       } else if(repamMode_ == LPReparametrizationMode::Anisotropic2) {
-         ComputeAnisotropicWeights2();
-         return omega_storage{omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_};
+        if(!omega_anisotropic2_valid_) {
+          ComputeAnisotropicWeights2();
+          omega_anisotropic2_valid_ = true;
+          if(reparametrization_type.getValue() == "residual") {
+            shared_weights_to_residual(omegaForwardAnisotropic2_);
+            shared_weights_to_residual(omegaBackwardAnisotropic2_);
+          }
+        }
+        return omega_storage{omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_};
       } else if(repamMode_ == LPReparametrizationMode::Uniform) {
-         ComputeUniformWeights();
-         return omega_storage{omegaForwardIsotropic_, omegaBackwardIsotropic_};
+        if(!omega_isotropic_valid_) {
+          ComputeUniformWeights();
+          omega_isotropic_valid_ = false;
+          if(reparametrization_type.getValue() == "residual") {
+            shared_weights_to_residual(omegaForwardIsotropic_);
+            shared_weights_to_residual(omegaBackwardIsotropic_);
+          }
+        }
+        return omega_storage{omegaForwardIsotropic_, omegaBackwardIsotropic_};
       } else if(repamMode_ == LPReparametrizationMode::DampedUniform) {
-         ComputeDampedUniformWeights();
-         return omega_storage{omegaForwardIsotropicDamped_, omegaBackwardIsotropicDamped_};
+        if(!omega_isotropic_damped_valid_) {
+          ComputeDampedUniformWeights();
+          omega_isotropic_damped_valid_ = false;
+          if(reparametrization_type.getValue() == "residual") {
+            shared_weights_to_residual(omegaForwardIsotropicDamped_);
+            shared_weights_to_residual(omegaBackwardIsotropicDamped_);
+          }
+        }
+        return omega_storage{omegaForwardIsotropicDamped_, omegaBackwardIsotropicDamped_};
       } else if(repamMode_ == LPReparametrizationMode::Mixed) {
-         ComputeMixedWeights();
-         return omega_storage{omegaForwardMixed_, omegaBackwardMixed_};
+        if(!omega_mixed_valid_) {
+          omega_mixed_valid_ = true;
+          ComputeMixedWeights();
+          if(reparametrization_type.getValue() == "residual") {
+            shared_weights_to_residual(omegaForwardMixed_);
+            shared_weights_to_residual(omegaBackwardMixed_);
+          }
+        }
+        return omega_storage{omegaForwardMixed_, omegaBackwardMixed_};
       } else {
-         throw std::runtime_error("no reparametrization mode set");
+        throw std::runtime_error("no reparametrization mode set");
       }
    }
 protected:
@@ -619,6 +663,7 @@ protected:
 
    LPReparametrizationMode repamMode_ = LPReparametrizationMode::Undefined;
 
+   TCLAP::ValueArg<std::string> reparametrization_type; // shared|residual
 #ifdef LP_MP_PARALLEL
    TCLAP::ValueArg<INDEX> num_lp_threads_arg_;
    bool synchronization_valid_ = false;
@@ -650,8 +695,7 @@ inline void LP::Begin()
 #ifdef LP_MP_PARALLEL
    omp_set_num_threads(num_lp_threads_arg_.getValue());
    if(debug()) { std::cout << "number of threads = " << num_lp_threads_arg_.getValue() << "\n"; }
-#endif
-
+#endif 
 }
 
 #ifdef LP_MP_PARALLEL
@@ -782,53 +826,46 @@ void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd
 //#pragma omp parallel for schedule(static)
    for(INDEX i=0; i<n; ++i) {
      auto* f = *(factorIt + i);
-     f->UpdateFactor(*(omegaIt + i));
+     if(reparametrization_type.getValue() == "shared") {
+       f->UpdateFactor(*(omegaIt + i));
+     } else {
+       assert(reparametrization_type.getValue() == "residual");
+       f->update_factor_residual(*(omegaIt + i));
+     }
    }
 }
 
 inline void LP::ComputeAnisotropicWeights()
 {
-   if(!omega_anisotropic_valid_) {
-      omega_anisotropic_valid_ = true;
-      ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic_);
-      ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic_);
-   }
+  ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic_);
+  ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic_);
 }
 
 inline void LP::ComputeAnisotropicWeights2()
 {
-  if(!omega_anisotropic2_valid_) {
-    omega_anisotropic2_valid_ = true;
-    ComputeAnisotropicWeights2(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic2_);
-    ComputeAnisotropicWeights2(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic2_);
-  }
+  ComputeAnisotropicWeights2(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic2_);
+  ComputeAnisotropicWeights2(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic2_);
 }
 
 inline void LP::ComputeUniformWeights()
 {
-   if(!omega_isotropic_valid_) {
-      omega_isotropic_valid_ = true;
-      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropic_, 0.0);
-      ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropic_, 0.0);
+  ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropic_, 0.0);
+  ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropic_, 0.0);
 
-      assert(this->backwardUpdateOrdering_.size() == omegaBackwardIsotropic_.size());
-      for(auto it = this->backwardUpdateOrdering_.begin(); it != this->backwardUpdateOrdering_.end(); ++it) {
-         assert((*it)->no_send_messages() == omegaBackwardIsotropic_[ std::distance(this->backwardUpdateOrdering_.begin(), it) ].size());
-      } 
+  assert(this->backwardUpdateOrdering_.size() == omegaBackwardIsotropic_.size());
+  for(auto it = this->backwardUpdateOrdering_.begin(); it != this->backwardUpdateOrdering_.end(); ++it) {
+    assert((*it)->no_send_messages() == omegaBackwardIsotropic_[ std::distance(this->backwardUpdateOrdering_.begin(), it) ].size());
+  } 
 
-      for(auto it = this->forwardUpdateOrdering_.begin(); it != this->forwardUpdateOrdering_.end(); ++it) {
-         assert((*it)->no_send_messages() == omegaForwardIsotropic_[ std::distance(this->forwardUpdateOrdering_.begin(), it) ].size());
-      } 
-   }
+  for(auto it = this->forwardUpdateOrdering_.begin(); it != this->forwardUpdateOrdering_.end(); ++it) {
+    assert((*it)->no_send_messages() == omegaForwardIsotropic_[ std::distance(this->forwardUpdateOrdering_.begin(), it) ].size());
+  } 
 }
 
 inline void LP::ComputeDampedUniformWeights()
 {
-   if(!omega_isotropic_damped_valid_) {
-      omega_isotropic_damped_valid_ = true;
-      ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1.0);
-      ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropicDamped_, 1.0);
-   }
+  ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), omegaForwardIsotropicDamped_, 1.0);
+  ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), omegaBackwardIsotropicDamped_, 1.0);
 }
 
 // Here we check whether messages constraints are satisfied

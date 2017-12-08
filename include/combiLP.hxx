@@ -4,15 +4,16 @@
 #include "LP_MP.h"
 #include "DD_ILP.hxx"
 #include <vector>
+#include <unordered_set>
 
 namespace LP_MP {
 
   template<typename EXTERNAL_SOLVER, typename BASE_LP_SOLVER>
   class combiLP : public BASE_LP_SOLVER {
     public:
+      using BASE_LP_SOLVER::BASE_LP_SOLVER; 
 
-
-    virtual void End() const
+    void End()
     {
       BASE_LP_SOLVER::End();
 
@@ -25,17 +26,16 @@ namespace LP_MP {
       std::unordered_set<MessageTypeAdapter*> ILP_messages;
 
       auto factor_in_ILP = [&](auto* f) {
-        return ILP_factors_address_to_index.find(f) != ILP_factors_address_to_index.end(); 
-      }
+        return ILP_factor_address_to_index.find(f) != ILP_factor_address_to_index.end(); 
+      };
 
       auto add_factor_to_ILP = [&](auto* f) {
         consistent=false;
         const INDEX factor_index = this->factor_address_to_index_[f];
         if(!factor_in_ILP(f)) {
-          factor_consistent[factor_index] = false;
           ILP_factor_address_to_index.insert(std::make_pair(f, ILP_factors.size()));
           ILP_factors.push_back(f);
-          external_variable_counter_.push_back(s_.get_variable_counters());
+          external_variable_counter.push_back(s.get_variable_counters());
           f->construct_constraints(s); 
         }
       };
@@ -46,9 +46,9 @@ namespace LP_MP {
           auto* l = m->GetLeftFactor();
           auto* r = m->GetRightFactor();
           assert(factor_in_ILP(l) && factor_in_ILP(r));
-          auto left_factor_index = ILP_factor_address_to_index[l]->second;
-          auto right_factor_index = ILP_factor_address_to_index[r]->second;
-          m->construct_constraints(s_, external_variable_counter[left_factor_index], external_variable_counter[right_factor_index]);
+          auto left_factor_index = ILP_factor_address_to_index[l].second;
+          auto right_factor_index = ILP_factor_address_to_index[r].second;
+          m->construct_constraints(s, external_variable_counter[left_factor_index], external_variable_counter[right_factor_index]);
         } 
       };
 

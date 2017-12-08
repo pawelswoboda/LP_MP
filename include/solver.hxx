@@ -301,6 +301,7 @@ public:
                   f(*l).End();
             });
       }); 
+      lp_.End();
    }
 
    // register evaluated primal solution
