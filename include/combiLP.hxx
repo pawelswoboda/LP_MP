@@ -70,29 +70,34 @@ namespace LP_MP {
         }
       }
 
+      INDEX combiLP_iteration = 0;
       while(!consistent) {
+        //for(auto* f : ILP_factors) {
+        //  std::cout << this->factor_address_to_index_[f] << " ";
+        //}
+        //std::cout << "\n";
         // solve subproblem on factors that are not consistent
         s.init_variable_loading();
         for(auto* f : ILP_factors) {
           f->load_costs(s);
         }
-        for(INDEX i=0; i<this->GetNumberOfMessages(); ++i) {
-          auto* m = this->m_[i];
+        for(auto* m : this->m_) {
           auto* l = m->GetLeftFactor();
           auto* r = m->GetRightFactor();
           if(factor_in_ILP(l) && factor_in_ILP(r)) {
             add_message_to_ILP(m); 
           }
         }
-        s.solve();
+        //s.write_to_file("combiLP_ILP_part_iteration" + std::to_string(combiLP_iteration));
+        const bool solved = s.solve();
+        assert(solved);
         s.init_variable_loading();
         for(auto* f : ILP_factors) {
           f->convert_primal(s);
         } 
 
         // check whether solutions agree between ILP and LP part
-        for(INDEX i=0; i<this->GetNumberOfMessages(); ++i) {
-          auto* m = this->m_[i];
+        for(auto* m : this->m_) {
           auto* l = m->GetLeftFactor();
           auto* r = m->GetRightFactor();
           if(factor_in_ILP(l) != factor_in_ILP(r)) {
@@ -102,6 +107,7 @@ namespace LP_MP {
             }
           }
         }
+        ++combiLP_iteration;
       }
     }
   };

@@ -2478,7 +2478,7 @@ public:
    void convert_primal_impl(SOLVER& s)
    {
       auto vars = factor_.export_variables();
-      auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->convert_variables_to_external(s, x)...); }, vars); 
+      auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->load_external_variables(s, x)...); }, vars); 
 
       auto convert_primal_fun = [this,&s](auto... x) { this->factor_.convert_primal(s, x...); };
       std::apply(convert_primal_fun, external_vars);
