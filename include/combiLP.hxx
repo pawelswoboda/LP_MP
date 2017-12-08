@@ -46,8 +46,8 @@ namespace LP_MP {
           auto* l = m->GetLeftFactor();
           auto* r = m->GetRightFactor();
           assert(factor_in_ILP(l) && factor_in_ILP(r));
-          auto left_factor_index = ILP_factor_address_to_index[l].second;
-          auto right_factor_index = ILP_factor_address_to_index[r].second;
+          auto left_factor_index = ILP_factor_address_to_index[l];
+          auto right_factor_index = ILP_factor_address_to_index[r];
           m->construct_constraints(s, external_variable_counter[left_factor_index], external_variable_counter[right_factor_index]);
         } 
       };

@@ -144,6 +144,9 @@ public:
    // external ILP-interface
    virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::sat_solver>&, const DD_ILP::variable_counters&, const DD_ILP::variable_counters&) = 0;
    virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::problem_export>&, const DD_ILP::variable_counters&, const DD_ILP::variable_counters&) = 0;
+#ifdef DD_ILP_WITH_GUROBI
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>&, const DD_ILP::variable_counters&, const DD_ILP::variable_counters&) = 0;
+#endif
 };
 
 // primitive iterator class. Access may be slow. A more direct implementation would be more complicated, though.

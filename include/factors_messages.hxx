@@ -1536,6 +1536,15 @@ public:
        const typename DD_ILP::variable_counters& right_variable_counters 
        ) final
    { construct_constraints_impl(s, left_variable_counters, right_variable_counters); }
+#ifdef DD_ILP_WITH_GUROBI
+   virtual void construct_constraints(
+       DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& s, 
+       const typename DD_ILP::variable_counters& left_variable_counters,
+       const typename DD_ILP::variable_counters& right_variable_counters 
+       ) final
+   { construct_constraints_impl(s, left_variable_counters, right_variable_counters); }
+#endif
+
 
 protected:
    MessageType msg_op_; // possibly inherit privately from MessageType to apply empty base optimization when applicable
