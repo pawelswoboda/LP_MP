@@ -6,8 +6,3 @@ target_link_libraries( serialization LP_MP m stdc++ pthread )
 
 add_executable(test_model test_model.cpp ${headers})
 target_link_libraries(test_model LP_MP DD_ILP lingeling)
-
-if(WITH_GUROBI)
-  add_executable(combiLP combiLP.cpp)
-  target_link_libraries(combiLP LP_MP-MRF gurobi)
-endif()
