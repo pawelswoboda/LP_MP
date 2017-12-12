@@ -1517,7 +1517,7 @@ public:
       s.set_variable_counters(right_variable_counters);
       auto right_external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->rightFactor_->load_external_variables(s, x)...); }, right_vars);
 
-      auto t = std::tuple_cat(std::tie(*leftFactor_), left_external_vars, std::tie(*rightFactor_), right_external_vars);
+      auto t = std::tuple_cat(std::tie(*leftFactor_->GetFactor()), left_external_vars, std::tie(*rightFactor_->GetFactor()), right_external_vars);
       auto construct_constraints_fun = [this,&s](auto... x) { this->msg_op_.construct_constraints(s, x...); };
       std::apply(construct_constraints_fun, t);
 
