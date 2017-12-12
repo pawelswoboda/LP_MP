@@ -2409,6 +2409,10 @@ public:
    auto convert_variables_to_external(EXTERNAL_SOLVER& s, const vector<REAL>& v)
    { return s.add_vector(v); }
 
+   template<typename EXTERNAL_SOLVER, std::size_t N>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const std::array<REAL,N>& v)
+   { return s.add_vector(v); }
+
    template<typename EXTERNAL_SOLVER>
    auto convert_variables_to_external(EXTERNAL_SOLVER& s, const matrix<REAL>& m)
    { return s.add_matrix(m); }
@@ -2423,6 +2427,10 @@ public:
 
    template<typename EXTERNAL_SOLVER>
    auto load_external_variables(EXTERNAL_SOLVER& s, vector<REAL>& x)
+   { return s.load_vector(); }
+
+   template<typename EXTERNAL_SOLVER, std::size_t N>
+   auto load_external_variables(EXTERNAL_SOLVER& s, std::array<REAL,N>& x)
    { return s.load_vector(); }
 
    template<typename EXTERNAL_SOLVER>
@@ -2440,6 +2448,10 @@ public:
    template<typename EXTERNAL_SOLVER>
    void add_objective(EXTERNAL_SOLVER& s, const vector<REAL>& cost)
    { s.add_vector_objective(cost); }
+
+   template<typename EXTERNAL_SOLVER, std::size_t N>
+   auto add_objective(EXTERNAL_SOLVER& s, std::array<REAL,N>& cost)
+   { return s.add_vector_objective(cost); } 
 
    template<typename EXTERNAL_SOLVER>
    void add_objective(EXTERNAL_SOLVER& s, const matrix<REAL>& cost)
