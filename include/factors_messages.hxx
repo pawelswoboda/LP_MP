@@ -1648,7 +1648,7 @@ public:
    void update_factor_residual(const weight_vector& omega)
    {
       assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
-      assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
+      assert(*std::max_element(omega.begin(), omega.end()) <= 1.0+eps);
       assert(std::distance(omega.begin(), omega.end()) == no_send_messages());
       ReceiveMessages(omega);
       MaximizePotential();
@@ -1709,7 +1709,6 @@ public:
 
    void UpdateFactorPrimal(const weight_vector& omega, INDEX primal_access) final
    {
-     return;
 #ifdef LP_MP_PARALLEL
      std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
 #endif
@@ -1897,7 +1896,7 @@ public:
            if constexpr(l.CanCallSendMessages()) {
              const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
              if(omega_sum > 0.0) { 
-               f(l).SendMessages(factor, std::get<n>(msg_), omegaIt);
+               l.SendMessages(factor, std::get<n>(msg_), omegaIt);
              } 
            } else {
              for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
@@ -1972,18 +1971,48 @@ public:
       }
    } 
 
+   // choose order of messages to be sent and immediately reparametrize after each send message call and increase the remaining weights
    template<typename WEIGHT_VEC>
    void send_messages_residual(const WEIGHT_VEC& omega)
    {
-     CallSendMessages(factor_, omega.begin());
-   }
-
-   // choose order of messages to be sent and immediately reparametrize after each send message call and increase the remaining weights
-   template<typename WEIGHT_VEC>
-   void send_messages_(const WEIGHT_VEC& omega)
-   {
-     auto send_msg_fun = [this]() {};
-     std::apply(send_msg_fun, MESSAGE_DISPATCHER_TYPELIST{}); 
+     assert(false);
+     /*
+     auto omegaIt = omega.begin();
+     meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+         // check whether the message supports batch updates. If so, call batch update.
+         // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
+         constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+         if constexpr(l.SendsMessage()) {
+           if constexpr(l.CanCallSendMessages()) {
+             const REAL omega_sum = *(omegaIt+std::get<n>(msg_).size()-1);
+             if(omega_sum > 0.0) { 
+               // build array of messages that are actually called
+               if(std::get<n>(msg_).size() <= 16) {
+                 std::array<message_type*,16> msgs;
+                 INDEX no_msgs = 0;
+                 REAL prev_omega = ...;
+                 for(auto msg_it=std::get<n>(msg_).begin(); msg_it!=std::get<n>(msg_).end(); ++msg_it, ++omegaIt) {
+                   if(*omegaIt > prev_omega) {
+                     msgs[no_msgs++] = &msg_it->msg_op_;
+                   }
+                 }
+               } else {
+                 vector<message_type*> msgs(std::get<n>(msg_).size());
+                 // same as above
+                 ...
+               }
+               l.SendMessages(factor_, std::get<n>(msg_), omegaIt);
+             } 
+           } else {
+             for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
+               if(*omegaIt != 0.0) {
+                 l.SendMessage(&factor_, *(*it), *omegaIt); 
+               }
+             }
+           }
+         }
+       });
+       */
    }
 
 #ifdef LP_MP_PARALLEL

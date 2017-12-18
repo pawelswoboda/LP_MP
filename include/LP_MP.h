@@ -444,6 +444,7 @@ public:
    void ComputeMixedWeights(const two_dim_variable_array<REAL>& omega_anisotropic, const two_dim_variable_array<REAL>& omega_damped_uniform, two_dim_variable_array<REAL>& omega); 
    void ComputeMixedWeights()
    {
+     assert(false); // check for valid flags!
      ComputeDampedUniformWeights();
      ComputeAnisotropicWeights();
      ComputeMixedWeights(omegaForwardAnisotropic_, omegaForwardIsotropicDamped_, omegaForwardMixed_);
@@ -1081,12 +1082,12 @@ void LP::ComputeAnisotropicWeights(
                   const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
                   assert(i != j);
                   if(i<j || last_receiving_factor[j] > i) {
-                     //omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
-                    if(no_receiving_factors_later[i] > 0) {
-                      omega[c][k] = (1.0/REAL(1 + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
-                    } else {
-                      omega[c][k] = (1.0/REAL(no_send_factors_later[i]));
-                    }
+                     omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                    //if(no_receiving_factors_later[i] > 0) {
+                    //  omega[c][k] = (1.0/REAL(1 + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                    //} else {
+                    //  omega[c][k] = (1.0/REAL(no_send_factors_later[i]));
+                    //}
                     // omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
                   } else {
                      omega[c][k] = 0.0;
