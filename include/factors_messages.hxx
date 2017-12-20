@@ -88,9 +88,9 @@ struct LeftMessageFuncGetter
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromRightContainer) GetReceiveFunc() { return &MSG_CONTAINER::ReceiveMessageFromRightContainer; }
    constexpr static decltype(&MSG_CONTAINER::ReceiveRestrictedMessageFromRightContainer) GetReceiveRestrictedFunc() { return &MSG_CONTAINER::ReceiveRestrictedMessageFromRightContainer; }
    constexpr static decltype(&MSG_CONTAINER::SendMessageToRightContainer) GetSendFunc() { return &MSG_CONTAINER::SendMessageToRightContainer; }
-   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ARRAY, ITERATOR>) GetSendMessagesFunc() 
-   { return &MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ARRAY, ITERATOR>; }
+   template<typename LEFT_FACTOR, typename MSG_ITERATOR>
+   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ITERATOR>) GetSendMessagesFunc() 
+   { return &MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ITERATOR>; }
 
 #ifdef LP_MP_PARALLEL
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromRightContainerSynchronized) GetReceiveSynchronizedFunc() { return &MSG_CONTAINER::ReceiveMessageFromRightContainerSynchronized; }
@@ -135,9 +135,9 @@ struct RightMessageFuncGetter
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromLeftContainer) GetReceiveFunc() { return &MSG_CONTAINER::ReceiveMessageFromLeftContainer; }
    constexpr static decltype(&MSG_CONTAINER::ReceiveRestrictedMessageFromLeftContainer) GetReceiveRestrictedFunc() { return &MSG_CONTAINER::ReceiveRestrictedMessageFromLeftContainer; }
    constexpr static decltype(&MSG_CONTAINER::SendMessageToLeftContainer) GetSendFunc() { return &MSG_CONTAINER::SendMessageToLeftContainer; }
-   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>) GetSendMessagesFunc() 
-   { return &MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>; }
+   template<typename RIGHT_FACTOR, typename MSG_ITERATOR>
+   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ITERATOR>) GetSendMessagesFunc() 
+   { return &MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ITERATOR>; }
 
 #ifdef LP_MP_PARALLEL
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromLeftContainerSynchronized) GetReceiveSynchronizedFunc() { return &MSG_CONTAINER::ReceiveMessageFromLeftContainerSynchronized; }
@@ -216,11 +216,11 @@ struct MessageDispatcher
    // batch message sending
    constexpr static bool CanCallSendMessages() { return FuncGetter<MSG_CONTAINER>::CanCallSendMessages(); }
 
-   template<typename FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessages(const FACTOR& f, const MSG_ARRAY& msgs, ITERATOR omegaBegin)
+   template<typename FACTOR, typename MSG_ITERATOR>
+   static void SendMessages(const FACTOR& f, MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, const REAL omega)
    {
-      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::template GetSendMessagesFunc<FACTOR, MSG_ARRAY, ITERATOR>();
-      (*staticMemberFunc)(f, msgs, omegaBegin);
+      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::template GetSendMessagesFunc<FACTOR, MSG_ITERATOR>();
+      (*staticMemberFunc)(f, msgs_begin, msgs_end, omega);
    }
 
 #ifdef LP_MP_PARALLEL
@@ -707,7 +707,7 @@ public:
       constexpr INDEX msg_array_number = RightFactorContainer::template FindMessageDispatcherTypeIndex<MessageDispatcher<MessageContainerType,RightMessageFuncGetter>>();
       using msg_container_type = meta::at_c<typename RightFactorContainer::msg_container_type_list, msg_array_number>;
       using MSG_ARRAY_ITERATOR = decltype(std::declval<msg_container_type>().begin());
-      return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RightFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, typename std::vector<REAL>::iterator>();
+      return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RightFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, REAL>();
    }
 
    template<Chirality C> class MessageContainerView; // forward declaration. Put MessageIteratorView after definition of MessageContainerView
@@ -790,11 +790,11 @@ public:
    };
 
    // rename to send_messages_to_left_container
-   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   template<typename RIGHT_FACTOR, typename MSG_ITERATOR>
+   static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, const REAL omega) 
    {
-      using MessageIteratorType = MessageIteratorView<Chirality::right, decltype(msgs.begin())>;
-      return MessageType::SendMessagesToLeft(rightFactor, MessageIteratorType(msgs.begin()), MessageIteratorType(msgs.end()), omegaBegin);
+      using MessageIteratorType = MessageIteratorView<Chirality::right, MSG_ITERATOR>;
+      return MessageType::SendMessagesToLeft(rightFactor, MessageIteratorType(msgs_begin), MessageIteratorType(msgs_end), omega);
    }
 
 #ifdef LP_MP_PARALLEL
@@ -854,15 +854,15 @@ public:
       constexpr INDEX msg_array_number = LeftFactorContainer::template FindMessageDispatcherTypeIndex<MessageDispatcher<MessageContainerType,LeftMessageFuncGetter>>();
       using msg_container_type = meta::at_c<typename LeftFactorContainer::msg_container_type_list, msg_array_number>;
       using MSG_ARRAY_ITERATOR = decltype(std::declval<msg_container_type>().begin());
-      return FunctionExistence::HasSendMessagesToRight<MessageType, void, LeftFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, typename std::vector<REAL>::iterator>();
+      return FunctionExistence::HasSendMessagesToRight<MessageType, void, LeftFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, REAL>();
    }
 
    // rename send_messages_to_right_container
-   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessagesToRightContainer(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   template<typename LEFT_FACTOR, typename MSG_ITERATOR>
+   static void SendMessagesToRightContainer(const LEFT_FACTOR& leftFactor, MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, const REAL omega) 
    {
-      using MessageIteratorType = MessageIteratorView<Chirality::left, decltype(msgs.begin())>;
-      return MessageType::SendMessagesToRight(leftFactor, MessageIteratorType(msgs.begin()), MessageIteratorType(msgs.end()), omegaBegin);
+      using MessageIteratorType = MessageIteratorView<Chirality::left, MSG_ITERATOR>;
+      return MessageType::SendMessagesToRight(leftFactor, MessageIteratorType(msgs_begin), MessageIteratorType(msgs_end), omega);
    }
 
 #ifdef LP_MP_PARALLEL
@@ -1894,10 +1894,22 @@ public:
          constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
          if constexpr(l.SendsMessage()) {
            if constexpr(l.CanCallSendMessages()) {
-             const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
-             if(omega_sum > 0.0) { 
-               l.SendMessages(factor, std::get<n>(msg_), omegaIt);
+
+             const INDEX no_messages = std::get<n>(msg_).size();
+             const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](REAL x){ return x > 0.0; });
+
+             if(no_active_messages > 0) { 
+               const REAL omega_sum = *(omegaIt+std::get<n>(msg_).size());
+               // build array of messages that are actually called
+               if(no_active_messages <= active_messages_array_size) {
+                 auto msgs = get_active_messages_array(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt);
+                 l.SendMessages(factor, msgs.begin(), msgs.begin()+no_active_messages, omega_sum);
+               } else {
+                 auto msgs = get_active_messages_vector(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt, no_active_messages);
+                 l.SendMessages(factor, msgs.begin(), msgs.begin()+no_active_messages, omega_sum);
+               }
              } 
+
            } else {
              for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
                if(*omegaIt != 0.0) {
@@ -1971,39 +1983,68 @@ public:
       }
    } 
 
+   static constexpr INDEX active_messages_array_size = 16;
+   template<typename MSG_ITERATOR, typename ACTIVE_ITERATOR>
+   auto get_active_messages_array(MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, ACTIVE_ITERATOR active_begin)
+   {
+     using message_ptr_type = decltype( *msgs_begin );
+     std::array<message_ptr_type,active_messages_array_size> msgs = {nullptr};
+     INDEX no_msgs = 0;
+     for(auto msg_it=msgs_begin; msg_it!=msgs_end; ++msg_it, ++active_begin) {
+       if(*active_begin > 0.0) {
+         msgs[no_msgs++] = *msg_it;
+       }
+     }
+     return  msgs; 
+   }
+
+   template<typename MSG_ITERATOR, typename ACTIVE_ITERATOR>
+   auto get_active_messages_vector(MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, ACTIVE_ITERATOR active_begin, const INDEX no_active_messages)
+   {
+     using message_ptr_type = decltype( *msgs_begin );
+     std::vector<message_ptr_type> msgs(no_active_messages);
+     INDEX no_msgs = 0;
+     for(auto msg_it=msgs_begin; msg_it!=msgs_end; ++msg_it, ++active_begin) {
+       if(*active_begin > 0.0) {
+         msgs[no_msgs++] = *msg_it;
+       }
+     }
+     assert(no_active_messages == no_msgs); 
+     return  msgs; 
+   }
+
    // choose order of messages to be sent and immediately reparametrize after each send message call and increase the remaining weights
    template<typename WEIGHT_VEC>
    void send_messages_residual(const WEIGHT_VEC& omega)
    {
      assert(false);
-     /*
      auto omegaIt = omega.begin();
+     REAL residual_omega = 0.0;
      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
          // check whether the message supports batch updates. If so, call batch update.
          // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
          constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+         using message_ptr_type = decltype( *(std::get<n>(msg_).begin()) );
          if constexpr(l.SendsMessage()) {
+
            if constexpr(l.CanCallSendMessages()) {
-             const REAL omega_sum = *(omegaIt+std::get<n>(msg_).size()-1);
-             if(omega_sum > 0.0) { 
+             const INDEX no_messages = std::get<n>(msg_).size();
+             const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](REAL x){ return x > 0.0; });
+             const REAL omega_sum = *(omegaIt+std::get<n>(msg_).size());
+             residual_omega += omega_sum;
+             if(no_active_messages > 0) { 
                // build array of messages that are actually called
-               if(std::get<n>(msg_).size() <= 16) {
-                 std::array<message_type*,16> msgs;
-                 INDEX no_msgs = 0;
-                 REAL prev_omega = ...;
-                 for(auto msg_it=std::get<n>(msg_).begin(); msg_it!=std::get<n>(msg_).end(); ++msg_it, ++omegaIt) {
-                   if(*omegaIt > prev_omega) {
-                     msgs[no_msgs++] = &msg_it->msg_op_;
-                   }
-                 }
+               if(no_active_messages <= active_messages_array_size) {
+                 auto msgs = get_active_messages_array(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt);
+                 l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, omega_sum);
                } else {
-                 vector<message_type*> msgs(std::get<n>(msg_).size());
-                 // same as above
-                 ...
+                 auto msgs = get_active_messages_vector(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt, no_active_messages);
+                 l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, omega_sum);
                }
-               l.SendMessages(factor_, std::get<n>(msg_), omegaIt);
              } 
+
            } else {
+
              for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
                if(*omegaIt != 0.0) {
                  l.SendMessage(&factor_, *(*it), *omegaIt); 
@@ -2012,7 +2053,6 @@ public:
            }
          }
        });
-       */
    }
 
 #ifdef LP_MP_PARALLEL

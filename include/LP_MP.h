@@ -453,6 +453,7 @@ public:
 
    void shared_weights_to_residual(two_dim_variable_array<REAL>& omega)
    {
+     assert(false);
      for(INDEX i=0; i<omega.size(); ++i) {
        std::partial_sum(omega[i].begin(), omega[i].end(), omega[i].begin());
      }
