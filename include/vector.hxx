@@ -26,6 +26,13 @@ public:
 
    E& operator()() { return static_cast<E&>(*this); }
    const E& operator()() const { return static_cast<const E&>(*this); }
+
+   friend std::ostream& operator<<(std::ostream& os, const vector_expression<T,E>& v) {
+     for(INDEX i=0; i<v.size(); ++i) {
+       os << v[i] << " ";
+     }
+     os << "\n";
+   }
 };
 
 template<typename T, typename E>
@@ -40,6 +47,15 @@ public:
 
    E& operator()() { return static_cast<E&>(*this); }
    const E& operator()() const { return static_cast<const E&>(*this); }
+
+   friend std::ostream& operator<<(std::ostream& os, const matrix_expression<T,E>& m) {
+     for(INDEX i=0; i<m.dim1(); ++i) {
+       for(INDEX j=0; j<m.dim2(); ++j) {
+         os << m(i,j) << " ";
+       }
+       os << "\n";
+     }
+   }
 };
 
 template<typename T, typename E>

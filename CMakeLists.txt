@@ -79,4 +79,5 @@ add_subdirectory("external/BCFW-Bundle")
 add_subdirectory("external/DD_ILP")
 target_link_libraries(LP_MP INTERFACE DD_ILP)
 
+enable_testing()
 add_subdirectory(test) 

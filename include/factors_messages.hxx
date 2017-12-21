@@ -1888,53 +1888,42 @@ public:
    template<typename ITERATOR>
    void CallSendMessages(FactorType& factor, ITERATOR omegaIt) 
    {
+     auto omega_begin = omegaIt;
      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
-         // check whether the message supports batch updates. If so, call batch update.
-         // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
+         // check whether the message supports batch updates. If so, call batch update, else call individual send message
          constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
          if constexpr(l.SendsMessage()) {
+           auto msg_begin = std::get<n>(msg_).begin();
+           auto msg_end = std::get<n>(msg_).end();
+           const INDEX no_messages = std::get<n>(msg_).size();
+
            if constexpr(l.CanCallSendMessages()) {
 
-             const INDEX no_messages = std::get<n>(msg_).size();
              const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](REAL x){ return x > 0.0; });
 
              if(no_active_messages > 0) { 
-               const REAL omega_sum = *(omegaIt+std::get<n>(msg_).size());
+               const REAL omega_sum = std::accumulate(omegaIt, omegaIt+no_messages, 0.0);
                // build array of messages that are actually called
                if(no_active_messages <= active_messages_array_size) {
-                 auto msgs = get_active_messages_array(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt);
-                 l.SendMessages(factor, msgs.begin(), msgs.begin()+no_active_messages, omega_sum);
+                 auto active_msgs = get_active_messages_array(msg_begin, msg_end, omegaIt);
+                 l.SendMessages(factor, active_msgs.begin(), active_msgs.begin()+no_active_messages, omega_sum);
                } else {
-                 auto msgs = get_active_messages_vector(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt, no_active_messages);
-                 l.SendMessages(factor, msgs.begin(), msgs.begin()+no_active_messages, omega_sum);
+                 auto active_msgs = get_active_messages_vector(msg_begin, msg_end, omegaIt, no_active_messages);
+                 l.SendMessages(factor, active_msgs.begin(), active_msgs.begin()+no_active_messages, omega_sum);
                }
              } 
+             omegaIt += no_messages;
 
            } else {
-             for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
+             for(auto msg_it = msg_begin; msg_it != msg_end; ++msg_it, ++omegaIt) {
                if(*omegaIt != 0.0) {
-                 l.SendMessage(&factor, *(*it), *omegaIt); 
+                 l.SendMessage(&factor, *(*msg_it), *omegaIt); 
                }
              }
            }
          }
-         //if(l.SendsMessage()) {
-         //static_if<l.CanCallSendMessages()>([&](auto f) {
-         //    const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
-         //    if(omega_sum > 0.0) { 
-         //      f(l).SendMessages(factor, std::get<n>(msg_), omegaIt);
-         //    }
-         //    omegaIt += std::get<n>(msg_).size();
-         // }).else_([&](auto) {
-         //    constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-         //    for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
-         //      if(*omegaIt != 0.0) {
-         //        l.SendMessage(&factor, *(*it), *omegaIt); 
-         //      }
-         //    }
-         // });
-         //}
      });
+     assert(omegaIt - omega_begin == no_send_messages());
    }
 
 #ifdef LP_MP_PARALLEL
@@ -2017,7 +2006,6 @@ public:
    template<typename WEIGHT_VEC>
    void send_messages_residual(const WEIGHT_VEC& omega)
    {
-     assert(false);
      auto omegaIt = omega.begin();
      REAL residual_omega = 0.0;
      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
@@ -2036,10 +2024,10 @@ public:
                // build array of messages that are actually called
                if(no_active_messages <= active_messages_array_size) {
                  auto msgs = get_active_messages_array(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt);
-                 l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, omega_sum);
+                 l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, residual_omega);
                } else {
                  auto msgs = get_active_messages_vector(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt, no_active_messages);
-                 l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, omega_sum);
+                 l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, residual_omega);
                }
              } 
 
@@ -2047,7 +2035,8 @@ public:
 
              for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
                if(*omegaIt != 0.0) {
-                 l.SendMessage(&factor_, *(*it), *omegaIt); 
+                 residual_omega += *omegaIt;
+                 l.SendMessage(&factor_, *(*it), residual_omega); 
                }
              }
            }

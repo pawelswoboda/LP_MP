@@ -73,6 +73,15 @@ public:
       }
    }
 
+   friend std::ostream& operator<<(std::ostream& os, const two_dim_variable_array<T>& a) {
+     for(INDEX i=0; i<a.size(); ++i) {
+       for(INDEX j=0; j<a[i].size(); ++j) {
+         os << a(i,j) << " ";
+       }
+       os << "\n";
+     }
+   }
+
    template<typename ITERATOR>
    void resize(ITERATOR begin, ITERATOR end)
    {

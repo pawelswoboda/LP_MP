@@ -451,14 +451,6 @@ public:
      ComputeMixedWeights(omegaBackwardAnisotropic_, omegaBackwardIsotropicDamped_, omegaBackwardMixed_);
    }
 
-   void shared_weights_to_residual(two_dim_variable_array<REAL>& omega)
-   {
-     assert(false);
-     for(INDEX i=0; i<omega.size(); ++i) {
-       std::partial_sum(omega[i].begin(), omega[i].end(), omega[i].begin());
-     }
-   }
-
    double LowerBound() const
    {
       double lb = 0.0;
@@ -588,50 +580,30 @@ public:
         if(!omega_anisotropic_valid_) {
           ComputeAnisotropicWeights();
           omega_anisotropic_valid_ = true;
-          if(reparametrization_type.getValue() == "residual") {
-            shared_weights_to_residual(omegaForwardAnisotropic_);
-            shared_weights_to_residual(omegaBackwardAnisotropic_);
-          }
         }
         return omega_storage{omegaForwardAnisotropic_, omegaBackwardAnisotropic_};
       } else if(repamMode_ == LPReparametrizationMode::Anisotropic2) {
         if(!omega_anisotropic2_valid_) {
           ComputeAnisotropicWeights2();
           omega_anisotropic2_valid_ = true;
-          if(reparametrization_type.getValue() == "residual") {
-            shared_weights_to_residual(omegaForwardAnisotropic2_);
-            shared_weights_to_residual(omegaBackwardAnisotropic2_);
-          }
         }
         return omega_storage{omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_};
       } else if(repamMode_ == LPReparametrizationMode::Uniform) {
         if(!omega_isotropic_valid_) {
           ComputeUniformWeights();
           omega_isotropic_valid_ = false;
-          if(reparametrization_type.getValue() == "residual") {
-            shared_weights_to_residual(omegaForwardIsotropic_);
-            shared_weights_to_residual(omegaBackwardIsotropic_);
-          }
         }
         return omega_storage{omegaForwardIsotropic_, omegaBackwardIsotropic_};
       } else if(repamMode_ == LPReparametrizationMode::DampedUniform) {
         if(!omega_isotropic_damped_valid_) {
           ComputeDampedUniformWeights();
           omega_isotropic_damped_valid_ = false;
-          if(reparametrization_type.getValue() == "residual") {
-            shared_weights_to_residual(omegaForwardIsotropicDamped_);
-            shared_weights_to_residual(omegaBackwardIsotropicDamped_);
-          }
         }
         return omega_storage{omegaForwardIsotropicDamped_, omegaBackwardIsotropicDamped_};
       } else if(repamMode_ == LPReparametrizationMode::Mixed) {
         if(!omega_mixed_valid_) {
           omega_mixed_valid_ = true;
           ComputeMixedWeights();
-          if(reparametrization_type.getValue() == "residual") {
-            shared_weights_to_residual(omegaForwardMixed_);
-            shared_weights_to_residual(omegaBackwardMixed_);
-          }
         }
         return omega_storage{omegaForwardMixed_, omegaBackwardMixed_};
       } else {
@@ -825,18 +797,21 @@ void LP::ComputePassSynchronized(
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
 void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
 {
-   //assert(std::distance(factorItEnd, factorIt) == std::distance(omegaIt, omegaItEnd));
+  //assert(std::distance(factorItEnd, factorIt) == std::distance(omegaIt, omegaItEnd));
   const INDEX n = std::distance(factorIt, factorItEnd);
 //#pragma omp parallel for schedule(static)
-   for(INDEX i=0; i<n; ++i) {
-     auto* f = *(factorIt + i);
-     if(reparametrization_type.getValue() == "shared") {
-       f->UpdateFactor(*(omegaIt + i));
-     } else {
-       assert(reparametrization_type.getValue() == "residual");
-       f->update_factor_residual(*(omegaIt + i));
-     }
-   }
+  if(reparametrization_type.getValue() == "shared") {
+    for(INDEX i=0; i<n; ++i) {
+      auto* f = *(factorIt + i);
+      f->UpdateFactor(*(omegaIt + i));
+    }
+  } else {
+    assert(reparametrization_type.getValue() == "residual");
+    for(INDEX i=0; i<n; ++i) {
+      auto* f = *(factorIt + i);
+      f->update_factor_residual(*(omegaIt + i));
+    }
+  }
 }
 
 inline void LP::ComputeAnisotropicWeights()
@@ -1083,13 +1058,12 @@ void LP::ComputeAnisotropicWeights(
                   const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
                   assert(i != j);
                   if(i<j || last_receiving_factor[j] > i) {
-                     omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
-                    //if(no_receiving_factors_later[i] > 0) {
-                    //  omega[c][k] = (1.0/REAL(1 + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
-                    //} else {
-                    //  omega[c][k] = (1.0/REAL(no_send_factors_later[i]));
-                    //}
-                    // omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                    //omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                    if(no_receiving_factors_later[i] > 0) {
+                      omega[c][k] = (1.0/REAL(1 + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                    } else {
+                      omega[c][k] = (1.0/REAL(no_send_factors_later[i]));
+                    }
                   } else {
                      omega[c][k] = 0.0;
                   } 
@@ -1101,7 +1075,6 @@ void LP::ComputeAnisotropicWeights(
          }
       }
    }
-
 
    // check whether all messages were added to m_. Possibly, this can be automated: Traverse all factors, get all messages, add them to m_ and avoid duplicates along the way.
    assert(2*m_.size() == std::accumulate(f_.begin(), f_.end(), 0, [](INDEX sum, auto* f){ return sum + f->no_messages(); }));
