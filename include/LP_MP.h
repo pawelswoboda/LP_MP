@@ -65,6 +65,7 @@ public:
    virtual REAL LowerBound() const = 0;
    virtual void init_primal() = 0;
    virtual void MaximizePotentialAndComputePrimal() = 0;
+   virtual void propagate_primal_through_messages() = 0;
 
    // for use in tree decomposition:
    // for writing primal solution into subgradient
@@ -1058,12 +1059,12 @@ void LP::ComputeAnisotropicWeights(
                   const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
                   assert(i != j);
                   if(i<j || last_receiving_factor[j] > i) {
-                    //omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
-                    if(no_receiving_factors_later[i] > 0) {
-                      omega[c][k] = (1.0/REAL(1 + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
-                    } else {
-                      omega[c][k] = (1.0/REAL(no_send_factors_later[i]));
-                    }
+                    omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                    //if(no_receiving_factors_later[i] > 0) {
+                    //  omega[c][k] = (1.0/REAL(1 + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                    //} else {
+                    //  omega[c][k] = (1.0/REAL(no_send_factors_later[i]));
+                    //}
                   } else {
                      omega[c][k] = 0.0;
                   } 

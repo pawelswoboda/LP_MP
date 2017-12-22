@@ -62,6 +62,14 @@ public:
     s_.solve();
   }
 
+  void write_to_file(const std::string& filename) { 
+    s_.init_variable_loading();
+    for(INDEX i=0; i<this->GetNumberOfFactors(); ++i) {
+      this->f_[i]->load_costs(s_);
+    } 
+    s_.write_to_file(filename); 
+  }
+
 private:
    external_solver s_; 
 

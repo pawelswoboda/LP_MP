@@ -18,7 +18,6 @@ namespace LP_MP {
       BASE_LP_SOLVER::End();
 
       bool consistent = true;
-      //std::vector<bool> factor_consistent(this->GetNumberOfFactors()), true; // possibly not needed
       std::vector<FactorTypeAdapter*> ILP_factors;
       std::unordered_map<FactorTypeAdapter*,INDEX> ILP_factor_address_to_index;
       DD_ILP::external_solver_interface<EXTERNAL_SOLVER> s;
@@ -37,11 +36,13 @@ namespace LP_MP {
           ILP_factors.push_back(f);
           external_variable_counter.push_back(s.get_variable_counters());
           f->construct_constraints(s); 
+          // to do: set initial solution
         }
       };
 
       auto add_message_to_ILP = [&](auto* m) {
         if(ILP_messages.find(m) == ILP_messages.end()) {
+          consistent = false;
           ILP_messages.insert(m);
           auto* l = m->GetLeftFactor();
           auto* r = m->GetRightFactor();
@@ -52,11 +53,12 @@ namespace LP_MP {
         } 
       };
 
-      // check wheter factor is locally optimal
+      // check whether factor is locally optimal
       for(INDEX i=0; i<this->GetNumberOfFactors(); ++i) {
         auto* f = this->f_[i];
-        f->MaximizePotentialAndComputePrimal(); // should this be called here or shall we assume that this has been done already during computation?
-        if(f->LowerBound() <= f->EvaluatePrimal() - eps) {
+        //f->MaximizePotentialAndComputePrimal(); // should this be called here or shall we assume that this has been done already during computation?
+        assert(f->LowerBound() <= f->EvaluatePrimal() + eps);
+        if(f->LowerBound() < f->EvaluatePrimal() - eps) {
           add_factor_to_ILP(f);
         }
       }
@@ -71,7 +73,17 @@ namespace LP_MP {
       }
 
       INDEX combiLP_iteration = 0;
+      //std::ofstream ofs("solution_iteration.txt", std::ofstream::out);
       while(!consistent) {
+        //for(INDEX i=0; i<100; ++i) {
+          //if(factor_in_ILP(this->f_[i])) ofs << "+";
+          //else ofs << "-";
+          //ofs << static_cast<FMC_SRMP::UnaryFactor*>(this->f_[i])->GetFactor()->primal() << " ";
+        //}
+        //ofs << std::endl;
+
+        consistent = true;
+        std::cout << "solve ILP subproblem with " << ILP_factors.size() << " factors (out of " << this->f_.size() << ")\n";
         //for(auto* f : ILP_factors) {
         //  std::cout << this->factor_address_to_index_[f] << " ";
         //}
@@ -85,16 +97,19 @@ namespace LP_MP {
           auto* l = m->GetLeftFactor();
           auto* r = m->GetRightFactor();
           if(factor_in_ILP(l) && factor_in_ILP(r)) {
-            add_message_to_ILP(m); 
+            add_message_to_ILP(m);
           }
         }
-        //s.write_to_file("combiLP_ILP_part_iteration" + std::to_string(combiLP_iteration));
+        s.write_to_file("combiLP_ILP_part_iteration" + std::to_string(combiLP_iteration) + ".lp");
         const bool solved = s.solve();
         assert(solved);
         s.init_variable_loading();
         for(auto* f : ILP_factors) {
           f->convert_primal(s);
         } 
+        for(auto* m : ILP_messages) {
+          assert(m->CheckPrimalConsistency() == true);
+        }
 
         // check whether solutions agree between ILP and LP part
         for(auto* m : this->m_) {
@@ -107,11 +122,15 @@ namespace LP_MP {
             }
           }
         }
+
+        for(auto* f : ILP_factors) {
+          f->propagate_primal_through_messages(); 
+        } 
+        std::cout << "primal cost obtained by combiLP = " << this->EvaluatePrimal() << "\n";
         ++combiLP_iteration;
       }
     }
   };
-
 } // namespace LP_MP
 
 #endif // LP_MP_combiLP_HXX

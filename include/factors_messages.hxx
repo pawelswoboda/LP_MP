@@ -955,12 +955,12 @@ public:
       if constexpr (CanComputeRightFromLeftPrimalWithoutReturn()) {
         msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
         rightFactor_->PropagatePrimal();
-        rightFactor_->ComputePrimalThroughMessages(); 
+        rightFactor_->propagate_primal_through_messages(); 
       } else if constexpr (MessageContainerType::CanComputeRightFromLeftPrimalWithReturn()) {
         const bool changed = msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
         if(changed) {
           rightFactor_->PropagatePrimal();
-          rightFactor_->ComputePrimalThroughMessages();
+          rightFactor_->propagate_primal_through_messages();
         }
       }
 
@@ -968,13 +968,13 @@ public:
       static_if<CanComputeRightFromLeftPrimalWithoutReturn()>([&](auto f) {
         f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
         rightFactor_->PropagatePrimal();
-        rightFactor_->ComputePrimalThroughMessages();
+        rightFactor_->propagate_primal_through_messages();
       }).else_([&](auto) {
          static_if<MessageContainerType::CanComputeRightFromLeftPrimalWithReturn()>([&](auto f) {
                const bool changed = f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
                if(changed) {
                   rightFactor_->PropagatePrimal();
-                  rightFactor_->ComputePrimalThroughMessages();
+                  rightFactor_->propagate_primal_through_messages();
                }
          });
       });
@@ -987,13 +987,13 @@ public:
       static_if<CanComputeLeftFromRightPrimalWithoutReturn()>([&](auto f) {
         f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
         leftFactor_->PropagatePrimal();
-        leftFactor_->ComputePrimalThroughMessages();
+        leftFactor_->propagate_primal_through_messages();
       }).else_([&](auto ) {
          static_if<MessageContainerType::CanComputeLeftFromRightPrimalWithReturn()>([&](auto f) {
                const bool changed = f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
                if(changed) {
                   leftFactor_->PropagatePrimal();
-                  leftFactor_->ComputePrimalThroughMessages();
+                  leftFactor_->propagate_primal_through_messages();
                }
          });
       });
@@ -1742,7 +1742,7 @@ public:
             SendMessages(omega);
          }
          // now propagate primal to adjacent factors
-         ComputePrimalThroughMessages();
+         propagate_primal_through_messages();
       } else {
          ReceiveMessages(omega);
          MaximizePotential();
@@ -1766,7 +1766,7 @@ public:
    }
 
    // do zrobienia: rename PropagatePrimalThroughMessages
-   void ComputePrimalThroughMessages() const
+   virtual void propagate_primal_through_messages() final
    {
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this](auto l) {
             static_if<l.CanComputePrimalThroughMessage()>([&](auto f) {
@@ -2212,7 +2212,7 @@ public:
       //for(INDEX i=0; i<PrimalSize(); ++i) {
       //   primal[i + GetPrimalOffset()] = label[i];
       //}
-      ComputePrimalThroughMessages();
+      propagate_primal_through_messages();
    }
 
    struct apply_subgradient {
@@ -2552,6 +2552,8 @@ public:
 
       auto convert_primal_fun = [this,&s](auto... x) { this->factor_.convert_primal(s, x...); };
       std::apply(convert_primal_fun, external_vars);
+
+      //propagate_primal_through_messages();
    }
 
    virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final { construct_constraints_impl(s); }
