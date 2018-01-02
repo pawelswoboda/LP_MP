@@ -661,6 +661,8 @@ protected:
      synchronize_backward_ = compute_synchronization(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end()); 
    }
 #endif
+
+   std::vector<FactorTypeAdapter*> get_inconsistent_factors()
 };
 
 
@@ -1172,6 +1174,64 @@ void LP::ComputePassAndPrimalSynchronized(FACTOR_ITERATOR factorIt, const FACTOR
   }
 }
 #endif
+
+std::vector<FactorTypeAdapter*> LP::get_inconsistent_factors()
+{
+  std::vector<bool> inconsistent_mask(f_.size(),false);
+  
+  // check for locally non-optimal factors
+  for(std::size_t i=0; i<f_.size(); ++i) {
+    assert(f->EvaluatePrimal() < std::numeric_limits<REAL>::infinity());
+    if(f->LowerBound() < f->EvaluatePrimal() - eps) {
+      inconsistent_mask[i] = true;
+    }
+  }
+
+  // check for violated messages
+  for(auto* m : m_) {
+    if(!m->CheckPrimalConsistency()) {
+      auto* l = m->GetLeftFactor();
+      auto l_index = factor_address_to_index[l];
+      auto* r = m->GetRightFactor();
+      auto r_index = factor_address_to_index[r];
+
+      inconsistent_mask[l_index] = true;
+      inconsistent_mask[r_index] = true; 
+    }
+  }
+
+  // fatten the region
+  auto fatten = [&]() {
+    for(auto* m : m_) {
+      auto* l = m->GetLeftFactor();
+      auto l_index = factor_address_to_index[l];
+      auto* r = m->GetRightFactor();
+      auto r_index = factor_address_to_index[r];
+
+      if(inconsistent_mask[l_index] == true || inconsistent_mask[r_index] == true) {
+        inconsistent_mask[l_index] = true;
+        inconsistent_mask[r_index] = true;
+      }
+    }
+  };
+
+  const std::size_t no_fatten_rounds = 1;
+  for(INDEX iter=0; iter<no_fatten_rounds; ++iter) {
+    fatten();
+  }
+  
+  std::vector<FactorTypeAdapter*> inconsistent_factors;
+  const auto no_inconsistent_factors = std::count(inconsistent_mask.begin(), inconsistent_mask.end());
+  inconsistent_factors.reserve(no_inconsistent_factors);
+  for(std::size_t i=0; i<inconsistent_mask.size(); ++i) {
+    if(inconsistent_mask[i]) {
+      inconsistent_factors.push_back(f_[i]);
+    }
+  }
+
+  return inconsistent_factors;
+}
+
 
 
 } // end namespace LP_MP

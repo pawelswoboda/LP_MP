@@ -98,7 +98,8 @@ namespace LP_MP {
           auto* r = m->GetRightFactor();
           if(factor_in_ILP(l) && factor_in_ILP(r)) {
             add_message_to_ILP(m);
-          }
+          } else {
+            assert(m->CheckPrimalConsistency() == true);
         }
         s.write_to_file("combiLP_ILP_part_iteration" + std::to_string(combiLP_iteration) + ".lp");
         const bool solved = s.solve();

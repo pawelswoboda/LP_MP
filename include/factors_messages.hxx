@@ -2014,33 +2014,39 @@ public:
          constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
          using message_ptr_type = decltype( *(std::get<n>(msg_).begin()) );
          if constexpr(l.SendsMessage()) {
+           const INDEX no_messages = std::get<n>(msg_).size();
+           if(no_messages > 0) {
 
-           if constexpr(l.CanCallSendMessages()) {
-             const INDEX no_messages = std::get<n>(msg_).size();
-             const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](REAL x){ return x > 0.0; });
-             const REAL omega_sum = *(omegaIt+std::get<n>(msg_).size());
-             residual_omega += omega_sum;
-             if(no_active_messages > 0) { 
-               // build array of messages that are actually called
-               if(no_active_messages <= active_messages_array_size) {
-                 auto msgs = get_active_messages_array(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt);
-                 l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, residual_omega);
-               } else {
-                 auto msgs = get_active_messages_vector(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt, no_active_messages);
-                 l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, residual_omega);
-               }
-             } 
-
-           } else {
-
-             for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
-               if(*omegaIt != 0.0) {
-                 residual_omega += *omegaIt;
-                 l.SendMessage(&factor_, *(*it), residual_omega); 
+             if constexpr(l.CanCallSendMessages()) {
+               const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](REAL x){ return x > 0.0; });
+               const REAL omega_sum = std::accumulate(omegaIt, omegaIt+no_messages, 0.0);
+               residual_omega += omega_sum;
+               if(no_active_messages > 0) { 
+                 // build array of messages that are actually called
+                 if(no_active_messages <= active_messages_array_size) {
+                   auto msgs = get_active_messages_array(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt);
+                   l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, residual_omega);
+                 } else {
+                   auto msgs = get_active_messages_vector(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt, no_active_messages);
+                   l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, residual_omega);
+                 }
+               } 
+               omegaIt += no_messages;
+  
+             } else {
+  
+               for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
+                 if(*omegaIt != 0.0) {
+                   residual_omega += *omegaIt;
+                   l.SendMessage(&factor_, *(*it), residual_omega); 
+                 }
                }
              }
            }
+
          }
+         assert(0.0 <= residual_omega && residual_omega <= 1.0 + eps);
+
        });
    }
 
