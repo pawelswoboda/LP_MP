@@ -97,7 +97,7 @@ class LP_BCFW_Bundle : public LP_with_trees {
 private:
    typename BCFW_Bundle::SVM* build_up_solver(const REAL lambda = 0.1)
    {
-      auto* svm = new BCFW_Bundle::SVM(this->no_Lagrangean_vars(), trees_.size(), LP_tree_BCFW_Bundle::max_fn, LP_tree_BCFW_Bundle::copy_fn, LP_tree_BCFW_Bundle::compare_fn, LP_tree_BCFW_Bundle::dot_product_fn, nullptr, false);//int d, int n, MaxFn max_fn, CopyFn copy_fn, CompareFn compare_fn, DotProductFn dot_product_fn, DotProductKernelFn dot_product_kernel_fn, bool zero_lower_bound);
+      auto* svm = new BCFW_Bundle::SVM(this->no_Lagrangean_vars(), trees_.size(), LP_tree_BCFW_Bundle::max_fn, LP_tree_BCFW_Bundle::copy_fn, LP_tree_BCFW_Bundle::dot_product_fn);//int d, int n, MaxFn max_fn, CopyFn copy_fn, DotProductFn dot_product_fn);
       //svm->SetParams(lambda, 1.0, 1.0); // lambda, mu, kappa
 
       for(INDEX i=0; i<trees_.size(); ++i) {
