@@ -1899,7 +1899,7 @@ public:
 
            if constexpr(l.CanCallSendMessages()) {
 
-             const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](REAL x){ return x > 0.0; });
+             const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](const REAL x){ return x > 0.0; });
 
              if(no_active_messages > 0) { 
                const REAL omega_sum = std::accumulate(omegaIt, omegaIt+no_messages, 0.0);
@@ -1973,18 +1973,18 @@ public:
    } 
 
    static constexpr INDEX active_messages_array_size = 16;
+
    template<typename MSG_ITERATOR, typename ACTIVE_ITERATOR>
    auto get_active_messages_array(MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, ACTIVE_ITERATOR active_begin)
    {
      using message_ptr_type = decltype( *msgs_begin );
-     std::array<message_ptr_type,active_messages_array_size> msgs = {nullptr};
-     INDEX no_msgs = 0;
-     for(auto msg_it=msgs_begin; msg_it!=msgs_end; ++msg_it, ++active_begin) {
+     std::array<message_ptr_type,active_messages_array_size> msgs;
+     for(auto [no_msgs,msg_it]=std::pair(0,msgs_begin); msg_it!=msgs_end; ++msg_it, ++active_begin) {
        if(*active_begin > 0.0) {
          msgs[no_msgs++] = *msg_it;
        }
      }
-     return  msgs; 
+     return msgs; 
    }
 
    template<typename MSG_ITERATOR, typename ACTIVE_ITERATOR>
@@ -1999,7 +1999,7 @@ public:
        }
      }
      assert(no_active_messages == no_msgs); 
-     return  msgs; 
+     return msgs; 
    }
 
    // choose order of messages to be sent and immediately reparametrize after each send message call and increase the remaining weights
@@ -2314,12 +2314,6 @@ public:
 
    FactorType* GetFactor() const { return &factor_; }
    FactorType* GetFactor() { return &factor_; }
-   // do zrobienia: delete below four functions
-   void SetPrimalOffset(const INDEX n) final { primalOffset_ = n; } // this function is used in AddFactor in LP class
-   INDEX GetPrimalOffset() const final { return primalOffset_; }
-
-  void SetAuxOffset(const INDEX n) final { auxOffset_ = n; }
-  INDEX GetAuxOffset() const final { return auxOffset_; }
 
   template<typename MESSAGE_TYPE>
   constexpr static 
@@ -2374,10 +2368,6 @@ public:
      return runtime;
    }
 protected:
-   // do zrobienia: those two variables are not needed anymore
-   INDEX primalOffset_;
-   INDEX auxOffset_; // do zrobienia: remove again: artifact from LP interface
-
    // pool memory allocator specific for this factor container
    // note: the below construction is not perfect when more than one solver is run simultaneously: The same allocator is used, yet the optimization problems are different + not thread safe.
    // -> investigate thread_local inline static! inline static however is only supported in C++17

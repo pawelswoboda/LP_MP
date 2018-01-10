@@ -17,6 +17,9 @@ namespace LP_MP {
     {
       BASE_LP_SOLVER::End();
 
+      //this->repamMode_ = LPReparametrizationMode::DampedUniform;
+      //this->ComputePass();
+
       bool consistent = true;
       std::vector<FactorTypeAdapter*> ILP_factors;
       std::unordered_map<FactorTypeAdapter*,INDEX> ILP_factor_address_to_index;

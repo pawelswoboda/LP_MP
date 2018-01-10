@@ -11,4 +11,3 @@ add_executable(test_model test_model.cpp ${headers})
 target_link_libraries(test_model LP_MP DD_ILP lingeling)
 add_test( test_model test_model )
 
-
