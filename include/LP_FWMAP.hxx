@@ -86,7 +86,7 @@ public:
       }
 
       //svm->options.gap_threshold = 0.0001;
-      bundle_solver->options.iter_max = 100;
+      bundle_solver->options.iter_max = 1000000;
 
       return bundle_solver;
    }

@@ -271,7 +271,7 @@ public:
   void add_to_mapping(std::vector<int>& mapping)
   {
     local_Lagrangean_vars_offset_ = mapping.size();
-    for(INDEX i=0; i<Lagrangean_factor_base::no_Lagrangean_vars(); ++i) {
+    for(INDEX i=0; i<no_Lagrangean_vars(); ++i) {
       mapping.push_back(global_Lagrangean_vars_offset_ + i);
     }
   }
@@ -600,6 +600,7 @@ public:
       assert(Lagrangean_factors.size() == this->f_.size()); // otherwise not all factors are covered by trees
 
       // copy Lagrangean factors and insert into trees.
+      Lagrangean_vars_size_ = 0;
       std::vector<std::unordered_map<FactorTypeAdapter*, FactorTypeAdapter*>> factor_mapping(trees_.size()); // original to copied factor in each tree
       for(auto& it : Lagrangean_factors) {
         auto* f = it.first;
@@ -613,13 +614,19 @@ public:
           for(INDEX i : tree_indices) {
             auto* f_copy = f->clone(); // do zrobienia: possibly not all pointers to messages have to be cloned as well
             L.factors.push_back(LAGRANGEAN_FACTOR(f_copy));
-            trees_[i].Lagrangean_factors_.push_back(f_copy);
             factor_mapping[i].insert(std::make_pair(f, f_copy)); 
           }
 
           const INDEX no_Lagrangean_vars = LAGRANGEAN_FACTOR::joint_no_Lagrangean_vars( L.factors );
           LAGRANGEAN_FACTOR::init_Lagrangean_variables( L.factors, Lagrangean_vars_size_ );
+
+          assert(tree_indices.size() == L.factors.size());
+          for(INDEX i=0; i<L.factors.size(); ++i) {
+            const INDEX tree_index = tree_indices[i];
+            trees_[tree_index].Lagrangean_factors_.push_back(L.factors[i]);
+          }
           
+          std::cout << no_Lagrangean_vars << "; " << Lagrangean_vars_size_ << "\n";
           Lagrangean_vars_size_ += no_Lagrangean_vars;
         }
       }
@@ -661,10 +668,12 @@ public:
       for(auto& t : trees_) {
          INDEX local_offset = 0;
          std::vector<int> m;
-         m.reserve(t.dual_size()+1); // +1 because of requirement in SVM that last entry is equal to total size of Lagrangean variables
+         m.reserve(t.dual_size());
          for(auto& L : t.Lagrangean_factors_) {
            L.add_to_mapping(m);
          }
+         assert(m.size() <= Lagrangean_vars_size_);
+         assert(m.size() == t.dual_size());
          t.mapping_ = m;
       }
 
@@ -681,7 +690,8 @@ public:
          }
       }
       for(auto i : mapping_count) {
-         if(i < 2) {
+         if(i < 2 || i > trees_.size()) {
+           assert(false);
             return false;
          }
       }
