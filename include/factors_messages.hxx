@@ -2235,12 +2235,12 @@ public:
    virtual INDEX subgradient(double* w, const REAL sign) final
    {
       assert(sign == -1.0 || sign == 1.0);
-      static_if<can_apply()>([this,w,sign](auto f) {
-            apply_subgradient a(w,sign);
-            f(factor_).apply(a);
-      }).else_([](auto f) {
-         assert(false);
-      });
+      if constexpr(can_apply()) {
+        apply_subgradient a(w,sign);
+        factor_.apply(a);
+      } else {
+        assert(false);
+      }
       return 0;
    }
 

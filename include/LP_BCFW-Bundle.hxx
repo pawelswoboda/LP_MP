@@ -1,21 +1,21 @@
-#ifndef LP_MP_LP_BCFW_BUNDLE_HXX
-#define LP_MP_LP_BCFW_BUNDLE_HXX
+#ifndef LP_MP_LP_FWMAP_HXX
+#define LP_MP_LP_FWMAP_HXX
 
 #include "tree_decomposition.hxx"
-#include "SVM.h"
+#include "FWMAP.h"
 
 namespace LP_MP {
 
-class LP_tree_BCFW_Bundle : public LP_tree {
+class LP_tree_FWMAP : public LP_tree<Lagrangean_factor_FWMAP> {
 public:
    // for the Frank Wolfe implementation
-   // to do: change the SVM implementation and make these methods virtual instead of static.
+   // to do: change the FWMAP implementation and make these methods virtual instead of static.
    // to do: Lagrangean factors are shared between trees. Hence, one must in each tree use these factors with costs divided by number of appearances in different trees.
    // _y is the primal labeling to be computed
    // wi is the Lagrangean variables
-   static double max_fn(double* wi, BCFW_Bundle::YPtr _y, BCFW_Bundle::TermData term_data)
+   static double max_fn(double* wi, FWMAP::YPtr _y, FWMAP::TermData term_data)
    {
-      LP_tree_BCFW_Bundle* t = (LP_tree_BCFW_Bundle*) term_data;
+      LP_tree_FWMAP* t = (LP_tree_FWMAP*) term_data;
 
       // first add weights to problem
       // we only need to add Lagrange variables to Lagrangean_factors_ (others are not shared)
@@ -39,18 +39,18 @@ public:
       return -t->primal_cost(); // SVN considers maximization problem!
    }
 
-   static bool compare_fn(BCFW_Bundle::YPtr _y1, BCFW_Bundle::YPtr _y2, BCFW_Bundle::TermData term_data)
+   static bool compare_fn(FWMAP::YPtr _y1, FWMAP::YPtr _y2, FWMAP::TermData term_data)
    {
       // the primal is a binary archive constructed by serializing the primal solutions
-      LP_tree_BCFW_Bundle* t = (LP_tree_BCFW_Bundle*) term_data;
+      LP_tree_FWMAP* t = (LP_tree_FWMAP*) term_data;
       const INDEX size = t->primal_size_in_bytes();
       return std::memcmp((void*) _y1, (void*) _y2, size) == 0;
    }
 
    // copy values provided by subgradient from all factors into ai
-   static void copy_fn(double* ai, BCFW_Bundle::YPtr _y, BCFW_Bundle::TermData term_data)
+   static void copy_fn(double* ai, FWMAP::YPtr _y, FWMAP::TermData term_data)
    {
-      LP_tree_BCFW_Bundle* t = (LP_tree_BCFW_Bundle*) term_data;
+      LP_tree_FWMAP* t = (LP_tree_FWMAP*) term_data;
 
       std::fill(ai, ai+t->dual_size(), double(0.0));
 
@@ -68,9 +68,9 @@ public:
       }
    }
 
-   static double dot_product_fn(double* wi, BCFW_Bundle::YPtr _y, BCFW_Bundle::TermData term_data)
+   static double dot_product_fn(double* wi, FWMAP::YPtr _y, FWMAP::TermData term_data)
    {
-      LP_tree_BCFW_Bundle* t = (LP_tree_BCFW_Bundle*) term_data;
+      LP_tree_FWMAP* t = (LP_tree_FWMAP*) term_data;
 
       // read in primal solution
       // to do: only primal solution associated with Lagrangean factors needs to be read in
@@ -93,11 +93,11 @@ public:
 };
 
 // solve problem with proximal bundle with proximal steps implemented with a multi-plane block coordinate Frank-Wolfe method
-class LP_BCFW_Bundle : public LP_with_trees {
+class LP_FWMAP : public LP_with_trees {
 private:
-   typename BCFW_Bundle::SVM* build_up_solver(const REAL lambda = 0.1)
+   typename FWMAP::SVM* build_up_solver(const REAL lambda = 0.1)
    {
-      auto* svm = new BCFW_Bundle::SVM(this->no_Lagrangean_vars(), trees_.size(), LP_tree_BCFW_Bundle::max_fn, LP_tree_BCFW_Bundle::copy_fn, LP_tree_BCFW_Bundle::dot_product_fn);//int d, int n, MaxFn max_fn, CopyFn copy_fn, DotProductFn dot_product_fn);
+      auto* svm = new FWMAP::SVM(this->no_Lagrangean_vars(), trees_.size(), LP_tree_FWMAP::max_fn, LP_tree_FWMAP::copy_fn, LP_tree_FWMAP::dot_product_fn);//int d, int n, MaxFn max_fn, CopyFn copy_fn, DotProductFn dot_product_fn);
       //svm->SetParams(lambda, 1.0, 1.0); // lambda, mu, kappa
 
       for(INDEX i=0; i<trees_.size(); ++i) {
@@ -138,5 +138,5 @@ public:
 
 } // namespace LP_MP
 
-#endif // LP_MP_LP_BCFW_BUNDLE_HXX
+#endif // LP_MP_LP_FWMAP_HXX
 

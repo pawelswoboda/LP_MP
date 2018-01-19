@@ -3,29 +3,21 @@
 
 #include "LP_MP.h"
 #include "serialization.hxx"
+#include "union_find.hxx"
 
 namespace LP_MP {
 
-// factors are arranged in trees.
-class LP_tree
-{
-   // make LP_MP::vector out of these
-   //std::vector<tree_node> tree_nodes_;
-   //std::vector<shared_factor> shared_factors_;
-
-   friend class LP_with_trees;
+// given factors connected as a tree, solve it.
+class factor_tree {
 public:
    // add messages from leaves to root upward
-   void AddMessage(MessageTypeAdapter* m, Chirality c) // chirality denotes which factor is upper
+   void AddMessage(MessageTypeAdapter* m, Chirality c) // chirality denotes which factor is nearer the root
    {
       tree_messages_.push_back(std::make_tuple(m, c));
    }
 
-   // to do: give possiblity to specifiy root node
    void init()
    {
-      static_assert(sizeof(REAL) == sizeof(double), "needed for SVM implementation");
-
       std::set<FactorTypeAdapter*> factor_set;
       for(auto tree_msg : tree_messages_) {
          auto* msg = std::get<0>(tree_msg);
@@ -36,11 +28,76 @@ public:
       std::sort(factors_.begin(), factors_.end());
       assert(factors_.size() == tree_messages_.size() + 1);
 
-      primal_size_in_bytes_ =  compute_primal_size_in_bytes();
-      dual_size_in_bytes_ = compute_dual_size_in_bytes();
+      assert(tree_valid());
    }
 
-   REAL compute_subgradient()
+   // check whether messages are arranged correctly
+   bool tree_valid() const
+   {
+     // build graph out of tree messages and check whether all edges point towards root
+     std::vector<std::vector<int>> tree(factors_.size());
+     std::unordered_map<FactorTypeAdapter*, int> factor_map;
+     for(INDEX i=0; i<factors_.size(); ++i) {
+       factor_map.insert({ factors_[i], i });
+     }
+     for(auto& tree_msg : tree_messages_) {
+         auto* msg = std::get<0>(tree_msg);
+         auto c = std::get<1>(tree_msg);
+         auto* left = msg->GetLeftFactor();
+         const int left_idx = factor_map[left];
+         auto* right = msg->GetRightFactor();
+         const int right_idx = factor_map[right];
+         // point messages here towards leaves
+         if(c == Chirality::left) {
+           tree[left_idx].push_back(right_idx); 
+         } else {
+           assert(c == Chirality::right);
+           tree[right_idx].push_back(left_idx); 
+         } 
+     }
+     // determine root: it is the single index without incoming edges
+     std::vector<int> no_incoming_edges(factors_.size(), 0);
+     for(INDEX i=0; i<tree.size(); ++i) {
+       for(int j : tree[i]) {
+         no_incoming_edges[j]++;
+       }
+     }
+     assert(1 == std::count(no_incoming_edges.begin(), no_incoming_edges.end(), 0));
+     // check if tree is connected
+     UnionFind uf(tree.size());
+     for(INDEX i=0; i<tree.size(); ++i) {
+       for(int j : tree[i]) {
+         uf.merge(i,j);
+       }
+     }
+     assert(uf.count() == 1);
+
+     const int root = std::find(no_incoming_edges.begin(), no_incoming_edges.end(), 0) - no_incoming_edges.begin();
+
+     // check whether messages are in correct order: from bottom to top
+     std::vector<int> visited(tree.size(), false);
+     for(auto& tree_msg : tree_messages_) {
+         auto* msg = std::get<0>(tree_msg);
+         auto c = std::get<1>(tree_msg);
+         auto* left = msg->GetLeftFactor();
+         const int left_idx = factor_map[left];
+         auto* right = msg->GetRightFactor();
+         const int right_idx = factor_map[right];
+         // point messages here towards leaves
+         if(c == Chirality::left) {
+           visited[right_idx] = true;
+           assert(visited[left_idx] == false);
+         } else {
+           visited[left_idx] = true;
+           assert(visited[right_idx] == false); 
+         }
+     }
+     assert(visited[root] == false);
+
+     return true; 
+   }
+
+   REAL solve()
    {
       assert(factors_.size() == tree_messages_.size() + 1); // otherwise call init
       // send messages up the tree
@@ -51,7 +108,7 @@ public:
       }
       // compute primal for topmost factor
       // also init primal for top factor, all other primals were initialized already by send_message_up
-      REAL subgradient_value = 0.0;
+      REAL value = 0.0;
       {
          auto* msg = std::get<0>(tree_messages_.back());
          Chirality c = std::get<1>(tree_messages_.back());
@@ -59,12 +116,12 @@ public:
             // init primal for right factor!
             msg->GetRightFactorTypeAdapter()->init_primal();
             msg->GetRightFactorTypeAdapter()->MaximizePotentialAndComputePrimal();
-            subgradient_value = msg->GetRightFactorTypeAdapter()->EvaluatePrimal();
+            value = msg->GetRightFactorTypeAdapter()->EvaluatePrimal();
          } else {
             assert(c == Chirality::left);
             msg->GetLeftFactorTypeAdapter()->init_primal(); 
             msg->GetLeftFactorTypeAdapter()->MaximizePotentialAndComputePrimal(); 
-            subgradient_value = msg->GetLeftFactorTypeAdapter()->EvaluatePrimal();
+            value = msg->GetLeftFactorTypeAdapter()->EvaluatePrimal();
          }
       }
       // track down optimal primal solution
@@ -73,48 +130,18 @@ public:
          Chirality c = std::get<1>(*it);
          msg->track_solution_down(c);
          if(c == Chirality::right) {
-            subgradient_value += msg->GetLeftFactorTypeAdapter()->EvaluatePrimal();
+            value += msg->GetLeftFactorTypeAdapter()->EvaluatePrimal();
          } else {
             assert(c == Chirality::left);
-            subgradient_value += msg->GetRightFactorTypeAdapter()->EvaluatePrimal();
+            value += msg->GetRightFactorTypeAdapter()->EvaluatePrimal();
          }
       } 
 
       // check if primal cost is equal to lower bound
       assert(primal_consistent());
       assert(std::abs(lower_bound() - primal_cost()) <= eps);
-      assert(std::abs(subgradient_value - primal_cost()) <= eps);
-      return subgradient_value;
-   }
-
-   template<typename VECTOR1>
-   REAL compute_mapped_subgradient(VECTOR1& subgradient)
-   {
-      const REAL subgradient_value = compute_subgradient();
-      std::vector<double> local_subgradient(dual_size(),0.0);
-      // write primal solution into subgradient
-      for(auto L : Lagrangean_factors_) {
-         L.copy_fn(&local_subgradient[0]);
-      }
-      assert(mapping_.size() >= dual_size());
-      for(INDEX i=0; i<dual_size(); ++i) {
-         assert(mapping_[i] < subgradient.size());
-         subgradient[ mapping_[i] ] += local_subgradient[i];
-      } 
-      return subgradient_value;
-   }
-
-   template<typename VECTOR>
-   REAL compute_subgradient(VECTOR& subgradient, const REAL step_size)
-   {
-      const REAL subgradient_value = compute_subgradient();
-
-      std::fill(subgradient.begin(), subgradient.end(), 0.0);
-      // write primal solution into subgradient
-      for(auto L : Lagrangean_factors_) {
-         L.copy_fn(&subgradient[0]);
-      }
-      return subgradient_value;
+      assert(std::abs(value - primal_cost()) <= eps);
+      return value;
    }
 
    bool primal_consistent() const 
@@ -138,23 +165,6 @@ public:
          }
       }
       return cost;
-      /*
-      for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
-         auto* m = std::get<0>(*it);
-         Chirality c = std::get<1>(*it);
-         if(c == Chirality::right) {
-            cost += m->GetLeftFactorTypeAdapter()->EvaluatePrimal(); 
-         } else {
-            cost += m->GetRightFactorTypeAdapter()->EvaluatePrimal();
-         }
-      }
-      if(std::get<1>(tree_messages_.back()) == Chirality::right) {
-         cost += std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->EvaluatePrimal();
-      } else {
-         cost += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->EvaluatePrimal(); 
-      }
-      return cost;
-      */
    }
 
    REAL lower_bound() const 
@@ -164,23 +174,6 @@ public:
          lb += f->LowerBound();
       }
       return lb;
-      /*
-      for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
-         auto* m = std::get<0>(*it);
-         Chirality c = std::get<1>(*it);
-         if(c == Chirality::right) {
-            lb += m->GetLeftFactorTypeAdapter()->LowerBound(); 
-         } else {
-            lb += m->GetRightFactorTypeAdapter()->LowerBound();
-         }
-      }
-      if(std::get<1>(tree_messages_.back()) == Chirality::right) {
-         lb += std::get<0>(tree_messages_.back())->GetRightFactorTypeAdapter()->LowerBound();
-      } else {
-         lb += std::get<0>(tree_messages_.back())->GetLeftFactorTypeAdapter()->LowerBound(); 
-      }
-      return lb; 
-      */
    }
 
    template<typename FACTOR_TYPE>
@@ -203,14 +196,279 @@ public:
             factors.push_back(right_cast);
             factor_present.insert(right_cast);
          } 
-
       }
-      return std::move(factors);
+      return factors;
    }
 
+   std::vector< std::tuple<MessageTypeAdapter*, Chirality>> tree_messages_; // messages forming a tree. Chirality says which side comprises the lower  factor
+   std::vector<FactorTypeAdapter*> factors_;
+
+protected:
+};
+
+// factors can be shared among multiple trees. Equality between shared factors is enforced via Lagrangean multipliers
+class Lagrangean_factor_base
+{
+public:
+  Lagrangean_factor_base(FactorTypeAdapter* factor)
+    : f(factor),
+    no_Lagrangean_vars_(factor->dual_size())
+  {}
+
+  INDEX no_Lagrangean_vars() const
+  {
+    assert(no_Lagrangean_vars_ == f->dual_size());
+    return no_Lagrangean_vars_; 
+  }
+
+  void serialize_Lagrangean(const double* w, const double scaling)
+  {
+    serialization_archive ar(w, no_Lagrangean_vars_*sizeof(REAL));
+    addition_archive l_ar(ar, 1.0*scaling);
+    f->serialize_dual(l_ar);
+    ar.release_memory(); 
+  }
+  //void copy_fn(double* w)
+  //{
+  //  f->subgradient(w, +1.0); 
+  //}
+  //REAL dot_product_fn(double* w)
+  //{
+  //  return f->dot_product(w);
+  //}
+
+  FactorTypeAdapter* f;
+  const INDEX no_Lagrangean_vars_;
+  INDEX global_Lagrangean_vars_offset_; // at which offset are the Lagrangean variables for factor f stored?
+  INDEX local_Lagrangean_vars_offset_; // in the mapped subspace, at which position do the Lagrangean variables start?
+};
+
+class Lagrangean_factor_FWMAP : public Lagrangean_factor_base {
+public:
+  Lagrangean_factor_FWMAP(FactorTypeAdapter* factor)
+    : Lagrangean_factor_base(factor)
+  {}
+
+  ~Lagrangean_factor_FWMAP()
+  {
+    static_assert(sizeof(REAL) == sizeof(double), "needed for FWMAP implementation");
+  }
+
+  static INDEX joint_no_Lagrangean_vars(const std::vector<Lagrangean_factor_FWMAP>& factors)
+  {
+    assert(factors.size() > 0);
+    return factors[0].no_Lagrangean_vars();
+  }
+
+  static void init_Lagrangean_variables(std::vector<Lagrangean_factor_FWMAP>& factors, const INDEX Lagrangean_vars_begin)
+  {
+    assert(factors.size() > 0);
+    for(INDEX i=0; i<factors.size(); ++i) {
+      factors[i].global_Lagrangean_vars_offset_ = Lagrangean_vars_begin; 
+    } 
+  }
+
+  void add_to_mapping(std::vector<int>& mapping)
+  {
+    local_Lagrangean_vars_offset_ = mapping.size();
+    for(INDEX i=0; i<Lagrangean_factor_base::no_Lagrangean_vars(); ++i) {
+      mapping.push_back(global_Lagrangean_vars_offset_ + i);
+    }
+  }
+
+  void serialize_Lagrangean(const double* wi, const double scaling)
+  {
+    const double* w = wi + local_Lagrangean_vars_offset_;
+    serialization_archive ar(w, Lagrangean_factor_base::no_Lagrangean_vars()*sizeof(REAL));
+    addition_archive l_ar(ar, 1.0*scaling);
+    f->serialize_dual(l_ar);
+    ar.release_memory(); 
+  }
+  void copy_fn(double* wi)
+  {
+    double* w = wi + local_Lagrangean_vars_offset_;
+    f->subgradient(w, +1.0); 
+  }
+  REAL dot_product_fn(double* wi)
+  {
+    double* w = wi + local_Lagrangean_vars_offset_;
+    return f->dot_product(w);
+  }
+};
+
+class Lagrangean_factor_zero_sum : public Lagrangean_factor_base {
+public:
+  using Lagrangean_factor_base::Lagrangean_factor_base;
+
+  static INDEX joint_no_Lagrangean_vars(const std::vector<Lagrangean_factor_zero_sum>& factors)
+  {
+    assert(factors.size() > 0);
+    const INDEX no_Lagrangean_vars = factors[0].no_Lagrangean_vars_;
+    return no_Lagrangean_vars * factors.size(); 
+  }
+  static void init_Lagrangean_variables(std::vector<Lagrangean_factor_zero_sum>& factors, const INDEX Lagrangean_vars_begin)
+  {
+    assert(factors.size() > 0);
+    const INDEX no_Lagrangean_vars = factors[0].no_Lagrangean_vars_;
+    for(INDEX i=0; i<factors.size(); ++i) {
+      factors[i].global_Lagrangean_vars_offset_ = Lagrangean_vars_begin + i*no_Lagrangean_vars; 
+    } 
+  }
+
+  void add_to_mapping(std::vector<int>& mapping)
+  {
+    local_Lagrangean_vars_offset_ = mapping.size();
+    for(INDEX i=0; i<no_Lagrangean_vars_; ++i) {
+      mapping.push_back(global_Lagrangean_vars_offset_ + i);
+    } 
+  }
+};
+
+class Lagrangean_factors_cyclic {
+public:
+protected:
+  FactorTypeAdapter* f;
+  INDEX Lagrangean_vars_offset; // at which offset are the Lagrangean variables for factor f stored?
+  INDEX dual_size_; // size as multiples of REAL 
+};
+
+// between each pair of shared factors there is a Lagrangean multipliers. Does not scale. (quadratic number of multipliers)
+class Lagrangean_factor_quadratic : public Lagrangean_factor_base {
+public:
+  using Lagrangean_factor_base::Lagrangean_factor_base;
+
+  static INDEX joint_no_Lagrangean_vars(std::vector<Lagrangean_factor_quadratic>& factors)
+  {
+    const INDEX n = factors.size();
+    assert(n > 0);
+    const INDEX no_Lagrangean_vars = factors[0].no_Lagrangean_vars_;
+    return (n*(n-1))/2 * no_Lagrangean_vars; 
+  }
+
+  static void init_Lagrangean_variables(std::vector<Lagrangean_factor_quadratic>& factors, const INDEX Lagrangean_vars_begin)
+  {
+    for(INDEX i=0; i<factors.size(); ++i) {
+      factors[i].no_trees = factors.size();
+      factors[i].pos = i;
+      factors[i].global_Lagrangean_vars_offset_ = Lagrangean_vars_begin;
+    } 
+  }
+
+  void add_to_mapping(std::vector<int>& mapping)
+  {
+    assert(false);
+  }
+
+  void serialize_Lagrangean(const double* wi, const double scaling)
+  {
+    for(INDEX i=0; i<pos; ++i) {
+      const double* w = wi+offset(i);
+      serialization_archive ar(w, no_Lagrangean_vars_*sizeof(REAL));
+      addition_archive l_ar(ar, 1.0*scaling);
+      f->serialize_dual(l_ar);
+      ar.release_memory();
+    }
+    for(INDEX i=pos+1; i<no_trees; ++i) {
+      //double* w = wi+offset(pos, i);
+      const double* w = wi+offset(i-1);
+      serialization_archive ar(w, no_Lagrangean_vars_*sizeof(REAL));
+      addition_archive l_ar(ar, -1.0*scaling);
+      f->serialize_dual(l_ar);
+      ar.release_memory();
+    }
+  } 
+
+  void copy_fn(double* wi)
+  {
+    for(INDEX i=0; i<pos; ++i) {
+      double* w = wi+offset(i);
+      f->subgradient(w, +1.0);
+    } 
+    for(INDEX i=pos+1; i<no_trees; ++i) {
+      //double* w = wi+offset(pos,i);
+      double* w = wi+offset(i-1);
+      f->subgradient(w, -1.0);
+    }
+  }
+
+  REAL dot_product_fn(double* wi)
+  {
+    REAL d = 0.0;
+    for(INDEX i=0; i<pos; ++i) {
+      double* w = wi+offset(i);
+      d += f->dot_product(w);
+    } 
+    for(INDEX i=pos+1; i<no_trees; ++i) {
+      double* w = wi+offset(i-1);
+      d -= f->dot_product(w);
+    }
+    return d;
+  }
+
+
+protected:
+  INDEX no_trees; // number of trees in which factor is
+  INDEX pos; // factor is in pos-th tree that contains it
+
+  INDEX global_offset(const INDEX offset, const INDEX i, const INDEX j) // offset for Lagrangean variables (i,j)
+  {
+    //assert(no_trees <= 2);
+    assert(i < j && j < no_trees);
+    assert(offset == global_Lagrangean_vars_offset_);
+    assert(false); // remove offset parameter
+    return offset + (i*no_trees - i*(i+1)/2 + (j-i-1))*no_Lagrangean_vars_; 
+  }
+
+  INDEX offset(const INDEX i) // offset for Lagrangean variables (i,j)
+  {
+    assert(i < no_trees);
+    const INDEX o = local_Lagrangean_vars_offset_ + i*no_Lagrangean_vars_;
+    return o;
+  }
+};
+
+// extends factor_tree by collection of Lagrangean factors
+template<typename LAGRANGEAN_FACTOR>
+class LP_tree_Lagrangean : public factor_tree {
+public:
+  LP_tree_Lagrangean(factor_tree& t)
+    : factor_tree(t)
+  {}
+
+   template<typename VECTOR1>
+   void compute_mapped_subgradient(VECTOR1& subgradient)
+   {
+      //const REAL subgradient_value = compute_subgradient();
+      assert(false); // assert that subgradient has been computed!
+      std::vector<double> local_subgradient(dual_size(),0.0);
+      // write primal solution into subgradient
+      for(auto L : Lagrangean_factors_) {
+         L.copy_fn(&local_subgradient[0]);
+      }
+      assert(mapping_.size() >= dual_size());
+      for(INDEX i=0; i<dual_size(); ++i) {
+         assert(mapping_[i] < subgradient.size());
+         subgradient[ mapping_[i] ] += local_subgradient[i];
+      } 
+   }
+
+   template<typename VECTOR>
+   void compute_subgradient(VECTOR& subgradient, const REAL step_size)
+   {
+      //const REAL subgradient_value = compute_subgradient();
+     assert(false); // assert that subgradient has been computed!
+
+      std::fill(subgradient.begin(), subgradient.end(), 0.0);
+      // write primal solution into subgradient
+      for(auto L : Lagrangean_factors_) {
+         L.copy_fn(&subgradient[0]);
+      }
+   }
+
+  
    // find out necessary size for storing primal solution in archive
    INDEX compute_primal_size_in_bytes()
-   {  
+   {
       // why not allocate_archive?
       INDEX size = 0;
       for(auto& L : Lagrangean_factors_) {
@@ -218,11 +476,13 @@ public:
       }
       return size;
    }
+
    INDEX primal_size_in_bytes()
    { 
       assert(primal_size_in_bytes_ == compute_primal_size_in_bytes());
       return primal_size_in_bytes_; 
    }
+   
 
    void add_weights(const double* wi, const double scaling)
    {
@@ -236,7 +496,7 @@ public:
   {
      INDEX s = 0;
      for(auto& L : Lagrangean_factors_) {
-        s += L.Lagrangean_vars_size_in_bytes();
+        s += L.no_Lagrangean_vars()*sizeof(REAL);
      }
      return s;
   }
@@ -250,104 +510,41 @@ public:
 
   INDEX dual_size() { return dual_size_in_bytes() / sizeof(REAL); }
    
+  void read_in_primal(void* p)
+  {
+    serialization_archive ar(p, this->primal_size_in_bytes());
+    load_archive l_ar(ar);
+    for(auto L : Lagrangean_factors_) {
+      L.f->serialize_primal(l_ar);
+    } 
+    ar.release_memory();
+  }
+
+  void save_primal(void* p)
+  {
+    serialization_archive ar(p, this->primal_size_in_bytes());
+    save_archive s_ar(ar);
+    for(auto L : Lagrangean_factors_) {
+      L.f->serialize_primal(s_ar);
+    } 
+    ar.release_memory();
+  }
+
+  void init()
+  {
+    factor_tree::init();
+    dual_size_in_bytes_ = compute_dual_size_in_bytes();
+    primal_size_in_bytes_ = compute_primal_size_in_bytes();
+  }
+
 //protected:
-   std::vector< std::tuple<MessageTypeAdapter*, Chirality>> tree_messages_; // messages forming a tree. Chirality says which side comprises the lower  factor
-   std::vector<FactorTypeAdapter*> factors_;
    INDEX primal_size_in_bytes_;
    INDEX dual_size_in_bytes_;
    // subgradient information = primal solution to tree
    // for sending messages down we need to know to how many lower factors an upper factor is connected and then we need to average messages sent down appropriately.
 
-   // Lagrangean variables come from copying factors
-   struct Lagrangean_msg {
-      FactorTypeAdapter* f;
-      const INDEX no_trees; // number of trees in which factor is
-      const INDEX pos; // factor is in pos-th tree that contains it
-      INDEX Lagrangean_vars_offset; // at which offset are the Lagrangean variables for factor f stored?
-      INDEX dual_size_; // size as multiples of REAL
-      // replace by function into factor (serialize dual)
-
-      INDEX dual_size() {
-         assert(dual_size_ == f->dual_size());
-         return dual_size_; 
-      }
-      INDEX dual_size_in_bytes() 
-      { 
-         return dual_size()*sizeof(REAL); 
-      }
-
-      INDEX global_offset(const INDEX offset, const INDEX i, const INDEX j) // offset for Lagrangean variables (i,j)
-      {
-         //assert(no_trees <= 2);
-         assert(i < j && j < no_trees);
-         return offset + (i*no_trees - i*(i+1)/2 + (j-i-1))*dual_size(); 
-      }
-
-      INDEX offset(const INDEX i) // offset for Lagrangean variables (i,j)
-      {
-         assert(i < no_trees);
-         const INDEX o = Lagrangean_vars_offset + i*dual_size();
-         return o;
-      }
-
-      INDEX Lagrangean_vars_size() 
-      {
-         assert(no_trees > 1);
-         return (no_trees-1)*dual_size(); //((no_trees-1)*no_trees)/2*dual_size;
-      }
-
-      INDEX Lagrangean_vars_size_in_bytes() 
-      {
-         return (no_trees-1)*dual_size_in_bytes(); //((no_trees-1)*no_trees)/2*dual_size;
-      }
-
-      // +1 is for loading, -1 is for unloading
-      void serialize_Lagrangean(const double* wi, const double scaling)
-      {
-         for(INDEX i=0; i<pos; ++i) {
-            const double* w = wi+offset(i);
-            serialization_archive ar(w, Lagrangean_vars_size_in_bytes());
-            addition_archive l_ar(ar, 1.0*scaling);
-            f->serialize_dual(l_ar);
-            ar.release_memory();
-         }
-         for(INDEX i=pos+1; i<no_trees; ++i) {
-            //double* w = wi+offset(pos, i);
-            const double* w = wi+offset(i-1);
-            serialization_archive ar(w, Lagrangean_vars_size_in_bytes());
-            addition_archive l_ar(ar, -1.0*scaling);
-            f->serialize_dual(l_ar);
-            ar.release_memory();
-         }
-      } 
-
-      void copy_fn(double* wi)
-      {
-         for(INDEX i=0; i<pos; ++i) {
-            double* w = wi+offset(i);
-            f->subgradient(w, +1.0);
-         } 
-         for(INDEX i=pos+1; i<no_trees; ++i) {
-            //double* w = wi+offset(pos,i);
-            double* w = wi+offset(i-1);
-            f->subgradient(w, -1.0);
-         }
-      }
-
-      REAL dot_product_fn(double* wi)
-      {
-         REAL d = 0.0;
-         for(INDEX i=0; i<pos; ++i) {
-            double* w = wi+offset(i);
-            d += f->dot_product(w);
-         } 
-         for(INDEX i=pos+1; i<no_trees; ++i) {
-            double* w = wi+offset(i-1);
-            d -= f->dot_product(w);
-         }
-         return d;
-      }
-   };
+   // Lagrangean variables come from copying factors across trees
+   std::vector<LAGRANGEAN_FACTOR> Lagrangean_factors_;
 
    const std::vector<int>& mapping() const { return mapping_; }
    std::vector<int>& mapping() { return mapping_; }
@@ -355,15 +552,12 @@ public:
    // we have Lagrangean variables for every pair of factors that are identical but occur in different trees, hence can be indexed by factor and their pos
    // Lagrangean variables are stored contiguosly for each factor in lexicographic order of pos
 
-   std::vector<Lagrangean_msg> Lagrangean_factors_;
    INDEX subgradient_size;
    std::vector<int> mapping_;
-
-   //serialization_archive potentials_archive_; // possibly only Lagrangean factors need to be stored here
 };
 
 // do zrobienia: templatize base class
-// rename to LP_Frank_Wolfe
+template<typename LAGRANGEAN_FACTOR>
 class LP_with_trees : public LP
 {
 public:
@@ -375,9 +569,10 @@ public:
       assert(false);
    }
 
-   void add_tree(LP_tree& t)
+   void add_tree(factor_tree& t)
    { 
-      trees_.push_back(t);
+     LP_tree_Lagrangean<LAGRANGEAN_FACTOR> lt(t);
+      trees_.push_back(lt);
    }
 
    // find out, which factors are shared between trees and add Lagrangean multipliers for them.
@@ -387,103 +582,72 @@ public:
 
       // first, go over all Lagrangean factors in each tree and count how often factor is shared
       struct Lagrangean_counting {
-         INDEX no_trees = 1; // in how many trees is factor,
-         INDEX position = 0; // counter for enumerating in which position (i.e. in how many trees was factor already observed)
+         //INDEX position = 0; // counter for enumerating in which position (i.e. in how many trees was factor already observed)
+         std::vector<INDEX> trees;
+         std::vector<LAGRANGEAN_FACTOR> factors;
          INDEX offset = 0; // offset into dual weights
       };
       std::unordered_map<FactorTypeAdapter*, Lagrangean_counting > Lagrangean_factors;
-      for(auto& t : trees_) {
-         for(auto* f : t.factors_) {
+      for(INDEX i=0; i<trees_.size(); ++i) {
+         for(auto* f : trees_[i].factors_) {
             auto it = Lagrangean_factors.find(f);
             if(it == Lagrangean_factors.end()) {
-               Lagrangean_factors.insert(std::make_pair(f,Lagrangean_counting()));
-            } else {
-               it->second.no_trees++;
+               it = Lagrangean_factors.insert({f,Lagrangean_counting()}).first;
             }
+            it->second.trees.push_back(i);
          }
       }
       assert(Lagrangean_factors.size() == this->f_.size()); // otherwise not all factors are covered by trees
 
-      // now set Lagrangean_msg in each tree
-      for(auto& t : trees_) {
-         for(auto* f : t.factors_) {
-            auto it = Lagrangean_factors.find(f);
-            const INDEX no_occurences = it->second.no_trees;
-            const INDEX pos = it->second.position;
-            it->second.position++;
-            if(no_occurences > 1) {
-               t.Lagrangean_factors_.push_back({f, no_occurences, pos, 0, f->dual_size()});
-            }
-         }
-      }
-
-      // count needed size for Lagrangean variables and index into array for each shared factor
-      Lagrangean_vars_size_ = 0;
+      // copy Lagrangean factors and insert into trees.
+      std::vector<std::unordered_map<FactorTypeAdapter*, FactorTypeAdapter*>> factor_mapping(trees_.size()); // original to copied factor in each tree
       for(auto& it : Lagrangean_factors) {
-         const INDEX no_occurences = it.second.no_trees;
-         if(no_occurences > 1) {
-            assert(it.second.no_trees == it.second.position); // number of occurences and positions correctly counted
-            it.second.offset = Lagrangean_vars_size_;
-            const INDEX delta_offset = ((no_occurences-1)*no_occurences)/2 * it.first->dual_size();
-            assert(delta_offset > 0);
-            Lagrangean_vars_size_ += delta_offset;
-         }
+        auto* f = it.first;
+        auto L = it.second;
+        auto& tree_indices = L.trees;
+        const INDEX no_occurences = tree_indices.size();
+        if(no_occurences > 1) {
+          f->divide(no_occurences);
+          //L.factors.push_back(LAGRANGEAN_FACTOR(f));
+
+          for(INDEX i : tree_indices) {
+            auto* f_copy = f->clone(); // do zrobienia: possibly not all pointers to messages have to be cloned as well
+            L.factors.push_back(LAGRANGEAN_FACTOR(f_copy));
+            trees_[i].Lagrangean_factors_.push_back(f_copy);
+            factor_mapping[i].insert(std::make_pair(f, f_copy)); 
+          }
+
+          const INDEX no_Lagrangean_vars = LAGRANGEAN_FACTOR::joint_no_Lagrangean_vars( L.factors );
+          LAGRANGEAN_FACTOR::init_Lagrangean_variables( L.factors, Lagrangean_vars_size_ );
+          
+          Lagrangean_vars_size_ += no_Lagrangean_vars;
+        }
       }
 
-      // set offsets into Lagrangean vars for each shared factor in tree
-      // we need this ugly construction of first putting global offsets and only later local ones because of factor splitting, otherwise global offset could be looked up in Lagrangean_factors.
-      for(auto& t : trees_) {
-         for(auto& L : t.Lagrangean_factors_) {
-            auto it = Lagrangean_factors.find(L.f);
-            assert(it->second.no_trees > 1);
-            const INDEX offset = it->second.offset;
-            L.Lagrangean_vars_offset = offset;
-         }
-      }
-
-      // make copies of shared factors, their number being equal to the number of times they are shared. Redirect links to factors in relevant messages
-      for(auto& t : trees_) {
-         std::unordered_map<FactorTypeAdapter*, FactorTypeAdapter*> factor_mapping; // original to copied factor
-         for(auto& L : t.Lagrangean_factors_) {
-            const INDEX no_occurences = L.no_trees;
-            assert(no_occurences > 1);
-            const INDEX pos = L.pos;
-            if(pos > 0) {
-               auto* f_copy = L.f->clone(); // do zrobienia: possibly not all pointers to messages have to be cloned as well
-               f_copy->divide(no_occurences);
-               factor_mapping.insert(std::make_pair(L.f, f_copy));
-               L.f = f_copy;
-            }
-         }
+      // Redirect links to factors in relevant messages
+      for(INDEX i=0; i<trees_.size(); ++i) {
+         auto& t = trees_[i];
+         
          // redirect links from messages in trees that are directed to current factor
-         for(auto tree_msg : t.tree_messages_) {
+         for(auto tree_msg : trees_[i].tree_messages_) {
             auto* m = std::get<0>(tree_msg);
             auto* left = m->GetLeftFactor();
             auto* right = m->GetRightFactor();
-            if(factor_mapping.find(left) != factor_mapping.end()) {
-               auto* left_copy = factor_mapping.find(left)->second;
+            if(factor_mapping[i].find(left) != factor_mapping[i].end()) {
+               auto* left_copy = factor_mapping[i].find(left)->second;
                m->SetLeftFactor(left_copy);
             }
-            if(factor_mapping.find(right) != factor_mapping.end()) {
-               auto* right_copy = factor_mapping.find(right)->second;
+            if(factor_mapping[i].find(right) != factor_mapping[i].end()) {
+               auto* right_copy = factor_mapping[i].find(right)->second;
                m->SetRightFactor(right_copy);
             }
          }
          // search for factor in tree and change it as well
          for(auto& f : t.factors_) {
-            if(factor_mapping.find(f) != factor_mapping.end()) {
-               auto* f_copy = factor_mapping.find(f)->second;
+            if(factor_mapping[i].find(f) != factor_mapping[i].end()) {
+               auto* f_copy = factor_mapping[i].find(f)->second;
                f = f_copy;
             } 
-         }
-      }
-
-      // divide cost of non-copied factor
-      for(auto& t : trees_) {
-         for(auto& L : t.Lagrangean_factors_) {
-            if(L.no_trees > 1 && L.pos == 0) {
-               L.f->divide(L.no_trees); 
-            }
          }
       }
 
@@ -495,45 +659,14 @@ public:
       // construct mapping from Lagrangean variables of each tree to whole Lagrangean variables
       //mapping_.reserve(trees_.size());
       for(auto& t : trees_) {
-         //std::cout << "tree " << mapping_.size() << "\n";
          INDEX local_offset = 0;
          std::vector<int> m;
          m.reserve(t.dual_size()+1); // +1 because of requirement in SVM that last entry is equal to total size of Lagrangean variables
          for(auto& L : t.Lagrangean_factors_) {
-
-            // change global offset currently stored into local offset
-            const INDEX global_offset = L.Lagrangean_vars_offset; 
-            L.Lagrangean_vars_offset = m.size();
-
-            //std::cout << L.f << " = " << L.f->dual_size() << "\n";
-            assert(L.no_trees > 1);
-            const INDEX pos = L.pos;
-            for(INDEX i=0; i<pos; ++i) {
-               //std::cout << "before pos: ";
-               for(INDEX j=0; j<L.dual_size(); ++j) {
-                  m.push_back(L.global_offset(global_offset, i, pos) + j);
-                  //std::cout << m.back() << ",";
-                  assert(m.back() < Lagrangean_vars_size_);
-               }
-            }
-            //std::cout << "\n";
-            for(INDEX i=pos+1; i<L.no_trees; ++i) {
-               //std::cout << "after pos: ";
-               for(INDEX j=0; j<L.dual_size(); ++j) {
-                  m.push_back(L.global_offset(global_offset, pos, i) + j);
-                  //std::cout << m.back() << ",";
-                  assert(m.back() < Lagrangean_vars_size_);
-               }
-            }
-            //std::cout << "\n";
-            //assert(local_offset == m.size());
-            //local_offset += L.Lagrangean_vars_size();
+           L.add_to_mapping(m);
          }
-         assert(m.size() == t.dual_size());
-         m.push_back(Lagrangean_vars_size_);
-         //assert(local_offset == m.size());
          t.mapping_ = m;
-      } 
+      }
 
       // check map validity: each entry in m (except last one) must occur exactly twice
       assert(mapping_valid()); 
@@ -543,20 +676,19 @@ public:
    {
       std::vector<INDEX> mapping_count(Lagrangean_vars_size_,0);
       for(const auto& t : trees_) {
-         for(INDEX i=0; i<t.mapping().size()-1; ++i) {
+         for(INDEX i=0; i<t.mapping().size(); ++i) {
             mapping_count[t.mapping()[i]]++;
          }
       }
       for(auto i : mapping_count) {
-         if(i != 2) {
+         if(i < 2) {
             return false;
          }
       }
       return true;
    }
 
-   INDEX no_Lagrangean_vars() const { return Lagrangean_vars_size_; }
-
+   INDEX no_Lagrangean_vars() const { return Lagrangean_vars_size_; } 
    
    void ComputeForwardPassAndPrimal(const INDEX iteration) 
    {
@@ -596,12 +728,13 @@ public:
 
 
 protected:
-   std::vector<LP_tree> trees_;
+   std::vector<LP_tree_Lagrangean<LAGRANGEAN_FACTOR>> trees_; // store for each tree the associated Lagrangean factors.
    INDEX Lagrangean_vars_size_;
 };
 
 // perform subgradient ascent with Polyak's step size with estimated optimum
-class LP_subgradient_ascent : public LP_with_trees {
+class LP_subgradient_ascent : public LP_with_trees<Lagrangean_factor_quadratic> // better: perform projected subgradient ascent with Lagrangean_factor_zero_sum
+{
 public:
    using LP_with_trees::LP_with_trees;
 
@@ -616,7 +749,8 @@ public:
       REAL current_lower_bound = 0.0;
       std::vector<REAL> subgradient(this->no_Lagrangean_vars(), 0.0);
       for(INDEX i=0; i<trees_.size(); ++i) {
-         current_lower_bound += trees_[i].compute_mapped_subgradient(subgradient); // note that mapping has one extra component!
+         current_lower_bound += trees_[i].solve();
+         trees_[i].compute_mapped_subgradient(subgradient); // note that mapping has one extra component!
          //trees_[i].primal_cost();
       }
       best_lower_bound = std::max(current_lower_bound, best_lower_bound);

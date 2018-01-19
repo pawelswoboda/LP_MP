@@ -720,9 +720,6 @@ inline std::vector<bool> LP::compute_synchronization(ITERATOR factor_begin, ITER
 
 inline void LP::ComputePass(const INDEX iteration)
 {
-  if(iteration == 50) {
-    reduce_optimization_factors();
-  }
    const auto omega = get_omega();
    assert(forwardUpdateOrdering_.size() == omega.forward.size());
    assert(forwardUpdateOrdering_.size() == omega.backward.size());
