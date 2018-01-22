@@ -16,8 +16,8 @@ option(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
 include(ExternalProject)
 externalproject_add( conicBundle_Project
   URL http://www-user.tu-chemnitz.de/~helmberg/ConicBundle/CB_v0.3.11.tgz
-  PATCH_COMMAND patch -s -d ${PROJECT_BINARY_DIR}/ConicBundle -p1 < ${PROJECT_SOURCE_DIR}/external/ConicBundle-v0.3.11.patch -N -r -
-  SOURCE_DIR "${PROJECT_BINARY_DIR}/ConicBundle"
+  PATCH_COMMAND patch -s -d ${PROJECT_BINARY_DIR}/external/ConicBundle -p1 < ${PROJECT_SOURCE_DIR}/external/ConicBundle-v0.3.11.patch -N -r -
+  SOURCE_DIR "${PROJECT_BINARY_DIR}/external/ConicBundle"
   CONFIGURE_COMMAND ""
   BUILD_COMMAND "make"
   BUILD_IN_SOURCE 1
@@ -25,23 +25,11 @@ externalproject_add( conicBundle_Project
   )
 
 add_library(CONIC_BUNDLE STATIC IMPORTED GLOBAL)
-set_target_properties(CONIC_BUNDLE PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/lib/ConicBundle/include")
-set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/lib/ConicBundle/lib/libcb.a")
-
-
-# HDF5 for reading OpenGM and Andres models
-# set (HDF5_USE_STATIC_LIBRARIES ON)
-#if(BUILD_MULTICUT OR BUILD_MULTICUT_EVALUATION OR BUILD_GRAPHICAL_MODEL)
-#   find_package(HDF5 1.8.15 REQUIRED)
-#   include_directories (${HDF5_INCLUDE_DIR})
-#   add_definitions(${HDF5_DEFINITIONS})
-#   message(STATUS ${HDF5_LIBRARIES})
-#   message(STATUS ${HDF5_INCLUDE_DIR})
-#endif()
+set_target_properties(CONIC_BUNDLE PROPERTIES INCLUDE_DIRECTORIES "${PROJECT_BINARY_DIR}/external/ConicBundle/include")
+set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/external/ConicBundle/lib/libcb.a")
 
 # Parallelisation support
 if(PARALLEL_OPTIMIZATION)
-
   add_definitions(-DLP_MP_PARALLEL) 
 
   FIND_PACKAGE(OpenMP REQUIRED)
@@ -69,7 +57,6 @@ target_include_directories(LP_MP INTERFACE include)
 target_include_directories(LP_MP INTERFACE external/TCLAP/include)
 
 target_include_directories(LP_MP INTERFACE "external/libsimdpp")
-target_include_directories(LP_MP INTERFACE "external/Catch/include")
 target_include_directories(LP_MP INTERFACE "external/meta/include")
 target_include_directories(LP_MP INTERFACE "external/cpp-sort/include")
 target_include_directories(LP_MP INTERFACE "external/TCLAP/include")
