@@ -26,7 +26,7 @@ externalproject_add( conicBundle_Project
 
 add_library(CONIC_BUNDLE STATIC IMPORTED GLOBAL)
 set_target_properties(CONIC_BUNDLE PROPERTIES INCLUDE_DIRECTORIES "${PROJECT_BINARY_DIR}/external/ConicBundle/include")
-set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/external/ConicBundle/lib/libcb.a")
+set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/external/ConicBundle/external/libcb.a")
 
 # Parallelisation support
 if(PARALLEL_OPTIMIZATION)
