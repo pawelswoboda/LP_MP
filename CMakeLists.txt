@@ -24,9 +24,9 @@ externalproject_add( conicBundle_Project
   INSTALL_COMMAND ""
   )
 
-add_library(CONIC_BUNDLE STATIC IMPORTED)
-set_target_properties(CONIC_BUNDLE PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/external/ConicBundle/include")
-set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/external/ConicBundle/lib/libcb.a")
+add_library(CONIC_BUNDLE STATIC IMPORTED GLOBAL)
+set_target_properties(CONIC_BUNDLE PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/lib/ConicBundle/include")
+set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/lib/ConicBundle/lib/libcb.a")
 
 
 # HDF5 for reading OpenGM and Andres models
@@ -74,6 +74,7 @@ target_include_directories(LP_MP INTERFACE "external/meta/include")
 target_include_directories(LP_MP INTERFACE "external/cpp-sort/include")
 target_include_directories(LP_MP INTERFACE "external/TCLAP/include")
 target_include_directories(LP_MP INTERFACE "external/BCFW-Bundle/include")
+target_include_directories(LP_MP INTERFACE "lib/ConicBundle/include")
 
 add_subdirectory("external/BCFW-Bundle") 
 add_subdirectory("external/DD_ILP")

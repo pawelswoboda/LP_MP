@@ -5,7 +5,7 @@
 
 namespace LP_MP {
 
-class LP_conic_bundle : public LP_with_trees, public ConicBundle::FunctionOracle {
+class LP_conic_bundle : public LP_with_trees<Lagrangean_factor_star>, public ConicBundle::FunctionOracle {
 public:
    using LP_with_trees::LP_with_trees;
 
@@ -46,6 +46,7 @@ public:
       objective_value = 0.0;
       ConicBundle::DVector subg(x.size(), 0.0); // this is not so nice!
       for(auto& t : this->trees_) {
+         t.solve();
          t.compute_mapped_subgradient(subg);
          objective_value -= t.primal_cost();
       }
