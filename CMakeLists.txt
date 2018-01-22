@@ -61,7 +61,7 @@ target_include_directories(LP_MP INTERFACE "external/meta/include")
 target_include_directories(LP_MP INTERFACE "external/cpp-sort/include")
 target_include_directories(LP_MP INTERFACE "external/TCLAP/include")
 target_include_directories(LP_MP INTERFACE "external/BCFW-Bundle/include")
-target_include_directories(LP_MP INTERFACE "lib/ConicBundle/include")
+target_include_directories(LP_MP INTERFACE "external/ConicBundle/include")
 
 add_subdirectory("external/BCFW-Bundle") 
 add_subdirectory("external/DD_ILP")
