@@ -274,6 +274,7 @@ public:
   {
     local_Lagrangean_vars_offset_ = mapping.size();
     if(no_connected > 0) {
+      assert(no_connected > 1);
       for(INDEX i=0; i<(no_connected-1)*no_Lagrangean_vars(); ++i) {
         mapping.push_back(global_Lagrangean_vars_offset_ + i);
       }
@@ -289,6 +290,7 @@ public:
   {
     const double* w = wi + local_Lagrangean_vars_offset_;
     if(no_connected > 0) {
+      assert(no_connected > 1);
       for(INDEX i=0; i<no_connected-1; ++i) {
         serialization_archive ar(w + i*no_Lagrangean_vars(), Lagrangean_factor_base::no_Lagrangean_vars()*sizeof(REAL));
         addition_archive l_ar(ar, 1.0*scaling);
@@ -307,6 +309,7 @@ public:
   {
     double* w = wi + local_Lagrangean_vars_offset_;
     if(no_connected > 0) {
+      assert(no_connected > 1);
       for(INDEX i=0; i<no_connected-1; ++i) {
         f->subgradient(w + i*no_Lagrangean_vars(), +1.0); 
       }
@@ -320,7 +323,7 @@ public:
     if(no_connected > 0) {
       double d = 0.0;
       for(INDEX i=0; i<no_connected-1; ++i) {
-        f->dot_product(w + i*no_Lagrangean_vars());
+        d += f->dot_product(w + i*no_Lagrangean_vars());
       }
       return d;
     } else {
@@ -527,13 +530,13 @@ public:
    {
       //const REAL subgradient_value = compute_subgradient();
       //assert(false); // assert that subgradient has been computed!
-      std::vector<double> local_subgradient(dual_size(),0.0);
+      std::vector<double> local_subgradient(mapping_.size(),0.0);
       // write primal solution into subgradient
       for(auto L : Lagrangean_factors_) {
          L.copy_fn(&local_subgradient[0]);
       }
       assert(mapping_.size() >= dual_size());
-      for(INDEX i=0; i<dual_size(); ++i) {
+      for(INDEX i=0; i<mapping_.size(); ++i) {
          assert(mapping_[i] < subgradient.size());
          subgradient[ mapping_[i] ] += local_subgradient[i];
       } 
@@ -760,7 +763,7 @@ public:
            L.add_to_mapping(m);
          }
          assert(m.size() <= Lagrangean_vars_size_);
-         assert(m.size() == t.dual_size());
+         //assert(m.size() == t.dual_size());
          t.mapping_ = m;
       }
 
@@ -815,8 +818,8 @@ public:
          auto& tree = trees_[i];
          const auto& m = tree.mapping();
          std::vector<double> local_weights;
-         local_weights.reserve(m.size()-1);
-         for(INDEX idx=0; idx<m.size()-1; ++idx) {
+         local_weights.reserve(m.size());
+         for(INDEX idx=0; idx<m.size(); ++idx) {
             local_weights.push_back(w[m[idx]]);
          }
          tree.add_weights(&local_weights[0], scaling);

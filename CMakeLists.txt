@@ -26,7 +26,7 @@ externalproject_add( conicBundle_Project
 
 add_library(CONIC_BUNDLE STATIC IMPORTED GLOBAL)
 set_target_properties(CONIC_BUNDLE PROPERTIES INCLUDE_DIRECTORIES "${PROJECT_BINARY_DIR}/external/ConicBundle/include")
-set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/external/ConicBundle/external/libcb.a")
+set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/external/ConicBundle/lib/libcb.a")
 
 # Parallelisation support
 if(PARALLEL_OPTIMIZATION)
@@ -61,7 +61,7 @@ target_include_directories(LP_MP INTERFACE "external/meta/include")
 target_include_directories(LP_MP INTERFACE "external/cpp-sort/include")
 target_include_directories(LP_MP INTERFACE "external/TCLAP/include")
 target_include_directories(LP_MP INTERFACE "external/BCFW-Bundle/include")
-target_include_directories(LP_MP INTERFACE "external/ConicBundle/include")
+target_include_directories(LP_MP INTERFACE "${PROJECT_BINARY_DIR}/external/ConicBundle/include")
 
 add_subdirectory("external/BCFW-Bundle") 
 add_subdirectory("external/DD_ILP")

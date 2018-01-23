@@ -33,6 +33,14 @@ public:
       }
    }
 
+   void ComputeForwardPassAndPrimal(const INDEX iteration) 
+   {}
+
+   void ComputeBackwardPassAndPrimal(const INDEX iteration) 
+   {
+      ComputePass(iteration);
+   }
+
    int evaluate(const ConicBundle::DVector& x, double relprec, 
          double& objective_value,
          ConicBundle::DVector&  cut_vals,std::vector<ConicBundle::DVector>&  subgradients,

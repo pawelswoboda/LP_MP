@@ -166,6 +166,22 @@ void build_test_model(LP_TYPE& lp)
     t2.init();
     lp.add_tree(t2);
   }
+
+  {
+    factor_tree t3;
+    auto* f2 = new typename test_FMC::factor(1,0);
+    auto* f3 = new typename test_FMC::factor(0,0);
+    lp.AddFactor(f2);
+    lp.AddFactor(f3);
+    auto* m12 = new typename test_FMC::message(f1,f2);
+    auto* m23 = new typename test_FMC::message(f2,f3);
+    lp.AddMessage(m12);
+    lp.AddMessage(m23);
+    t3.AddMessage(m12, Chirality::right);
+    t3.AddMessage(m23, Chirality::left);
+    t3.init();
+    lp.add_tree(t3);
+  }
 }
 
 
