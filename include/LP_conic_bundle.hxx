@@ -2,6 +2,7 @@
 #define LP_MP_LP_CONIC_BUNDLE_HXX
 
 #include "CBSolver.hxx"
+#include "tree_decomposition.hxx"
 
 namespace LP_MP {
 
@@ -14,7 +15,7 @@ public:
       LP_with_trees::Begin();
       std::cout << "no of Lagrangean vars: " << this->no_Lagrangean_vars() << "\n";
 
-      cb_solver_.set_max_bundlesize(*this,10);
+      //cb_solver_.set_max_bundlesize(*this,10);
       //cb_solver_.set_eval_limit(1250); // recommendation by Jan Kuske
 
       // set up problem for conic bundle

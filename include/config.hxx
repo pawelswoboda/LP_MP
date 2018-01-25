@@ -46,7 +46,8 @@ namespace LP_MP {
      left, // messages are received from left and sent by left
      right, // messages are received from right and sent by right
      full, // messages are received and send in both directions
-     only_send // messages are only sent
+     only_send, // messages are only sent
+     none // message is not called during message passing
    }; 
 
    constexpr REAL eps = std::is_same<REAL,float>::value ? 1e-6 : 1e-8;
