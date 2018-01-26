@@ -95,6 +95,8 @@ public:
       bundle_solver->options.c = proximal_weight_arg_.getValue();
       bundle_solver->init();
 
+      lb_ = -std::numeric_limits<REAL>::infinity();
+
       return bundle_solver;
    }
 
