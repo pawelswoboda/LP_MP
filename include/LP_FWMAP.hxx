@@ -110,7 +110,16 @@ public:
    LP_tree_FWMAP(TCLAP::CmdLine& cmd) 
      : LP_with_trees(cmd),
      proximal_weight_arg_("","proximalWeight","inverse weight for the proximal term", false, 1.0, "", cmd)
-  {}
+  {
+    bundle_solver = nullptr;
+  }
+
+   ~LP_tree_FWMAP()
+   {
+     if(bundle_solver != nullptr) {
+       delete bundle_solver;
+     }
+   }
 
    void optimize_decomposition(const INDEX iteration)
    {

@@ -644,6 +644,8 @@ public:
 
    INDEX subgradient_size;
    std::vector<int> mapping_;
+
+   std::vector<FactorTypeAdapter*> original_factors_;
 };
 
 // do zrobienia: templatize base class
@@ -658,8 +660,35 @@ public:
 
    ~LP_with_trees()
    {
-      // delete copies of factors and redirect messages back to original factors
-      assert(false);
+     // redirect messages back to original factors
+     for(auto& t : trees_) {
+       assert(t.original_factors_.size() == t.Lagrangean_factors_.size());
+       std::unordered_map<FactorTypeAdapter*, FactorTypeAdapter*> copy_to_original_factor;
+       for(INDEX i=0; i<t.Lagrangean_factors_.size(); ++i) {
+         copy_to_original_factor.insert({t.Lagrangean_factors_[i].f, t.original_factors_[i]});
+       } 
+
+       for(auto tree_msg : t.tree_messages_) {
+         auto* m = std::get<0>(tree_msg);
+         auto* left = m->GetLeftFactor();
+         auto* right = m->GetRightFactor();
+         if(copy_to_original_factor.find(left) != copy_to_original_factor.end()) {
+           auto* left_original = copy_to_original_factor.find(left)->second;
+           m->SetLeftFactor(left_original);
+         }
+         if(copy_to_original_factor.find(right) != copy_to_original_factor.end()) {
+           auto* right_original = copy_to_original_factor.find(right)->second;
+           m->SetRightFactor(right_original);
+         }
+       } 
+     }
+
+     // delete copies of factors
+     for(auto& t : trees_) {
+       for(auto& L : t.Lagrangean_factors_) {
+         delete L.f;
+       }
+     }
    }
 
    void add_tree(factor_tree& t)
@@ -716,6 +745,7 @@ public:
           for(INDEX i=0; i<L.factors.size(); ++i) {
             const INDEX tree_index = tree_indices[i];
             trees_[tree_index].Lagrangean_factors_.push_back(L.factors[i]);
+            trees_[tree_index].original_factors_.push_back(f);
           }
           
           std::cout << no_Lagrangean_vars << "; " << Lagrangean_vars_size_ << "\n";
@@ -811,6 +841,7 @@ public:
        LP::ComputePass(iteration);
      } else if(iteration == tree_decomposition_iter) {
        construct_decomposition();
+       static_cast<DECOMPOSITION_SOLVER*>(this)->optimize_decomposition(iteration); 
      } else {
        static_cast<DECOMPOSITION_SOLVER*>(this)->optimize_decomposition(iteration); 
      }
