@@ -6,7 +6,7 @@
 
 namespace LP_MP {
 
-class LP_tree_FWMAP : public LP_with_trees<Lagrangean_factor_FWMAP> {
+class LP_tree_FWMAP : public LP_with_trees<Lagrangean_factor_FWMAP, LP_tree_FWMAP> {
 public:
    // for the Frank Wolfe implementation
    // to do: change the FWMAP implementation and make these methods virtual instead of static.
@@ -74,7 +74,12 @@ public:
    }
    */
 
-   FWMAP* build_up_solver(const REAL lambda = 0.1)
+   void construct_decomposition()
+   {
+     bundle_solver = build_up_solver();
+   }
+
+   FWMAP* build_up_solver()
    {
       auto* bundle_solver = new FWMAP(this->no_Lagrangean_vars(), trees_.size(), LP_tree_FWMAP::max_fn, LP_tree_FWMAP::copy_fn, LP_tree_FWMAP::dot_product_fn);//int d, int n, MaxFn max_fn, CopyFn copy_fn, DotProductFn dot_product_fn);
 
@@ -87,35 +92,40 @@ public:
 
       //svm->options.gap_threshold = 0.0001;
       bundle_solver->options.iter_max = 1000000;
+      bundle_solver->init();
 
       return bundle_solver;
+   }
+
+   REAL decomposition_lower_bound() const
+   {
+     return lb_; 
    }
 
 
 public:
    using LP_with_trees::LP_with_trees;
 
-   void ComputePass(const INDEX iteration)
+   void optimize_decomposition(const INDEX iteration)
    {
       std::cout << "compute pass fw\n";
       // compute descent with quadratic term centered at current reparametrization.
       // unfortunately, the SVM solver has to be built up from scratch in every iteration
 
-      std::cout << "build up solver\n";
-      auto* bundle_solver = build_up_solver();
-      const REAL lb = this->LowerBound();
       //SVM_FW_visitor visitor({0.0,lb});
       //auto visitor_func = std::bind(&SVM_FW_visitor::visit, &visitor, std::placeholders::_1);
       //svm->options.callback_fn = visitor_func;
-      double cost = bundle_solver->Solve();
+      double cost = bundle_solver->do_descent_step();
+      lb_ = std::min(cost, lb_);
       //double* w = svm->GetLambda()
       //add_weights(w, -1.0);
-      delete bundle_solver;
       //std::cout << "after lower bound = " << this->LowerBound() << "\n";
    }
+
+private:
+  FWMAP* bundle_solver;
+  REAL lb_;
 };
-
-
 } // namespace LP_MP
 
 #endif // LP_MP_LP_FWMAP_HXX

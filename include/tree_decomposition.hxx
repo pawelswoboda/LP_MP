@@ -647,11 +647,14 @@ public:
 };
 
 // do zrobienia: templatize base class
-template<typename LAGRANGEAN_FACTOR>
+template<typename LAGRANGEAN_FACTOR, typename DECOMPOSITION_SOLVER>
 class LP_with_trees : public LP
 {
 public:
-   using LP::LP;
+   LP_with_trees(TCLAP::CmdLine& cmd)
+     : LP(cmd),
+     tree_decomposition_begin_arg_("","treeDecompositionBegin","after how many iterations to start tree decomposition based optimization", false, 0, "", cmd)
+  {}
 
    ~LP_with_trees()
    {
@@ -662,14 +665,13 @@ public:
    void add_tree(factor_tree& t)
    { 
      LP_tree_Lagrangean<LAGRANGEAN_FACTOR> lt(t);
-      trees_.push_back(lt);
+     trees_.push_back(lt);
    }
 
    // find out, which factors are shared between trees and add Lagrangean multipliers for them.
-   void Begin()
+   void construct_decomposition()
    {
-      LP::Begin();
-
+     constructed_decomposition = true;
       // first, go over all Lagrangean factors in each tree and count how often factor is shared
       struct Lagrangean_counting {
          //INDEX position = 0; // counter for enumerating in which position (i.e. in how many trees was factor already observed)
@@ -769,6 +771,8 @@ public:
 
       // check map validity: each entry in m (except last one) must occur exactly twice
       assert(mapping_valid()); 
+
+      static_cast<DECOMPOSITION_SOLVER*>(this)->construct_decomposition();
    }
 
    bool mapping_valid() const
@@ -800,16 +804,35 @@ public:
       assert(false); 
    }
 
-   virtual void ComputePass(const INDEX iteration) = 0;
+   virtual void ComputePass(const INDEX iteration)
+   {
+     const INDEX tree_decomposition_iter = tree_decomposition_begin_arg_.getValue();
+     if(iteration < tree_decomposition_iter) {
+       LP::ComputePass(iteration);
+     } else if(iteration == tree_decomposition_iter) {
+       construct_decomposition();
+     } else {
+       static_cast<DECOMPOSITION_SOLVER*>(this)->optimize_decomposition(iteration); 
+     }
+   }
 
    // lower bound must be computed over all cloned factors as well
-   REAL LowerBound() const
+   REAL LowerBound() 
    {
-      REAL lb = 0.0;
-      for(auto& t : trees_) {
-         lb += t.lower_bound();
-      }
-      return lb;
+     if(constructed_decomposition) {
+       return static_cast<DECOMPOSITION_SOLVER*>(this)->decomposition_lower_bound();
+     } else {
+       return LP::LowerBound();
+     }
+   }
+
+   REAL decomposition_lower_bound() const
+   {
+     REAL lb = 0.0;
+     for(auto& t : trees_) {
+       lb += t.lower_bound();
+     }
+     return lb; 
    }
 
    void add_weights(const double* w, const REAL scaling) 
@@ -830,21 +853,19 @@ public:
 protected:
    std::vector<LP_tree_Lagrangean<LAGRANGEAN_FACTOR>> trees_; // store for each tree the associated Lagrangean factors.
    INDEX Lagrangean_vars_size_;
+   TCLAP::ValueArg<INDEX> tree_decomposition_begin_arg_; 
+   bool constructed_decomposition = false;
 };
 
 // perform subgradient ascent with Polyak's step size with estimated optimum
-class LP_subgradient_ascent : public LP_with_trees<Lagrangean_factor_quadratic> // better: perform projected subgradient ascent with Lagrangean_factor_zero_sum
+class LP_subgradient_ascent : public LP_with_trees<Lagrangean_factor_quadratic, LP_subgradient_ascent> // better: perform projected subgradient ascent with Lagrangean_factor_zero_sum
 {
 public:
    using LP_with_trees::LP_with_trees;
 
-   void Begin()
-   {
-      best_lower_bound = -std::numeric_limits<REAL>::infinity();
-      LP_with_trees::Begin(); 
-   }
+   void construct_decomposition() {}
 
-   void ComputePass(const INDEX iteration)
+   void optimize_decomposition(const INDEX iteration)
    {
       REAL current_lower_bound = 0.0;
       std::vector<REAL> subgradient(this->no_Lagrangean_vars(), 0.0);

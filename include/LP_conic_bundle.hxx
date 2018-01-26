@@ -1,18 +1,17 @@
 #ifndef LP_MP_LP_CONIC_BUNDLE_HXX
 #define LP_MP_LP_CONIC_BUNDLE_HXX
 
-#include "CBSolver.hxx"
 #include "tree_decomposition.hxx"
+#include "CBSolver.hxx"
 
 namespace LP_MP {
 
-class LP_conic_bundle : public LP_with_trees<Lagrangean_factor_star>, public ConicBundle::FunctionOracle {
+class LP_conic_bundle : public LP_with_trees<Lagrangean_factor_star, LP_conic_bundle>, public ConicBundle::FunctionOracle {
 public:
    using LP_with_trees::LP_with_trees;
 
-   void Begin()
+   void construct_decomposition()
    {
-      LP_with_trees::Begin();
       std::cout << "no of Lagrangean vars: " << this->no_Lagrangean_vars() << "\n";
 
       //cb_solver_.set_max_bundlesize(*this,10);
@@ -22,9 +21,10 @@ public:
       cb_solver_.init_problem(this->no_Lagrangean_vars());
       cb_solver_.set_out(&std::cout,1);
       cb_solver_.add_function(*this);
+      cb_solver_.do_descent_step(); // we need to setup the solver like this as well
    }
 
-   void ComputePass(const INDEX iteration)
+   void optimize_decomposition(const INDEX iteration)
    {
       cb_solver_.do_descent_step();
 
@@ -68,7 +68,7 @@ public:
       return 0;
    }
 
-   REAL LowerBound()
+   REAL decomposition_lower_bound() 
    {
       assert(cb_solver_.get_dim() == this->no_Lagrangean_vars() && cb_solver_.get_dim() > 0);
       ConicBundle::DVector Lagrangean_vars;
@@ -76,7 +76,7 @@ public:
       // load Lagrangean variables
       this->add_weights(&Lagrangean_vars[0], -1.0);
 
-      const REAL lb = LP_with_trees::LowerBound();
+      const REAL lb = LP_with_trees::decomposition_lower_bound();
       // remove Lagrangean variables again
       this->add_weights(&Lagrangean_vars[0], +1.0);
 
