@@ -92,6 +92,7 @@ public:
 
       //svm->options.gap_threshold = 0.0001;
       bundle_solver->options.iter_max = 1000000;
+      bundle_solver->options.c = proximal_weight_arg_.getValue();
       bundle_solver->init();
 
       return bundle_solver;
@@ -104,7 +105,10 @@ public:
 
 
 public:
-   using LP_with_trees::LP_with_trees;
+   LP_tree_FWMAP(TCLAP::CmdLine& cmd) 
+     : LP_with_trees(cmd),
+     proximal_weight_arg_("","proximalWeight","inverse weight for the proximal term", false, 1.0, "", cmd)
+  {}
 
    void optimize_decomposition(const INDEX iteration)
    {
@@ -116,7 +120,7 @@ public:
       //auto visitor_func = std::bind(&SVM_FW_visitor::visit, &visitor, std::placeholders::_1);
       //svm->options.callback_fn = visitor_func;
       double cost = bundle_solver->do_descent_step();
-      lb_ = std::min(cost, lb_);
+      lb_ = std::max(cost, lb_);
       //double* w = svm->GetLambda()
       //add_weights(w, -1.0);
       //std::cout << "after lower bound = " << this->LowerBound() << "\n";
@@ -125,6 +129,7 @@ public:
 private:
   FWMAP* bundle_solver;
   REAL lb_;
+  TCLAP::ValueArg<double> proximal_weight_arg_; 
 };
 } // namespace LP_MP
 
