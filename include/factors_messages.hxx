@@ -3292,9 +3292,15 @@ public:
    template<typename EXTERNAL_SOLVER>
    void load_costs_impl(EXTERNAL_SOLVER& s)
    {
+      // FIXME: This code relies on UNDEFINED BEHAVIOUR!
+      // The order of argument evaluation for function calls is undefined
+      // behaviour even in C++17! At the same time, the side_effects of
+      // `add_objective` and `convert_primal` must take effect in exactly the
+      // same order.
+
       // load external solver variables corresponding to reparametrization ones and add reparametrization as cost
       auto vars = factor_.export_variables();
-      std::apply([this,&s](auto... x){ ((this->add_objective(s,x)), ...); },  vars);
+      std::apply([this,&s](auto... x){ std::make_tuple((this->add_objective(s,x), 0)...); }, vars);
       //auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->leftFactor_->load_external_variables(s, x)...); }, vars);
       // for all variables,
    }
@@ -3303,6 +3309,9 @@ public:
    template<typename SOLVER>
    void convert_primal_impl(SOLVER& s)
    {
+      // FIXME: This code relies on UNDEFINED BEHAVIOUR!
+      // See explanation in function `load_costs_impl`.
+
       auto vars = factor_.export_variables();
       auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->load_external_variables(s, x)...); }, vars); 
 
