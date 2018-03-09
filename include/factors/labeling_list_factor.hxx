@@ -319,37 +319,24 @@ public:
    template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( binary_data<REAL>(&(*this)[0], size()) ); }//*static_cast<array<REAL,size()>*>(this) ); }
    template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
 
-#ifdef WITH_SAT
-   template<typename SAT_SOLVER>
-   void construct_sat_clauses(SAT_SOLVER& s) const
-   {
-      const INDEX no_vars = size() + (has_implicit_origin() ? 1 : 0);
-      auto vars = s.add_literal_vector(no_vars);
-      s.add_simplex_constraint(vars.begin(), vars.end());
-   }
+   auto export_variables() { return std::tie( *static_cast<array<REAL, LABELINGS::no_labelings()>*>(this) ); }
 
-   template<typename VEC>
-   void reduce_sat(VEC& assumptions, const REAL th, sat_literal begin) const
+   template<typename EXTERNAL_SOLVER, typename VECTOR>
+   void construct_constraints(EXTERNAL_SOLVER& s, VECTOR vars) const
    {
-      const REAL lb = LowerBound();
-      for(INDEX i=0; i<this->size(); ++i) {
-         if((*this)[i] > lb + th) { 
-            assumptions.push_back(-(begin+i));
-         }
-      } 
-   }
-
-   template<typename SAT_SOLVER>
-   void convert_primal(SAT_SOLVER& s, sat_literal first)
-   {
-      primal_.reset();
-      for(INDEX i=first; i<first+this->size(); ++i) {
-         if(s.solution(i)) {
-           primal_ = LABELINGS::labeling(i-first); 
-         }
+      if(has_implicit_origin()) {
+	      s.add_at_most_one_constraint(vars.begin(), vars.end());
+      } else {
+	      s.add_simplex_constraint(vars.begin(), vars.end());
       }
    }
-#endif
+
+   template<typename EXTERNAL_SOLVER, typename VECTOR>
+   void convert_primal(EXTERNAL_SOLVER& s, VECTOR vars)
+   {
+      primal_.reset();
+      primal_ = s.first_active(vars.begin(), vars.end());
+   }
 
 private:
    std::bitset<primal_size()> primal_;
@@ -554,7 +541,6 @@ public:
       print_matching_impl<0>(RIGHT_LABELINGS{});
    }
 
-#ifdef WITH_SAT
    template<INDEX LEFT_LABELING_NO, typename... RIGHT_LABELINGS_REST>
    constexpr static std::size_t no_corresponding_labelings_impl(labelings<RIGHT_LABELINGS_REST...>)
    {
@@ -585,7 +571,7 @@ public:
    template<INDEX LEFT_LABELING_NO, INDEX RIGHT_LABELING_IDX, typename ARRAY_IT, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
    void corresponding_labelings_impl(ARRAY_IT it, labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>) const
    {
-      INDEX left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr!
+      std::size_t left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr!
       if(left_label_number == LEFT_LABELING_NO) {
          *it = RIGHT_LABELING_IDX;
          corresponding_labelings_impl<LEFT_LABELING_NO, RIGHT_LABELING_IDX+1>(it+1, labelings<RIGHT_LABELINGS_REST...>{});
@@ -594,37 +580,37 @@ public:
       } 
    }
    template<INDEX LEFT_LABELING_NO>
-   std::array< sat_literal, no_corresponding_labelings<LEFT_LABELING_NO>() > corresponding_labelings() const
+   std::array< std::size_t, no_corresponding_labelings<LEFT_LABELING_NO>() > corresponding_labelings() const
    {
-      std::array< sat_literal, no_corresponding_labelings<LEFT_LABELING_NO>() > idx;
+      std::array< std::size_t, no_corresponding_labelings<LEFT_LABELING_NO>() > idx;
       corresponding_labelings_impl<LEFT_LABELING_NO, 0>(idx.begin(), RIGHT_LABELINGS{});
       return idx;
    }
 
 
-   template<INDEX LEFT_LABELING_NO, typename SAT_SOLVER>
+   template<INDEX LEFT_LABELING_NO, typename EXTERNAL_SOLVER, typename VECTOR>
    typename std::enable_if<(LEFT_LABELING_NO >= LEFT_LABELINGS::no_labelings())>::type
-   construct_sat_clauses_impl(SAT_SOLVER& s, const sat_literal left_begin, const sat_literal right_begin) const
+   construct_constraints_impl(EXTERNAL_SOLVER& s, VECTOR left_vars, VECTOR right_vars) const
    {}
-   template<INDEX LEFT_LABELING_NO, typename SAT_SOLVER>
+   template<INDEX LEFT_LABELING_NO, typename EXTERNAL_SOLVER, typename VECTOR>
    typename std::enable_if<(LEFT_LABELING_NO < LEFT_LABELINGS::no_labelings())>::type
-   construct_sat_clauses_impl(SAT_SOLVER& s, const sat_literal left_begin, const sat_literal right_begin) const
+   construct_constraints_impl(EXTERNAL_SOLVER& s, VECTOR left_vars, VECTOR right_vars) const
    {
       auto right_idx = corresponding_labelings<LEFT_LABELING_NO>();
-      for(auto& idx : right_idx) {
-         idx += right_begin;
+      std::array<typename EXTERNAL_SOLVER::variable, no_corresponding_labelings<LEFT_LABELING_NO>()> idx;
+      for(std::size_t i=0; i<idx.size(); ++i) {
+         idx[i] += right_vars[right_idx[i]];
       }
-      auto one_active = s.add_at_most_one_constraint(right_idx.begin(), right_idx.end());
-      s.make_equal(left_begin + LEFT_LABELING_NO, one_active);
-      construct_sat_clauses_impl<LEFT_LABELING_NO+1>(s, left_begin, right_begin);
+      auto one_active = s.add_at_most_one_constraint(idx.begin(), idx.end());
+      s.make_equal(left_vars[LEFT_LABELING_NO], one_active);
+      construct_constraints_impl<LEFT_LABELING_NO+1>(s, left_vars, right_vars);
    }
-   template<typename SAT_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR>
-   void construct_sat_clauses(SAT_SOLVER& s, const LEFT_FACTOR& l, const RIGHT_FACTOR& r, const sat_literal left_begin, const sat_literal right_begin) const
+   template<typename EXTERNAL_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR, typename VECTOR>
+   void construct_constraints(EXTERNAL_SOLVER& s, const LEFT_FACTOR& l, VECTOR left_vars, const RIGHT_FACTOR& r, VECTOR right_vars) const
    {
-      construct_sat_clauses_impl<0>(s, left_begin, right_begin);
+      construct_constraints_impl<0>(s, left_vars, right_vars);
    }
 
-#endif
 private:
 };
 

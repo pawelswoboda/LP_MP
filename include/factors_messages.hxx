@@ -264,6 +264,38 @@ public:
    constexpr INDEX size() const { return NO_ELEMENTS; }
 };
 
+// actually hold messages here
+template<INDEX NO_ELEMENTS, typename MSG_CONTAINER_TYPE>
+class FixedSizeMessageContainer2 : public std::array<char, sizeof(MSG_CONTAINER_TYPE) * NO_ELEMENTS>
+{
+public:
+	using msg_type = typename MSG_CONTAINER_TYPE::MessageType;
+	static constexpr INDEX size_in_bytes = sizeof(MSG_CONTAINER_TYPE) * NO_ELEMENTS;
+	FixedSizeMessageContainer2() 
+	{
+		std::fill((char*) this, (char*) this + size_in_bytes, 0);
+	}
+	~FixedSizeMessageContainer2() 
+	{
+		static_assert(sizeof(*this) == sizeof(MSG_CONTAINER_TYPE) * NO_ELEMENTS);
+	}
+	template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+	void push_back(LEFT_FACTOR* l, RIGHT_FACTOR* r, msg_type msg)
+	{
+		// determine at which place to insert: iterate over memory in strides of size of MSG_CONTAINER and check whether it is zero
+		for(INDEX pos = 0; pos<size(); ++pos) {
+			char* ptr = (char*) this + pos*sizeof(MSG_CONTAINER_TYPE);
+			auto* ptr_end = std::find_if(ptr, ptr+sizeof(MSG_CONTAINER_TYPE), [](char x) { return x!=0; });
+			if(ptr_end == ptr+sizeof(MSG_CONTAINER_TYPE)) { 
+				MSG_CONTAINER_TYPE* msg = new(ptr) MSG_CONTAINER_TYPE(l,r,msg); 
+			}
+		}
+		assert(false); // already holds maximum number of messages
+	} 
+
+	constexpr INDEX size() const { return NO_ELEMENTS; }
+};
+
 // holds at most NO_ELEMENTS in std::array. Unused entries have nullptr in them
 template<INDEX NO_ELEMENTS, typename T>
 class UpToFixedSizeMessageContainer : public std::array<T*,NO_ELEMENTS> {
@@ -2468,6 +2500,10 @@ public:
    { return s.add_vector(v); }
 
    template<typename EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const std::vector<REAL>& v)
+   { return s.add_vector(v); } 
+
+   template<typename EXTERNAL_SOLVER>
    auto convert_variables_to_external(EXTERNAL_SOLVER& s, const matrix<REAL>& m)
    { return s.add_matrix(m); }
 
@@ -2483,8 +2519,12 @@ public:
    auto load_external_variables(EXTERNAL_SOLVER& s, vector<REAL>& x)
    { return s.load_vector(); }
 
-   template<typename EXTERNAL_SOLVER, std::size_t N>
-   auto load_external_variables(EXTERNAL_SOLVER& s, std::array<REAL,N>& x)
+   template<typename EXTERNAL_SOLVER, INDEX N>
+   auto load_external_variables(EXTERNAL_SOLVER& s, array<REAL,N>& x)
+   { return s.load_vector(); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto load_external_variables(EXTERNAL_SOLVER& s, std::vector<REAL>& x)
    { return s.load_vector(); }
 
    template<typename EXTERNAL_SOLVER>
@@ -2504,8 +2544,12 @@ public:
    { s.add_vector_objective(cost); }
 
    template<typename EXTERNAL_SOLVER, std::size_t N>
-   auto add_objective(EXTERNAL_SOLVER& s, std::array<REAL,N>& cost)
+   auto add_objective(EXTERNAL_SOLVER& s, array<REAL,N>& cost)
    { return s.add_vector_objective(cost); } 
+
+   template<typename EXTERNAL_SOLVER>
+   void add_objective(EXTERNAL_SOLVER& s, const std::vector<REAL>& cost)
+   { s.add_vector_objective(cost); }
 
    template<typename EXTERNAL_SOLVER>
    void add_objective(EXTERNAL_SOLVER& s, const matrix<REAL>& cost)

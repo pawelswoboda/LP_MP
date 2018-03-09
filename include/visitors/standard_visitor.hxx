@@ -260,7 +260,7 @@ namespace LP_MP {
          :
             BaseVisitorType(cmd),
             tightenArg_("","tighten","enable tightening",cmd,false),
-            tightenReparametrizationArg_("","tightenReparametrization","reparametrization mode used when tightening. Overrides primal computation reparametrization mode",false,"uniform","(uniform|anisotropic)",cmd),
+            tightenReparametrizationArg_("","tightenReparametrization","reparametrization mode used when tightening. Overrides primal computation reparametrization mode",false,"damped_uniform","(damped_uniform|uniform|anisotropic)",cmd),
             tightenIterationArg_("","tightenIteration","number of iterations after which tightening is performed for the first time, default = never",false,std::numeric_limits<INDEX>::max(),"positive integer", cmd),
             tightenIntervalArg_("","tightenInterval","number of iterations between tightenings",false,std::numeric_limits<INDEX>::max(),"positive integer", cmd),
             tightenConstraintsMaxArg_("","tightenConstraintsMax","maximal number of constraints to be added during tightening",false,20,"positive integer",cmd),
