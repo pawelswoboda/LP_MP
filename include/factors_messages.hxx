@@ -16,8 +16,6 @@
 #include <assert.h>
 #include <cxxabi.h>
 
-#include "sat_interface.hxx"
-
 #include <mutex>
 
 #include "template_utilities.hxx"
@@ -28,17 +26,17 @@
 
 #include "memory_allocator.hxx"
 
-#include "cereal/archives/binary.hpp"
-
 #include "LP_MP.h"
 
 // do zrobienia: remove these
 //#include "factors/reparametrization_storage.hxx"  // also delete file
-#include "messages/message_storage.hxx"
+//#include "messages/message_storage.hxx"
 #include <fstream>
 #include <sstream>
-#include <valarray> // do zrobienia: do not use
 #include <vector>
+#include "vector"
+
+#include "DD_ILP.hxx"
 
 // this file provides message and factor containers. The factors and messages are plugged into the container and then every method call is dispatched correctly with static polymorphism and template tricks.
 
@@ -57,9 +55,6 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveMessageFromLeft, ReceiveMessageFromLeft
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromRight,ReceiveRestrictedMessageFromRight)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromLeft, ReceiveRestrictedMessageFromLeft)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessageToRight,SendMessageToRight)
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessageToLeft, SendMessageToLeft)
-
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessagesToRight,SendMessagesToRight)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessagesToLeft, SendMessagesToLeft)
 
@@ -70,17 +65,14 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeLeftFromRightPrimal, ComputeLeftFromRig
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasComputeRightFromLeftPrimal, ComputeRightFromLeftPrimal)
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency, CheckPrimalConsistency)
-LP_MP_FUNCTION_EXISTENCE_CLASS(has_reduce_sat, reduce_sat)
-LP_MP_FUNCTION_EXISTENCE_CLASS(has_convert_primal, convert_primal)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasPrimalSize,PrimalSize)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasPropagatePrimal, PropagatePrimal)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotential, MaximizePotential)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotentialAndComputePrimal, MaximizePotentialAndComputePrimal)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasCreateConstraints, CreateConstraints)
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasGetNumberOfAuxVariables, GetNumberOfAuxVariables)
-LP_MP_FUNCTION_EXISTENCE_CLASS(HasReduceLp, ReduceLp)
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_apply, apply)
+
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_create_constraints, create_constraints)
 
 LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(IsAssignable, operator[])
 }
@@ -96,21 +88,28 @@ struct LeftMessageFuncGetter
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromRightContainer) GetReceiveFunc() { return &MSG_CONTAINER::ReceiveMessageFromRightContainer; }
    constexpr static decltype(&MSG_CONTAINER::ReceiveRestrictedMessageFromRightContainer) GetReceiveRestrictedFunc() { return &MSG_CONTAINER::ReceiveRestrictedMessageFromRightContainer; }
    constexpr static decltype(&MSG_CONTAINER::SendMessageToRightContainer) GetSendFunc() { return &MSG_CONTAINER::SendMessageToRightContainer; }
+   template<typename LEFT_FACTOR, typename MSG_ITERATOR>
+   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ITERATOR>) GetSendMessagesFunc() 
+   { return &MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ITERATOR>; }
 
+#ifdef LP_MP_PARALLEL
+   constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromRightContainerSynchronized) GetReceiveSynchronizedFunc() { return &MSG_CONTAINER::ReceiveMessageFromRightContainerSynchronized; }
+   constexpr static decltype(&MSG_CONTAINER::SendMessageToRightContainerSynchronized) GetSendSynchronizedFunc() { return &MSG_CONTAINER::SendMessageToRightContainerSynchronized; }
    template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ARRAY, ITERATOR>) GetSendMessagesFunc() 
-   { return &MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ARRAY, ITERATOR>; }
+   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToRightContainerSynchronized<LEFT_FACTOR, MSG_ARRAY, ITERATOR>) GetSendMessagesSynchronizedFunc() 
+   { return &MSG_CONTAINER::template SendMessagesToRightContainerSynchronized<LEFT_FACTOR, MSG_ARRAY, ITERATOR>; }
+#endif
 
    constexpr static bool 
-   CanCallReceiveMessage()
-   { return MSG_CONTAINER::CanCallReceiveMessageFromRightContainer(); }
+   ReceivesMessage()
+   { return MSG_CONTAINER::receives_message_from_right_constexpr(); }
+
+   constexpr static bool SendsMessage() 
+   { return MSG_CONTAINER::sends_message_to_right_constexpr(); }
 
    constexpr static bool
    CanCallReceiveRestrictedMessage()
    { return MSG_CONTAINER::CanCallReceiveRestrictedMessageFromRightContainer(); }
-
-   constexpr static bool CanCallSendMessage() 
-   { return MSG_CONTAINER::CanCallSendMessageToRightContainer(); }
 
    constexpr static bool 
    CanCallSendMessages()
@@ -136,19 +135,26 @@ struct RightMessageFuncGetter
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromLeftContainer) GetReceiveFunc() { return &MSG_CONTAINER::ReceiveMessageFromLeftContainer; }
    constexpr static decltype(&MSG_CONTAINER::ReceiveRestrictedMessageFromLeftContainer) GetReceiveRestrictedFunc() { return &MSG_CONTAINER::ReceiveRestrictedMessageFromLeftContainer; }
    constexpr static decltype(&MSG_CONTAINER::SendMessageToLeftContainer) GetSendFunc() { return &MSG_CONTAINER::SendMessageToLeftContainer; }
+   template<typename RIGHT_FACTOR, typename MSG_ITERATOR>
+   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ITERATOR>) GetSendMessagesFunc() 
+   { return &MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ITERATOR>; }
 
+#ifdef LP_MP_PARALLEL
+   constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromLeftContainerSynchronized) GetReceiveSynchronizedFunc() { return &MSG_CONTAINER::ReceiveMessageFromLeftContainerSynchronized; }
+   constexpr static decltype(&MSG_CONTAINER::SendMessageToLeftContainerSynchronized) GetSendSynchronizedFunc() { return &MSG_CONTAINER::SendMessageToLeftContainerSynchronized; }
    template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>) GetSendMessagesFunc() 
-   { return &MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>; }
+   constexpr static decltype(&MSG_CONTAINER::template SendMessagesToLeftContainerSynchronized<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>) GetSendMessagesSynchronizedFunc() 
+   { return &MSG_CONTAINER::template SendMessagesToLeftContainerSynchronized<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>; }
+#endif
 
-   constexpr static bool CanCallReceiveMessage() 
-   { return MSG_CONTAINER::CanCallReceiveMessageFromLeftContainer(); }
+   constexpr static bool ReceivesMessage()
+   { return MSG_CONTAINER::receives_message_from_left_constexpr(); }
+
+   constexpr static bool SendsMessage() 
+   { return MSG_CONTAINER::sends_message_to_left_constexpr(); }
 
    constexpr static bool CanCallReceiveRestrictedMessage() 
    { return MSG_CONTAINER::CanCallReceiveRestrictedMessageFromLeftContainer(); }
-
-   constexpr static bool CanCallSendMessage() 
-   { return MSG_CONTAINER::CanCallSendMessageToLeftContainer(); }
 
    constexpr static bool
    CanCallSendMessages()
@@ -168,44 +174,63 @@ struct MessageDispatcher
 {
    using ConnectedFactorType = typename FuncGetter<MSG_CONTAINER>::ConnectedFactorType; // this is the type of factor container to which the message is connected
 
-   constexpr static bool CanCallReceiveMessage() { return FuncGetter<MSG_CONTAINER>::CanCallReceiveMessage(); }
    static void ReceiveMessage(MSG_CONTAINER& t)
    {
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetReceiveFunc();
-      return (t.*staticMemberFunc)();
+      (t.*staticMemberFunc)();
    }
+#ifdef LP_MP_PARALLEL
+   static void ReceiveMessageSynchronized(MSG_CONTAINER& t)
+   {
+      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetReceiveSynchronizedFunc();
+      (t.*staticMemberFunc)();
+   }
+#endif
+
    constexpr static bool CanCallReceiveRestrictedMessage() { return FuncGetter<MSG_CONTAINER>::CanCallReceiveRestrictedMessage(); }
    static void ReceiveRestrictedMessage(MSG_CONTAINER& t)
    {
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetReceiveRestrictedFunc();
-      return (t.*staticMemberFunc)();
+      (t.*staticMemberFunc)();
    }
 
-   // individual message sending
-   constexpr static bool CanCallSendMessage() { return FuncGetter<MSG_CONTAINER>::CanCallSendMessage(); }
+   constexpr static bool SendsMessage() { return FuncGetter<MSG_CONTAINER>::SendsMessage(); }
+   constexpr static bool ReceivesMessage() { return FuncGetter<MSG_CONTAINER>::ReceivesMessage(); }
 
    template<typename FACTOR_TYPE>
    static void SendMessage(FACTOR_TYPE* f, MSG_CONTAINER& t, const REAL omega)
    {
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetSendFunc();
-      return (t.*staticMemberFunc)(f, omega);
+      (t.*staticMemberFunc)(f, omega);
    }
+
+#ifdef LP_MP_PARALLEL
+   template<typename FACTOR_TYPE>
+   static void SendMessageSynchronized(FACTOR_TYPE* f, MSG_CONTAINER& t, const REAL omega)
+   {
+      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetSendSynchronizedFunc();
+      (t.*staticMemberFunc)(f, omega);
+   }
+#endif
 
    // batch message sending
    constexpr static bool CanCallSendMessages() { return FuncGetter<MSG_CONTAINER>::CanCallSendMessages(); }
 
-   template<typename FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessages(const FACTOR& f, const MSG_ARRAY& msgs, ITERATOR omegaBegin)
+   template<typename FACTOR, typename MSG_ITERATOR>
+   static void SendMessages(const FACTOR& f, MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, const REAL omega)
    {
-      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::template GetSendMessagesFunc<FACTOR, MSG_ARRAY, ITERATOR>();
-      (*staticMemberFunc)(f, msgs, omegaBegin);
+      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::template GetSendMessagesFunc<FACTOR, MSG_ITERATOR>();
+      (*staticMemberFunc)(f, msgs_begin, msgs_end, omega);
    }
 
-   //static REAL GetMessage(MSG_CONTAINER& t, const INDEX i)
-   //{
-   //   auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetMessageFunc();
-   //   return (t.*staticMemberFunc)(i);
-   //}
+#ifdef LP_MP_PARALLEL
+   template<typename FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   static void SendMessagesSynchronized(const FACTOR& f, const MSG_ARRAY& msgs, ITERATOR omegaBegin)
+   {
+      auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::template GetSendMessagesSynchronizedFunc<FACTOR, MSG_ARRAY, ITERATOR>();
+      (*staticMemberFunc)(f, msgs, omegaBegin);
+   }
+#endif
 
    constexpr static bool CanComputePrimalThroughMessage() // do zrobienia: return false, if the factor from which this is called computes its own primal already
    {
@@ -229,14 +254,46 @@ public:
    void push_back(T* t) {
       // do zrobienia: possibly use binary search when NO_ELEMENTS is bigger than some threshold
       for(INDEX i=0; i<NO_ELEMENTS; ++i) {
-         if(this->operator[](i) == nullptr) {
-            this->operator[](i) = t;
+         if((*this)[i] == nullptr) {
+            (*this)[i] = t;
             return;
          }
       }
       throw std::range_error("added more messages than can be held");
    }
    constexpr INDEX size() const { return NO_ELEMENTS; }
+};
+
+// actually hold messages here
+template<INDEX NO_ELEMENTS, typename MSG_CONTAINER_TYPE>
+class FixedSizeMessageContainer2 : public std::array<char, sizeof(MSG_CONTAINER_TYPE) * NO_ELEMENTS>
+{
+public:
+	using msg_type = typename MSG_CONTAINER_TYPE::MessageType;
+	static constexpr INDEX size_in_bytes = sizeof(MSG_CONTAINER_TYPE) * NO_ELEMENTS;
+	FixedSizeMessageContainer2() 
+	{
+		std::fill((char*) this, (char*) this + size_in_bytes, 0);
+	}
+	~FixedSizeMessageContainer2() 
+	{
+		static_assert(sizeof(*this) == sizeof(MSG_CONTAINER_TYPE) * NO_ELEMENTS);
+	}
+	template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+	void push_back(LEFT_FACTOR* l, RIGHT_FACTOR* r, msg_type msg)
+	{
+		// determine at which place to insert: iterate over memory in strides of size of MSG_CONTAINER and check whether it is zero
+		for(INDEX pos = 0; pos<size(); ++pos) {
+			char* ptr = (char*) this + pos*sizeof(MSG_CONTAINER_TYPE);
+			auto* ptr_end = std::find_if(ptr, ptr+sizeof(MSG_CONTAINER_TYPE), [](char x) { return x!=0; });
+			if(ptr_end == ptr+sizeof(MSG_CONTAINER_TYPE)) { 
+				MSG_CONTAINER_TYPE* msg = new(ptr) MSG_CONTAINER_TYPE(l,r,msg); 
+			}
+		}
+		assert(false); // already holds maximum number of messages
+	} 
+
+	constexpr INDEX size() const { return NO_ELEMENTS; }
 };
 
 // holds at most NO_ELEMENTS in std::array. Unused entries have nullptr in them
@@ -249,7 +306,7 @@ public:
    }
    void push_back(T* t) {
       assert(size_ < NO_ELEMENTS);
-      this->operator[](size_) = t;
+      (*this)[size_] = t;
       ++size_;
    }
    INDEX size() const { return size_; }
@@ -384,27 +441,27 @@ struct MessageContainerSelector {
                                          VariableSizeMessageContainer<MESSAGE_CONTAINER_TYPE,CHIRALITY> >::type >::type;
 };
 
-
-
 // Class holding message and left and right factor
 // do zrobienia: possibly replace {LEFT|RIGHT}_FACTOR_NO by their type
 template<typename MESSAGE_TYPE, 
-         INDEX LEFT_FACTOR_NO, INDEX RIGHT_FACTOR_NO, SIGNED_INDEX NO_OF_LEFT_FACTORS, SIGNED_INDEX NO_OF_RIGHT_FACTORS,
+         INDEX LEFT_FACTOR_NO, INDEX RIGHT_FACTOR_NO,
+         message_passing_schedule MPS,
+         SIGNED_INDEX NO_OF_LEFT_FACTORS, SIGNED_INDEX NO_OF_RIGHT_FACTORS,
          typename FACTOR_MESSAGE_TRAIT, 
          INDEX MESSAGE_NO
          >
 class MessageContainer : //public MessageStorageSelector<MESSAGE_SIZE,true>::type, 
                            public MessageTypeAdapter
                          // when NO_OF_LEFT_FACTORS is zero, we hold factors in linked list
-                         ,public next_left_message_container<MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>,NO_OF_LEFT_FACTORS == 0> 
-                         ,public next_right_message_container<MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>,NO_OF_RIGHT_FACTORS == 0>
+                         ,public next_left_message_container<MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>,NO_OF_LEFT_FACTORS == 0> 
+                         ,public next_right_message_container<MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>,NO_OF_RIGHT_FACTORS == 0>
 {
 public:
    using leftFactorNumber_t = std::integral_constant<INDEX, LEFT_FACTOR_NO>;
    static constexpr INDEX leftFactorNumber = LEFT_FACTOR_NO;
    static constexpr INDEX rightFactorNumber = RIGHT_FACTOR_NO;
 
-   using MessageContainerType = MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, FACTOR_MESSAGE_TRAIT, MESSAGE_NO>;
+   using MessageContainerType = MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, MPS, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, FACTOR_MESSAGE_TRAIT, MESSAGE_NO>;
    using MessageType = MESSAGE_TYPE;
    using next_left_message_container_type = next_left_message_container<MessageContainerType,NO_OF_LEFT_FACTORS == 0>;
    using next_right_message_container_type = next_right_message_container<MessageContainerType,NO_OF_RIGHT_FACTORS == 0>;
@@ -478,7 +535,9 @@ public:
    void* operator new(std::size_t size)
    {
       assert(size == sizeof(MessageContainerType));
-      //return (void*) global_real_block_allocator.allocate(size/sizeof(REAL),1);
+      //INDEX s = size/sizeof(REAL);
+      //if(size % sizeof(REAL) != 0) { s++; }
+      //return (void*) global_real_block_allocator.allocate(s,1);
       return Allocator::get().allocate(1);
    }
    void operator delete(void* mem)
@@ -494,22 +553,96 @@ public:
       return m; 
    }
 
+   void send_message_to_left(const REAL omega = 1.0) 
+   {
+      send_message_to_left(rightFactor_->GetFactor(), omega);
+   }
+   void send_message_to_left(RightFactorType* r, const REAL omega)
+   {
+     msg_op_.send_message_to_left(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega); 
+   }
+
+#ifdef LP_MP_PARALLEL
+   void send_message_to_left_synchronized(const REAL omega = 1.0) 
+   {
+      send_message_to_left_synchronized(rightFactor_->GetFactor(), omega);
+   }
+   void send_message_to_left_synchronized(RightFactorType* r, const REAL omega)
+   {
+     auto& mtx = GetLeftFactor()->mutex_;
+     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
+     if(lck.try_lock()) {
+       msg_op_.send_message_to_left(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega); 
+     } else {
+#ifndef NDEBUG
+       if(debug()) {
+         std::cout << "locking failed for " << GetLeftFactor() << "\n";
+       }
+#endif
+     }
+   }
+#endif
+
+   void send_message_to_right(const REAL omega = 1.0) 
+   {
+      send_message_to_right(leftFactor_->GetFactor(), omega);
+   }
+   void send_message_to_right(LeftFactorType* l, const REAL omega)
+   {
+     msg_op_.send_message_to_right(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega); 
+   }
+
+#ifdef LP_MP_PARALLEL
+   void send_message_to_right_synchronized(const REAL omega = 1.0) 
+   {
+      send_message_to_right_synchronized(leftFactor_->GetFactor(), omega);
+   }
+   void send_message_to_right_synchronized(LeftFactorType* l, const REAL omega)
+   {
+     auto& mtx = GetRightFactor()->mutex_;
+     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
+     if(lck.try_lock()) {
+       msg_op_.send_message_to_right(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega); 
+     } else {
+#ifndef NDEBUG
+       if(debug()) {
+         std::cout << "locking failed for " << GetRightFactor() << "\n";
+       }
+#endif
+     }
+   }
+#endif
 
    constexpr static bool
    CanCallReceiveMessageFromRightContainer()
    { 
+      return MPS == message_passing_schedule::left || MPS==message_passing_schedule::full;
+      // obsolete
       return FunctionExistence::HasReceiveMessageFromRight<MessageType, void, 
       RightFactorType, MessageContainerType>(); 
    }
    void ReceiveMessageFromRightContainer()
    {
-#ifdef LP_MP_PARALLEL
-     auto& mtx = GetRightFactor()->mutex_;
-     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
-     if(lck.try_lock()) 
+#ifndef NDEBUG
+      const REAL before_left_lb = leftFactor_->LowerBound();
+      const REAL before_right_lb = rightFactor_->LowerBound();
 #endif
-       msg_op_.ReceiveMessageFromRight(*rightFactor_->GetFactor(), *static_cast<MessageContainerView<Chirality::right>*>(this) ); 
+
+      send_message_to_left();
+
+#ifndef NDEBUG
+      const REAL after_left_lb = leftFactor_->LowerBound();
+      const REAL after_right_lb = rightFactor_->LowerBound();
+      assert(before_left_lb + before_right_lb <= after_left_lb + after_right_lb + eps); 
+#endif
    }
+
+#ifdef LP_MP_PARALLEL
+   void ReceiveMessageFromRightContainerSynchronized()
+   {
+      send_message_to_left_synchronized();
+   }
+#endif
 
    constexpr static bool
    CanCallReceiveRestrictedMessageFromRightContainer()
@@ -526,18 +659,30 @@ public:
    constexpr static bool 
    CanCallReceiveMessageFromLeftContainer()
    { 
-      return FunctionExistence::HasReceiveMessageFromLeft<MessageType, void, 
-      LeftFactorType, MessageContainerType>(); 
+      return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full;
    }
    void ReceiveMessageFromLeftContainer()
    { 
-#ifdef LP_MP_PARALLEL
-     auto& mtx = GetLeftFactor()->mutex_;
-     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
-     if(lck.try_lock())
+#ifndef NDEBUG
+      const REAL before_left_lb = leftFactor_->LowerBound();
+      const REAL before_right_lb = rightFactor_->LowerBound();
 #endif
-       msg_op_.ReceiveMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<MessageContainerView<Chirality::left>*>(this) ); 
+
+      send_message_to_right();
+
+#ifndef NDEBUG
+      const REAL after_left_lb = leftFactor_->LowerBound();
+      const REAL after_right_lb = rightFactor_->LowerBound();
+      assert(before_left_lb + before_right_lb <= after_left_lb + after_right_lb + eps); 
+#endif
    }
+
+#ifdef LP_MP_PARALLEL
+   void ReceiveMessageFromLeftContainerSynchronized()
+   { 
+      send_message_to_right_synchronized();
+   }
+#endif
 
    constexpr static bool
    CanCallReceiveRestrictedMessageFromLeftContainer()
@@ -555,36 +700,38 @@ public:
    constexpr static bool 
    CanCallSendMessageToRightContainer()
    { 
-      return FunctionExistence::HasSendMessageToRight<MessageType, void, 
-      LeftFactorType, MessageContainerType, REAL>(); 
+      return MPS == message_passing_schedule::left || MPS == message_passing_schedule::full || MPS == message_passing_schedule::only_send;
    }
 
    void SendMessageToRightContainer(LeftFactorType* l, const REAL omega)
    {
-#ifdef LP_MP_PARALLEL
-     auto& mtx = GetRightFactor()->mutex_;
-     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
-     if(lck.try_lock())
-#endif
-       msg_op_.SendMessageToRight(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega);
+      send_message_to_right(l, omega);
    }
+
+#ifdef LP_MP_PARALLEL
+   void SendMessageToRightContainerSynchronized(LeftFactorType* l, const REAL omega)
+   {
+      send_message_to_right_synchronized(l, omega);
+   }
+#endif
 
    constexpr static bool
    CanCallSendMessageToLeftContainer()
    { 
-      return FunctionExistence::HasSendMessageToLeft<MessageType, void, 
-      RightFactorType, MessageContainerType, REAL>(); 
+      return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full || MPS == message_passing_schedule::only_send;
    }
 
    void SendMessageToLeftContainer(RightFactorType* r, const REAL omega)
    {
-#ifdef LP_MP_PARALLEL
-     auto& mtx = GetLeftFactor()->mutex_;
-     std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
-     if(lck.try_lock()) 
-#endif
-      msg_op_.SendMessageToLeft(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega);
+      send_message_to_left(r, omega);
    }
+
+#ifdef LP_MP_PARALLEL
+   void SendMessageToLeftContainerSynchronized(RightFactorType* r, const REAL omega)
+   {
+      send_message_to_left_synchronized(r, omega);
+   }
+#endif
 
    constexpr static bool CanCallSendMessagesToLeftContainer()
    {
@@ -592,29 +739,19 @@ public:
       constexpr INDEX msg_array_number = RightFactorContainer::template FindMessageDispatcherTypeIndex<MessageDispatcher<MessageContainerType,RightMessageFuncGetter>>();
       using msg_container_type = meta::at_c<typename RightFactorContainer::msg_container_type_list, msg_array_number>;
       using MSG_ARRAY_ITERATOR = decltype(std::declval<msg_container_type>().begin());
-      return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RightFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, typename std::vector<REAL>::iterator>();
+      return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RightFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, REAL>();
    }
 
    template<Chirality C> class MessageContainerView; // forward declaration. Put MessageIteratorView after definition of MessageContainerView
+
    template<Chirality CHIRALITY, typename MESSAGE_ITERATOR>
    struct MessageIteratorView {
-#ifdef LP_MP_PARALLEL
-     MessageIteratorView(MESSAGE_ITERATOR it, std::vector<bool>::iterator lock_it) : it_(it), lock_it_(lock_it) {}
-#else
      MessageIteratorView(MESSAGE_ITERATOR it) : it_(it) {} 
-#endif
      MessageContainerView<CHIRALITY>& operator*() const {
        return *(static_cast<MessageContainerView<CHIRALITY>*>( *it_ )); 
      }
      MessageIteratorView<CHIRALITY,MESSAGE_ITERATOR>& operator++() {
        ++it_;
-#ifdef LP_MP_PARALLEL
-       ++lock_it_;
-       while(*lock_it_ == false) { // this will always terminate: the lock_rec has one more entry than there are msgs and last entry is always true
-         ++it_;
-         ++lock_it_; 
-       }
-#endif
        return *this;
      }
      bool operator==(const MessageIteratorView<CHIRALITY,MESSAGE_ITERATOR>& o) const {
@@ -625,14 +762,39 @@ public:
      }
      private:
      MESSAGE_ITERATOR it_;
-#ifdef LP_MP_PARALLEL
-     std::vector<bool>::iterator lock_it_;
-#endif
    };
 
-   template<typename IT>
+#ifdef LP_MP_PARALLEL
+   template<Chirality CHIRALITY, typename MESSAGE_ITERATOR, typename LOCK_ITERATOR>
+   struct MessageIteratorViewSynchronized {
+     MessageIteratorViewSynchronized(MESSAGE_ITERATOR it, LOCK_ITERATOR lock_it) : it_(it), lock_it_(lock_it) {}
+     MessageContainerView<CHIRALITY>& operator*() const {
+       return *(static_cast<MessageContainerView<CHIRALITY>*>( *it_ )); 
+     }
+     MessageIteratorViewSynchronized<CHIRALITY,MESSAGE_ITERATOR,LOCK_ITERATOR>& operator++() {
+       ++it_;
+       ++lock_it_;
+       while(*lock_it_ == false) { // this will always terminate: the lock_rec has one more entry than there are msgs and last entry is always true
+         ++it_;
+         ++lock_it_; 
+       }
+       return *this;
+     }
+     bool operator==(const MessageIteratorViewSynchronized<CHIRALITY,MESSAGE_ITERATOR,LOCK_ITERATOR>& o) const {
+       return it_ == o.it_; 
+     }
+     bool operator!=(const MessageIteratorViewSynchronized<CHIRALITY,MESSAGE_ITERATOR,LOCK_ITERATOR>& o) const {
+       return it_ != o.it_; 
+     }
+     private:
+     MESSAGE_ITERATOR it_;
+     LOCK_ITERATOR lock_it_;
+   };
+#endif
+
+   template<typename IT, typename LOCK_ITERATOR>
    struct omega_iterator_with_lock {
-     omega_iterator_with_lock(IT it, std::vector<bool>::iterator lock_it) : it_(it), lock_it_(lock_it) {}
+     omega_iterator_with_lock(IT it, LOCK_ITERATOR lock_it) : it_(it), lock_it_(lock_it) {}
      omega_iterator_with_lock(const omega_iterator_with_lock& o) : it_(o.it_), lock_it_(o.lock_it_) {}
      omega_iterator_with_lock& operator++() {
        ++it_;
@@ -651,21 +813,26 @@ public:
         return o;
      }
      auto operator*() const { return *it_; }
-     bool operator==(const omega_iterator_with_lock<IT>& o) const { return it_ == o.it_; }
-     bool operator!=(const omega_iterator_with_lock<IT>& o) const { return it_ != o.it_; }
+     bool operator==(const omega_iterator_with_lock<IT,LOCK_ITERATOR>& o) const { return it_ == o.it_; }
+     bool operator!=(const omega_iterator_with_lock<IT,LOCK_ITERATOR>& o) const { return it_ != o.it_; }
 
      private:
      IT it_;
-     std::vector<bool>::iterator lock_it_;
+     LOCK_ITERATOR lock_it_;
    };
 
-   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   // rename to send_messages_to_left_container
+   template<typename RIGHT_FACTOR, typename MSG_ITERATOR>
+   static void SendMessagesToLeftContainer(const RIGHT_FACTOR& rightFactor, MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, const REAL omega) 
    {
+      using MessageIteratorType = MessageIteratorView<Chirality::right, MSG_ITERATOR>;
+      return MessageType::SendMessagesToLeft(rightFactor, MessageIteratorType(msgs_begin), MessageIteratorType(msgs_end), omega);
+   }
+
 #ifdef LP_MP_PARALLEL
-      // record which factors were locked here
-      std::vector<bool> lock_rec(msgs.size()+1); // replace with own vector
-      lock_rec[msgs.size()] = true;
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR, typename LOCK_VECTOR>
+   static void SendMessagesToLeftContainerSynchronized_impl(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin, LOCK_VECTOR& lock_rec) 
+   {
       // first lock as many adjacent factors as possible.
       auto lock_it = lock_rec.begin();
       for(auto it=msgs.begin(); it!=msgs.end(); ++it, ++lock_it) {
@@ -674,13 +841,18 @@ public:
           *lock_it = true;
         } else {
           *lock_it = false; 
+#ifndef NDEBUG
+          if(debug()) {
+            std::cout << "locking failed for " << (*it)->GetLeftFactor() << "\n";
+          }
+#endif
         }
       }
       assert(lock_it+1 == lock_rec.end());
-      std::fill(lock_rec.begin(), lock_rec.end(), true);
+      //std::fill(lock_rec.begin(), lock_rec.end(), true);
 
-      using MessageIteratorType = MessageIteratorView<Chirality::right, decltype(msgs.begin())>;
-      omega_iterator_with_lock<decltype(omegaBegin)> omega_it(omegaBegin, lock_rec.begin()) ;
+      using MessageIteratorType = MessageIteratorViewSynchronized<Chirality::right, decltype(msgs.begin()), decltype(lock_it)>;
+      omega_iterator_with_lock<decltype(omegaBegin), decltype(lock_rec.cbegin())> omega_it(omegaBegin, lock_rec.cbegin()) ;
       MessageType::SendMessagesToLeft(rightFactor, MessageIteratorType(msgs.begin(), lock_rec.begin()), MessageIteratorType(msgs.end(), lock_rec.end()-1), omega_it);
 
       // unlock those factors which were locked above
@@ -691,11 +863,21 @@ public:
         }
       }
       assert(lock_it+1 == lock_rec.end());
-#else 
-      using MessageIteratorType = MessageIteratorView<Chirality::right, decltype(msgs.begin())>;
-      return MessageType::SendMessagesToLeft(rightFactor, MessageIteratorType(msgs.begin()), MessageIteratorType(msgs.end()), omegaBegin);
+   }
 #endif
-
+   template<typename RIGHT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   static void SendMessagesToLeftContainerSynchronized(const RIGHT_FACTOR& rightFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   {
+     // record which factors were locked here
+     if(msgs.size() <= 63) {
+       std::array<bool,64> lock_rec;
+       lock_rec[msgs.size()] = true;
+       SendMessagesToLeftContainerSynchronized_impl(rightFactor, msgs, omegaBegin, lock_rec);
+     } else {
+       std::vector<bool> lock_rec(msgs.size()+1); // replace with own vector
+       lock_rec[msgs.size()] = true;
+       SendMessagesToLeftContainerSynchronized_impl(rightFactor, msgs, omegaBegin, lock_rec);
+     }
    }
 
    constexpr static bool CanCallSendMessagesToRightContainer()
@@ -704,16 +886,21 @@ public:
       constexpr INDEX msg_array_number = LeftFactorContainer::template FindMessageDispatcherTypeIndex<MessageDispatcher<MessageContainerType,LeftMessageFuncGetter>>();
       using msg_container_type = meta::at_c<typename LeftFactorContainer::msg_container_type_list, msg_array_number>;
       using MSG_ARRAY_ITERATOR = decltype(std::declval<msg_container_type>().begin());
-      return FunctionExistence::HasSendMessagesToRight<MessageType, void, LeftFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, typename std::vector<REAL>::iterator>();
+      return FunctionExistence::HasSendMessagesToRight<MessageType, void, LeftFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, REAL>();
    }
 
-   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
-   static void SendMessagesToRightContainer(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   // rename send_messages_to_right_container
+   template<typename LEFT_FACTOR, typename MSG_ITERATOR>
+   static void SendMessagesToRightContainer(const LEFT_FACTOR& leftFactor, MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, const REAL omega) 
    {
+      using MessageIteratorType = MessageIteratorView<Chirality::left, MSG_ITERATOR>;
+      return MessageType::SendMessagesToRight(leftFactor, MessageIteratorType(msgs_begin), MessageIteratorType(msgs_end), omega);
+   }
+
 #ifdef LP_MP_PARALLEL
-      // record which factors were locked here
-      std::vector<bool> lock_rec(msgs.size()+1); // replace with own vector
-      lock_rec[msgs.size()] = true;
+   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR, typename LOCK_VECTOR>
+   static void SendMessagesToRightContainerSynchronized_impl(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin, LOCK_VECTOR& lock_rec) 
+   {
       // first lock as many adjacent factors as possible.
       auto lock_it = lock_rec.begin();
       for(auto it=msgs.begin(); it!=msgs.end(); ++it, ++lock_it) {
@@ -721,12 +908,18 @@ public:
           *lock_it = true;
         } else {
           *lock_it = false; 
+#ifndef NDEBUG
+          if(debug()) {
+            std::cout << "locking failed for " << (*it)->GetRightFactor() << "\n";
+          }
+#endif
         }
       }
+      assert(lock_it+1 == lock_rec.end());
       //std::fill(lock_rec.begin(), lock_rec.end(), true);
 
-      using MessageIteratorType = MessageIteratorView<Chirality::left, decltype(msgs.begin())>;
-      omega_iterator_with_lock<decltype(omegaBegin)> omega_it(omegaBegin, lock_rec.begin()) ;
+      using MessageIteratorType = MessageIteratorViewSynchronized<Chirality::left, decltype(msgs.begin()), decltype(lock_it)>;
+      omega_iterator_with_lock<decltype(omegaBegin), decltype(lock_rec.cbegin())> omega_it(omegaBegin, lock_rec.cbegin()) ;
       MessageType::SendMessagesToRight(leftFactor, MessageIteratorType(msgs.begin(), lock_rec.begin()), MessageIteratorType(msgs.end(), lock_rec.end()-1), omega_it);
 
       // unlock those factors which were locked above
@@ -737,11 +930,22 @@ public:
         }
       }
       assert(lock_it+1 == lock_rec.end());
-#else 
-      using MessageIteratorType = MessageIteratorView<Chirality::left, decltype(msgs.begin())>;
-      return MessageType::SendMessagesToRight(leftFactor, MessageIteratorType(msgs.begin()), MessageIteratorType(msgs.end()), omegaBegin);
-#endif
    }
+   template<typename LEFT_FACTOR, typename MSG_ARRAY, typename ITERATOR>
+   static void SendMessagesToRightContainerSynchronized(const LEFT_FACTOR& leftFactor, const MSG_ARRAY& msgs, ITERATOR omegaBegin) 
+   {
+     // record which factors were locked here
+     if(msgs.size() <= 63) {
+       std::array<bool,64> lock_rec;
+       lock_rec[msgs.size()] = true;
+       SendMessagesToRightContainerSynchronized_impl(leftFactor, msgs, omegaBegin, lock_rec);
+     } else {
+       std::vector<bool> lock_rec(msgs.size()+1); // replace with own vector
+       lock_rec[msgs.size()] = true;
+       SendMessagesToRightContainerSynchronized_impl(leftFactor, msgs, omegaBegin, lock_rec);
+     }
+   }
+#endif
 
    constexpr static bool
    CanComputeRightFromLeftPrimal()
@@ -779,19 +983,34 @@ public:
    void ComputeRightFromLeftPrimal() 
    {
       rightFactor_->conditionally_init_primal(leftFactor_->primal_access_);
+
+      if constexpr (CanComputeRightFromLeftPrimalWithoutReturn()) {
+        msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+        rightFactor_->PropagatePrimal();
+        rightFactor_->propagate_primal_through_messages(); 
+      } else if constexpr (MessageContainerType::CanComputeRightFromLeftPrimalWithReturn()) {
+        const bool changed = msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+        if(changed) {
+          rightFactor_->PropagatePrimal();
+          rightFactor_->propagate_primal_through_messages();
+        }
+      }
+
+      /*
       static_if<CanComputeRightFromLeftPrimalWithoutReturn()>([&](auto f) {
         f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
         rightFactor_->PropagatePrimal();
-        rightFactor_->ComputePrimalThroughMessages();
+        rightFactor_->propagate_primal_through_messages();
       }).else_([&](auto) {
          static_if<MessageContainerType::CanComputeRightFromLeftPrimalWithReturn()>([&](auto f) {
                const bool changed = f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
                if(changed) {
                   rightFactor_->PropagatePrimal();
-                  rightFactor_->ComputePrimalThroughMessages();
+                  rightFactor_->propagate_primal_through_messages();
                }
          });
       });
+      */
    }
 
    void ComputeLeftFromRightPrimal()
@@ -800,13 +1019,13 @@ public:
       static_if<CanComputeLeftFromRightPrimalWithoutReturn()>([&](auto f) {
         f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
         leftFactor_->PropagatePrimal();
-        leftFactor_->ComputePrimalThroughMessages();
+        leftFactor_->propagate_primal_through_messages();
       }).else_([&](auto ) {
          static_if<MessageContainerType::CanComputeLeftFromRightPrimalWithReturn()>([&](auto f) {
                const bool changed = f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
                if(changed) {
                   leftFactor_->PropagatePrimal();
-                  leftFactor_->ComputePrimalThroughMessages();
+                  leftFactor_->propagate_primal_through_messages();
                }
          });
       });
@@ -954,6 +1173,17 @@ public:
    // do zrobienia: Rename Get{Left|Right}FactorContainer
    LeftFactorContainer* GetLeftFactor() const final { return leftFactor_; }
    RightFactorContainer* GetRightFactor() const final { return rightFactor_; }
+
+   void SetLeftFactor(FactorTypeAdapter* l) final 
+   {
+      assert(dynamic_cast<LeftFactorContainer*>(l));
+      leftFactor_ = static_cast<LeftFactorContainer*>(l); 
+   }
+   void SetRightFactor(FactorTypeAdapter* r) final 
+   {
+      assert(dynamic_cast<RightFactorContainer*>(r));
+      rightFactor_ = static_cast<RightFactorContainer*>(r); 
+   }
 
    //INDEX GetMessageNumber() const final { return MESSAGE_NO; } 
    //REAL GetMessageWeightToRight() const final { return SEND_MESSAGE_TO_RIGHT_WEIGHT::value; }
@@ -1142,43 +1372,36 @@ public:
    }
 
    // for weight computations these functions are necessary
-   virtual bool SendsMessageToLeft() const final
+   static constexpr bool sends_message_to_left_constexpr()
    {
-      return 
-         this->CanCallSendMessagesToLeftContainer() || 
-         this->CanCallSendMessageToLeftContainer();
+      return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full || MPS == message_passing_schedule::only_send;
    }
-   virtual bool SendsMessageToRight() const final
+   static constexpr bool sends_message_to_right_constexpr() 
    {
-      return 
-         this->CanCallSendMessagesToRightContainer() || 
-         this->CanCallSendMessageToRightContainer();
+      return MPS == message_passing_schedule::left || MPS == message_passing_schedule::full || MPS == message_passing_schedule::only_send;
    }
-   virtual bool ReceivesMessageFromLeft() const final
+   static constexpr bool receives_message_from_left_constexpr() 
    {
-      return CanCallReceiveMessageFromLeftContainer();
+     return MPS == message_passing_schedule::right || MPS == message_passing_schedule::full;
    }
-   virtual bool ReceivesMessageFromRight() const final
+   static constexpr bool receives_message_from_right_constexpr() 
    {
-      return CanCallReceiveMessageFromRightContainer();
+     return MPS == message_passing_schedule::left || MPS == message_passing_schedule::full;
    }
 
-   constexpr static bool CanCreateConstraints()
-   {
-      //return FunctionExistence::HasCreateConstraints<MessageType,LpInterfaceAdapter*, LeftFactorContainer*, RightFactorContainer*>();
-      return FunctionExistence::HasCreateConstraints<MessageType,void, LpInterfaceAdapter*, LeftFactorType*, RightFactorType*>();
-   }
+   virtual bool SendsMessageToLeft() const final { return sends_message_to_left_constexpr(); }
+   virtual bool SendsMessageToRight() const final { return sends_message_to_right_constexpr(); }
+   virtual bool ReceivesMessageFromLeft() const final { return receives_message_from_left_constexpr(); }
+   virtual bool ReceivesMessageFromRight() const final { return receives_message_from_right_constexpr(); }
 
-   // sat related functions
-   LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_sat_clauses,construct_sat_clauses)
-
+   /*
    constexpr static bool
-   can_construct_sat_clauses()
+   can_construct_constraints()
    {
-      return has_construct_sat_clauses<MessageType,void,LGL*, LeftFactorType, RightFactorType, sat_var, sat_var>();
+      return has_construct_sat_clauses<MessageType,void,sat_solver&, LeftFactorType, RightFactorType, sat_var, sat_var>();
    }
 
-   void construct_sat_clauses(LGL* s, sat_var left_var, sat_var right_var) 
+   void construct_sat_clauses(sat_solver& s, sat_var left_var, sat_var right_var) 
    {
       static_if<can_construct_sat_clauses()>([&](auto f) {
             f(msg_op_).construct_sat_clauses(s, *leftFactor_->GetFactor(), *rightFactor_->GetFactor(), left_var, right_var);
@@ -1187,43 +1410,35 @@ public:
          assert(false);
       }
    }
-
-
+   */ 
    
-   virtual void CreateConstraints(LpInterfaceAdapter* l) final
-   {
-      static_if<CanCreateConstraints()>([&](auto f) {
-            f(msg_op_).CreateConstraints(l,leftFactor_->GetFactor(),rightFactor_->GetFactor());
-      }).else_([&](auto) {
-         throw std::runtime_error("create constraints not implemented by message");
-      });
-   }
-
    // for traversing a tree
    virtual void send_message_up(Chirality c) final
    {
       if(c == Chirality::right) { // right factor is top one
          leftFactor_->GetFactor()->init_primal();
-         static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
-               f(this)->ReceiveMessageFromLeftContainer();
-         }).else_([&](auto) {
-               static_if<MessageContainerType::CanCallSendMessageToRightContainer()>([&](auto f) {
-                        f(this)->SendMessageToRightContainer(leftFactor_->GetFactor(),1.0);
-               }).else_([](auto) {
-                  assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
-               });
-         });
+         this->send_message_to_right();
+         //static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
+         //      f(this)->ReceiveMessageFromLeftContainer();
+         //}).else_([&](auto) {
+         //      static_if<MessageContainerType::CanCallSendMessageToRightContainer()>([&](auto f) {
+         //               f(this)->SendMessageToRightContainer(leftFactor_->GetFactor(),1.0);
+         //      }).else_([](auto) {
+         //         assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
+         //      });
+         //});
       } else {
          rightFactor_->GetFactor()->init_primal();
-         static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
-               f(this)->ReceiveMessageFromRightContainer();
-         }).else_([&](auto) {
-               static_if<MessageContainerType::CanCallSendMessageToLeftContainer()>([&](auto f) {
-                        f(this)->SendMessageToLeftContainer(rightFactor_->GetFactor(),1.0);
-               }).else_([](auto) {
-                  assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
-               });
-         });
+         this->send_message_to_left();
+         //static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
+         //      f(this)->ReceiveMessageFromRightContainer();
+         //}).else_([&](auto) {
+         //      static_if<MessageContainerType::CanCallSendMessageToLeftContainer()>([&](auto f) {
+         //               f(this)->SendMessageToLeftContainer(rightFactor_->GetFactor(),1.0);
+         //      }).else_([](auto) {
+         //         assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
+         //      });
+         //});
       }
    }
 
@@ -1232,14 +1447,34 @@ public:
    {
       // we can assume that upper factor has already (partially) computed primal.
       // we check whether we can receive restricted messages from upper and compute primal in lower. If yes, we receive restricted message, compute primal in lower factor and propagate it back to upper factor.
+      if(c == Chirality::right) {
+         //leftFactor_->init_primal(); // initialization is already done in upward pass
+         static_if<MessageContainerType::CanComputeLeftFromRightPrimal()>([&](auto f) {
+               f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+         });
+         static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f2) {
+               f2(leftFactor_)->MaximizePotentialAndComputePrimal(); 
+         });
+      } else {
+         assert(c == Chirality::left);
+         //rightFactor_->init_primal();
+         static_if<MessageContainerType::CanComputeRightFromLeftPrimal()>([&](auto f) {
+               f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+         });
+         static_if<RightFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f2) {
+               f2(rightFactor_)->MaximizePotentialAndComputePrimal(); 
+         });
+      }
+      return;
+
+
       // if this is not possible, we propagate primal labeling of upper to lower
       if(c == Chirality::right) { // right factor is upper
          static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromRightContainer()>([&](auto f) {
-                  std::stringstream ss;
                   // receive restricted messages 
-                  std::stringstream dual;
-                  cereal::BinaryOutputArchive ar_in(dual);
-                  leftFactor_->GetFactor()->serialize_dual( ar_in );
+                  serialization_archive ar(leftFactor_->GetFactor(), leftFactor_->GetFactor()+1, [](auto& f, auto& ar) { f.serialize_dual(ar); });
+                  save_archive s_ar(ar);
+                  leftFactor_->GetFactor()->serialize_dual( s_ar );
 
                   f(this)->ReceiveRestrictedMessageFromRightContainer();
 
@@ -1247,8 +1482,8 @@ public:
                   leftFactor_->MaximizePotentialAndComputePrimal();
 
                   // restore dual reparametrization to before restricted messages were sent.
-                  cereal::BinaryInputArchive ar_out(dual);
-                  leftFactor_->GetFactor()->serialize_dual( ar_out );
+                  load_archive l_ar(ar);
+                  leftFactor_->GetFactor()->serialize_dual( l_ar );
 
                   // propagate back to upper
                   f(this)->ComputeRightFromLeftPrimal(); 
@@ -1268,9 +1503,9 @@ public:
          static_if<RightFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromLeftContainer()>([&](auto f) {
                   std::stringstream ss;
                   // receive restricted messages 
-                  std::stringstream dual;
-                  cereal::BinaryOutputArchive ar_in(dual);
-                  rightFactor_->GetFactor()->serialize_dual( ar_in );
+                  serialization_archive ar(rightFactor_->GetFactor(), rightFactor_->GetFactor()+1, [](auto& f, auto& ar) { f.serialize_dual(ar); });
+                  save_archive s_ar(ar);
+                  rightFactor_->GetFactor()->serialize_dual( s_ar );
 
                   f(this)->ReceiveRestrictedMessageFromLeftContainer();
 
@@ -1278,8 +1513,8 @@ public:
                   rightFactor_->MaximizePotentialAndComputePrimal();
 
                   // restore dual reparametrization to before restricted messages were sent.
-                  cereal::BinaryInputArchive ar_out(dual);
-                  rightFactor_->GetFactor()->serialize_dual( ar_out );
+                  load_archive l_ar(ar);
+                  rightFactor_->GetFactor()->serialize_dual( l_ar );
 
                   // propagate back to upper
                   f(this)->ComputeLeftFromRightPrimal(); 
@@ -1297,36 +1532,66 @@ public:
 
       } else {
          assert(false);
-      } 
+      }
    }
+
+   // construct constraints
+   template<typename SOLVER>
+   void construct_constraints_impl(SOLVER& s, const typename DD_ILP::variable_counters& left_variable_counters, const typename DD_ILP::variable_counters& right_variable_counters)
+   {
+      auto current_variable_counters = s.get_variable_counters();
+
+      auto left_vars = leftFactor_->GetFactor()->export_variables();
+      s.set_variable_counters(left_variable_counters);
+      auto left_external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->leftFactor_->load_external_variables(s, x)...); }, left_vars);
+
+      auto right_vars = rightFactor_->GetFactor()->export_variables();
+      s.set_variable_counters(right_variable_counters);
+      auto right_external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->rightFactor_->load_external_variables(s, x)...); }, right_vars);
+
+      auto t = std::tuple_cat(std::tie(*leftFactor_->GetFactor()), left_external_vars, std::tie(*rightFactor_->GetFactor()), right_external_vars);
+      auto construct_constraints_fun = [this,&s](auto... x) { this->msg_op_.construct_constraints(s, x...); };
+      std::apply(construct_constraints_fun, t);
+
+      s.set_variable_counters(current_variable_counters);
+   }
+
+   virtual void construct_constraints(
+       DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s, 
+       const typename DD_ILP::variable_counters& left_variable_counters,
+       const typename DD_ILP::variable_counters& right_variable_counters 
+       ) final
+   { construct_constraints_impl(s, left_variable_counters, right_variable_counters); }
+   virtual void construct_constraints(
+       DD_ILP::external_solver_interface<DD_ILP::problem_export>& s, 
+       const typename DD_ILP::variable_counters& left_variable_counters,
+       const typename DD_ILP::variable_counters& right_variable_counters 
+       ) final
+   { construct_constraints_impl(s, left_variable_counters, right_variable_counters); }
+#ifdef DD_ILP_WITH_GUROBI
+   virtual void construct_constraints(
+       DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& s, 
+       const typename DD_ILP::variable_counters& left_variable_counters,
+       const typename DD_ILP::variable_counters& right_variable_counters 
+       ) final
+   { construct_constraints_impl(s, left_variable_counters, right_variable_counters); }
+#endif
+
 
 protected:
    MessageType msg_op_; // possibly inherit privately from MessageType to apply empty base optimization when applicable
-   LeftFactorContainer* const leftFactor_;
-   RightFactorContainer* const rightFactor_;
+   LeftFactorContainer* leftFactor_;
+   RightFactorContainer* rightFactor_;
 
    // see notes on allocator in FactorContainer
    struct Allocator {
-      using type = MemoryPool<MessageContainerType,4096*sizeof(MessageContainerType)>; 
+      using type = MemoryPool<MessageContainerType,4096*(sizeof(MessageContainerType)+sizeof(void*))>; 
       static type& get() {
          static type allocator;
          return allocator;
       }
    };
 };
-
-// additionally store message difference between left and right factor (might be != 0) for use in Frank-Wolfe algorithm decomposition
-template<typename MESSAGE_CONTAINER>
-class FwMessageContainer : public MESSAGE_CONTAINER {
-   template<typename... ARGS>
-   FwMessageContainer(const INDEX msg_size, ARGS... args):
-      MESSAGE_CONTAINER(args...),
-      msg_diff_(msg_size)
-   {}
-private:
-   std::vector<REAL> msg_diff_; // change to vector
-};
-
 
 
 // container class for factors. Here we hold the factor, all connected messages, reparametrization storage and perform reparametrization and coordination for sending and receiving messages.
@@ -1369,8 +1634,10 @@ public:
    // overloaded new so that factor containers are allocated by global block allocator consecutively
    void* operator new(std::size_t size)
    {
-      //assert(size == sizeof(FactorContainerType));
-      //return (void*) global_real_block_allocator.allocate(size/sizeof(REAL)+1,1);
+      assert(size == sizeof(FactorContainerType));
+      //INDEX s = size/sizeof(REAL);
+      //if(size % sizeof(REAL) != 0) { s++; }
+      //return (void*) global_real_block_allocator.allocate(s,1);
       return Allocator::get().allocate(1);
    }
    void operator delete(void* mem)
@@ -1400,38 +1667,44 @@ public:
       std::get<n>(msg_).push_back(m);
    }
 
-   // do zrobienia: remove
-   // get sum of all messages in dimension i -> obsolete
-   const REAL GetMessageSum(const INDEX i) const {
-      return GetMessageSum(MESSAGE_DISPATCHER_TYPELIST{},i);
-   }
-   template<typename... MESSAGE_DISPATCHER_TYPES_REST>
-   REAL GetMessageSum(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX i) const { return 0.0; }
-   template<typename MESSAGE_DISPATCHER_TYPE, typename... MESSAGE_DISPATCHER_TYPES_REST>
-   REAL GetMessageSum(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX i) const {
-      //INDEX status;
-      //std::cout << "return message for " << abi::__cxa_demangle(typeid(MESSAGE_DISPATCHER_TYPE).name(),0,0,&status) << "\n";
-      // current number of MESSAGE_DISPATCHER_TYPE
-      constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      REAL msg_val = 0.0;
-      for(auto it=std::get<n>(msg_).begin(); it!=std::get<n>(msg_).end(); ++it) {
-         msg_val += MESSAGE_DISPATCHER_TYPE::GetMessage(*(*it),i);
-      }
-      // receive messages for subsequent MESSAGE_DISPATCER_TYPES
-      return msg_val + GetMessageSum(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{},i);
-   }
-
    void UpdateFactor(const weight_vector& omega) final
    {
+      assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
       assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
       assert(std::distance(omega.begin(), omega.end()) == no_send_messages());
-#ifdef LP_MP_PARALLEL
-      std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
-#endif
       ReceiveMessages(omega);
       MaximizePotential();
       SendMessages(omega);
    }
+
+   void update_factor_residual(const weight_vector& omega)
+   {
+      assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
+      assert(*std::max_element(omega.begin(), omega.end()) <= 1.0+eps);
+      assert(std::distance(omega.begin(), omega.end()) == no_send_messages());
+      ReceiveMessages(omega);
+      MaximizePotential();
+      send_messages_residual(omega); // other message passing type shall be called "shared"
+   }
+
+#ifdef LP_MP_PARALLEL
+   void UpdateFactorSynchronized(const weight_vector& omega) final
+   {
+      assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
+      assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
+      assert(std::distance(omega.begin(), omega.end()) == no_send_messages());
+      std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
+      ReceiveMessagesSynchronized(omega);
+      MaximizePotential();
+      SendMessagesSynchronized(omega);
+   }
+
+   void UpdateFactorPrimalSynchronized(const weight_vector& omega, const INDEX iteration) final
+   {
+     //std::cout << "not implemented\n";
+     //assert(false);
+   }
+#endif
 
    // do zrobienia: possibly also check if method present
    constexpr static bool
@@ -1465,60 +1738,6 @@ public:
       return FunctionExistence::HasMaximizePotential<FactorType,void>();
    }
 
-   // sat related functions
-   LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_sat_clauses,construct_sat_clauses)
-
-   constexpr static bool
-   can_construct_sat_clauses()
-   {
-      return has_construct_sat_clauses<FactorType,void,LGL*>();
-   }
-
-   void construct_sat_clauses(LGL* s) 
-   {
-      static_if<can_construct_sat_clauses()>([&](auto f) {
-            f(factor_).construct_sat_clauses(s);
-            });
-      if(!can_construct_sat_clauses()) {
-         assert(false);
-      }
-   }
-
-
-   template<typename SAT_SOLVER>
-   constexpr static bool can_convert_primal()
-   {
-      return FunctionExistence::has_convert_primal<FactorType,void, SAT_SOLVER, sat_var>(); 
-   }
-   //void convert_primal(Glucose::SimpSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
-   //void convert_primal(CMSat::SATSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
-   void convert_primal(LGL* sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
-   {
-      static_if<can_convert_primal<decltype(sat)>()>([&](auto f) { 
-            f(factor_).convert_primal(sat, sat_begin);
-            });
-      assert(can_convert_primal<decltype(sat)>);
-   }
-
-   constexpr static bool
-   can_reduce_sat()
-   {
-      return FunctionExistence::has_reduce_sat<FactorType, void, sat_vec<sat_literal>, REAL, sat_var>(); 
-   }
-
-   void UpdateFactorSAT(const weight_vector& omega, const REAL th, sat_var begin, sat_vec<sat_literal>& assumptions) final
-   {
-#ifdef LP_MP_PARALLEL
-     std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
-#endif
-
-     ReceiveMessages(omega);
-     MaximizePotential();
-     static_if<can_reduce_sat()>([&](auto f) {
-       f(factor_).reduce_sat(assumptions, th, begin);
-     });
-     SendMessages(omega);
-   }
 
    void UpdateFactorPrimal(const weight_vector& omega, INDEX primal_access) final
    {
@@ -1529,12 +1748,11 @@ public:
       conditionally_init_primal(primal_access);
       if(CanComputePrimal()) { // do zrobienia: for now
          primal_access_ = primal_access;
-         if(CanReceiveRestrictedMessages() && CallsReceiveRestrictedMessages()) {
+         if(CanReceiveRestrictedMessage() && ReceivesRestrictedMessage()) {
 
-            // note: use better (fixed size buffer) for dual information and allocate memory on stack for this. How to estimate memory? Mock writing into buffer (possibly slow)? A hint function could be used too.
-            std::stringstream dual;
-            cereal::BinaryOutputArchive ar_in(dual);
-            factor_.serialize_dual( ar_in );
+            serialization_archive ar(GetFactor(), GetFactor()+1, [](auto& f, auto& ar) { f.serialize_dual(ar); });
+            save_archive s_ar(ar);
+            factor_.serialize_dual( s_ar );
 
             // now we change the dual information
             // first we compute restricted incoming messages, on which to compute the primal
@@ -1544,8 +1762,8 @@ public:
             MaximizePotentialAndComputePrimal();
 
             // restore dual reparametrization to before restricted messages were sent.
-            cereal::BinaryInputArchive ar_out(dual);
-            factor_.serialize_dual( ar_out );
+            load_archive l_ar(ar);
+            factor_.serialize_dual( l_ar );
 
             ReceiveMessages(omega);
             MaximizePotential();
@@ -1556,13 +1774,12 @@ public:
             SendMessages(omega);
          }
          // now propagate primal to adjacent factors
-         ComputePrimalThroughMessages();
+         propagate_primal_through_messages();
       } else {
          ReceiveMessages(omega);
          MaximizePotential();
          SendMessages(omega);
       }  
-
    }
 
    void MaximizePotential()
@@ -1581,7 +1798,7 @@ public:
    }
 
    // do zrobienia: rename PropagatePrimalThroughMessages
-   void ComputePrimalThroughMessages() const
+   virtual void propagate_primal_through_messages() final
    {
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this](auto l) {
             static_if<l.CanComputePrimalThroughMessage()>([&](auto f) {
@@ -1600,7 +1817,7 @@ public:
       auto omegaIt = omega.begin();
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&omegaIt](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            static_if<l.CanCallReceiveMessage()>([&](auto f) {
+            static_if<l.ReceivesMessage()>([&](auto f) {
                   
                   for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
                      //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
@@ -1613,6 +1830,29 @@ public:
             //std::advance(omegaIt, std::get<n>(msg_).size());
       });
    }
+
+#ifdef LP_MP_PARALLEL
+   template<typename WEIGHT_VEC>
+   void ReceiveMessagesSynchronized(const WEIGHT_VEC& omega) 
+   {
+      // note: currently all messages are received, even if not needed. Change this again.
+      auto omegaIt = omega.begin();
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&omegaIt](auto l) {
+            constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+            static_if<l.ReceivesMessage()>([&](auto f) {
+                  
+                  for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
+                     //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
+                     f(l).ReceiveMessageSynchronized(*(*it));
+                     //}
+                  }
+
+                  });
+            
+            //std::advance(omegaIt, std::get<n>(msg_).size());
+      });
+   }
+#endif
 
    // we write message change not into original reparametrization, but into temporary one named pot
    void ReceiveRestrictedMessages() 
@@ -1629,22 +1869,22 @@ public:
 
    struct can_receive_restricted_message {
       template<typename MESSAGE_DISPATCHER_TYPE>
-         using invoke = typename std::is_same<std::integral_constant<bool,MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage()>, std::integral_constant<bool,true> >::type;
+         using invoke = typename std::is_same<std::integral_constant<bool,MESSAGE_DISPATCHER_TYPE::CanCallReceiveRestrictedMessage()>, std::integral_constant<bool,true> >::type;
    };
-   constexpr static bool CanReceiveRestrictedMessages() 
+   constexpr static bool CanReceiveRestrictedMessage() 
    {
       return meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_receive_restricted_message>{};
    }
 
    // methods used by MessageIterator
-   INDEX GetNoMessages() const final
+   INDEX no_messages() const final
    {
-      INDEX noMessages = 0;
-      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&noMessages](auto l) {
+      INDEX no_msgs = 0;
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_msgs](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            noMessages += std::get<n>(msg_).size();
+            no_msgs += std::get<n>(msg_).size();
             } );
-      return noMessages;
+      return no_msgs;
    }
 
    // counts number of messages for which messages are sent
@@ -1653,8 +1893,7 @@ public:
       INDEX no_calls = 0;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_calls](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            if(FactorContainerType::CanCallSendMessages(l) ||
-                  FactorContainerType::CanCallSendMessage(l)) {
+            if(l.SendsMessage()) {
                no_calls += std::get<n>(msg_).size();
             }
             } );
@@ -1667,11 +1906,11 @@ public:
       INDEX no_calls = 0;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_calls](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            if(FactorContainerType::CanCallSendMessages(l)) {
+            if(l.CanCallSendMessages() && l.SendsMessage()) {
                if(std::get<n>(msg_).size() > 0) {
                   ++no_calls;
                }
-            } else if(FactorContainerType::CanCallSendMessage(l)) {
+            } else if(l.SendsMessage()) {
                no_calls += std::get<n>(msg_).size();
             }
             } );
@@ -1681,28 +1920,71 @@ public:
    template<typename ITERATOR>
    void CallSendMessages(FactorType& factor, ITERATOR omegaIt) 
    {
+     auto omega_begin = omegaIt;
+     meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+         // check whether the message supports batch updates. If so, call batch update, else call individual send message
+         constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+         if constexpr(l.SendsMessage()) {
+           auto msg_begin = std::get<n>(msg_).begin();
+           auto msg_end = std::get<n>(msg_).end();
+           const INDEX no_messages = std::get<n>(msg_).size();
+
+           if constexpr(l.CanCallSendMessages()) {
+
+             const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](const REAL x){ return x > 0.0; });
+
+             if(no_active_messages > 0) { 
+               const REAL omega_sum = std::accumulate(omegaIt, omegaIt+no_messages, 0.0);
+               // build array of messages that are actually called
+               if(no_active_messages <= active_messages_array_size) {
+                 auto active_msgs = get_active_messages_array(msg_begin, msg_end, omegaIt);
+                 l.SendMessages(factor, active_msgs.begin(), active_msgs.begin()+no_active_messages, omega_sum);
+               } else {
+                 auto active_msgs = get_active_messages_vector(msg_begin, msg_end, omegaIt, no_active_messages);
+                 l.SendMessages(factor, active_msgs.begin(), active_msgs.begin()+no_active_messages, omega_sum);
+               }
+             } 
+             omegaIt += no_messages;
+
+           } else {
+             for(auto msg_it = msg_begin; msg_it != msg_end; ++msg_it, ++omegaIt) {
+               if(*omegaIt != 0.0) {
+                 l.SendMessage(&factor, *(*msg_it), *omegaIt); 
+               }
+             }
+           }
+         }
+     });
+     assert(omegaIt - omega_begin == no_send_messages());
+   }
+
+#ifdef LP_MP_PARALLEL
+   template<typename ITERATOR>
+   void CallSendMessagesSynchronized(FactorType& factor, ITERATOR omegaIt) 
+   {
      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
          // check whether the message supports batch updates. If so, call batch update.
          // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
-         static_if<FactorContainerType::CanCallSendMessages(l)>([&](auto f) {
+         if(l.SendsMessage()) {
+         static_if<l.CanCallSendMessages()>([&](auto f) {
              constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
              const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
              if(omega_sum > 0.0) { 
-               f(l).SendMessages(factor, std::get<n>(msg_), omegaIt);
+               f(l).SendMessagesSynchronized(factor, std::get<n>(msg_), omegaIt);
              }
              omegaIt += std::get<n>(msg_).size();
-             }).else_([&](auto) {
-               static_if<FactorContainerType::CanCallSendMessage(decltype(l){})>([&](auto f) {
-                   constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-                   for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
-                     if(*omegaIt != 0.0) {
-                       f(l).SendMessage(&factor, *(*it), *omegaIt); 
-                     }
-                   }
-               });
-             });
+          }).else_([&](auto) {
+                constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+                for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
+                  if(*omegaIt != 0.0) {
+                    l.SendMessageSynchronized(&factor, *(*it), *omegaIt); 
+                  }
+                }
+          });
+         }
      });
    }
+#endif
 
    template<typename WEIGHT_VEC>
    void SendMessages(const WEIGHT_VEC& omega) 
@@ -1722,6 +2004,104 @@ public:
       }
    } 
 
+   static constexpr INDEX active_messages_array_size = 16;
+
+   template<typename MSG_ITERATOR, typename ACTIVE_ITERATOR>
+   auto get_active_messages_array(MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, ACTIVE_ITERATOR active_begin)
+   {
+     using message_ptr_type = decltype( *msgs_begin );
+     std::array<message_ptr_type,active_messages_array_size> msgs;
+     for(auto [no_msgs,msg_it]=std::pair(0,msgs_begin); msg_it!=msgs_end; ++msg_it, ++active_begin) {
+       if(*active_begin > 0.0) {
+         msgs[no_msgs++] = *msg_it;
+       }
+     }
+     return msgs; 
+   }
+
+   template<typename MSG_ITERATOR, typename ACTIVE_ITERATOR>
+   auto get_active_messages_vector(MSG_ITERATOR msgs_begin, MSG_ITERATOR msgs_end, ACTIVE_ITERATOR active_begin, const INDEX no_active_messages)
+   {
+     using message_ptr_type = decltype( *msgs_begin );
+     std::vector<message_ptr_type> msgs(no_active_messages);
+     INDEX no_msgs = 0;
+     for(auto msg_it=msgs_begin; msg_it!=msgs_end; ++msg_it, ++active_begin) {
+       if(*active_begin > 0.0) {
+         msgs[no_msgs++] = *msg_it;
+       }
+     }
+     assert(no_active_messages == no_msgs); 
+     return msgs; 
+   }
+
+   // choose order of messages to be sent and immediately reparametrize after each send message call and increase the remaining weights
+   template<typename WEIGHT_VEC>
+   void send_messages_residual(const WEIGHT_VEC& omega)
+   {
+     auto omegaIt = omega.begin();
+     REAL residual_omega = 0.0;
+     meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+         // check whether the message supports batch updates. If so, call batch update.
+         // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
+         constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+         using message_ptr_type = decltype( *(std::get<n>(msg_).begin()) );
+         if constexpr(l.SendsMessage()) {
+           const INDEX no_messages = std::get<n>(msg_).size();
+           if(no_messages > 0) {
+
+             if constexpr(l.CanCallSendMessages()) {
+               const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](REAL x){ return x > 0.0; });
+               const REAL omega_sum = std::accumulate(omegaIt, omegaIt+no_messages, 0.0);
+               residual_omega += omega_sum;
+               if(no_active_messages > 0) { 
+                 // build array of messages that are actually called
+                 if(no_active_messages <= active_messages_array_size) {
+                   auto msgs = get_active_messages_array(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt);
+                   l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, residual_omega);
+                 } else {
+                   auto msgs = get_active_messages_vector(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt, no_active_messages);
+                   l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, residual_omega);
+                 }
+               } 
+               omegaIt += no_messages;
+  
+             } else {
+  
+               for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
+                 if(*omegaIt != 0.0) {
+                   residual_omega += *omegaIt;
+                   l.SendMessage(&factor_, *(*it), residual_omega); 
+                 }
+               }
+             }
+           }
+
+         }
+         assert(0.0 <= residual_omega && residual_omega <= 1.0 + eps);
+
+       });
+   }
+
+#ifdef LP_MP_PARALLEL
+   template<typename WEIGHT_VEC>
+   void SendMessagesSynchronized(const WEIGHT_VEC& omega) 
+   {
+      // do zrobienia: condition no_send_messages_calls also on omega. whenever omega is zero, we will not send messages
+      const INDEX no_calls = no_send_messages_calls();
+
+      if(no_calls == 1) {
+        CallSendMessagesSynchronized(factor_, omega.begin());
+      } else if( no_calls > 1 ) {
+         // make a copy of the current reparametrization. The new messages are computed on it. Messages are updated implicitly and hence possibly the new reparametrization is automatically adjusted, which would interfere with message updates
+         FactorType tmp_factor(factor_);
+
+         CallSendMessagesSynchronized(tmp_factor, omega.begin());
+      } else {
+        assert(omega.size() == 0.0);
+      }
+   } 
+#endif
+
    template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
    MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX) const 
    {
@@ -1729,6 +2109,7 @@ public:
       throw std::runtime_error("index out of bound");
       return nullptr;
    }
+
    template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
    MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX msgNo) const 
    {
@@ -1743,7 +2124,7 @@ public:
    }
    MessageTypeAdapter* GetMessage(const INDEX n) const final
    {
-      assert(n<GetNoMessages());
+      assert(n<no_messages());
       return GetMessage(MESSAGE_DISPATCHER_TYPELIST{}, n);
    }
 
@@ -1777,62 +2158,26 @@ public:
       return f;
    }
 
-   struct can_receive_message {
-      template<typename MESSAGE_DISPATCHER_TYPE>
-         using invoke = typename std::is_same<std::integral_constant<bool,MESSAGE_DISPATCHER_TYPE::CanCallReceiveMessage()>, std::integral_constant<bool,true> >::type;
-   };
-   constexpr static bool CanReceiveMessages() 
-   {
-      return meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_receive_message>{};
-   }
-
-   bool CallsReceiveMessages() const
+   bool ReceivesMessage() const
    {
       bool can_receive = false;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&can_receive](auto l) {
          constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-         if(l.CanCallReceiveMessage() && std::get<n>(msg_).size() > 0) {
+         if(l.ReceivesMessage() && std::get<n>(msg_).size() > 0) {
             can_receive = true;
          }
       });
       return can_receive;
    }
 
-
-   template<typename MESSAGE_DISPATCHER_TYPE>
-   constexpr static bool CanCallSendMessages(MESSAGE_DISPATCHER_TYPE) 
-   {
-      return MESSAGE_DISPATCHER_TYPE::CanCallSendMessages();
-   }
-   template<typename MESSAGE_DISPATCHER_TYPE>
-   constexpr static bool CanCallSendMessage(MESSAGE_DISPATCHER_TYPE) 
-   {
-      return MESSAGE_DISPATCHER_TYPE::CanCallSendMessage();
-   }
-
-   struct can_send_message {
-      template<typename MESSAGE_DISPATCHER_TYPE>
-         using invoke = typename std::is_same<std::integral_constant<bool,CanCallSendMessage(MESSAGE_DISPATCHER_TYPE{})>, std::integral_constant<bool,true> >::type;
-   };
-   struct can_send_messages {
-      template<typename MESSAGE_DISPATCHER_TYPE>
-         using invoke = typename std::is_same<std::integral_constant<bool,CanCallSendMessages(MESSAGE_DISPATCHER_TYPE{})>, std::integral_constant<bool,true> >::type;
-   };
-   constexpr static bool CanSendMessages() 
-   {
-      return meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_send_message>{} || meta::any_of<MESSAGE_DISPATCHER_TYPELIST, can_send_messages>{};
-   }
-
    // check whether actually send messages is called. Can be false, even if CanSendMessages is true, e.g. when no message is present
-   bool CallsSendMessages() const
+   bool SendsMessage() const
    {
       bool calls_send = false;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            if(FactorContainerType::CanCallSendMessage(l) || FactorContainerType::CanCallSendMessages(l)) {
-               if(std::get<n>(msg_).size()>0) {
-                  calls_send = true;
-               }
+            if(l.SendsMessage() && std::get<n>(msg_).size() > 0) {
+               calls_send = true;
             }
       });
       return calls_send;
@@ -1840,33 +2185,35 @@ public:
 
 
    template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   bool CanSendMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX) const 
+   bool SendsMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX) const 
    {
       throw std::runtime_error("message index out of bound");
    }
    template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   bool CanSendMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX cur_msg_idx) const // to get the current MESSAGE_TYPE
+   bool SendsMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX cur_msg_idx) const // to get the current MESSAGE_TYPE
    {
       constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
       const INDEX no_msgs = std::get<n>(msg_).size();
       if(cur_msg_idx < no_msgs) {
-         if( CanCallSendMessage(MESSAGE_DISPATCHER_TYPE{}) || CanCallSendMessages(MESSAGE_DISPATCHER_TYPE{}) ) {
+         MESSAGE_DISPATCHER_TYPE l;
+         assert(std::get<n>(msg_).size() > 0);
+         if( l.SendsMessage() ) {
             return true;
          } else {
            return false;
          }
       } else {
-         return CanSendMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, cur_msg_idx - no_msgs);
+         return SendsMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, cur_msg_idx - no_msgs);
       }
    }
 
-   bool CanSendMessage(const INDEX msg_idx) const final
+   bool SendsMessage(const INDEX msg_idx) const final
    {
-      return CanSendMessage(MESSAGE_DISPATCHER_TYPELIST{}, msg_idx);
+      return SendsMessage(MESSAGE_DISPATCHER_TYPELIST{}, msg_idx);
    }
 
    // check whether actually receive restricted messages is called. Can be false, even if CanReceiveRestrictedMessages is true, e.g. when no message is present
-   bool CallsReceiveRestrictedMessages() const
+   bool ReceivesRestrictedMessage() const
    {
       bool calls_receive_restricted = false;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
@@ -1884,13 +2231,13 @@ public:
       if(CanComputePrimal()) {
          return true;
       }
-      if(CanReceiveMessages() && CallsReceiveMessages()) {
+      if(ReceivesMessage()) {
          return true;
       }
-      if(CanSendMessages() && CallsSendMessages()) {
+      if(SendsMessage()) {
          return true;
       }
-      if(CanReceiveRestrictedMessages() && CallsReceiveRestrictedMessages()) {
+      if(ReceivesRestrictedMessage()) {
          return true;
       }
       return false;
@@ -1903,60 +2250,94 @@ public:
       //for(INDEX i=0; i<PrimalSize(); ++i) {
       //   primal[i + GetPrimalOffset()] = label[i];
       //}
-      ComputePrimalThroughMessages();
+      propagate_primal_through_messages();
    }
 
-      // do zrobienia: possibly do it with std::result_of
-   //auto begin() -> decltype(std::declval<RepamStorageType>().begin()) { return RepamStorageType::begin(); }
-   //auto end()   -> decltype(std::declval<RepamStorageType>().end()) { return RepamStorageType::end(); }
-   //auto cbegin() -> decltype(std::declval<RepamStorageType>().cbegin()) const { return RepamStorageType::cbegin(); } // do zrobienia: somehow discards const qualifiers
-   //auto cend()   -> decltype(std::declval<RepamStorageType>().cend()) const { return RepamStorageType::cend(); } 
-
-   /*
-   const INDEX size() const { return factor_.size(); }
-   // get reparametrized cost
-   const REAL operator[](const INDEX i) const { return RepamStorageType::operator[](i); }
-   //auto operator[](const INDEX i) -> decltype(std::declval<RepamStorageType>().operator[](0)) { return RepamStorageType::operator[](i); }
-   REAL& operator[](const INDEX i) { return RepamStorageType::operator[](i); }
-   */
-
-   // do zrobienia: remove
-   std::vector<REAL> GetReparametrizedPotential() const final
+   struct apply_subgradient {
+      apply_subgradient(double* _w, REAL _sign) : w(_w), sign(_sign) { assert(sign == 1.0 || sign == -1.0); }
+      void operator[](const INDEX i) { w[i] = sign; }
+      private:
+      REAL* const w;
+      const REAL sign;
+   };
+   constexpr static bool can_apply()
    {
-      assert(false);
-      std::vector<REAL> repam(size());
-      //for(INDEX i=0; i<repam.size(); ++i) {
-      //   repam[i] = RepamStorageType::operator[](i);
-      //}
-      return repam;
+      return FunctionExistence::has_apply<FactorType, void, apply_subgradient>(); 
+   }
+   virtual INDEX subgradient(double* w, const REAL sign) final
+   {
+      assert(sign == -1.0 || sign == 1.0);
+      if constexpr(can_apply()) {
+        apply_subgradient a(w,sign);
+        factor_.apply(a);
+      } else {
+        assert(false);
+      }
+      return 0;
    }
 
-   // do zrobienia: remove
-   INDEX size() const final { 
-      return factor_.size();
-      //return RepamStorageType::size(); 
+   virtual REAL dot_product(double* w) final
+   {
+      class apply_dot_product {
+      public:
+         apply_dot_product(double* _w) : w(_w) {}
+         void operator[](const INDEX i) { dp += w[i]; }
+         REAL dot_product() const { return dp; }
+      private:
+         REAL* const w;
+         REAL dp = 0;
+      };
+
+      apply_dot_product d(w);
+      static_if<can_apply()>([this,w,&d](auto f) {
+            f(factor_).apply(d);
+      }).else_([](auto f) {
+         assert(false);
+      });
+      return d.dot_product(); 
    }
 
-   // do zrobienia: remove
-   constexpr static bool CanComputePrimalSize()
+   virtual void serialize_dual(load_archive& ar) final
+   { factor_.serialize_dual(ar); }
+   virtual void serialize_primal(load_archive& ar) final
+   { factor_.serialize_primal(ar); } 
+   virtual void serialize_dual(save_archive& ar) final
+   { factor_.serialize_dual(ar); }
+   virtual void serialize_primal(save_archive& ar) final
+   { factor_.serialize_primal(ar); } 
+   virtual void serialize_dual(allocate_archive& ar) final
+   { factor_.serialize_dual(ar); }
+   virtual void serialize_primal(allocate_archive& ar) final
+   { factor_.serialize_primal(ar); } 
+   virtual void serialize_dual(addition_archive& ar) final
+   { factor_.serialize_dual(ar); }
+
+   // returns size in bytes
+   virtual INDEX dual_size() final
    {
-      return FunctionExistence::HasPrimalSize<FactorType,INDEX>();
+      return dual_size_in_bytes()/sizeof(REAL);
    }
-   template<bool ENABLE = CanComputePrimalSize()>
-   typename std::enable_if<!ENABLE,INDEX>::type
-   PrimalSizeImpl() const
+
+   virtual INDEX dual_size_in_bytes() final
    {
-      return this->size();
-      //return sizeof(typename decltype(factor_)::primal);
+      allocate_archive ar;
+      factor_.serialize_dual(ar);
+      assert(ar.size() % sizeof(REAL) == 0);
+      return ar.size();
    }
-   template<bool ENABLE = CanComputePrimalSize()>
-   typename std::enable_if<ENABLE,INDEX>::type
-   PrimalSizeImpl() const
+
+   virtual void divide(const REAL val) final
    {
-      return factor_.PrimalSize();
+      arithmetic_archive<operation::division> ar(val);
+      factor_.serialize_dual(ar);
    }
-   // return size for primal storage
-   INDEX PrimalSize() const final { return PrimalSizeImpl(); }
+
+   virtual INDEX primal_size_in_bytes() final
+   {
+      allocate_archive ar;
+      factor_.serialize_primal(ar);
+      return ar.size(); 
+   }
 
    REAL LowerBound() const final {
       //return factor_.LowerBound(*this); 
@@ -1965,12 +2346,6 @@ public:
 
    FactorType* GetFactor() const { return &factor_; }
    FactorType* GetFactor() { return &factor_; }
-   // do zrobienia: delete below four functions
-   void SetPrimalOffset(const INDEX n) final { primalOffset_ = n; } // this function is used in AddFactor in LP class
-   INDEX GetPrimalOffset() const final { return primalOffset_; }
-
-  void SetAuxOffset(const INDEX n) final { auxOffset_ = n; }
-  INDEX GetAuxOffset() const final { return auxOffset_; }
 
   template<typename MESSAGE_TYPE>
   constexpr static 
@@ -2000,6 +2375,7 @@ protected:
    FactorType factor_; // the factor operation
 public:
    INDEX primal_access_ = 0; // counts when primal was accessed last, do zrobienia: make setter and getter for clean interface or make MessageContainer a friend
+
    virtual void init_primal() final
    {
       factor_.init_primal();
@@ -2012,16 +2388,23 @@ public:
          primal_access_ = timestamp;
       } 
    }
-protected:
-   // do zrobienia: those two variables are not needed anymore
-   INDEX primalOffset_;
-   INDEX auxOffset_; // do zrobienia: remove again: artifact from LP interface
 
+   INDEX runtime_estimate()
+   {
+     INDEX runtime = 0;
+     assert(false);
+     // go over all messages to be received and sum the dual size of connected factors
+
+     // get number of messages to be sent and multiply by dual size of current factor (discount for SendMessages calls?)
+
+     return runtime;
+   }
+protected:
    // pool memory allocator specific for this factor container
    // note: the below construction is not perfect when more than one solver is run simultaneously: The same allocator is used, yet the optimization problems are different + not thread safe.
    // -> investigate thread_local inline static! inline static however is only supported in C++17
    struct Allocator { // we enclose static allocator in nested class as only there (since C++11) we can access sizeof(FactorContainerType).
-      using type = MemoryPool<FactorContainerType,4096*sizeof(FactorContainerType)>; 
+      using type = MemoryPool<FactorContainerType,4096*(sizeof(FactorContainerType)+sizeof(void*))>; 
       static type& get() {
          static type allocator;
          return allocator;
@@ -2096,65 +2479,182 @@ public:
       return factor_.EvaluatePrimal();
    }
 
-   constexpr static bool CanCreateConstraints()
-   {
-      return FunctionExistence::HasCreateConstraints<FactorType,void,LpInterfaceAdapter*>();
-   }
-
-   constexpr static bool CanReduceLp()
-   {
-      return FunctionExistence::HasReduceLp<FactorType,void,LpInterfaceAdapter*, FactorContainerType&>();
-   }
-   template<bool ENABLE = CanReduceLp()>
-   typename std::enable_if<!ENABLE>::type
-   ReduceLpImpl(LpInterfaceAdapter* l) const
-   {}  
-   template<bool ENABLE = CanReduceLp()>
-   typename std::enable_if<ENABLE>::type
-   ReduceLpImpl(LpInterfaceAdapter* l) const
-   {
-           factor_.ReduceLp(l, factor_); 
-   }  
-   void ReduceLp(LpInterfaceAdapter* l) const {
-           ReduceLpImpl(l);
-   }
-  
-   constexpr static bool CanCallGetNumberOfAuxVariables()
-   {
-      return FunctionExistence::HasGetNumberOfAuxVariables<FactorType,INDEX>();
-   }
-   template<bool ENABLE = CanCallGetNumberOfAuxVariables()>
-   typename std::enable_if<!ENABLE,INDEX>::type
-   GetNumberOfAuxVariablesImpl() const
-   {
-      return 0;
-   }
-   template<bool ENABLE = CanCallGetNumberOfAuxVariables()>
-   typename std::enable_if<ENABLE,INDEX>::type
-   GetNumberOfAuxVariablesImpl() const
-   {
-      return factor_.GetNumberOfAuxVariables();
-   }
-  
-   INDEX GetNumberOfAuxVariables() const 
-   { 
-    return GetNumberOfAuxVariablesImpl();
-   }
-
-   void CreateConstraints(LpInterfaceAdapter* l) const final
-   {
-      static_if<CanCreateConstraints()>([&](auto f) {
-            f(factor_).CreateConstraints(l);
-      }).else_([&](auto) {
-         throw std::runtime_error("create constraints not implemented by factor");
-      });
-   }
-
-
-   // a recursive mutex is required only for SendMessagesTo{Left|Right}, as multiple messages may be have the same endpoints. Then the corresponding lock is acquired multiple times
 #ifdef LP_MP_PARALLEL
+   // a recursive mutex is required only for SendMessagesTo{Left|Right}, as multiple messages may be have the same endpoints. Then the corresponding lock is acquired multiple times.
+   // if no two messages have the same endpoints, an ordinary mutex is enough.
    std::recursive_mutex mutex_;
 #endif
+
+   // functions for interfacing with external solver interface DD_ILP
+
+   template<typename EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, REAL x)
+   { return s.add_variable(); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const vector<REAL>& v)
+   { return s.add_vector(v); }
+
+   template<typename EXTERNAL_SOLVER, std::size_t N>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const std::array<REAL,N>& v)
+   { return s.add_vector(v); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const std::vector<REAL>& v)
+   { return s.add_vector(v); } 
+
+   template<typename EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const matrix<REAL>& m)
+   { return s.add_matrix(m); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto convert_variables_to_external(EXTERNAL_SOLVER& s, const tensor3<REAL>& t)
+   { return s.add_tensor(t); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto load_external_variables(EXTERNAL_SOLVER& s, REAL x)
+   { return s.load_variable(); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto load_external_variables(EXTERNAL_SOLVER& s, vector<REAL>& x)
+   { return s.load_vector(); }
+
+   template<typename EXTERNAL_SOLVER, INDEX N>
+   auto load_external_variables(EXTERNAL_SOLVER& s, array<REAL,N>& x)
+   { return s.load_vector(); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto load_external_variables(EXTERNAL_SOLVER& s, std::vector<REAL>& x)
+   { return s.load_vector(); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto load_external_variables(EXTERNAL_SOLVER& s, matrix<REAL>& x)
+   { return s.load_matrix(); }
+
+   template<typename EXTERNAL_SOLVER>
+   auto load_external_variables(EXTERNAL_SOLVER& s, tensor3<REAL>& x)
+   { return s.load_tensor(); }
+
+   template<typename EXTERNAL_SOLVER>
+   void add_objective(EXTERNAL_SOLVER& s, REAL cost)
+   { s.add_variable_objective(cost); }
+
+   template<typename EXTERNAL_SOLVER>
+   void add_objective(EXTERNAL_SOLVER& s, const vector<REAL>& cost)
+   { s.add_vector_objective(cost); }
+
+   template<typename EXTERNAL_SOLVER, std::size_t N>
+   auto add_objective(EXTERNAL_SOLVER& s, array<REAL,N>& cost)
+   { return s.add_vector_objective(cost); } 
+
+   template<typename EXTERNAL_SOLVER>
+   void add_objective(EXTERNAL_SOLVER& s, const std::vector<REAL>& cost)
+   { s.add_vector_objective(cost); }
+
+   template<typename EXTERNAL_SOLVER>
+   void add_objective(EXTERNAL_SOLVER& s, const matrix<REAL>& cost)
+   { s.add_matrix_objective(cost); }
+
+   template<typename EXTERNAL_SOLVER>
+   void add_objective(EXTERNAL_SOLVER& s, const tensor3<REAL>& cost)
+   { s.add_tensor_objective(cost); }
+
+   // functions for implementing external solver interface
+   template<typename EXTERNAL_SOLVER>
+   void construct_constraints_impl(EXTERNAL_SOLVER& s)
+   {
+      // transform exported variables to external solver variables
+      auto vars = factor_.export_variables();
+      auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->convert_variables_to_external(s, x)...); }, vars);
+
+      // unpack tuple and call construct_constraints function of factor
+      auto construct_constraints_fun = [this,&s](auto... x) { this->factor_.construct_constraints(s, x...); };
+      std::apply(construct_constraints_fun, external_vars);
+   }
+
+
+   template<typename EXTERNAL_SOLVER>
+   void load_costs_impl(EXTERNAL_SOLVER& s)
+   {
+      // load external solver variables corresponding to reparametrization ones and add reparametrization as cost
+      auto vars = factor_.export_variables();
+      std::apply([this,&s](auto... x){ ((this->add_objective(s,x)), ...); },  vars);
+      //auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->leftFactor_->load_external_variables(s, x)...); }, vars);
+      // for all variables,
+   }
+
+
+   template<typename SOLVER>
+   void convert_primal_impl(SOLVER& s)
+   {
+      auto vars = factor_.export_variables();
+      auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->load_external_variables(s, x)...); }, vars); 
+
+      auto convert_primal_fun = [this,&s](auto... x) { this->factor_.convert_primal(s, x...); };
+      std::apply(convert_primal_fun, external_vars);
+
+      //propagate_primal_through_messages();
+   }
+
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final { construct_constraints_impl(s); }
+   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final {  }
+   virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& solver) { convert_primal_impl(solver); }
+
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::problem_export>& s) final { construct_constraints_impl(s); }
+   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::problem_export>& s) final { load_costs_impl(s); } 
+   virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::problem_export>& solver) { convert_primal_impl(solver); }
+
+#ifdef DD_ILP_WITH_GUROBI
+   virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& s) final { construct_constraints_impl(s); }
+   virtual void load_costs(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& s) final { load_costs_impl(s); } 
+   virtual void convert_primal(DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& solver) { convert_primal_impl(solver); }
+#endif
+   /*
+   // sat related functions
+   LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_constraints,construct_constraints)
+
+   constexpr static bool
+   can_construct_constraints()
+   {
+      return has_construct_constraints<FactorType,void,sat_solver&>();
+   }
+
+   void construct_sat_clauses(sat_solver& s) 
+   {
+      static_if<can_construct_sat_clauses()>([&](auto f) {
+            f(factor_).construct_sat_clauses(s);
+            });
+      if(!can_construct_sat_clauses()) {
+         assert(false);
+      }
+   }
+
+
+   template<typename SAT_SOLVER>
+   constexpr static bool can_convert_primal()
+   {
+      return FunctionExistence::has_convert_primal<FactorType,void, SAT_SOLVER, sat_var>(); 
+   }
+   //void convert_primal(Glucose::SimpSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   //void convert_primal(CMSat::SATSolver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   void convert_primal(sat_solver& sat, const sat_var sat_begin) final // this is not nice: the solver should be templatized
+   {
+      static_if<can_convert_primal<decltype(sat)>()>([&](auto f) { 
+            f(factor_).convert_primal(sat, sat_begin);
+            });
+      assert(can_convert_primal<decltype(sat)>);
+   }
+
+   void reduce_sat(const REAL th, sat_var begin, std::vector<sat_literal>& assumptions) final
+   {
+     static_if<can_reduce_sat()>([&](auto f) {
+       f(factor_).reduce_sat(assumptions, th, begin);
+     }).else_([&](auto) {
+       assert(false);  
+     }); 
+   }
+   */
+
 };
 
 } // end namespace LP_MP

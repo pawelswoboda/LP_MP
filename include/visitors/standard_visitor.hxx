@@ -35,12 +35,13 @@ namespace LP_MP {
             // xor those //
             //boundComputationIntervalArg_("","boundComputationInterval","lower bound computation performed every x-th iteration, default = 5",false,5,"positive integer",cmd),
             primalComputationIntervalArg_("","primalComputationInterval","primal computation performed every x-th iteration, default = 5",false,5,&posIntegerConstraint_,cmd),
+            primalComputationStartArg_("","primalComputationStart","iteration when to start primal computation, default = 1",false,1,&posIntegerConstraint_,cmd),
             lowerBoundComputationIntervalArg_("","lowerBoundComputationInterval","lower bound computation performed every x-th iteration, default = 1",false,1, &posIntegerConstraint_,cmd),
             ///////////////
             minDualImprovementArg_("","minDualImprovement","minimum dual improvement between iterations of LP_MP",false,0.0,&posRealConstraint_,cmd),
             minDualImprovementIntervalArg_("","minDualImprovementInterval","the interval between which at least minimum dual improvement must occur",false,10,&posIntegerConstraint_,cmd),
-            standardReparametrizationArg_("","standardReparametrization","mode of reparametrization: {anisotropic,uniform}",false,"anisotropic","{anisotropic|uniform}",cmd),
-            roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution: {anisotropic|uniform}",false,"uniform","{anisotropic|uniform}",cmd),
+            standardReparametrizationArg_("","standardReparametrization","mode of reparametrization",false,"anisotropic","{anisotropic|damped_uniform|uniform}",cmd),
+            roundingReparametrizationArg_("","roundingReparametrization","mode of reparametrization for rounding primal solution:",false,"damped_uniform","{anisotropic|damped_uniform|uniform}",cmd),
             primalTime_(0)
       {}
 
@@ -55,6 +56,7 @@ namespace LP_MP {
             timeout_ = timeoutArg_.getValue();
             //boundComputationInterval_ = boundComputationIntervalArg_.getValue();
             primalComputationInterval_ = primalComputationIntervalArg_.getValue();
+            primalComputationStart_ = primalComputationStartArg_.getValue();
             lowerBoundComputationInterval_ = lowerBoundComputationIntervalArg_.getValue();
 
             standardReparametrization_ = LPReparametrizationModeConvert( standardReparametrizationArg_.getValue() );
@@ -96,8 +98,8 @@ namespace LP_MP {
 
 
          LpControl ret;
-         ret.repam = roundingReparametrization_;
-         ret.computePrimal = true;
+         ret.repam = standardReparametrization_;
+         ret.computePrimal = false;
          ret.computeLowerBound = true;
          return ret;
       }
@@ -112,15 +114,17 @@ namespace LP_MP {
          // first output based on what lp solver did in last iteration
          if(c.computePrimal == false && c.computeLowerBound == false) {
             // output nothing
-         } else {
-            std::cout << "iteration = " << curIter_;
-            if(c.computeLowerBound) {
-               std::cout << ", lower bound = " << lowerBound;
+         } else { 
+            if(verbosity >= 1) { 
+              std::cout << "iteration = " << curIter_;
+              if(c.computeLowerBound) {
+                std::cout << ", lower bound = " << lowerBound;
+              }
+              if(c.computePrimal) {
+                std::cout << ", upper bound = " << primalBound;
+              }
+              std::cout << ", time elapsed = " << timeElapsed/1000 << "." << (timeElapsed%1000)/10 << "s\n";
             }
-            if(c.computePrimal) {
-               std::cout << ", upper bound = " << primalBound;
-            }
-            std::cout << ", time elapsed = " << timeElapsed/1000 << "." << (timeElapsed%1000)/10 << "s\n";
          }
 
          curIter_++;
@@ -134,32 +138,32 @@ namespace LP_MP {
          }
          // check if optimization has to be terminated
          if(remainingIter_ == 0) {
-            std::cout << "One iteration remaining\n";
+           if(verbosity >= 1) { std::cout << "One iteration remaining\n"; }
             ret.end = true;
             return ret;
          } 
          if(primalBound <= lowerBound + eps) {
             assert(primalBound + eps >= lowerBound);
-            std::cout << "Primal cost " << primalBound << " greater equal lower bound " << lowerBound << "\n";
+            if(verbosity >= 1) { std::cout << "Primal cost " << primalBound << " greater equal lower bound " << lowerBound << "\n"; }
             ret.end = true;
             return ret;
          }
          if(timeout_ != std::numeric_limits<REAL>::max() && timeElapsed/1000 >= timeout_) {
-            std::cout << "Timeout reached after " << timeElapsed << " seconds\n";
+            if(verbosity >= 1) { std::cout << "Timeout reached after " << timeElapsed << " seconds\n"; }
             remainingIter_ = std::min(INDEX(1),remainingIter_);
          }
          if(maxMemory_ > 0) {
             const INDEX memoryUsed = memory_used()/(1024*1024);
             if(maxMemory_ < memoryUsed) {
                remainingIter_ = std::min(INDEX(1),remainingIter_);
-               std::cout << "Solver uses " << memoryUsed << " MB memory, aborting optimization\n";
+               if(verbosity >= 1) { std::cout << "Solver uses " << memoryUsed << " MB memory, aborting optimization\n"; }
             }
          }
          if(c.computeLowerBound && curIter_ >= minDualImprovementInterval_ && minDualImprovementArg_.isSet()) {
             assert(lowerBound_.size() >= minDualImprovementInterval_);
             const REAL prevLowerBound = lowerBound_[lowerBound_.size() - 1 - minDualImprovementInterval_];
             if(minDualImprovement_ > 0 && lowerBound - prevLowerBound < minDualImprovement_) {
-               std::cout << "Dual improvement smaller than " << minDualImprovement_ << " after " << minDualImprovementInterval_ << " iterations, terminating optimization\n";
+               if(verbosity >= 1) { std::cout << "Dual improvement smaller than " << minDualImprovement_ << " after " << minDualImprovementInterval_ << " iterations, terminating optimization\n"; }
                remainingIter_ = std::min(INDEX(1),remainingIter_);
             }
          }
@@ -173,18 +177,13 @@ namespace LP_MP {
 
 
          // determine next steps of solver
-         if(curIter_ % primalComputationInterval_ == 0 && curIter_ % lowerBoundComputationInterval_ == 0) {
-            ret.computePrimal = true;
-            ret.computeLowerBound = true;
+         ret.repam = standardReparametrization_;
+         if(curIter_ >= primalComputationStart_ && (curIter_ - primalComputationStart_) % primalComputationInterval_ == 0) {
+            ret.computePrimal = true; 
             ret.repam = roundingReparametrization_;
-         } else if(curIter_ % primalComputationInterval_ == 0) {
-            ret.computePrimal = true;
-            ret.repam = roundingReparametrization_;
-         } else if(curIter_ % lowerBoundComputationInterval_ == 0) {
-            ret.computeLowerBound = true;
-            ret.repam = standardReparametrization_;
-         } else {
-            ret.repam = standardReparametrization_;
+         }
+         if(curIter_ % lowerBoundComputationInterval_ == 0) {
+           ret.computeLowerBound = true;
          }
          return ret;
       }
@@ -192,8 +191,10 @@ namespace LP_MP {
       void end(const REAL lower_bound, const REAL upper_bound)
       {
          auto endTime = std::chrono::steady_clock::now();
-         std::cout << "final lower bound = " << lower_bound << ", upper bound = " << upper_bound << "\n";
-         std::cout << "Optimization took " <<  std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations.\n";
+         if(verbosity >= 1) { 
+           std::cout << "final lower bound = " << lower_bound << ", upper bound = " << upper_bound << "\n";
+           std::cout << "Optimization took " <<  std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime_).count() << " milliseconds and " << curIter_ << " iterations.\n";
+         }
       }
       
       using TimeType = decltype(std::chrono::steady_clock::now());
@@ -210,6 +211,7 @@ namespace LP_MP {
       TCLAP::ValueArg<INDEX> timeoutArg_;
       //TCLAP::ValueArg<INDEX> boundComputationIntervalArg_;
       TCLAP::ValueArg<INDEX> primalComputationIntervalArg_;
+      TCLAP::ValueArg<INDEX> primalComputationStartArg_;
       TCLAP::ValueArg<INDEX> lowerBoundComputationIntervalArg_;
       TCLAP::ValueArg<REAL> minDualImprovementArg_;
       TCLAP::ValueArg<INDEX> minDualImprovementIntervalArg_;
@@ -222,6 +224,7 @@ namespace LP_MP {
       INDEX timeout_;
       //INDEX boundComputationInterval_;
       INDEX primalComputationInterval_;
+      INDEX primalComputationStart_;
       INDEX lowerBoundComputationInterval_;
       REAL minDualImprovement_;
       INDEX minDualImprovementInterval_;
@@ -257,7 +260,7 @@ namespace LP_MP {
          :
             BaseVisitorType(cmd),
             tightenArg_("","tighten","enable tightening",cmd,false),
-            tightenReparametrizationArg_("","tightenReparametrization","reparametrization mode used when tightening. Overrides primal computation reparametrization mode",false,"uniform","(uniform|anisotropic)",cmd),
+            tightenReparametrizationArg_("","tightenReparametrization","reparametrization mode used when tightening. Overrides primal computation reparametrization mode",false,"damped_uniform","(damped_uniform|uniform|anisotropic)",cmd),
             tightenIterationArg_("","tightenIteration","number of iterations after which tightening is performed for the first time, default = never",false,std::numeric_limits<INDEX>::max(),"positive integer", cmd),
             tightenIntervalArg_("","tightenInterval","number of iterations between tightenings",false,std::numeric_limits<INDEX>::max(),"positive integer", cmd),
             tightenConstraintsMaxArg_("","tightenConstraintsMax","maximal number of constraints to be added during tightening",false,20,"positive integer",cmd),
@@ -318,14 +321,14 @@ namespace LP_MP {
 
          if(tighten_) {
             iteration_after_tightening_++;
-            const REAL cur_slope = std::max(lowerBound - prev_lower_bound_,0.0);
+            const REAL cur_slope = std::max(lowerBound - prev_lower_bound_,REAL(0.0));
             if(iteration_after_tightening_ == 2) {
                tighten_slope_ = cur_slope;
             }
             if((this->GetIter() >= tightenIteration_ && 
                      (this->GetIter() >= lastTightenIteration_ + tightenInterval_ || 
                       (tightenSlopeArg_.isSet() && cur_slope < tightenSlopeArg_.getValue()*tighten_slope_)))) {
-               std::cout << "Time to tighten\n";
+               if(verbosity >= 1) { std::cout << "Time to tighten\n"; }
                ret = SetTighten(ret);
                iteration_after_tightening_ = 0;
                tighten_slope_ = -std::numeric_limits<REAL>::infinity();
@@ -335,8 +338,10 @@ namespace LP_MP {
                   assert(this->lowerBound_.size() >= tightenMinDualImprovementInterval_);
                   const REAL prevLowerBound = lowerBound_[lowerBound_.size() - 1 - tightenMinDualImprovementInterval_];
                   if(tightenMinDualImprovement_ > 0 && lowerBound - prevLowerBound < tightenMinDualImprovement_) {
-                     std::cout << "cur lower bound = " << lowerBound << " prev lower bound = " << prevLowerBound << "\n";
-                     std::cout << "Dual improvement smaller than " << tightenMinDualImprovement_ << " after " << tightenMinDualImprovementInterval_ << " iterations, tighten\n";
+                     if(verbosity >= 1) { 
+                       std::cout << "cur lower bound = " << lowerBound << " prev lower bound = " << prevLowerBound << "\n";
+                       std::cout << "Dual improvement smaller than " << tightenMinDualImprovement_ << " after " << tightenMinDualImprovementInterval_ << " iterations, tighten\n";
+                     }
                      ret = SetTighten(ret);
                      iteration_after_tightening_ = 0;
                      tighten_slope_ = -std::numeric_limits<REAL>::infinity();

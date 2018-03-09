@@ -5,7 +5,11 @@
 #include <bitset>
 #include "vector.hxx"
 #include "config.hxx"
+#include "serialization.hxx"
 
+#ifdef WITH_SAT
+#include "sat_solver.hxx"
+#endif
 
 // to do: make _impl functions private
 // make functions static whenever they can be
@@ -19,6 +23,7 @@ struct labeling {
    constexpr static
    typename std::enable_if<LABEL_NO == 0,INDEX>::type label_impl()
    {
+     static_assert(LABEL == 0 || LABEL == 1,"");
       return LABEL;
    }
 
@@ -63,16 +68,40 @@ struct labeling {
    {
       return matches_impl<0, LABELS...>(l); 
    }
+
+   template<INDEX I, INDEX... LABELS_REST>
+   static typename std::enable_if<(I == sizeof...(LABELS))>::type
+   get_labeling_impl(const std::bitset< sizeof...(LABELS)>& l)
+   {
+      return;
+   }
+
+   template<INDEX I, INDEX LABEL, INDEX... LABELS_REST>
+   static typename std::enable_if<(I < sizeof...(LABELS))>::type
+   get_labeling_impl(std::bitset< sizeof...(LABELS)>& l)
+   {
+     l[I] = (LABEL == 0) ? false : true;
+     return get_labeling_impl<I+1, LABELS_REST...>(l);
+   }
+
+   static std::bitset<no_labels()> get_labeling()
+   {
+     std::bitset<no_labels()> l;
+     get_labeling_impl<0, LABELS...>(l);
+     return l;
+   }
 };
 
 template<typename... LABELINGS> // all labels must be instances of labeling
 struct labelings
 {
+   /* destructor makes labelings a non-constant type
    ~labelings()
    {
       static_assert(sizeof...(LABELINGS) > 0, "at least one labeling must be present");
       // to do: check whether each label occurs at most once and each labeling has same number of labels.
    }
+   */
 
    template<INDEX LABELING_NO, INDEX LABEL_NO, typename LABELING, typename... LABELINGS_REST>
    constexpr static typename std::enable_if<LABELING_NO == 0,INDEX>::type 
@@ -91,6 +120,9 @@ struct labelings
    template<INDEX LABELING_NO, INDEX LABEL_NO>
    constexpr static INDEX label()
    {
+      static_assert(sizeof...(LABELINGS) > 0, "at least one labeling must be present");
+      // to do: check whether each label occurs at most once and each labeling has same number of labels.
+
       static_assert(LABELING_NO < sizeof...(LABELINGS), "labeling number must be smaller than number of labelings");
       return get_label<LABELING_NO,LABEL_NO,LABELINGS...>();
    }
@@ -133,6 +165,30 @@ struct labelings
       return matching_labeling_impl<0, LABELINGS...>(l); 
    }
 
+   template<INDEX I, typename... LABELINGS_REST>
+   static typename std::enable_if<(I >= sizeof...(LABELINGS)), std::bitset<no_labels()>>::type
+   labeling_impl(const INDEX no)
+   {
+     assert(false);
+      return std::bitset<no_labels()>();
+   }
+
+   template<INDEX I, typename LABELING, typename... LABELINGS_REST>
+   static typename std::enable_if<(I < sizeof...(LABELINGS)), std::bitset<no_labels()>>::type
+   labeling_impl(const INDEX no)
+   {
+     if(I == no) {
+       return LABELING::get_labeling();
+     } else {
+       return labeling_impl<I+1,LABELINGS_REST...>(no);
+     }
+   }
+
+   static std::bitset<no_labels()> labeling(const INDEX no)
+   {
+     return labeling_impl<0, LABELINGS...>(no);
+   }
+
 };
 
 template<>
@@ -170,9 +226,7 @@ public:
       std::fill(this->begin(), this->end(), 0.0);
    }
    ~labeling_factor()
-   {
-      static_assert(IMPLICIT_ORIGIN, "implicit zero label obligatory yet");
-   }
+   {}
 
    constexpr static bool has_implicit_origin() { return IMPLICIT_ORIGIN; } // means zero label has cost 0 and is not recorded.
 
@@ -186,10 +240,37 @@ public:
 
    REAL LowerBound() const
    {
-      if(IMPLICIT_ORIGIN) {
-         return std::min(0.0, *std::min_element(this->begin(), this->end()));
+
+      /*
+      static_assert(std::is_same<REAL, double>::value, "");
+         // for this to work, array must be aligned
+      REAL min;
+      auto it = this->begin();
+      // first compute minimum entry with SIMD
+      if(this->size() >= 4) {
+         simdpp::float64<4> min_vec = simdpp::load(it);
+         for(it+=4; it+4<this->end(); it+=4) {
+            simdpp::float64<4> tmp = simdpp::load( it );
+            min_vec = simdpp::min(min_vec, tmp);
+         }
+
+         min = simdpp::reduce_min(min_vec);
       } else {
-         return *std::min_element(this->begin(), this->end());
+         min = *it;
+         ++it;
+      }
+      for(; it<this->end(); ++it) {
+         min = std::min(min, *it);
+      } 
+      */
+
+      assert(this->min() == *std::min_element(this->begin(), this->end()));
+      if(has_implicit_origin()) {
+         return std::min(0.0, this->min());
+         //return std::min(0.0, *std::min_element(this->begin(), this->end()));
+      } else {
+         return this->min();
+         //return *std::min_element(this->begin(), this->end());
       }
    }
 
@@ -206,12 +287,56 @@ public:
       return std::numeric_limits<REAL>::infinity();
    }
 
+   // return two possible variable states
+   // branch on current primal vs. not current primal
+   void branch_left()
+   {
+      // set cost of label associated not with primal to infinity, i.e. current label should always be taken
+      const INDEX labeling_no = LABELINGS::matching_labeling(primal_);
+      assert(labeling_no < this->size());
+      for(INDEX i=0; i<this->size(); ++i) {
+         (*this)[i] = std::numeric_limits<REAL>::infinity(); 
+      }
+      // also the zero labeling must be forbidden. How to do? IMPLICIT_ORIGIN must be dropped for this.
+      assert(false);
+      assert(!has_implicit_origin());
+   }
+
+   void branch_right()
+   {
+      // set cost of primal label to infinity
+      assert(EvaluatePrimal() < std::numeric_limits<REAL>::infinity());
+      const INDEX labeling_no = LABELINGS::matching_labeling(primal_);
+      assert(labeling_no < this->size());
+      (*this)[labeling_no] = std::numeric_limits<REAL>::infinity();
+      assert(LowerBound() < std::numeric_limits<REAL>::infinity());
+   }
+
    auto& primal() { return primal_; }
    const auto& primal() const { return primal_; }
 
    void init_primal() {}
-   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( *static_cast<array<REAL,size()>*>(this) ); }
+   template<typename ARCHIVE> void serialize_dual(ARCHIVE& ar) { ar( binary_data<REAL>(&(*this)[0], size()) ); }//*static_cast<array<REAL,size()>*>(this) ); }
    template<typename ARCHIVE> void serialize_primal(ARCHIVE& ar) { ar( primal_ ); }
+
+   auto export_variables() { return std::tie( *static_cast<array<REAL, LABELINGS::no_labelings()>*>(this) ); }
+
+   template<typename EXTERNAL_SOLVER, typename VECTOR>
+   void construct_constraints(EXTERNAL_SOLVER& s, VECTOR vars) const
+   {
+      if(has_implicit_origin()) {
+	      s.add_at_most_one_constraint(vars.begin(), vars.end());
+      } else {
+	      s.add_simplex_constraint(vars.begin(), vars.end());
+      }
+   }
+
+   template<typename EXTERNAL_SOLVER, typename VECTOR>
+   void convert_primal(EXTERNAL_SOLVER& s, VECTOR vars)
+   {
+      primal_.reset();
+      primal_ = s.first_active(vars.begin(), vars.end());
+   }
 
 private:
    std::bitset<primal_size()> primal_;
@@ -352,14 +477,13 @@ public:
    }
 
    template<typename RIGHT_FACTOR, typename MSG>
-   void ReceiveMessageFromRight(const RIGHT_FACTOR& r, MSG& msg)
+   void send_message_to_left(const RIGHT_FACTOR& r, MSG& msg, const REAL omega)
    {
       // msg has dimension equal to number of left labelings;
       // go over all right labelings. Then find left labeling corresponding to it, and compute minimum
-      msg_val_type msg_val; // additional last entry is minimum over unmatched right labelings
+      msg_val_type msg_val;
       compute_msg(msg_val, r);
-      //assert(false);
-      msg -= msg_val;
+      msg -= omega*msg_val;
    }
 
    template<typename LEFT_FACTOR, typename MSG>
@@ -375,7 +499,7 @@ public:
    }
 
    template<typename LEFT_FACTOR, typename MSG>
-   void SendMessageToRight(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
+   void send_message_to_right(const LEFT_FACTOR& l, MSG& msg, const REAL omega)
    {
       for(INDEX i=0; i<l.size(); ++i) { assert(!std::isnan(l[i])); }
       msg -= omega*l;
@@ -415,6 +539,76 @@ public:
    {
       // for each right labeling, print left one that is matched (for debugging purposes)
       print_matching_impl<0>(RIGHT_LABELINGS{});
+   }
+
+   template<INDEX LEFT_LABELING_NO, typename... RIGHT_LABELINGS_REST>
+   constexpr static std::size_t no_corresponding_labelings_impl(labelings<RIGHT_LABELINGS_REST...>)
+   {
+      return 0;
+   }
+   template<INDEX LEFT_LABELING_NO, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
+   constexpr static std::size_t no_corresponding_labelings_impl(labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>)
+   {
+      if(matching_left_labeling<RIGHT_LABELING>() == LEFT_LABELING_NO) {
+         return 1 + no_corresponding_labelings_impl<LEFT_LABELING_NO>(labelings<RIGHT_LABELINGS_REST...>{});
+      } else {
+         return no_corresponding_labelings_impl<LEFT_LABELING_NO>(labelings<RIGHT_LABELINGS_REST...>{});
+      }
+   }
+   template<INDEX LEFT_LABELING_NO>
+   constexpr static std::size_t no_corresponding_labelings()
+   {
+      return no_corresponding_labelings_impl<LEFT_LABELING_NO>(RIGHT_LABELINGS{}); 
+   }
+
+
+   template<INDEX LEFT_LABELING_NO, INDEX RIGHT_LABELING_IDX, typename ARRAY_IT, typename... RIGHT_LABELINGS_REST>
+   void corresponding_labelings_impl(ARRAY_IT idx, labelings<RIGHT_LABELINGS_REST...>) const
+   {
+      static_assert(RIGHT_LABELING_IDX == RIGHT_LABELINGS::no_labelings(), "");
+      return;
+   }
+   template<INDEX LEFT_LABELING_NO, INDEX RIGHT_LABELING_IDX, typename ARRAY_IT, typename RIGHT_LABELING, typename... RIGHT_LABELINGS_REST>
+   void corresponding_labelings_impl(ARRAY_IT it, labelings<RIGHT_LABELING, RIGHT_LABELINGS_REST...>) const
+   {
+      std::size_t left_label_number = matching_left_labeling<RIGHT_LABELING>(); // note: we should be able to qualify with constexpr!
+      if(left_label_number == LEFT_LABELING_NO) {
+         *it = RIGHT_LABELING_IDX;
+         corresponding_labelings_impl<LEFT_LABELING_NO, RIGHT_LABELING_IDX+1>(it+1, labelings<RIGHT_LABELINGS_REST...>{});
+      } else {
+         corresponding_labelings_impl<LEFT_LABELING_NO, RIGHT_LABELING_IDX+1>(it, labelings<RIGHT_LABELINGS_REST...>{});
+      } 
+   }
+   template<INDEX LEFT_LABELING_NO>
+   std::array< std::size_t, no_corresponding_labelings<LEFT_LABELING_NO>() > corresponding_labelings() const
+   {
+      std::array< std::size_t, no_corresponding_labelings<LEFT_LABELING_NO>() > idx;
+      corresponding_labelings_impl<LEFT_LABELING_NO, 0>(idx.begin(), RIGHT_LABELINGS{});
+      return idx;
+   }
+
+
+   template<INDEX LEFT_LABELING_NO, typename EXTERNAL_SOLVER, typename VECTOR>
+   typename std::enable_if<(LEFT_LABELING_NO >= LEFT_LABELINGS::no_labelings())>::type
+   construct_constraints_impl(EXTERNAL_SOLVER& s, VECTOR left_vars, VECTOR right_vars) const
+   {}
+   template<INDEX LEFT_LABELING_NO, typename EXTERNAL_SOLVER, typename VECTOR>
+   typename std::enable_if<(LEFT_LABELING_NO < LEFT_LABELINGS::no_labelings())>::type
+   construct_constraints_impl(EXTERNAL_SOLVER& s, VECTOR left_vars, VECTOR right_vars) const
+   {
+      auto right_idx = corresponding_labelings<LEFT_LABELING_NO>();
+      std::array<typename EXTERNAL_SOLVER::variable, no_corresponding_labelings<LEFT_LABELING_NO>()> idx;
+      for(std::size_t i=0; i<idx.size(); ++i) {
+         idx[i] += right_vars[right_idx[i]];
+      }
+      auto one_active = s.add_at_most_one_constraint(idx.begin(), idx.end());
+      s.make_equal(left_vars[LEFT_LABELING_NO], one_active);
+      construct_constraints_impl<LEFT_LABELING_NO+1>(s, left_vars, right_vars);
+   }
+   template<typename EXTERNAL_SOLVER, typename LEFT_FACTOR, typename RIGHT_FACTOR, typename VECTOR>
+   void construct_constraints(EXTERNAL_SOLVER& s, const LEFT_FACTOR& l, VECTOR left_vars, const RIGHT_FACTOR& r, VECTOR right_vars) const
+   {
+      construct_constraints_impl<0>(s, left_vars, right_vars);
    }
 
 private:
