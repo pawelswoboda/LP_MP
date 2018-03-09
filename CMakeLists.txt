@@ -39,75 +39,8 @@ option(BUILD_PYTHON OFF)
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/meta/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/Catch/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/cpp_sort/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/opengm/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/PEGTL")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/graph/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/cereal/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/tclap/include")
 #include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling-ala")
-
-# TODO this seems to be a pretty old version, if the license permits it make a new upload ?! however, this seems to be compatible with the one that was downloaded before
-include(ExternalProject)
-ExternalProject_ADD(
-   lingeling
-   URL "http://fmv.jku.at/lingeling/lingeling-bal-2293bef-151109.tar.gz"
-   BUILD_IN_SOURCE 1
-   CONFIGURE_COMMAND "./configure.sh"
-   BUILD_COMMAND "make"
-   INSTALL_COMMAND ""
-   )
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/lingeling-prefix/src/lingeling") 
-link_directories("${CMAKE_CURRENT_BINARY_DIR}/lingeling-prefix/src/lingeling")
-
-#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/CryptoMiniSat_Project/include")
-#link_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Build/CryptoMiniSat_Project/lib")
-
-#add_subdirectory("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project")
-#set(LEMON_INCLUDE_DIRS
-#   ${LEMON_SOURCE_ROOT_DIR}
-#   ${CMAKE_BINARY_DIR}/deps/lemon
-#   )
-#include_directories(${LEMON_INCLUDE_DIRS})
-#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/LEMON_Project/lemon")
-
-#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/Hana_Project/include")
-#include_directories("${CMAKE_CURRENT_BINARY_DIR}/Dependencies/Source/CS2_CPP_Project")
-
-# manually downloaded repositories of Kolmogorov's code. How to automate?
-#add_subdirectory(lib/MinCost)
-
-#-----------
-# pybindings
-#-----------
-include_directories( "${CMAKE_CURRENT_SOURCE_DIR}/external/pybind11/include")
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/external/pybind11")
-
-
-# HDF5 for reading OpenGM and Andres models
-# set (HDF5_USE_STATIC_LIBRARIES ON)
-if(BUILD_MULTICUT OR BUILD_MULTICUT_EVALUATION OR BUILD_GRAPHICAL_MODEL)
-   find_package(HDF5 1.8.15 REQUIRED)
-   include_directories (${HDF5_INCLUDE_DIR})
-   add_definitions(${HDF5_DEFINITIONS})
-   message(STATUS ${HDF5_LIBRARIES})
-   message(STATUS ${HDF5_INCLUDE_DIR})
-endif()
-
-# GUROBI
-if(WITH_GUROBI)
-   find_package(Gurobi REQUIRED)
-   add_definitions(-DWITH_GUROBI)
-endif(WITH_GUROBI)
-
-# CPLEX
-if(WITH_CPLEX)
-   find_package(Cplex REQUIRED)
-   add_definitions(-DWITH_CPLEX)
-endif(WITH_CPLEX)
-
-if(WITH_SAT_BASED_ROUNDING)
-   add_definitions(-DWITH_SAT)
-endif()
 
 # Parallelisation support
 if(PARALLEL_OPTIMIZATION)
