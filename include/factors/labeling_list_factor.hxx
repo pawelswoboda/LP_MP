@@ -523,6 +523,30 @@ public:
       compute_right_from_left_primal_impl<0, INDICES...>(l.primal(), r.primal()); 
    } 
 
+   template<INDEX LEFT_INDEX, INDEX... RIGHT_INDICES_REST>
+   typename std::enable_if<(LEFT_INDEX >= LEFT_LABELINGS::no_labels()),bool>::type
+   check_primal_consistency_impl(const std::bitset<LEFT_LABELINGS::no_labels()>& l, const std::bitset< RIGHT_LABELINGS::no_labels()>& r) const
+   {
+       return true;
+   }
+   template<INDEX LEFT_INDEX, INDEX RIGHT_INDEX, INDEX... RIGHT_INDICES_REST>
+   typename std::enable_if<(LEFT_INDEX < LEFT_LABELINGS::no_labels()),bool>::type
+   check_primal_consistency_impl(const std::bitset<LEFT_LABELINGS::no_labels()>& l, const std::bitset< RIGHT_LABELINGS::no_labels()>& r) const
+   {
+       if( r[RIGHT_INDEX] != l[LEFT_INDEX] ) { 
+           return false; 
+       } else {
+           return check_primal_consistency_impl<LEFT_INDEX+1, RIGHT_INDICES_REST...>(l,r); 
+       }
+   }
+
+
+   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
+   bool CheckPrimalConsistency(const LEFT_FACTOR& l, const RIGHT_FACTOR& r) const
+   {
+       return check_primal_consistency_impl<0, INDICES...>(l.primal(),r.primal()); 
+   }
+
    template<INDEX RIGHT_INDEX, typename... RIGHT_LABELINGS_REST>
    static typename std::enable_if<(RIGHT_INDEX >= RIGHT_LABELINGS::no_labelings())>::type
    print_matching_impl(labelings<RIGHT_LABELINGS_REST...>)

@@ -1240,9 +1240,10 @@ double LP::EvaluatePrimal() {
   const bool consistent = CheckPrimalConsistency();
   if(consistent == false) return std::numeric_limits<REAL>::infinity();
 
-  double cost = 0.0;
+  double cost = constant_;
 #pragma omp parallel for reduction(+:cost)
   for(INDEX i=0; i<f_.size(); ++i) {
+    assert(f_[i]->LowerBound() <= f_[i]->EvaluatePrimal() + eps);
     cost += f_[i]->EvaluatePrimal();
   }
 
