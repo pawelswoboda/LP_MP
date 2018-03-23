@@ -60,12 +60,13 @@ public:
    MessageIterator end();
    virtual INDEX no_messages() const = 0;
    virtual INDEX no_send_messages() const = 0;
-   virtual MessageTypeAdapter* GetMessage(const INDEX n) const = 0;
+   virtual const MessageTypeAdapter* GetMessage(const INDEX n) const = 0;
    virtual FactorTypeAdapter* GetConnectedFactor(const INDEX i) const = 0;
    virtual REAL LowerBound() const = 0;
    virtual void init_primal() = 0;
    virtual void MaximizePotentialAndComputePrimal() = 0;
    virtual void propagate_primal_through_messages() = 0;
+   virtual bool check_primal_consistency() = 0;
 
    // for use in tree decomposition:
    // for writing primal solution into subgradient
@@ -151,8 +152,8 @@ public:
    MessageIterator* operator++() { ++msg_idx_; return this; } // do zrobienia: is * correct in return value?
    bool operator==(const MessageIterator& rhs) const { return (factor_ == rhs.factor_ && msg_idx_ == rhs.msg_idx_); }
    bool operator!=(const MessageIterator& rhs) const { return !operator==(rhs); }
-   MessageTypeAdapter& operator*() const { return *(factor_->GetMessage(msg_idx_)); }
-   MessageTypeAdapter& operator->() const { return *(factor_->GetMessage(msg_idx_)); }
+   const MessageTypeAdapter& operator*() const { return *(factor_->GetMessage(msg_idx_)); }
+   const MessageTypeAdapter& operator->() const { return *(factor_->GetMessage(msg_idx_)); }
    FactorTypeAdapter* GetConnectedFactor() const { return factor_->GetConnectedFactor(msg_idx_); }
    bool SendsMessage() const  { return factor_->SendsMessage(msg_idx_); }
 private:
@@ -165,6 +166,13 @@ inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, 
 
 
 class LP {
+   struct message_trait
+   {
+       FactorTypeAdapter* left;
+       FactorTypeAdapter* right;
+       const bool sends_message_to_left, sends_message_to_right, receives_message_from_left, receives_message_from_right;
+   };
+
 public:
    LP(TCLAP::CmdLine& cmd);
    ~LP();
@@ -188,8 +196,31 @@ public:
    INDEX GetNumberOfFactors() const { return f_.size(); }
    FactorTypeAdapter* GetFactor(const INDEX i) const { return f_[i]; }
 
-   virtual INDEX AddMessage(MessageTypeAdapter* m);
-   MessageTypeAdapter* GetMessage(const INDEX i) const { return m_[i]; }
+   template<typename MESSAGE_CONTAINER_TYPE, typename LEFT_FACTOR, typename RIGHT_FACTOR, typename... ARGS>
+   INDEX add_message(LEFT_FACTOR* l, RIGHT_FACTOR* r, ARGS... args)
+   {
+       set_flags_dirty();
+#ifndef NDEBUG
+       const auto no_left_messages = l->no_messages();
+       const auto no_right_messages = r->no_messages();
+#endif
+       auto* m_l = l->template add_message<MESSAGE_CONTAINER_TYPE,Chirality::left>(r,args...);
+       auto* m_r = r->template add_message<MESSAGE_CONTAINER_TYPE,Chirality::right>(l,args...);
+
+       l->set_left_msg(m_r);
+       r->set_right_msg(m_l); 
+#ifndef NDEBUG
+       assert(no_left_messages + 1 == l->no_messages());
+       assert(no_right_messages + 1 == r->no_messages());
+#endif 
+       auto* m = (m_l != nullptr ? m_l : m_r);
+       assert(m != nullptr);
+       m_.push_back({l,r, m->SendsMessageToLeft(), m->SendsMessageToRight(), m->ReceivesMessageFromLeft(), m->ReceivesMessageFromRight()});
+
+       return m_.size() + 1;
+   }
+   //virtual INDEX AddMessage(MessageTypeAdapter* m);
+   message_trait GetMessage(const INDEX i) const { return m_[i]; }
    INDEX GetNumberOfMessages() const { return m_.size(); }
 
    void AddFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2); // indicate that factor f1 comes before factor f2
@@ -344,7 +375,7 @@ protected:
 
    // do zrobienia: possibly hold factors and messages in shared_ptr?
    std::vector<FactorTypeAdapter*> f_; // note that here the factors are stored in the original order they were given. They will be output in this order as well, e.g. by problemDecomposition
-   std::vector<MessageTypeAdapter*> m_;
+   std::vector<message_trait> m_;
 
    bool ordering_valid_ = false;
    std::vector<FactorTypeAdapter*> forwardOrdering_, backwardOrdering_; // separate forward and backward ordering are not needed: Just store factorOrdering_ and generate forward order by begin() and backward order by rbegin().
@@ -412,7 +443,6 @@ LP::LP(TCLAP::CmdLine& cmd)
 
 LP::~LP()
 {
-  for(INDEX i=0; i<m_.size(); i++) { delete m_[i]; }
   for(INDEX i=0; i<f_.size(); i++) { delete f_[i]; }
 }
 
@@ -433,13 +463,12 @@ LP::LP(LP& o) // no const because of o.num_lp_threads_arg_.getValue() not being 
     factor_map.insert(std::make_pair(f, clone));
   }
   m_.reserve(o.m_.size());
-  for(auto* m : o.m_) {
-    auto* left = m->GetLeftFactorTypeAdapter();
-    auto* right = m->GetRightFactorTypeAdapter();
+  for(auto m : o.m_) {
+    auto* left = m.left;
+    auto* right = m.right;
     auto* left_clone = factor_map[left];
     auto* right_clone = factor_map[right];
-    auto* clone = m->clone(left_clone, right_clone);
-    this->AddMessage(m);
+    m_.push_back({left_clone, right_clone, m.sends_message_to_left, m.sends_message_to_right, m.receives_message_from_left, m.receives_message_from_right});
   }
 
   ordering_valid_ = o.ordering_valid_;
@@ -509,10 +538,10 @@ INDEX LP::AddFactor(FactorTypeAdapter* f)
   return f_.size() - 1;
 }
 
-INDEX LP::AddMessage(MessageTypeAdapter* m)
-{
-  set_flags_dirty();
-  m_.push_back(m);
+//INDEX LP::AddMessage(MessageTypeAdapter* m)
+//{
+//  set_flags_dirty();
+//  m_.push_back(m);
   // do zrobienia: check whether left and right factors are in f_
 
   //////////////////////////////////////////////////////
@@ -533,8 +562,8 @@ INDEX LP::AddMessage(MessageTypeAdapter* m)
    */
   ////////////////////////////////////////////////////
 
-  return m_.size() - 1;
-}
+//  return m_.size() - 1;
+//}
 
 void LP::ForwardPassFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2) 
 { 
@@ -872,10 +901,10 @@ inline bool LP::CheckPrimalConsistency() const
    volatile bool consistent=true; // or use std::atomic<bool>?
 
 #pragma omp parallel for shared(consistent)
-   for(INDEX i=0; i<m_.size(); ++i) {
+   for(INDEX i=0; i<f_.size(); ++i) {
       if(!consistent) continue;
-      if(!m_[i]->CheckPrimalConsistency()) {
-         consistent = false;
+      if(!f_[i]->check_primal_consistency()) {
+          consistent = false;
       }
    }
    if(debug()) { std::cout << "primal solution consistent: " << (consistent ? "true" : "false") << "\n"; }
@@ -899,17 +928,17 @@ void LP::ComputeAnisotropicWeights2(
 
    std::vector<INDEX> no_send_messages_later(f_.size(), 0);
    for(INDEX i=0; i<m_.size(); ++i) {
-      auto* f_left = m_[i]->GetLeftFactor();
+      auto* f_left = m_[i].left;
       const INDEX f_index_left = factor_address_to_index_[f_left];
       const INDEX index_left = f_sorted_inverse[f_index_left];
-      auto* f_right = m_[i]->GetRightFactor();
+      auto* f_right = m_[i].right;
       const INDEX f_index_right = factor_address_to_index_[f_right];
       const INDEX index_right = f_sorted_inverse[f_index_right];
       
-      if(m_[i]->SendsMessageToRight() && index_left < index_right) {
+      if(m_[i].sends_message_to_right && index_left < index_right) {
         no_send_messages_later[index_left]++;
       }
-      if(m_[i]->SendsMessageToLeft() && index_right < index_left) {
+      if(m_[i].sends_message_to_left && index_right < index_left) {
         no_send_messages_later[index_right]++;
       }
    }
@@ -994,10 +1023,10 @@ void LP::ComputeAnisotropicWeights(
    // do zrobienia: if factor is not visited at all, then omega is not needed for that entry. We must filter out such entries still
 #pragma omp parallel for
    for(INDEX i=0; i<m_.size(); ++i) {
-      auto* f_left = m_[i]->GetLeftFactor();
+      auto* f_left = m_[i].left;
       const INDEX f_index_left = factor_address_to_index_[f_left];
       const INDEX index_left = f_sorted_inverse[f_index_left];
-      auto* f_right = m_[i]->GetRightFactor();
+      auto* f_right = m_[i].right;
       const INDEX f_index_right = factor_address_to_index_[f_right];
       const INDEX index_right = f_sorted_inverse[f_index_right];
       
@@ -1005,7 +1034,7 @@ void LP::ComputeAnisotropicWeights(
         continue; 
       }
       
-      if(m_[i]->ReceivesMessageFromLeft()) {
+      if(m_[i].receives_message_from_left) {
          if(index_left < index_right) {
             no_receiving_factors_later[index_left]++;
          }
@@ -1018,7 +1047,7 @@ void LP::ComputeAnisotropicWeights(
 #endif
       }
 
-      if(m_[i]->ReceivesMessageFromRight()) {
+      if(m_[i].receives_message_from_right) {
          if(index_left > index_right) {
             no_receiving_factors_later[index_right]++;
          }
@@ -1034,10 +1063,10 @@ void LP::ComputeAnisotropicWeights(
 
 #pragma omp parallel for
    for(INDEX i=0; i<m_.size(); ++i) {
-      auto* f_left = m_[i]->GetLeftFactor();
+      auto* f_left = m_[i].left;
       const INDEX f_index_left = factor_address_to_index_[f_left];
       const INDEX index_left = f_sorted_inverse[f_index_left];
-      auto* f_right = m_[i]->GetRightFactor();
+      auto* f_right = m_[i].right;
       const INDEX f_index_right = factor_address_to_index_[f_right];
       const INDEX index_right = f_sorted_inverse[f_index_right];
 
@@ -1045,13 +1074,13 @@ void LP::ComputeAnisotropicWeights(
         continue; 
       }
 
-      if(m_[i]->SendsMessageToRight()) {
+      if(m_[i].sends_message_to_right) {
          no_send_factors[index_left]++;
          if(index_left < index_right || last_receiving_factor[index_right] > index_left) {
             no_send_factors_later[index_left]++;
          }
       }
-      if(m_[i]->SendsMessageToLeft()) {
+      if(m_[i].sends_message_to_left) {
          no_send_factors[index_right]++;
          if(index_right < index_left || last_receiving_factor[index_left] > index_right) {
             no_send_factors_later[index_right]++;
@@ -1114,8 +1143,8 @@ void LP::ComputeAnisotropicWeights(
    }
 
    // check whether all messages were added to m_. Possibly, this can be automated: Traverse all factors, get all messages, add them to m_ and avoid duplicates along the way.
+   std::cout << 2*m_.size() << " == "<< std::accumulate(f_.begin(), f_.end(), 0, [](INDEX sum, auto* f){ return sum + f->no_messages(); }) << "\n";
    assert(2*m_.size() == std::accumulate(f_.begin(), f_.end(), 0, [](INDEX sum, auto* f){ return sum + f->no_messages(); }));
-   assert(HasUniqueValues(m_));
    for(INDEX i=0; i<omega.size(); ++i) {
       //assert(omega[i].size() <= (*(factorIt+i))->no_messages());
       //const REAL omega_sum = std::accumulate(omega[i].begin(), omega[i].end(), 0.0); 
@@ -1142,23 +1171,6 @@ void LP::ComputeUniformWeights(
    assert(factorEndIt - factorIt == f_.size());
 
    std::vector<INDEX> omega_size(std::distance(factorIt, factorEndIt),0);
-   std::vector<INDEX> no_send_messages(f_.size(),0);
-   for(auto* m : m_) {
-      auto* f_left = m->GetLeftFactor();
-      const INDEX f_index_left = factor_address_to_index_[f_left];
-      auto* f_right = m->GetRightFactor();
-      const INDEX f_index_right = factor_address_to_index_[f_right];
-      
-      if(!(factor_mask_begin[f_index_left] && factor_mask_begin[f_index_right])) {
-        continue;
-      }
-      if(f_[f_index_right]->FactorUpdated()) {
-        no_send_messages[f_index_right]++;
-      }
-      if(f_[f_index_left]->FactorUpdated()) {
-        no_send_messages[f_index_left]++;
-      } 
-   }
    INDEX c=0;
    for(auto it=factorIt; it != factorEndIt; ++it) {
      const INDEX f_index = factor_address_to_index_[ *it ];
@@ -1187,12 +1199,13 @@ void LP::ComputeUniformWeights(
            auto* f_connected = mIt.GetConnectedFactor();
            const INDEX connected_index = factor_address_to_index_[f_connected];
            if(factor_mask_begin[connected_index]) {
-             omega[c][k] = (1.0/REAL(no_send_messages[f_index] + leave_weight));
+             omega[c][k] = (1.0/REAL(omega[c].size() + leave_weight));
            } else {
              omega[c][k] = 0.0;
            }
          }
        }
+       c++;
      }
    }
 }
@@ -1308,24 +1321,19 @@ std::vector<bool> LP::get_inconsistent_mask(const std::size_t no_fatten_rounds)
   }
 
   // check for violated messages
-  for(auto* m : m_) {
-    if(!m->CheckPrimalConsistency()) {
-      auto* l = m->GetLeftFactor();
-      auto l_index = factor_address_to_index_[l];
-      auto* r = m->GetRightFactor();
-      auto r_index = factor_address_to_index_[r];
-
-      inconsistent_mask[l_index] = true;
-      inconsistent_mask[r_index] = true; 
-    }
+  for(auto* f : f_) {
+      if(!f->check_primal_consistency()) {
+          auto f_index = factor_address_to_index_[f];
+          inconsistent_mask[f_index] = true;
+      }
   }
 
   // fatten the region
   auto fatten = [&]() {
-    for(auto* m : m_) {
-      auto* l = m->GetLeftFactor();
+    for(auto m : m_) {
+      auto* l = m.left;
       auto l_index = factor_address_to_index_[l];
-      auto* r = m->GetRightFactor();
+      auto* r = m.right;
       auto r_index = factor_address_to_index_[r];
 
       if(inconsistent_mask[l_index] == true || inconsistent_mask[r_index] == true) {

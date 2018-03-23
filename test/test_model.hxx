@@ -141,9 +141,10 @@ void build_test_model(LP_TYPE& lp)
     auto* f3 = new typename test_FMC::factor(0,0);
     lp.AddFactor(f2);
     lp.AddFactor(f3);
+    lp.add_message<typename test_FMC::message>(f1,f2);
+    lp.add_message<typename test_FMC::message>(f1,f3);
     auto* m12 = new typename test_FMC::message(f1,f2);
     auto* m13 = new typename test_FMC::message(f1,f3);
-    lp.AddMessage(m12);
     lp.AddMessage(m13);
     t1.AddMessage(m12, Chirality::left);
     t1.AddMessage(m13, Chirality::left);
