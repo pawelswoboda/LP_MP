@@ -1911,17 +1911,17 @@ public:
    //      std::get<n>(msg_).push_back(m);
    //}
 
-   void UpdateFactor(const weight_vector& omega) final
+   void UpdateFactor(const weight_slice& omega, const receive_slice& receive_mask) final
    {
       assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
       assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
       assert(std::distance(omega.begin(), omega.end()) == no_send_messages());
-      ReceiveMessages(omega);
+      ReceiveMessages(receive_mask);
       MaximizePotential();
       SendMessages(omega);
    }
 
-   void update_factor_residual(const weight_vector& omega)
+   void update_factor_residual(const weight_slice& omega)
    {
       assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
       assert(*std::max_element(omega.begin(), omega.end()) <= 1.0+eps);
@@ -1932,7 +1932,7 @@ public:
    }
 
 #ifdef LP_MP_PARALLEL
-   void UpdateFactorSynchronized(const weight_vector& omega) final
+   void UpdateFactorSynchronized(const weight_slice& omega) final
    {
       assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
       assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
@@ -1943,7 +1943,7 @@ public:
       SendMessagesSynchronized(omega);
    }
 
-   void UpdateFactorPrimalSynchronized(const weight_vector& omega, const INDEX iteration) final
+   void UpdateFactorPrimalSynchronized(const weight_slice& omega, const INDEX iteration) final
    {
      //std::cout << "not implemented\n";
      //assert(false);
@@ -1983,7 +1983,7 @@ public:
    }
 
 
-   void UpdateFactorPrimal(const weight_vector& omega, INDEX primal_access) final
+   void UpdateFactorPrimal(const weight_slice& omega, INDEX primal_access) final
    {
 #ifdef LP_MP_PARALLEL
      std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
@@ -2074,21 +2074,21 @@ public:
    }
 
    template<typename WEIGHT_VEC>
-   void ReceiveMessages(const WEIGHT_VEC& omega) 
+   void ReceiveMessages(const WEIGHT_VEC& receive_mask) 
    {
       // note: currently all messages are received, even if not needed. Change this again.
-      auto omegaIt = omega.begin();
-      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&omegaIt](auto l) {
+      auto receive_it = receive_mask.begin();
+      assert(receive_mask.size() == no_receive_messages());
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&receive_it](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
             if constexpr(l.ReceivesMessage()) {
-                  for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
-                     //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
-                     l.ReceiveMessage(*it);
-                     //}
+                  for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++receive_it) {
+                     if(*receive_it) {
+                         l.ReceiveMessage(*it);
+                     }
                   }
             }
             
-            //std::advance(omegaIt, std::get<n>(msg_).size());
       });
    }
 
@@ -2174,6 +2174,18 @@ public:
             }
             } );
       return no_calls;
+   }
+
+   INDEX no_receive_messages() const
+   {
+       INDEX no_messages = 0;
+       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_messages](auto l) {
+            constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+            if(l.ReceivesMessage()) {
+               no_messages += std::get<n>(msg_).size();
+            }
+       } );
+       return no_messages;
    }
 
    template<typename ITERATOR>
@@ -2469,6 +2481,34 @@ public:
    bool SendsMessage(const INDEX msg_idx) const final
    {
       return SendsMessage(MESSAGE_DISPATCHER_TYPELIST{}, msg_idx);
+   }
+
+   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   bool ReceivesMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX) const 
+   {
+      throw std::runtime_error("message index out of bound");
+   }
+   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
+   bool ReceivesMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX cur_msg_idx) const // to get the current MESSAGE_TYPE
+   {
+      constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      const INDEX no_msgs = std::get<n>(msg_).size();
+      if(cur_msg_idx < no_msgs) {
+         MESSAGE_DISPATCHER_TYPE l;
+         assert(std::get<n>(msg_).size() > 0);
+         if( l.ReceivesMessage() ) {
+            return true;
+         } else {
+           return false;
+         }
+      } else {
+         return ReceivesMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, cur_msg_idx - no_msgs);
+      }
+   }
+
+   bool ReceivesMessage(const INDEX msg_idx) const final
+   {
+       return ReceivesMessage(MESSAGE_DISPATCHER_TYPELIST{}, msg_idx);
    }
 
    // check whether actually receive restricted messages is called. Can be false, even if CanReceiveRestrictedMessages is true, e.g. when no message is present

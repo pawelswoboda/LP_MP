@@ -38,7 +38,10 @@ namespace LP_MP {
 class MessageTypeAdapter;
 class MessageIterator;
 
-using weight_vector = two_dim_variable_array<REAL>::ArrayAccessObject;
+using weight_array = two_dim_variable_array<REAL>;
+using weight_slice = two_dim_variable_array<REAL>::ArrayAccessObject;
+using receive_array = two_dim_variable_array<unsigned char>;
+using receive_slice = two_dim_variable_array<unsigned char>::ArrayAccessObject;
 
 // pure virtual base class for factor container used by LP class
 class FactorTypeAdapter
@@ -46,20 +49,22 @@ class FactorTypeAdapter
 public:
    virtual ~FactorTypeAdapter() {}
    virtual FactorTypeAdapter* clone() const = 0;
-   virtual void UpdateFactor(const weight_vector& omega) = 0;
-   virtual void update_factor_residual(const weight_vector& omega) = 0;
-   virtual void UpdateFactorPrimal(const weight_vector& omega, const INDEX iteration) = 0;
+   virtual void UpdateFactor(const weight_slice& omega, const receive_slice& receive_mask) = 0;
+   virtual void update_factor_residual(const weight_slice& omega) = 0;
+   virtual void UpdateFactorPrimal(const weight_slice& omega, const INDEX iteration) = 0;
 #ifdef LP_MP_PARALLEL
-   virtual void UpdateFactorSynchronized(const weight_vector& omega) = 0;
-   virtual void UpdateFactorPrimalSynchronized(const weight_vector& omega, const INDEX iteration) = 0;
+   virtual void UpdateFactorSynchronized(const weight_slice& omega) = 0;
+   virtual void UpdateFactorPrimalSynchronized(const weight_slice& omega, const INDEX iteration) = 0;
 #endif
    virtual bool SendsMessage(const INDEX msg_idx) const = 0;
+   virtual bool ReceivesMessage(const INDEX msg_idx) const = 0;
    virtual bool FactorUpdated() const = 0; // does calling UpdateFactor do anything? If no, it need not be called while in ComputePass, saving time.
    // to do: remove both
    MessageIterator begin(); 
    MessageIterator end();
    virtual INDEX no_messages() const = 0;
    virtual INDEX no_send_messages() const = 0;
+   virtual INDEX no_receive_messages() const = 0;
    virtual const MessageTypeAdapter* GetMessage(const INDEX n) const = 0;
    virtual FactorTypeAdapter* GetConnectedFactor(const INDEX i) const = 0;
    virtual REAL LowerBound() const = 0;
@@ -156,6 +161,7 @@ public:
    const MessageTypeAdapter& operator->() const { return *(factor_->GetMessage(msg_idx_)); }
    FactorTypeAdapter* GetConnectedFactor() const { return factor_->GetConnectedFactor(msg_idx_); }
    bool SendsMessage() const  { return factor_->SendsMessage(msg_idx_); }
+   bool ReceivesMessage() const  { return factor_->ReceivesMessage(msg_idx_); }
 private:
    FactorTypeAdapter* const factor_;
    INDEX msg_idx_;
@@ -267,7 +273,7 @@ public:
 
    void ComputeAnisotropicWeights();
    template<typename FACTOR_ITERATOR, typename FACTOR_SORT_ITERATOR, typename FACTOR_MASK_ITERATOR>
-   void ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, FACTOR_MASK_ITERATOR factor_mask_begin, FACTOR_MASK_ITERATOR factor_mask_end, two_dim_variable_array<REAL>& omega); 
+   void ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, FACTOR_MASK_ITERATOR factor_mask_begin, FACTOR_MASK_ITERATOR factor_mask_end, weight_array& omega, receive_array& receive_mask); 
 
    void ComputeAnisotropicWeights2();
    template<typename FACTOR_ITERATOR, typename FACTOR_SORT_ITERATOR>
@@ -281,6 +287,10 @@ public:
 
    void ComputeMixedWeights(const two_dim_variable_array<REAL>& omega_anisotropic, const two_dim_variable_array<REAL>& omega_damped_uniform, two_dim_variable_array<REAL>& omega); 
    void ComputeMixedWeights();
+
+   void compute_full_receive_mask();
+   template<typename FACTOR_ITERATOR>
+   void compute_full_receive_mask(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, receive_array& receive_mask);
 
    double LowerBound() const;
    double EvaluatePrimal();
@@ -300,8 +310,8 @@ public:
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
    void ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, const INDEX iteration);
 
-   template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
-   void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt);
+   template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename RECEIVE_MASK_ITERATOR>
+   void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt, RECEIVE_MASK_ITERATOR receive_it);
 
 #ifdef LP_MP_PARALLEL
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename SYNCHRONIZATION_ITERATOR>
@@ -324,6 +334,8 @@ public:
    struct omega_storage {
       two_dim_variable_array<REAL>& forward;
       two_dim_variable_array<REAL>& backward;
+      receive_array& receive_mask_forward;
+      receive_array& receive_mask_backward;
    };
 
    omega_storage get_omega()
@@ -334,40 +346,47 @@ public:
 #ifdef LP_MP_PARALLEL
       compute_synchronization();
 #endif 
+      if(repamMode_ != LPReparametrizationMode::Anisotropic) {
+          if(!full_receive_mask_valid_) {
+              compute_full_receive_mask();
+              full_receive_mask_valid_ = true;
+          }
+      }
 
       if(repamMode_ == LPReparametrizationMode::Anisotropic) {
         if(!omega_anisotropic_valid_) {
           ComputeAnisotropicWeights();
           omega_anisotropic_valid_ = true;
         }
-        return omega_storage{omegaForwardAnisotropic_, omegaBackwardAnisotropic_};
+        return omega_storage{omegaForwardAnisotropic_, omegaBackwardAnisotropic_, anisotropic_receive_mask_forward_, anisotropic_receive_mask_backward_};
       } else if(repamMode_ == LPReparametrizationMode::Anisotropic2) {
         if(!omega_anisotropic2_valid_) {
           ComputeAnisotropicWeights2();
           omega_anisotropic2_valid_ = true;
         }
-        return omega_storage{omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_};
+        return omega_storage{omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_, full_receive_mask_backward_, full_receive_mask_backward_};
       } else if(repamMode_ == LPReparametrizationMode::Uniform) {
         if(!omega_isotropic_valid_) {
           ComputeUniformWeights();
           omega_isotropic_valid_ = true;
         }
-        return omega_storage{omegaForwardIsotropic_, omegaBackwardIsotropic_};
+        return omega_storage{omegaForwardIsotropic_, omegaBackwardIsotropic_, full_receive_mask_forward_, full_receive_mask_backward_};
       } else if(repamMode_ == LPReparametrizationMode::DampedUniform) {
         if(!omega_isotropic_damped_valid_) {
           ComputeDampedUniformWeights();
           omega_isotropic_damped_valid_ = true;
         }
-        return omega_storage{omegaForwardIsotropicDamped_, omegaBackwardIsotropicDamped_};
+        return omega_storage{omegaForwardIsotropicDamped_, omegaBackwardIsotropicDamped_, full_receive_mask_backward_, full_receive_mask_backward_};
       } else if(repamMode_ == LPReparametrizationMode::Mixed) {
         if(!omega_mixed_valid_) {
           ComputeMixedWeights();
           omega_mixed_valid_ = true;
         }
-        return omega_storage{omegaForwardMixed_, omegaBackwardMixed_};
+        return omega_storage{omegaForwardMixed_, omegaBackwardMixed_, full_receive_mask_backward_, full_receive_mask_backward_};
       } else {
         throw std::runtime_error("no reparametrization mode set");
       }
+
    }
 
    void add_to_constant(const REAL x) { constant_ += x; }
@@ -383,6 +402,7 @@ protected:
 
    bool omega_anisotropic_valid_ = false;
    two_dim_variable_array<REAL> omegaForwardAnisotropic_, omegaBackwardAnisotropic_;
+   receive_array anisotropic_receive_mask_forward_, anisotropic_receive_mask_backward_;
    bool omega_anisotropic2_valid_ = false;
    two_dim_variable_array<REAL> omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_;
    bool omega_isotropic_valid_ = false;
@@ -391,6 +411,9 @@ protected:
    two_dim_variable_array<REAL> omegaForwardIsotropicDamped_, omegaBackwardIsotropicDamped_;
    bool omega_mixed_valid_ = false;
    two_dim_variable_array<REAL> omegaForwardMixed_, omegaBackwardMixed_;
+
+   bool full_receive_mask_valid_ = false;
+   receive_array full_receive_mask_forward_, full_receive_mask_backward_;
 
    std::vector<std::pair<FactorTypeAdapter*, FactorTypeAdapter*> > forward_pass_factor_rel_, backward_pass_factor_rel_; // factor ordering relations. First factor must come before second factor. factorRel_ must describe a DAG
 
@@ -749,9 +772,6 @@ inline std::vector<bool> LP::compute_synchronization(ITERATOR factor_begin, ITER
 
 inline void LP::ComputePass(const INDEX iteration)
 {
-   const auto omega = get_omega();
-   assert(forwardUpdateOrdering_.size() == omega.forward.size());
-   assert(forwardUpdateOrdering_.size() == omega.backward.size());
 #ifdef LP_MP_PARALLEL
    compute_synchronization();
 #endif
@@ -765,7 +785,7 @@ void LP::ComputeForwardPass()
 #ifdef LP_MP_PARALLEL
   ComputePassSynchronized(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), omega.forward.end(), synchronize_forward_.begin(), synchronize_forward_.end()); 
 #else
-  ComputePass(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin()); 
+  ComputePass(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), omega.receive_mask_forward.begin()); 
 #endif
 }
 void LP::ComputeBackwardPass()
@@ -774,7 +794,7 @@ void LP::ComputeBackwardPass()
 #ifdef LP_MP_PARALLEL
   ComputePassSynchronized(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin(), omega.backward.end(), synchronize_backward_.begin(), synchronize_backward_.end()); 
 #else
-  ComputePass(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin());
+  ComputePass(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin(), omega.receive_mask_backward.begin());
 #endif
 }
 
@@ -842,8 +862,8 @@ void LP::ComputePassSynchronized(
 }
 #endif
 
-template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
-void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt)
+template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename RECEIVE_MASK_ITERATOR>
+void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt, RECEIVE_MASK_ITERATOR receive_it)
 {
   //assert(std::distance(factorItEnd, factorIt) == std::distance(omegaIt, omegaItEnd));
   const INDEX n = std::distance(factorIt, factorItEnd);
@@ -851,7 +871,7 @@ void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd
   if(reparametrization_type_ == reparametrization_type::shared) {
     for(INDEX i=0; i<n; ++i) {
       auto* f = *(factorIt + i);
-      f->UpdateFactor(*(omegaIt + i));
+      f->UpdateFactor(*(omegaIt + i), *(receive_it + i));
     }
   } else {
     assert(reparametrization_type_ == reparametrization_type::residual);
@@ -864,8 +884,8 @@ void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd
 
 inline void LP::ComputeAnisotropicWeights()
 {
-  ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), factor_mask.begin(), factor_mask.end(), omegaForwardAnisotropic_);
-  ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), factor_mask.begin(), factor_mask.end(), omegaBackwardAnisotropic_);
+  ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), factor_mask.begin(), factor_mask.end(), omegaForwardAnisotropic_, anisotropic_receive_mask_forward_);
+  ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), factor_mask.begin(), factor_mask.end(), omegaBackwardAnisotropic_, anisotropic_receive_mask_backward_);
 }
 
 inline void LP::ComputeAnisotropicWeights2()
@@ -990,7 +1010,7 @@ void LP::ComputeAnisotropicWeights(
       FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, // sorted pointers to factors
       FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, // sorted factor indices in f_
       FACTOR_MASK_ITERATOR factor_mask_begin, FACTOR_MASK_ITERATOR factor_mask_end,
-      two_dim_variable_array<REAL>& omega)
+      weight_array& omega, receive_array& receive_mask)
 {
    std::vector<INDEX> f_sorted_inverse(std::distance(factor_sort_begin, factor_sort_end)); // factor index in order they were added to sorted order
 #pragma omp parallel for
@@ -1018,6 +1038,7 @@ void LP::ComputeAnisotropicWeights(
    std::vector<INDEX> no_send_factors_later(f_.size(),0); // no of messages over which messages are sent from given factor in given direction
    std::vector<INDEX> no_receiving_factors_later(f_.size(),0); // number of factors later than current one receiving message from current one
    std::vector<INDEX> last_receiving_factor(f_.size(), 0); // what is the last (in the order given by factor iterator) factor that receives a message?
+   std::vector<INDEX> first_receiving_factor(f_.size(), 0); // what is the last (in the order given by factor iterator) factor that receives a message?
 #endif
 
    // do zrobienia: if factor is not visited at all, then omega is not needed for that entry. We must filter out such entries still
@@ -1044,6 +1065,7 @@ void LP::ComputeAnisotropicWeights(
          while(old_val < new_val && !last_receiving_factor[index_left].compare_exchange_weak(old_val, new_val)) ;
 #else
          last_receiving_factor[index_left] = std::max(last_receiving_factor[index_left], index_right);
+         first_receiving_factor[index_left] = std::min(first_receiving_factor[index_left], index_right);
 #endif
       }
 
@@ -1057,6 +1079,7 @@ void LP::ComputeAnisotropicWeights(
          while(old_val < new_val && !last_receiving_factor[index_right].compare_exchange_weak(old_val, new_val)) ;
 #else
          last_receiving_factor[index_right] = std::max(last_receiving_factor[index_right], index_left);
+         first_receiving_factor[index_right] = std::min(first_receiving_factor[index_right], index_left);
 #endif
       }
    }
@@ -1088,23 +1111,23 @@ void LP::ComputeAnisotropicWeights(
       }
    }
 
-   std::vector<INDEX> omega_size(f_.size());
-   {
-     INDEX c=0;
-     for(auto it=factorIt; it!=factorEndIt; ++it) {
+   std::vector<INDEX> omega_size;
+   omega_size.reserve(f_.size());
+   std::vector<INDEX> receive_size;
+   receive_size.reserve(f_.size());
+   for(auto it=factorIt; it!=factorEndIt; ++it) {
        const INDEX f_index = factor_address_to_index_[*it];
        if(!factor_mask_begin[f_index]) {
-         continue;
+           continue;
        }
        if((*it)->FactorUpdated()) {
-         omega_size[c] = (*it)->no_send_messages();
-         ++c;
+           omega_size.push_back( (*it)->no_send_messages() );
+           receive_size.push_back( (*it)->no_receive_messages() );
        }
-     }
-     omega_size.resize(c);
    }
 
-   omega = two_dim_variable_array<REAL>(omega_size);
+   omega = weight_array(omega_size);
+   receive_mask = receive_array(receive_size);
 
    {
       INDEX c=0;
@@ -1116,24 +1139,34 @@ void LP::ComputeAnisotropicWeights(
          const INDEX i = std::distance(factorIt, it);
          assert(i == f_sorted_inverse[ factor_address_to_index_[*it] ]);
          if((*it)->FactorUpdated()) {
-            INDEX k=0;
+            INDEX k_send = 0;
+            INDEX k_receive = 0;
             for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
+                auto* f_connected = mIt.GetConnectedFactor();
+                const INDEX j_index = factor_address_to_index_[f_connected];
+                const INDEX j = f_sorted_inverse[ j_index ];
+
                if(mIt.SendsMessage()) {
-                  auto* f_connected = mIt.GetConnectedFactor();
-                  const INDEX j_index = factor_address_to_index_[f_connected];
-                  const INDEX j = f_sorted_inverse[ j_index ];
                   assert(i != j);
                   if(i<j || last_receiving_factor[j] > i && factor_mask_begin[j_index]) {
-                    omega[c][k] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
+                    omega[c][k_send] = (1.0/REAL(no_receiving_factors_later[i] + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
                     //if(no_receiving_factors_later[i] > 0) {
                     //  omega[c][k] = (1.0/REAL(1 + std::max(INDEX(no_send_factors_later[i]), INDEX(no_send_factors[i]) - INDEX(no_send_factors_later[i]))));
                     //} else {
                     //  omega[c][k] = (1.0/REAL(no_send_factors_later[i]));
                     //}
                   } else {
-                     omega[c][k] = 0.0;
+                     omega[c][k_send] = 0.0;
                   } 
-                  ++k;
+                  ++k_send;
+               }
+               if(mIt.ReceivesMessage()) {
+                   if(j<i || first_receiving_factor[j] < i) {
+                       receive_mask[c][k_receive] = true; 
+                   } else {
+                       receive_mask[c][k_receive] = false; 
+                   }
+                   k_receive++; 
                }
             }
             assert(std::accumulate(omega[c].begin(), omega[c].end(), 0.0) <= 1.0 + eps);
@@ -1235,6 +1268,31 @@ inline void LP::ComputeMixedWeights(
          omega[i][j] = 0.5*(omega[i][j] + omega_damped_uniform[i][j]);
       }
    }
+}
+
+void LP::compute_full_receive_mask()
+{
+  compute_full_receive_mask(forwardOrdering_.begin(), forwardOrdering_.end(), full_receive_mask_forward_);
+  compute_full_receive_mask(backwardOrdering_.begin(), backwardOrdering_.end(), full_receive_mask_backward_); 
+}
+
+template<typename FACTOR_ITERATOR>
+void LP::compute_full_receive_mask(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, receive_array& receive_mask)
+{
+    std::vector<INDEX> mask_size;
+    mask_size.reserve(std::distance(factor_begin, factor_end));
+    for(auto it=factor_begin; it!=factor_end; ++it) {
+        if((*it)->FactorUpdated()) {
+            mask_size.push_back( (*it)->no_receive_messages() );
+        } 
+    }
+    receive_mask = receive_array(mask_size); 
+    for(std::size_t i=0; i<receive_mask.size(); ++i) {
+        for(std::size_t j=0; j<receive_mask[i].size(); ++j) {
+            receive_mask(i,j) = true;
+        }
+    }
+
 }
 
 double LP::LowerBound() const
