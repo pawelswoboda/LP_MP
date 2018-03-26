@@ -206,19 +206,13 @@ public:
    INDEX add_message(LEFT_FACTOR* l, RIGHT_FACTOR* r, ARGS... args)
    {
        set_flags_dirty();
-#ifndef NDEBUG
-       const auto no_left_messages = l->no_messages();
-       const auto no_right_messages = r->no_messages();
-#endif
+
        auto* m_l = l->template add_message<MESSAGE_CONTAINER_TYPE,Chirality::left>(r,args...);
        auto* m_r = r->template add_message<MESSAGE_CONTAINER_TYPE,Chirality::right>(l,args...);
 
        l->set_left_msg(m_r);
        r->set_right_msg(m_l); 
-#ifndef NDEBUG
-       assert(no_left_messages + 1 == l->no_messages());
-       assert(no_right_messages + 1 == r->no_messages());
-#endif 
+
        auto* m = (m_l != nullptr ? m_l : m_r);
        assert(m != nullptr);
        m_.push_back({l,r, m->SendsMessageToLeft(), m->SendsMessageToRight(), m->ReceivesMessageFromLeft(), m->ReceivesMessageFromRight()});
@@ -1176,7 +1170,7 @@ void LP::ComputeAnisotropicWeights(
    }
 
    // check whether all messages were added to m_. Possibly, this can be automated: Traverse all factors, get all messages, add them to m_ and avoid duplicates along the way.
-   std::cout << 2*m_.size() << " == "<< std::accumulate(f_.begin(), f_.end(), 0, [](INDEX sum, auto* f){ return sum + f->no_messages(); }) << "\n";
+   //std::cout << 2*m_.size() << " == "<< std::accumulate(f_.begin(), f_.end(), 0, [](INDEX sum, auto* f){ return sum + f->no_messages(); }) << "\n";
    assert(2*m_.size() == std::accumulate(f_.begin(), f_.end(), 0, [](INDEX sum, auto* f){ return sum + f->no_messages(); }));
    for(INDEX i=0; i<omega.size(); ++i) {
       //assert(omega[i].size() <= (*(factorIt+i))->no_messages());
