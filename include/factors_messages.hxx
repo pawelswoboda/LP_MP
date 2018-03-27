@@ -1944,6 +1944,11 @@ public:
 
    void UpdateFactor(const weight_slice& omega, const receive_slice& receive_mask) final
    {
+       assert(omega.size() == receive_mask.size());
+       for(std::size_t i=0; i<omega.size(); ++i) {
+           if(omega[i] > 0) { assert(receive_mask[i] == 0); }
+           if(omega[i] == 0) { assert(receive_mask[i] == 1); }
+       }
       assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
       assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
       assert(std::distance(omega.begin(), omega.end()) == no_send_messages());

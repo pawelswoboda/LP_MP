@@ -1155,7 +1155,7 @@ void LP::ComputeAnisotropicWeights(
                   ++k_send;
                }
                if(mIt.ReceivesMessage()) {
-                   if(j<i || first_receiving_factor[j] < i) {
+                   if(j<i && first_receiving_factor[i] < j) {
                        receive_mask[c][k_receive] = true; 
                    } else {
                        receive_mask[c][k_receive] = false; 
