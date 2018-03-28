@@ -1944,14 +1944,6 @@ public:
 
    void UpdateFactor(const weight_slice& omega, const receive_slice& receive_mask) final
    {
-       assert(omega.size() == receive_mask.size());
-       for(std::size_t i=0; i<omega.size(); ++i) {
-           if(omega[i] > 0) { assert(receive_mask[i] == 0); }
-           if(omega[i] == 0) { assert(receive_mask[i] == 1); }
-       }
-      assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
-      assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
-      assert(std::distance(omega.begin(), omega.end()) == no_send_messages());
       ReceiveMessages(receive_mask);
       MaximizePotential();
       SendMessages(omega);
@@ -1959,6 +1951,7 @@ public:
 
    void update_factor_residual(const weight_slice& omega)
    {
+       assert(false); // add receive mask here
       assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
       assert(*std::max_element(omega.begin(), omega.end()) <= 1.0+eps);
       assert(std::distance(omega.begin(), omega.end()) == no_send_messages());
@@ -2019,7 +2012,7 @@ public:
    }
 
 
-   void UpdateFactorPrimal(const weight_slice& omega, INDEX primal_access) final
+   void UpdateFactorPrimal(const weight_slice& omega, const receive_slice& receive_mask, INDEX primal_access) final
    {
 #ifdef LP_MP_PARALLEL
      std::lock_guard<std::recursive_mutex> lock(mutex_); // only here do we wait for the mutex. In all other places try_lock is allowed only
@@ -2045,18 +2038,18 @@ public:
             load_archive l_ar(ar);
             factor_.serialize_dual( l_ar );
 
-            ReceiveMessages(omega);
+            ReceiveMessages(receive_mask);
             MaximizePotential();
             SendMessages(omega);
          } else {
-            ReceiveMessages(omega);
+            ReceiveMessages(receive_mask);
             MaximizePotentialAndComputePrimal();
             SendMessages(omega);
          }
          // now propagate primal to adjacent factors
          propagate_primal_through_messages();
       } else {
-         ReceiveMessages(omega);
+         ReceiveMessages(receive_mask);
          MaximizePotential();
          SendMessages(omega);
       }  
@@ -2112,6 +2105,12 @@ public:
    template<typename WEIGHT_VEC>
    void ReceiveMessages(const WEIGHT_VEC& receive_mask) 
    {
+      assert(*std::max_element(receive_mask.begin(), receive_mask.end()) <= 1);
+      assert(*std::min_element(receive_mask.begin(), receive_mask.end()) >= 0);
+      assert(std::distance(receive_mask.begin(), receive_mask.end()) == no_receive_messages()); 
+#ifndef NDEBUG
+       const REAL before_lb = LowerBound();
+#endif
       // note: currently all messages are received, even if not needed. Change this again.
       auto receive_it = receive_mask.begin();
       assert(receive_mask.size() == no_receive_messages());
@@ -2126,12 +2125,18 @@ public:
             }
             
       });
+#ifndef NDEBUG
+       const REAL after_lb = LowerBound();
+       assert(before_lb <= after_lb + eps);
+#endif
+
    }
 
 #ifdef LP_MP_PARALLEL
    template<typename WEIGHT_VEC>
    void ReceiveMessagesSynchronized(const WEIGHT_VEC& omega) 
    {
+       assert(false); // introduce receive mask
       // note: currently all messages are received, even if not needed. Change this again.
       auto omegaIt = omega.begin();
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&omegaIt](auto l) {
@@ -2296,6 +2301,12 @@ public:
    template<typename WEIGHT_VEC>
    void SendMessages(const WEIGHT_VEC& omega) 
    {
+      assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
+      assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
+      assert(std::distance(omega.begin(), omega.end()) == no_send_messages()); 
+#ifndef NDEBUG
+       const REAL before_lb = LowerBound();
+#endif
       // do zrobienia: condition no_send_messages_calls also on omega. whenever omega is zero, we will not send messages
       const INDEX no_calls = no_send_messages_calls();
 
@@ -2309,6 +2320,11 @@ public:
       } else {
         assert(omega.size() == 0.0);
       }
+#ifndef NDEBUG
+       const REAL after_lb = LowerBound();
+       assert(before_lb <= after_lb + eps);
+#endif
+
    } 
 
    static constexpr INDEX active_messages_array_size = 16;

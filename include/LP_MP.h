@@ -51,7 +51,7 @@ public:
    virtual FactorTypeAdapter* clone() const = 0;
    virtual void UpdateFactor(const weight_slice& omega, const receive_slice& receive_mask) = 0;
    virtual void update_factor_residual(const weight_slice& omega) = 0;
-   virtual void UpdateFactorPrimal(const weight_slice& omega, const INDEX iteration) = 0;
+   virtual void UpdateFactorPrimal(const weight_slice& omega, const receive_slice& receive_mask, const INDEX iteration) = 0;
 #ifdef LP_MP_PARALLEL
    virtual void UpdateFactorSynchronized(const weight_slice& omega) = 0;
    virtual void UpdateFactorPrimalSynchronized(const weight_slice& omega, const INDEX iteration) = 0;
@@ -265,6 +265,8 @@ public:
    //void ComputeWeights(const LPReparametrizationMode m);
    void set_reparametrization(const LPReparametrizationMode r) { repamMode_ = r; }
 
+   bool omega_valid(const weight_array& omega) const;
+
    void ComputeAnisotropicWeights();
    template<typename FACTOR_ITERATOR, typename FACTOR_SORT_ITERATOR, typename FACTOR_MASK_ITERATOR>
    void ComputeAnisotropicWeights(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, FACTOR_MASK_ITERATOR factor_mask_begin, FACTOR_MASK_ITERATOR factor_mask_end, weight_array& omega, receive_array& receive_mask); 
@@ -301,8 +303,8 @@ public:
    void ComputeForwardPassAndPrimal(const INDEX iteration);
    void ComputeBackwardPassAndPrimal(const INDEX iteration);
 
-   template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
-   void ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, const INDEX iteration);
+   template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename RECEIVE_MASK_ITERATOR>
+   void ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, RECEIVE_MASK_ITERATOR receive_mask_it, const INDEX iteration);
 
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename RECEIVE_MASK_ITERATOR>
    void ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd, OMEGA_ITERATOR omegaIt, RECEIVE_MASK_ITERATOR receive_it);
@@ -798,7 +800,7 @@ void LP::ComputeForwardPassAndPrimal(const INDEX iteration)
 #ifdef LP_MP_PARALLEL
   ComputePassAndPrimalSynchronized(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), synchronize_forward_.begin(), 2*iteration+1); // timestamp must be > 0, otherwise in the first iteration primal does not get initialized
 #else
-  ComputePassAndPrimal(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), 2*iteration+1); // timestamp must be > 0, otherwise in the first iteration primal does not get initialized
+  ComputePassAndPrimal(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), omega.receive_mask_forward.begin(), 2*iteration+1); // timestamp must be > 0, otherwise in the first iteration primal does not get initialized
 #endif
 }
 void LP::ComputeBackwardPassAndPrimal(const INDEX iteration)
@@ -807,7 +809,7 @@ void LP::ComputeBackwardPassAndPrimal(const INDEX iteration)
 #ifdef LP_MP_PARALLEL
   ComputePassAndPrimalSynchronized(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin(), synchronize_backward_.begin(), 2*iteration + 2); 
 #else
-  ComputePassAndPrimal(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin(), 2*iteration + 2); 
+  ComputePassAndPrimal(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), omega.backward.begin(), omega.receive_mask_backward.begin(), 2*iteration + 2); 
 #endif
 }
 
@@ -876,22 +878,39 @@ void LP::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorItEnd
   }
 }
 
+bool LP::omega_valid(const weight_array& omega) const
+{
+    for(std::size_t i=0; i<omega.size(); ++i) {
+        assert(*std::min_element(omega[i].begin(), omega[i].end()) >= 0.0);
+        assert(std::accumulate(omega[i].begin(), omega[i].end(), 0.0) <= 1.0 + eps);
+    }
+}
+
 inline void LP::ComputeAnisotropicWeights()
 {
   ComputeAnisotropicWeights(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), factor_mask.begin(), factor_mask.end(), omegaForwardAnisotropic_, anisotropic_receive_mask_forward_);
   ComputeAnisotropicWeights(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), factor_mask.begin(), factor_mask.end(), omegaBackwardAnisotropic_, anisotropic_receive_mask_backward_);
+
+  omega_valid(omegaForwardAnisotropic_);
+  omega_valid(omegaBackwardAnisotropic_);
 }
 
 inline void LP::ComputeAnisotropicWeights2()
 {
   ComputeAnisotropicWeights2(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic2_);
   ComputeAnisotropicWeights2(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic2_);
+
+  omega_valid(omegaForwardAnisotropic2_);
+  omega_valid(omegaBackwardAnisotropic2_);
 }
 
 inline void LP::ComputeUniformWeights()
 {
   ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), factor_mask.begin(), factor_mask.end(), omegaForwardIsotropic_, 0.0);
   ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), factor_mask.begin(), factor_mask.end(), omegaBackwardIsotropic_, 0.0);
+
+  omega_valid(omegaForwardIsotropic_);
+  omega_valid(omegaBackwardIsotropic_);
 
   assert(this->backwardUpdateOrdering_.size() == omegaBackwardIsotropic_.size());
   for(auto it = this->backwardUpdateOrdering_.begin(); it != this->backwardUpdateOrdering_.end(); ++it) {
@@ -907,6 +926,9 @@ inline void LP::ComputeDampedUniformWeights()
 {
   ComputeUniformWeights(forwardOrdering_.begin(), forwardOrdering_.end(), factor_mask.begin(), factor_mask.end(), omegaForwardIsotropicDamped_, 1.0);
   ComputeUniformWeights(backwardOrdering_.begin(), backwardOrdering_.end(), factor_mask.begin(), factor_mask.end(), omegaBackwardIsotropicDamped_, 1.0);
+
+  omega_valid(omegaForwardIsotropicDamped_);
+  omega_valid(omegaBackwardIsotropicDamped_);
 }
 
 // Here we check whether messages constraints are satisfied
@@ -1192,7 +1214,7 @@ template<typename FACTOR_ITERATOR, typename FACTOR_MASK_ITERATOR>
 void LP::ComputeUniformWeights(
     FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt,
     FACTOR_MASK_ITERATOR factor_mask_begin, FACTOR_MASK_ITERATOR factor_mask_end,
-    two_dim_variable_array<REAL>& omega, const REAL leave_weight)
+    weight_array& omega, const REAL leave_weight)
 {
    assert(leave_weight >= 0.0 && leave_weight <= 1.0);
    assert(factorEndIt - factorIt == f_.size());
@@ -1215,13 +1237,12 @@ void LP::ComputeUniformWeights(
       assert(omega[i].size() == omega_size[i]);
    }
 
-#pragma omp parallel for
    c=0;
    for(auto it=factorIt; it != factorEndIt; ++it) {
      const INDEX f_index = factor_address_to_index_[ *it ];
      if((*it)->FactorUpdated() && factor_mask_begin[f_index]) {
+       INDEX k=0;
        for(auto mIt=(*it)->begin(); mIt!=(*it)->end(); ++mIt) {
-         INDEX k=0;
          if(mIt.SendsMessage()) {
            auto* f_connected = mIt.GetConnectedFactor();
            const INDEX connected_index = factor_address_to_index_[f_connected];
@@ -1230,11 +1251,14 @@ void LP::ComputeUniformWeights(
            } else {
              omega[c][k] = 0.0;
            }
+           ++k;
          }
        }
+       assert(k == omega[c].size());
        c++;
      }
    }
+   assert(c == omega.size());
 }
 
 // compute anisotropic and damped uniform weights, then average them
@@ -1318,14 +1342,14 @@ double LP::EvaluatePrimal() {
 }
 
 
-template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR>
-void LP::ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, INDEX iteration)
+template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename RECEIVE_MASK_ITERATOR>
+void LP::ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, RECEIVE_MASK_ITERATOR receive_mask_it, INDEX iteration)
 {
    //possibly do not use parallelization here
 //#pragma omp parallel for schedule(static)
    for(INDEX i=0; i<std::distance(factorIt, factorEndIt); ++i) {
       auto* f = *(factorIt+i);
-      f->UpdateFactorPrimal(*(omegaIt + i), iteration);
+      f->UpdateFactorPrimal(*(omegaIt + i), *(receive_mask_it + i), iteration);
    }
 }
 
