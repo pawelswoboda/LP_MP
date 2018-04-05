@@ -847,6 +847,68 @@ protected:
    const INDEX dim2_, dim3_;
 };
 
+// given fixed first index, the matrices can be of differing sizes
+template<typename T>
+class tensor3_variable : public vector<T> {
+public:
+    template<typename ITERATOR>
+    tensor3_variable(ITERATOR size_begin, ITERATOR size_end)
+    : dimensions_(std::distance(size_begin, size_end)),
+    vector<T>(size(size_begin, size_end), 0)
+    {
+        std::size_t offset = 0;
+        for(std::size_t i=0; i<std::distance(size_begin, size_end); ++i) {
+            dimensions_[i][0] = size_begin[i][0];
+            dimensions_[i][1] = size_begin[i][1];
+            dimensions_[i].offset = offset;
+            offset += dimensions_[i][0] * dimensions_[i][1];
+        }
+    }
+    T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) { 
+        assert(x1<dim1() && x2<dim2(x1) && x3<dim3(x1));
+        const auto offset = dimensions_[x1].offset;
+        return (*this)[offset + x2*dim3(x1) + x3]; 
+    }
+    T operator()(const INDEX x1, const INDEX x2, const INDEX x3) const 
+    {
+        assert(x1<dim1() && x2<dim2(x1) && x3<dim3(x1));
+        const auto offset = dimensions_[x1].offset;
+        return (*this)[offset + x2*dim3(x1) + x3]; 
+    }      
+
+    const INDEX dim1() const { return dimensions_.size(); }
+    const INDEX dim2(const INDEX x1) const
+    {
+        assert(x1<dim1());
+        return dimensions_[x1][0];
+    }
+    const INDEX dim3(const INDEX x1) const
+    {
+        assert(x1<dim1());
+        return dimensions_[x1][1];
+    }
+
+    vector<T>& data() { return *static_cast<vector<T>*>(this); }
+    const vector<T>& data() const { return *static_cast<vector<T>*>(this); }
+
+private:
+    template<typename ITERATOR>
+    static std::size_t size(ITERATOR size_begin, ITERATOR size_end)
+    {
+        std::size_t s=0;
+        for(auto size_it=size_begin; size_it!=size_end; ++size_it) {
+            s += (*size_it)[0] * (*size_it)[1];
+        }
+        return s;
+    }
+    struct dim_entry: public std::array<std::size_t,2> { // dim2, dim3
+        std::size_t offset; // offset into data array
+    };
+
+    vector<dim_entry> dimensions_; 
+    
+};
+
 template<INDEX FIXED_DIM, typename T=REAL>
 class matrix_view_of_tensor : public vector_expression<T,matrix_view_of_tensor<FIXED_DIM,T>> {
 public:
