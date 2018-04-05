@@ -623,7 +623,7 @@ public:
       return vec_ == o.vec_; 
    }
    void operator=(const matrix<T>& o) {
-     if(!(this->size() == o.size() && o.dim2_ == dim2_)) {
+     if(!(this->vec_.size() == o.vec_.size() && o.dim2_ == dim2_)) {
        matrix copy(o.dim1(), o.dim2());
        std::swap(vec_, copy.vec_);
        std::swap(dim2_, copy.dim2_);
