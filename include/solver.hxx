@@ -244,6 +244,8 @@ public:
       }
       if(!c.error) {
          this->End();
+         RegisterPrimal();
+         lowerBound_ = lp_.LowerBound();
          // possibly primal has been computed in end. Call visitor again
          visitor_.end(this->lowerBound_, this->bestPrimalCost_);
          static_if<visitor_has_solution()>([this](auto f) {
