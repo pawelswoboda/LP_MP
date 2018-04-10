@@ -46,8 +46,9 @@ public:
     }
   }
 
-  factor_archive(LP &lp)
-  : factor_archive(lp.begin(), lp.end()) { }
+  // FIXME: LP does not implement this interface.
+  //factor_archive(LP &lp)
+  //: factor_archive(lp.begin(), lp.end()) { }
 
   void load_factor(FactorTypeAdapter* f) {
     access<load_archive>(f);
