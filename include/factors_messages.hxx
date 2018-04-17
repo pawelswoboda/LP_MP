@@ -92,6 +92,11 @@ struct LeftMessageFuncGetter
    template<typename LEFT_FACTOR, typename MSG_ITERATOR>
    constexpr static decltype(&MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ITERATOR>) GetSendMessagesFunc() 
    { return &MSG_CONTAINER::template SendMessagesToRightContainer<LEFT_FACTOR, MSG_ITERATOR>; }
+   constexpr static decltype(&MSG_CONTAINER::send_message_to_right_improvement) get_send_message_improvement_func()
+   { return &MSG_CONTAINER::send_message_to_right_improvement; }
+   template<typename MSG_ITERATOR>
+   constexpr static decltype(&MSG_CONTAINER::template send_messages_to_right_improvement<MSG_ITERATOR>) get_send_messages_improvement_func()
+   { return &MSG_CONTAINER::template send_messages_to_right_improvement<MSG_ITERATOR>; }
 
 #ifdef LP_MP_PARALLEL
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromRightContainerSynchronized) GetReceiveSynchronizedFunc() { return &MSG_CONTAINER::ReceiveMessageFromRightContainerSynchronized; }
@@ -101,12 +106,10 @@ struct LeftMessageFuncGetter
    { return &MSG_CONTAINER::template SendMessagesToRightContainerSynchronized<LEFT_FACTOR, MSG_ARRAY, ITERATOR>; }
 #endif
 
-   constexpr static bool 
-   ReceivesMessage()
-   { return MSG_CONTAINER::receives_message_from_right_constexpr(); }
-
-   constexpr static bool SendsMessage() 
-   { return MSG_CONTAINER::sends_message_to_right_constexpr(); }
+   constexpr static bool sends_message_to_adjacent_factor() { return MSG_CONTAINER::sends_message_to_right_constexpr(); }
+   constexpr static bool receives_message_from_adjacent_factor() { return MSG_CONTAINER::receives_message_from_right_constexpr(); }
+   constexpr static bool adjacent_factor_sends_message() { return MSG_CONTAINER::sends_message_to_left_constexpr(); }
+   constexpr static bool adjacent_factor_receives_message() { return MSG_CONTAINER::receives_message_from_left_constexpr(); }
 
    constexpr static bool
    CanCallReceiveRestrictedMessage()
@@ -122,8 +125,9 @@ struct LeftMessageFuncGetter
    constexpr static decltype(&MSG_CONTAINER::ComputeRightFromLeftPrimal) GetComputePrimalThroughMessageFunc()
    { return &MSG_CONTAINER::ComputeRightFromLeftPrimal; }
 
-   constexpr static Chirality GetChirality() { return Chirality::left; }
-   constexpr static bool factor_holds_messages() { return MSG_CONTAINER::left_factor_holds_messages(); }
+   constexpr static Chirality get_chirality() { return Chirality::left; }
+
+   static auto* get_adjacent_factor(MSG_CONTAINER& msg) { return msg.GetRightFactor(); }
 };
 
 template<typename MSG_CONTAINER>
@@ -139,6 +143,11 @@ struct RightMessageFuncGetter
    template<typename RIGHT_FACTOR, typename MSG_ITERATOR>
    constexpr static decltype(&MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ITERATOR>) GetSendMessagesFunc() 
    { return &MSG_CONTAINER::template SendMessagesToLeftContainer<RIGHT_FACTOR, MSG_ITERATOR>; }
+   constexpr static decltype(&MSG_CONTAINER::send_message_to_left_improvement) get_send_message_improvement_func()
+   { return &MSG_CONTAINER::send_message_to_left_improvement; }
+   template<typename MSG_ITERATOR>
+   constexpr static decltype(&MSG_CONTAINER::template send_messages_to_left_improvement<MSG_ITERATOR>) get_send_messages_improvement_func()
+   { return &MSG_CONTAINER::template send_messages_to_left_improvement<MSG_ITERATOR>; }
 
 #ifdef LP_MP_PARALLEL
    constexpr static decltype(&MSG_CONTAINER::ReceiveMessageFromLeftContainerSynchronized) GetReceiveSynchronizedFunc() { return &MSG_CONTAINER::ReceiveMessageFromLeftContainerSynchronized; }
@@ -148,11 +157,10 @@ struct RightMessageFuncGetter
    { return &MSG_CONTAINER::template SendMessagesToLeftContainerSynchronized<RIGHT_FACTOR, MSG_ARRAY, ITERATOR>; }
 #endif
 
-   constexpr static bool ReceivesMessage()
-   { return MSG_CONTAINER::receives_message_from_left_constexpr(); }
-
-   constexpr static bool SendsMessage() 
-   { return MSG_CONTAINER::sends_message_to_left_constexpr(); }
+   constexpr static bool sends_message_to_adjacent_factor() { return MSG_CONTAINER::sends_message_to_left_constexpr(); }
+   constexpr static bool receives_message_from_adjacent_factor() { return MSG_CONTAINER::receives_message_from_left_constexpr(); }
+   constexpr static bool adjacent_factor_sends_message() { return MSG_CONTAINER::sends_message_to_right_constexpr(); }
+   constexpr static bool adjacent_factor_receives_message() { return MSG_CONTAINER::receives_message_from_right_constexpr(); }
 
    constexpr static bool CanCallReceiveRestrictedMessage() 
    { return MSG_CONTAINER::CanCallReceiveRestrictedMessageFromLeftContainer(); }
@@ -166,8 +174,9 @@ struct RightMessageFuncGetter
    constexpr static decltype(&MSG_CONTAINER::ComputeLeftFromRightPrimal) GetComputePrimalThroughMessageFunc()
    { return &MSG_CONTAINER::ComputeLeftFromRightPrimal; }
 
-   constexpr static Chirality GetChirality() { return Chirality::right; }
-   constexpr static bool factor_holds_messages() { return MSG_CONTAINER::right_factor_holds_messages(); }
+   constexpr static Chirality get_chirality() { return Chirality::right; }
+
+   static auto* get_adjacent_factor(MSG_CONTAINER& msg) { return msg.GetLeftFactor(); }
 };
 
 template<class MSG_CONTAINER, template<typename> class FuncGetter>
@@ -195,8 +204,10 @@ struct MessageDispatcher
       (t.*staticMemberFunc)();
    }
 
-   constexpr static bool SendsMessage() { return FuncGetter<MSG_CONTAINER>::SendsMessage(); }
-   constexpr static bool ReceivesMessage() { return FuncGetter<MSG_CONTAINER>::ReceivesMessage(); }
+   constexpr static bool sends_message_to_adjacent_factor() { return FuncGetter<MSG_CONTAINER>::sends_message_to_adjacent_factor(); }
+   constexpr static bool receives_message_from_adjacent_factor() { return FuncGetter<MSG_CONTAINER>::receives_message_from_adjacent_factor(); }
+   constexpr static bool adjacent_factor_sends_message() { return FuncGetter<MSG_CONTAINER>::adjacent_factor_sends_message(); }
+   constexpr static bool adjacent_factor_receives_message() { return FuncGetter<MSG_CONTAINER>::adjacent_factor_receives_message(); }
 
    template<typename FACTOR_TYPE>
    static void SendMessage(FACTOR_TYPE* f, MSG_CONTAINER& t, const REAL omega)
@@ -204,6 +215,13 @@ struct MessageDispatcher
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetSendFunc();
       (t.*staticMemberFunc)(f, omega);
    }
+
+   static REAL send_message_improvement(MSG_CONTAINER& t)
+   {
+       auto static_member_func = FuncGetter<MSG_CONTAINER>::get_send_message_improvement_func();
+       return (t.*static_member_func)();
+   }
+
 
 #ifdef LP_MP_PARALLEL
    template<typename FACTOR_TYPE>
@@ -222,6 +240,13 @@ struct MessageDispatcher
    {
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::template GetSendMessagesFunc<FACTOR, MSG_ITERATOR>();
       (*staticMemberFunc)(f, msgs_begin, msgs_end, omega);
+   }
+
+   template<typename MSG_ITERATOR>
+   static REAL send_messages_improvement(MSG_ITERATOR msg_begin, MSG_ITERATOR msg_end)
+   {
+       auto static_member_func = FuncGetter<MSG_CONTAINER>::template get_send_messages_improvement_func<MSG_ITERATOR>();
+       return (*static_member_func)(msg_begin, msg_end);
    }
 
 #ifdef LP_MP_PARALLEL
@@ -243,8 +268,9 @@ struct MessageDispatcher
       auto staticMemberFunc = FuncGetter<MSG_CONTAINER>::GetComputePrimalThroughMessageFunc();
       return (t.*staticMemberFunc)();
    }
-   constexpr static Chirality GetChirality() { return FuncGetter<MSG_CONTAINER>::GetChirality(); }
-   constexpr static bool factor_holds_messages() { return FuncGetter<MSG_CONTAINER>::factor_holds_messages(); }
+   constexpr static Chirality get_chirality() { return FuncGetter<MSG_CONTAINER>::get_chirality(); }
+
+   static auto* get_adjacent_factor(MSG_CONTAINER& msg) { return FuncGetter<MSG_CONTAINER>::get_adjacent_factor(msg); }
 };
 
 template<typename MSG_CONTAINER>
@@ -321,12 +347,13 @@ template<typename MESSAGE_TYPE,
          message_passing_schedule MPS,
          SIGNED_INDEX NO_OF_LEFT_FACTORS, SIGNED_INDEX NO_OF_RIGHT_FACTORS,
          typename FACTOR_MESSAGE_TRAIT, 
-         INDEX MESSAGE_NO
+         INDEX MESSAGE_NO,
+         INDEX ESTIMATED_NO_OF_LEFT_FACTORS = 4, INDEX ESTIMATED_NO_OF_RIGHT_FACTORS = 4
          >
-class MessageContainer : public MessageTypeAdapter,
+class MessageContainer : //public MessageTypeAdapter,
                          // when NO_OF_LEFT_FACTORS is zero, we hold factors in linked list
-                         public next_msg_container_selector< MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::left>::type,
-                         public next_msg_container_selector< MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO>, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::right>::type
+                         public next_msg_container_selector< MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO,ESTIMATED_NO_OF_LEFT_FACTORS,ESTIMATED_NO_OF_RIGHT_FACTORS>, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::left>::type,
+                         public next_msg_container_selector< MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO,ESTIMATED_NO_OF_LEFT_FACTORS,ESTIMATED_NO_OF_RIGHT_FACTORS>, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::right>::type
 {
 public:
    using leftFactorNumber_t = std::integral_constant<INDEX, LEFT_FACTOR_NO>;
@@ -336,7 +363,10 @@ public:
    static constexpr INDEX no_left_factors() { return NO_OF_LEFT_FACTORS; }
    static constexpr INDEX no_right_factors() { return NO_OF_RIGHT_FACTORS; }
 
-   using MessageContainerType = MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, MPS, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, FACTOR_MESSAGE_TRAIT, MESSAGE_NO>;
+   static constexpr INDEX estimated_no_left_factors() { return ESTIMATED_NO_OF_LEFT_FACTORS; }
+   static constexpr INDEX estimated_no_right_factors() { return ESTIMATED_NO_OF_RIGHT_FACTORS; }
+
+   using MessageContainerType = MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, MPS, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, FACTOR_MESSAGE_TRAIT, MESSAGE_NO, ESTIMATED_NO_OF_LEFT_FACTORS,ESTIMATED_NO_OF_RIGHT_FACTORS>;
    using MessageType = MESSAGE_TYPE;
    using next_left_message_container_type = next_msg_container_selector<MessageContainerType, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::left>;
    using next_right_message_container_type = next_msg_container_selector<MessageContainerType, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::left>;
@@ -416,14 +446,6 @@ public:
    //   //global_real_block_allocator.deallocate(mem,sizeof(FactorContainerType));
    //}
 
-   virtual MessageTypeAdapter* clone(FactorTypeAdapter* l, FactorTypeAdapter* r) const final
-   {
-      assert(false); // not used anymore. FactorContainer should clone also the messages
-      return nullptr;
-      //auto* m = new MessageContainer(msg_op_, static_cast<LeftFactorContainer*>(l), static_cast<RightFactorContainer*>(r));
-      //return m; 
-   }
-
    void send_message_to_left(const REAL omega = 1.0) 
    {
       send_message_to_left(rightFactor_->GetFactor(), omega);
@@ -454,6 +476,11 @@ public:
    }
 #endif
 
+   REAL send_message_to_left_improvement()
+   {
+       return msg_op_.send_message_to_left_improvement(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+   }
+
    void send_message_to_right(const REAL omega = 1.0) 
    {
       send_message_to_right(leftFactor_->GetFactor(), omega);
@@ -483,6 +510,11 @@ public:
      }
    }
 #endif
+
+   REAL send_message_to_right_improvement()
+   {
+       return msg_op_.send_message_to_right_improvement(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+   }
 
    constexpr static bool
    CanCallReceiveMessageFromRightContainer()
@@ -618,8 +650,11 @@ public:
    template<Chirality CHIRALITY, typename MESSAGE_ITERATOR>
    struct MessageIteratorView {
      MessageIteratorView(MESSAGE_ITERATOR it) : it_(it) {} 
-     MessageContainerView<CHIRALITY>& operator*() const {
-       return *(static_cast<MessageContainerView<CHIRALITY>*>( *it_ )); 
+     const MessageContainerView<CHIRALITY>& operator*() const {
+       return *(static_cast<MessageContainerView<CHIRALITY>*>( &*it_ )); 
+     }
+     MessageContainerView<CHIRALITY>& operator*() {
+       return *(static_cast<MessageContainerView<CHIRALITY>*>( &*it_ )); 
      }
      MessageIteratorView<CHIRALITY,MESSAGE_ITERATOR>& operator++() {
        ++it_;
@@ -751,6 +786,14 @@ public:
      }
    }
 
+   template<typename MSG_ITERATOR>
+   static REAL send_messages_to_left_improvement(MSG_ITERATOR msg_begin, MSG_ITERATOR msg_end) 
+   {
+       auto* r = (*msg_begin).GetRightFactor()->GetFactor();
+       auto& msg_op = (*msg_begin).GetMessageOp();
+       return msg_op.send_messages_to_left_improvement(*r, msg_begin, msg_end);
+   }
+
    constexpr static bool CanCallSendMessagesToRightContainer()
    {
       // possibly the below is to complicated. meta::find will be easier
@@ -817,6 +860,15 @@ public:
      }
    }
 #endif
+
+   template<typename MSG_ITERATOR>
+   static REAL send_messages_to_right_improvement(MSG_ITERATOR msg_begin, MSG_ITERATOR msg_end) 
+   {
+       assert(msg_begin != msg_end);
+       auto* l = (*msg_begin).GetLeftFactor()->GetFactor();
+       auto& msg_op = (*msg_begin).GetMessageOp();
+       return msg_op.send_messages_to_right_improvement(*l, msg_begin, msg_end);
+   }
 
    constexpr static bool
    CanComputeRightFromLeftPrimal()
@@ -910,7 +962,7 @@ public:
           typename RightFactorContainer::FactorType>();
    }
 
-   bool CheckPrimalConsistency() const final
+   bool CheckPrimalConsistency() const
    { 
       bool ret;
       static_if<CanCheckPrimalConsistency()>([&](auto f) {
@@ -941,13 +993,14 @@ public:
    RepamLeft(const ARRAY& m)
    { 
       //assert(false); // no -+ distinguishing
-      static_if<CanBatchRepamLeft<ARRAY>()>([&](auto f) {
-            f(msg_op_).RepamLeft(*(leftFactor_->GetFactor()), m);
-      }).else_([&](auto f) {
-         for(INDEX i=0; i<f(m).size(); ++i) {
-            f(msg_op_).RepamLeft(*(leftFactor_->GetFactor()), f(m)[i], i);
+      if constexpr(CanBatchRepamLeft<ARRAY>()) {
+            msg_op_.RepamLeft(*(leftFactor_->GetFactor()), m);
+      } else {
+         const auto s = m.size();
+         for(INDEX i=0; i<s; ++i) {
+            msg_op_.RepamLeft(*(leftFactor_->GetFactor()), m[i], i);
          }
-      });
+      }
    }
    /*
    template<typename ARRAY, bool IsAssignable = IsAssignableLeft()>
@@ -994,13 +1047,14 @@ public:
    RepamRight(const ARRAY& m)
    { 
       //assert(false); // no -+ distinguishing
-      static_if<CanBatchRepamRight<ARRAY>()>([&](auto f) {
-            f(msg_op_).RepamRight(*(rightFactor_->GetFactor()), m);
-      }).else_([&](auto f) {
-         for(INDEX i=0; i<f(m).size(); ++i) {
-            f(msg_op_).RepamRight(*(rightFactor_->GetFactor()), f(m)[i], i);
+      if constexpr(CanBatchRepamRight<ARRAY>()) {
+            msg_op_.RepamRight(*(rightFactor_->GetFactor()), m);
+      } else {
+          const auto s = m.size();
+         for(INDEX i=0; i<s; ++i) {
+            msg_op_.RepamRight(*(rightFactor_->GetFactor()), m[i], i);
          }
-      });
+      }
    }
    /*
    template<typename ARRAY, bool IsAssignable = IsAssignableRight()>
@@ -1042,24 +1096,20 @@ public:
    FactorTypeAdapter* GetLeftFactorTypeAdapter() const { return leftFactor_; }
    FactorTypeAdapter* GetRightFactorTypeAdapter() const { return rightFactor_; }
    // do zrobienia: Rename Get{Left|Right}FactorContainer
-   LeftFactorContainer* GetLeftFactor() const final { return leftFactor_; }
-   RightFactorContainer* GetRightFactor() const final { return rightFactor_; }
+   LeftFactorContainer* GetLeftFactor() const { return leftFactor_; }
+   RightFactorContainer* GetRightFactor() const { return rightFactor_; }
 
-   void SetLeftFactor(FactorTypeAdapter* l) final 
+   void SetLeftFactor(FactorTypeAdapter* l) 
    {
       assert(dynamic_cast<LeftFactorContainer*>(l));
       leftFactor_ = static_cast<LeftFactorContainer*>(l); 
    }
-   void SetRightFactor(FactorTypeAdapter* r) final 
+   void SetRightFactor(FactorTypeAdapter* r)
    {
       assert(dynamic_cast<RightFactorContainer*>(r));
       rightFactor_ = static_cast<RightFactorContainer*>(r); 
    }
 
-   //INDEX GetMessageNumber() const final { return MESSAGE_NO; } 
-   //REAL GetMessageWeightToRight() const final { return SEND_MESSAGE_TO_RIGHT_WEIGHT::value; }
-   //REAL GetMessageWeightToLeft() const final { return SEND_MESSAGE_TO_LEFT_WEIGHT::value;  }
-   
    // class for storing a callback upon new assignment of message: update left and right factors
    // convention is as follows: original message is for right factor. Inverted message is for left one
    template<Chirality CHIRALITY>
@@ -1237,10 +1287,9 @@ public:
    }
 
    // possibly not the best choice: Sometimes msg_op_ needs access to this class
-   const MessageType& GetMessageOp() const
-   {
-      return msg_op_;
-   }
+   const MessageType& GetMessageOp() const { return msg_op_; }
+
+   MessageType& GetMessageOp() { return msg_op_; }
 
    // for weight computations these functions are necessary
    static constexpr bool sends_message_to_left_constexpr()
@@ -1260,10 +1309,10 @@ public:
      return MPS == message_passing_schedule::left || MPS == message_passing_schedule::full;
    }
 
-   virtual bool SendsMessageToLeft() const final { return sends_message_to_left_constexpr(); }
-   virtual bool SendsMessageToRight() const final { return sends_message_to_right_constexpr(); }
-   virtual bool ReceivesMessageFromLeft() const final { return receives_message_from_left_constexpr(); }
-   virtual bool ReceivesMessageFromRight() const final { return receives_message_from_right_constexpr(); }
+   bool SendsMessageToLeft() const { return sends_message_to_left_constexpr(); }
+   bool SendsMessageToRight() const { return sends_message_to_right_constexpr(); }
+   bool ReceivesMessageFromLeft() const { return receives_message_from_left_constexpr(); }
+   bool ReceivesMessageFromRight() const { return receives_message_from_right_constexpr(); }
 
    /*
    constexpr static bool
@@ -1284,7 +1333,7 @@ public:
    */ 
    
    // for traversing a tree
-   virtual void send_message_up(Chirality c) final
+   virtual void send_message_up(Chirality c) 
    {
       if(c == Chirality::right) { // right factor is top one
          leftFactor_->GetFactor()->init_primal();
@@ -1314,7 +1363,7 @@ public:
    }
 
    
-   virtual void track_solution_down(Chirality c) final
+   virtual void track_solution_down(Chirality c) 
    {
       // we can assume that upper factor has already (partially) computed primal.
       // we check whether we can receive restricted messages from upper and compute primal in lower. If yes, we receive restricted message, compute primal in lower factor and propagate it back to upper factor.
@@ -1431,20 +1480,20 @@ public:
        DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s, 
        const typename DD_ILP::variable_counters& left_variable_counters,
        const typename DD_ILP::variable_counters& right_variable_counters 
-       ) final
+       ) 
    { construct_constraints_impl(s, left_variable_counters, right_variable_counters); }
    virtual void construct_constraints(
        DD_ILP::external_solver_interface<DD_ILP::problem_export>& s, 
        const typename DD_ILP::variable_counters& left_variable_counters,
        const typename DD_ILP::variable_counters& right_variable_counters 
-       ) final
+       ) 
    { construct_constraints_impl(s, left_variable_counters, right_variable_counters); }
 #ifdef DD_ILP_WITH_GUROBI
    virtual void construct_constraints(
        DD_ILP::external_solver_interface<DD_ILP::gurobi_interface>& s, 
        const typename DD_ILP::variable_counters& left_variable_counters,
        const typename DD_ILP::variable_counters& right_variable_counters 
-       ) final
+       ) 
    { construct_constraints_impl(s, left_variable_counters, right_variable_counters); }
 #endif
 
@@ -1453,6 +1502,8 @@ protected:
    MessageType msg_op_; // possibly inherit privately from MessageType to apply empty base optimization when applicable
    LeftFactorContainer* leftFactor_;
    RightFactorContainer* rightFactor_;
+   //REAL omega_forward_, omega_backward_; // only store for messages that are actually sent!
+   //bool receive_forward_, bool receive_backward_; // only store for messages that are actually received!
 };
 
 
@@ -1466,15 +1517,19 @@ public:
 
     static constexpr std::size_t message_storage_byte_size() 
     {
+        return N*(sizeof(message_type) + 4*sizeof(void*));
+
+        /*
         constexpr auto no_left_factors = MESSAGE_CONTAINER_TYPE::no_left_factors();
         constexpr auto no_right_factors = MESSAGE_CONTAINER_TYPE::no_right_factors();
         if constexpr(no_left_factors == 0 && no_right_factors != 0) {
-            return N*(sizeof(message_type) + 5*sizeof(void*));
+            return N*(sizeof(message_type) + 4*sizeof(void*));
         } else if constexpr(no_left_factors != 0 && no_right_factors == 0) {
-            return N*(sizeof(message_type) + 5*sizeof(void*));
+            return N*(sizeof(message_type) + 4*sizeof(void*));
         } else {
             return N*(sizeof(message_type) + 4*sizeof(void*)); // for left and right factor + vtbl
         }
+        */
         //return sizeof(MESSAGE_CONTAINER_TYPE) * N; 
     }
     //static constexpr std::size_t message_storage_byte_size_ = sizeof(MESSAGE_CONTAINER_TYPE)*N;
@@ -1520,7 +1575,8 @@ public:
     std::size_t occupied() const 
     {
         // check storage until encountering a slot with all zeros
-        for(std::size_t i=0; i<capacity(); ++i) {
+        auto cap = capacity();
+        for(std::size_t i=0; i<cap; ++i) {
             bool occupied = false;
             for(std::size_t j=0; j<sizeof(MESSAGE_CONTAINER_TYPE); ++j) {
                 if(storage_[i*sizeof(MESSAGE_CONTAINER_TYPE) + j] != 0) {
@@ -1586,7 +1642,12 @@ class variable_message_container_storage {
 public:
     using chunk_type = variable_message_container_storage_chunk;
 
-    chunk_type* last_chunk()
+    variable_message_container_storage() :
+        end_(&first_chunk_,0),
+        size_(0)
+    {} 
+
+    chunk_type* last_chunk() const
     {
         auto* cur_chunk = &first_chunk_;
 
@@ -1610,9 +1671,12 @@ public:
         }
 
         auto* m = cur_chunk->push_back(l, r, args...);
+
+        end_ = iterator(cur_chunk, cur_chunk->occupied());
+        ++size_;
 #ifndef NDEBUG
         assert(no_messages + 1 == size());
-#endif
+#endif 
         return m;
     }
 
@@ -1620,6 +1684,8 @@ public:
 
     std::size_t size() const
     {
+        return size_;
+        // can be optimized using end_
         std::size_t c = 0;
         auto* cur_chunk = &first_chunk_;
         while(cur_chunk->next_ != nullptr) {
@@ -1652,6 +1718,8 @@ public:
          const MESSAGE_CONTAINER_TYPE& operator*() const { return (*chunk_)[i_]; } 
          bool operator==(const iterator& o) const { return chunk_ == o.chunk_ && i_ == o.i_; }
          bool operator!=(const iterator& o) const { return !(*this == o); }
+         chunk_type* chunk() const { return chunk_; }
+         std::size_t chunk_size() const { return i_; }
       private:
          chunk_type* chunk_;
          std::size_t i_;
@@ -1661,21 +1729,28 @@ public:
       return iterator(&first_chunk_);
    }
    const iterator end() const {
-      auto* c = last_chunk();
-      return iterator(c, c->occupied());
+       assert(end_ == iterator(last_chunk(), last_chunk()->occupied()));
+       return end_;
+      //auto* c = last_chunk();
+      //return iterator(c, c->occupied());
    }
 
    iterator begin() {
       return iterator(&first_chunk_);
    }
    iterator end() {
-      auto* c = last_chunk();
-      return iterator(c, c->occupied());
+       assert(end_ == iterator(last_chunk(), last_chunk()->occupied()));
+       return end_;
+      //auto* c = last_chunk();
+      //return iterator(c, c->occupied());
    }
 
+    bool empty() const { return begin() == end(); }
 
 private:
     mutable chunk_type first_chunk_;
+    iterator end_;
+    std::size_t size_;
 };
 
 
@@ -1692,13 +1767,24 @@ public:
         static_assert(N > 0);
     } 
 
-    std::size_t size() const { return this->occupied(); }
+    std::size_t size() const { return std::distance(begin(), end()); }
+
+    template<typename LEFT_FACTOR, typename RIGHT_FACTOR, typename ...ARGS>
+    MESSAGE_CONTAINER_TYPE* push_back(LEFT_FACTOR* l, RIGHT_FACTOR* r, ARGS... args) 
+    {
+        ++end_;
+    }
 
     const auto* begin() const { return reinterpret_cast<const MESSAGE_CONTAINER_TYPE*>(&this->storage_[0]); } 
-    const auto* end() const { return reinterpret_cast<const MESSAGE_CONTAINER_TYPE*>(&this->storage_[0]) + this->occupied(); }
+    const auto* end() const { return end_; }
 
     auto* begin() { return reinterpret_cast<MESSAGE_CONTAINER_TYPE*>(&this->storage_[0]); } 
-    auto* end() { return reinterpret_cast<MESSAGE_CONTAINER_TYPE*>(&this->storage_[0]) + this->occupied(); }
+    //auto* end() { return reinterpret_cast<MESSAGE_CONTAINER_TYPE*>(&this->storage_[0]) + this->occupied(); }
+    auto* end() { return end_; }
+
+    bool empty() const { return begin() == end(); }
+private:
+    MESSAGE_CONTAINER_TYPE* end_;
 };
 
 // hold exactly N messages
@@ -1721,6 +1807,8 @@ public:
 
     auto* begin() { return reinterpret_cast<MESSAGE_CONTAINER_TYPE*>(&this->storage_[0]); } 
     auto* end() { return reinterpret_cast<MESSAGE_CONTAINER_TYPE*>(&this->storage_[0]) + this->occupied(); }
+
+    static constexpr bool empty() { return false; }
 };
 
 template<typename MESSAGE_CONTAINER_TYPE, Chirality CHIRALITY>
@@ -1787,13 +1875,14 @@ public:
     auto begin() const { return iterator(ptr); }
     auto end() const { return iterator(nullptr); }
 
+    bool empty() const { return ptr != nullptr; }
 private:
     MESSAGE_CONTAINER_TYPE* ptr;
 };
 
 // N=0 means variable number of messages, > 0 means compile time fixed number of messages and <0 means at most compile time number of messages
 // see config.hxx for shortcuts
-template<typename MESSAGE_CONTAINER_TYPE, SIGNED_INDEX NO_LEFT_FACTORS, SIGNED_INDEX NO_RIGHT_FACTORS, Chirality CHIRALITY>
+template<typename MESSAGE_CONTAINER_TYPE, SIGNED_INDEX NO_LEFT_FACTORS, SIGNED_INDEX NO_RIGHT_FACTORS, INDEX ESTIMATED_NO_OF_LEFT_FACTORS, INDEX ESTIMATED_NO_OF_RIGHT_FACTORS, Chirality CHIRALITY>
 struct message_container_selector {
     // the following cases may arise:
    // exactly one side has fixed number of messages, hold it in fixed_message_storage in factor of corresponding side.  The other side holds pointer to first message and messages holds next pointer.
@@ -1801,7 +1890,7 @@ struct message_container_selector {
    // both sides have fixed number of messages: not implemented yet.
 
    // number of entries in variable_message_container_storage chunks
-    static constexpr std::size_t variable_message_container_storage_size = 8;
+    static constexpr std::size_t variable_message_container_storage_size = 4;
 
     class empty {};
 
@@ -1811,7 +1900,7 @@ struct message_container_selector {
    std::conditional_t<(CHIRALITY == Chirality::left && NO_LEFT_FACTORS > 0 && NO_RIGHT_FACTORS < 0), fixed_message_container_storage<MESSAGE_CONTAINER_TYPE, NO_LEFT_FACTORS>,
 
    std::conditional_t<(CHIRALITY == Chirality::left && NO_LEFT_FACTORS < 0 && NO_RIGHT_FACTORS == 0), up_to_message_container_storage<MESSAGE_CONTAINER_TYPE, NO_LEFT_FACTORS>,
-   std::conditional_t<(CHIRALITY == Chirality::left && NO_LEFT_FACTORS == 0 && NO_RIGHT_FACTORS == 0), variable_message_container_storage<MESSAGE_CONTAINER_TYPE, variable_message_container_storage_size>,
+   std::conditional_t<(CHIRALITY == Chirality::left && NO_LEFT_FACTORS == 0 && NO_RIGHT_FACTORS == 0), variable_message_container_storage<MESSAGE_CONTAINER_TYPE, ESTIMATED_NO_OF_LEFT_FACTORS>,
    std::conditional_t<(CHIRALITY == Chirality::left && NO_LEFT_FACTORS > 0 && NO_RIGHT_FACTORS == 0), fixed_message_container_storage<MESSAGE_CONTAINER_TYPE, NO_LEFT_FACTORS>,
 
    std::conditional_t<(CHIRALITY == Chirality::left && NO_LEFT_FACTORS < 0 && NO_RIGHT_FACTORS > 0), up_to_message_container_storage<MESSAGE_CONTAINER_TYPE, NO_LEFT_FACTORS>,
@@ -1824,7 +1913,7 @@ struct message_container_selector {
    std::conditional_t<(CHIRALITY == Chirality::right && NO_RIGHT_FACTORS > 0 && NO_LEFT_FACTORS < 0), fixed_message_container_storage<MESSAGE_CONTAINER_TYPE, NO_RIGHT_FACTORS>,
 
    std::conditional_t<(CHIRALITY == Chirality::right && NO_RIGHT_FACTORS < 0 && NO_LEFT_FACTORS == 0), up_to_message_container_storage<MESSAGE_CONTAINER_TYPE, NO_RIGHT_FACTORS>,
-   std::conditional_t<(CHIRALITY == Chirality::right && NO_RIGHT_FACTORS == 0 && NO_LEFT_FACTORS == 0), variable_message_container_storage<MESSAGE_CONTAINER_TYPE, variable_message_container_storage_size>,
+   std::conditional_t<(CHIRALITY == Chirality::right && NO_RIGHT_FACTORS == 0 && NO_LEFT_FACTORS == 0), variable_message_container_storage<MESSAGE_CONTAINER_TYPE, ESTIMATED_NO_OF_RIGHT_FACTORS>,
    std::conditional_t<(CHIRALITY == Chirality::right && NO_RIGHT_FACTORS > 0 && NO_LEFT_FACTORS == 0), fixed_message_container_storage<MESSAGE_CONTAINER_TYPE, NO_RIGHT_FACTORS>,
 
    std::conditional_t<(CHIRALITY == Chirality::right && NO_RIGHT_FACTORS < 0 && NO_LEFT_FACTORS > 0), up_to_message_container_storage<MESSAGE_CONTAINER_TYPE, NO_RIGHT_FACTORS>,
@@ -1836,6 +1925,8 @@ struct message_container_selector {
    ~message_container_selector()
    {
        static_assert(!std::is_same_v<type, empty>, "");
+       static_assert(ESTIMATED_NO_OF_LEFT_FACTORS > 0);
+       static_assert(ESTIMATED_NO_OF_RIGHT_FACTORS > 0);
    }
 };
 
@@ -1855,6 +1946,7 @@ class FactorContainer : public FactorTypeAdapter
 public:
    using FactorContainerType = FactorContainer<FACTOR_TYPE, FACTOR_MESSAGE_TRAIT, FACTOR_NO, COMPUTE_PRIMAL_SOLUTION>;
    using FactorType = FACTOR_TYPE;
+   using FMC = FACTOR_MESSAGE_TRAIT;
 
    // do zrobienia: templatize cosntructor to allow for more general initialization of reparametrization storage and factor
    template<typename ...ARGS>
@@ -1942,20 +2034,33 @@ public:
    //      std::get<n>(msg_).push_back(m);
    //}
 
-   void UpdateFactor(const weight_slice& omega, const receive_slice& receive_mask) final
+   void update_factor_uniform(const REAL leave_weight) final
+   {
+       receive_messages();
+       MaximizePotential();
+       send_messages(leave_weight);
+   }
+   void UpdateFactor(const weight_slice omega, const receive_slice receive_mask) final
    {
       ReceiveMessages(receive_mask);
       MaximizePotential();
       SendMessages(omega);
    }
 
-   void update_factor_residual(const weight_slice& omega)
+   void update_factor_adaptive(const weight_slice omega, const receive_slice receive_mask) final
    {
-       assert(false); // add receive mask here
+      ReceiveMessages(receive_mask);
+      MaximizePotential();
+      send_messages_with_adaptive_weights(omega); 
+   }
+
+   void update_factor_residual(const weight_slice omega, const receive_slice receive_mask) final
+   {
       assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
       assert(*std::max_element(omega.begin(), omega.end()) <= 1.0+eps);
       assert(std::distance(omega.begin(), omega.end()) == no_send_messages());
-      ReceiveMessages(omega);
+      assert(receive_mask.size() == no_receive_messages());
+      ReceiveMessages(receive_mask);
       MaximizePotential();
       send_messages_residual(omega); // other message passing type shall be called "shared"
    }
@@ -2076,7 +2181,9 @@ public:
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this](auto l) {
             if constexpr(l.CanComputePrimalThroughMessage()) {
                   constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-                  for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it) {
+                  auto msg_begin = std::get<n>(msg_).begin();
+                  auto msg_end = std::get<n>(msg_).end();
+                  for(auto it = msg_begin; it != msg_end; ++it) {
                      l.ComputePrimalThroughMessage(*it);
                   }
             }
@@ -2090,7 +2197,9 @@ public:
        meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this, &consistent](auto l) {
               constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
               if(consistent) {
-               for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it) {
+                auto msg_begin = std::get<n>(msg_).begin();
+                auto msg_end = std::get<n>(msg_).end();
+                for(auto it = msg_begin; it != msg_end; ++it) {
                 const bool message_consistent = (*it).CheckPrimalConsistency();
                 if(!message_consistent) {
                     consistent = false;
@@ -2102,33 +2211,51 @@ public:
       return consistent;
    }
 
+   void receive_messages()
+   {
+      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this](auto l) {
+            constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+            if constexpr(l.receives_message_from_adjacent_factor()) {
+                auto msg_begin = std::get<n>(msg_).begin();
+                auto msg_end = std::get<n>(msg_).end();
+                for(auto it = msg_begin; it != msg_end; ++it) {
+                    l.ReceiveMessage(*it);
+                }
+            }
+      });
+   }
+
+
    template<typename WEIGHT_VEC>
    void ReceiveMessages(const WEIGHT_VEC& receive_mask) 
    {
+      assert(std::distance(receive_mask.begin(), receive_mask.end()) == no_receive_messages()); 
       assert(*std::max_element(receive_mask.begin(), receive_mask.end()) <= 1);
       assert(*std::min_element(receive_mask.begin(), receive_mask.end()) >= 0);
-      assert(std::distance(receive_mask.begin(), receive_mask.end()) == no_receive_messages()); 
-#ifndef NDEBUG
-       const REAL before_lb = LowerBound();
-#endif
-      // note: currently all messages are received, even if not needed. Change this again.
-      auto receive_it = receive_mask.begin();
+
       assert(receive_mask.size() == no_receive_messages());
+      auto receive_it = receive_mask.begin();
+
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&receive_it](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            if constexpr(l.ReceivesMessage()) {
-                  for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++receive_it) {
+            if constexpr(l.receives_message_from_adjacent_factor()) {
+                auto msg_begin = std::get<n>(msg_).begin();
+                auto msg_end = std::get<n>(msg_).end();
+                  for(auto it = msg_begin; it != msg_end; ++it, ++receive_it) {
                      if(*receive_it) {
-                         l.ReceiveMessage(*it);
+#ifndef NDEBUG
+                        const REAL before_lb = LowerBound() + l.get_adjacent_factor(*it)->LowerBound();
+#endif
+                        l.ReceiveMessage(*it);
+#ifndef NDEBUG
+                        const REAL after_lb = LowerBound() + l.get_adjacent_factor(*it)->LowerBound();
+                        assert(before_lb <= after_lb + eps);
+#endif
                      }
                   }
             }
             
       });
-#ifndef NDEBUG
-       const REAL after_lb = LowerBound();
-       assert(before_lb <= after_lb + eps);
-#endif
 
    }
 
@@ -2141,7 +2268,7 @@ public:
       auto omegaIt = omega.begin();
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&omegaIt](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            if constexpr(l.ReceivesMessage() {
+            if constexpr(l.receives_message_from_adjacent_factor() {
                   for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
                      //if(*omegaIt == 0.0) { // makes large difference for cosegmentation_bins, why?
                      l.ReceiveMessageSynchronized(*it);
@@ -2160,7 +2287,9 @@ public:
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
             if constexpr(l.CanCallReceiveRestrictedMessage()) {
-                  for(auto it=std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it) {
+                auto msg_begin = std::get<n>(msg_).begin();
+                auto msg_end = std::get<n>(msg_).end();
+                  for(auto it = msg_begin; it != msg_end; ++it) {
                      l.ReceiveRestrictedMessage(*it); 
                   }
             }
@@ -2193,7 +2322,7 @@ public:
       INDEX no_calls = 0;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_calls](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            if(l.SendsMessage()) {
+            if(l.sends_message_to_adjacent_factor()) {
                no_calls += std::get<n>(msg_).size();
             }
             } );
@@ -2206,11 +2335,11 @@ public:
       INDEX no_calls = 0;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_calls](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            if(l.CanCallSendMessages() && l.SendsMessage()) {
-               if(std::get<n>(msg_).size() > 0) {
+            if(l.CanCallSendMessages() && l.sends_message_to_adjacent_factor()) {
+               if(!std::get<n>(msg_).empty()) {
                   ++no_calls;
                }
-            } else if(l.SendsMessage()) {
+            } else if(l.sends_message_to_adjacent_factor()) {
                no_calls += std::get<n>(msg_).size();
             }
             } );
@@ -2222,11 +2351,98 @@ public:
        INDEX no_messages = 0;
        meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&no_messages](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            if(l.ReceivesMessage()) {
+            if(l.receives_message_from_adjacent_factor()) {
                no_messages += std::get<n>(msg_).size();
             }
        } );
        return no_messages;
+   }
+
+   // given some sending mask, skip over those iterators that have zero weight
+   template<typename MSG_ITERATOR, typename WEIGHT_ITERATOR>
+   struct conditional_message_iterator {
+   public:
+       conditional_message_iterator(MSG_ITERATOR msg_it, WEIGHT_ITERATOR weight_it)
+           : msg_it_(msg_it),
+           weight_it_(weight_it)
+       {}
+
+       const auto& operator*() const
+       {
+           while(*weight_it_ == 0) {
+               ++msg_it_;
+               ++weight_it_;
+           }
+           return *msg_it_;
+       }
+       auto& operator*() 
+       {
+           while(*weight_it_ == 0) {
+               ++msg_it_;
+               ++weight_it_;
+           }
+           return *msg_it_;
+       }
+       conditional_message_iterator& operator++()
+       {
+           ++msg_it_;
+           ++weight_it_;
+           return *this; 
+       }
+       bool operator==(const conditional_message_iterator o) const { return msg_it_ == o.msg_it_; }
+       bool operator!=(const conditional_message_iterator o) const { return !(*this == o); } 
+   private:
+       mutable MSG_ITERATOR msg_it_;
+       mutable WEIGHT_ITERATOR weight_it_; 
+   };
+
+   template<typename MSG_ITERATOR, typename WEIGHT_ITERATOR>
+   conditional_message_iterator<MSG_ITERATOR,WEIGHT_ITERATOR> conditional_message_iterator_begin(MSG_ITERATOR msg_begin, WEIGHT_ITERATOR weight_it)
+   {
+       return conditional_message_iterator<MSG_ITERATOR,WEIGHT_ITERATOR>(msg_begin, weight_it); 
+   }
+
+   template<typename MSG_ITERATOR, typename WEIGHT_ITERATOR>
+   conditional_message_iterator<MSG_ITERATOR,WEIGHT_ITERATOR> conditional_message_iterator_end(MSG_ITERATOR msg_begin, MSG_ITERATOR msg_end, WEIGHT_ITERATOR weight_it)
+   {
+       // find the last message
+       auto last_active_msg = msg_begin;
+       for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++weight_it) {
+           if(*weight_it > 0.0) {
+               last_active_msg = msg_it;
+           } 
+       }
+       ++last_active_msg;
+       return conditional_message_iterator<MSG_ITERATOR,WEIGHT_ITERATOR>(last_active_msg, weight_it); 
+   }
+
+
+   void call_send_messages(FactorType& factor, const REAL send_weight)
+   {
+     meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+         // check whether the message supports batch updates. If so, call batch update, else call individual send message
+         constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+         if constexpr(l.sends_message_to_adjacent_factor()) {
+           auto msg_begin = std::get<n>(msg_).begin();
+           auto msg_end = std::get<n>(msg_).end();
+
+           if constexpr(l.CanCallSendMessages()) {
+
+             const INDEX no_messages = std::get<n>(msg_).size(); 
+
+             if(no_messages > 1) { 
+               const REAL total_send_weight = no_messages*send_weight;
+               l.SendMessages(factor, msg_begin, msg_end, total_send_weight);
+             } else {
+                l.SendMessage(&factor, *msg_begin, send_weight); 
+             } 
+           } else {
+             for(auto msg_it = msg_begin; msg_it != msg_end; ++msg_it) {
+                 l.SendMessage(&factor, *msg_it, send_weight); 
+             }
+           }
+         }
+     }); 
    }
 
    template<typename ITERATOR>
@@ -2236,32 +2452,39 @@ public:
      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
          // check whether the message supports batch updates. If so, call batch update, else call individual send message
          constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-         if constexpr(l.SendsMessage()) {
+         if constexpr(l.sends_message_to_adjacent_factor()) {
            auto msg_begin = std::get<n>(msg_).begin();
            auto msg_end = std::get<n>(msg_).end();
-           const INDEX no_messages = std::get<n>(msg_).size();
 
            if constexpr(l.CanCallSendMessages()) {
 
+             const INDEX no_messages = std::get<n>(msg_).size(); 
              const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](const REAL x){ return x > 0.0; });
 
-             if(no_active_messages > 0) { 
+             if(no_active_messages > 1) { 
                const REAL omega_sum = std::accumulate(omegaIt, omegaIt+no_messages, 0.0);
-               // build array of messages that are actually called
-               if(no_active_messages <= active_messages_array_size) {
-                 auto active_msgs = get_active_messages_array(msg_begin, msg_end, omegaIt);
-                 l.SendMessages(factor, active_msgs.begin(), active_msgs.begin()+no_active_messages, omega_sum);
-               } else {
-                 auto active_msgs = get_active_messages_vector(msg_begin, msg_end, omegaIt, no_active_messages);
-                 l.SendMessages(factor, active_msgs.begin(), active_msgs.begin()+no_active_messages, omega_sum);
-               }
+               auto msg_begin_c = conditional_message_iterator_begin(msg_begin, omegaIt);
+               auto msg_end_c = conditional_message_iterator_end(msg_begin, msg_end, omegaIt);
+               l.SendMessages(factor, msg_begin_c, msg_end_c, omega_sum);
+               omegaIt += no_messages;
+             } else {
+                 for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omegaIt) {
+                     if(*omegaIt > 0) {
+                         l.SendMessage(&factor, *msg_it, *omegaIt); 
+                     } 
+                 }
              } 
-             omegaIt += no_messages;
-
            } else {
              for(auto msg_it = msg_begin; msg_it != msg_end; ++msg_it, ++omegaIt) {
                if(*omegaIt != 0.0) {
+#ifndef NDEBUG
+                 const REAL before_lb = LowerBound() + l.get_adjacent_factor(*msg_it)->LowerBound();
+#endif
                  l.SendMessage(&factor, *msg_it, *omegaIt); 
+#ifndef NDEBUG
+                 const REAL after_lb = LowerBound() + l.get_adjacent_factor(*msg_it)->LowerBound();
+                 assert(before_lb <= after_lb + eps);
+#endif
                }
              }
            }
@@ -2277,7 +2500,7 @@ public:
      meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
          // check whether the message supports batch updates. If so, call batch update.
          // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
-         if(l.SendsMessage()) {
+         if(l.sends_message_to_adjacent_factor()) {
          if constexpr(l.CanCallSendMessages()) {
              constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
              const REAL omega_sum = std::accumulate(omegaIt, omegaIt + std::get<n>(msg_).size(), 0.0);
@@ -2297,6 +2520,19 @@ public:
      });
    }
 #endif
+
+   void send_messages(const REAL leave_weight)
+   {
+       assert(leave_weight >= 0.0);
+       const auto no_calls = no_send_messages_calls();
+       const auto send_weight = 1.0/(leave_weight + no_send_messages());
+       if(no_calls == 1) {
+           call_send_messages(factor_, send_weight); 
+       } else if(no_calls > 1) {
+           FactorType tmp_factor(factor_);
+           call_send_messages(factor_, send_weight); 
+       }
+   }
 
    template<typename WEIGHT_VEC>
    void SendMessages(const WEIGHT_VEC& omega) 
@@ -2326,6 +2562,95 @@ public:
 #endif
 
    } 
+
+   template<typename WEIGHT_VEC>
+   void send_messages_with_adaptive_weights(const WEIGHT_VEC& omega)
+   {
+       assert(*std::min_element(omega.begin(), omega.end()) >= 0.0);
+       assert(std::accumulate(omega.begin(), omega.end(), 0.0) <= 1.0 + eps);
+       assert(std::distance(omega.begin(), omega.end()) == no_send_messages()); 
+
+       // first go over all messages that will be send (i.e. where omega > 0) and record, how large an improvement will result from sending message with weight 1
+       const auto omega_sum = std::accumulate(omega.begin(), omega.end(), 0.0);
+       std::vector<REAL> dual_improvement;
+       dual_improvement.reserve(omega.size());
+
+       auto omega_it = omega.begin();
+       // now record message update
+       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+         // check whether the message supports batch updates. If so, call batch update.
+         // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
+         constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+           if(!std::get<n>(msg_).empty()) {
+
+             auto msg_begin = std::get<n>(msg_).begin();
+             auto msg_end = std::get<n>(msg_).end(); 
+
+             if constexpr(l.CanCallSendMessages()) {
+
+               const INDEX no_messages = std::get<n>(msg_).size();
+               const INDEX no_active_messages = std::count_if(omega_it, omega_it+no_messages, [](REAL x){ return x > 0.0; });
+               REAL impr;
+               if(no_active_messages > 0) { 
+                 auto msg_begin_c = conditional_message_iterator_begin(msg_begin, omega_it);
+                 auto msg_end_c = conditional_message_iterator_end(msg_begin, msg_end, omega_it);
+                 impr = l.send_messages_improvement(msg_begin_c, msg_end_c);
+                 //impr = l.send_messages_improvement(conditional_message_iterator(msg_begin, omega_it), conditional_message_iterator_end(msg_begin, omega_it));
+                 assert(impr >= -eps);
+                 impr = std::abs(impr);
+               } 
+
+               // record dual improvement
+               for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
+                   if(*omega_it > 0) {
+                       dual_improvement.push_back(impr/no_active_messages);
+                   } else {
+                       dual_improvement.push_back(0.0);
+                   }
+               }
+
+             } else {
+                 for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it, ++omega_it) {
+                    if(*omega_it > 0.0) {
+                        dual_improvement.push_back( l.send_message_improvement(*msg_it) );
+                        assert(dual_improvement.back() >= -eps);
+                        dual_improvement.back() = std::abs(dual_improvement.back());
+                    } else {
+                        dual_improvement.push_back(0.0);
+                    }
+                 }
+             }
+           }
+       });
+
+       // reweight omega according to dual improvement
+       assert(dual_improvement.size() == omega.size());
+
+       // soft max
+       const auto scaling_exp = 100.0;
+       const auto dual_improvement_sum_help = std::accumulate(dual_improvement.begin(), dual_improvement.end(), 0.0);
+       const auto max_dual_improvement = *std::max_element(dual_improvement.begin(), dual_improvement.end());
+       const auto offset = scaling_exp*max_dual_improvement/dual_improvement_sum_help;
+       const auto dual_improvement_sum = std::accumulate(dual_improvement.begin(), dual_improvement.end(), 0.0, 
+               [=](auto sum, auto x) { 
+                   return sum + (x > 0 ? std::exp(scaling_exp*x/dual_improvement_sum_help - offset) : 0.0);
+               });
+
+       if(dual_improvement_sum_help > eps) {
+           for(std::size_t i=0; i<omega.size(); ++i) {
+               if(omega[i] > 0) {
+                   dual_improvement[i] = 0.1*omega[i] + 0.9*omega_sum*(std::exp(scaling_exp*dual_improvement[i]/dual_improvement_sum_help - offset)/dual_improvement_sum );
+               } else {
+                   assert(dual_improvement[i] == 0.0);
+               }
+           }
+       } else {
+           std::copy(omega.begin(), omega.end(), dual_improvement.begin());
+       }
+       //assert(std::abs( omega_sum - std::accumulate(dual_improvement.begin(), dual_improvement.end(), 0.0) ) <= eps);
+
+       SendMessages(dual_improvement);
+   }
 
    static constexpr INDEX active_messages_array_size = 16;
 
@@ -2368,29 +2693,29 @@ public:
          // If not, check whether individual updates are supported. If yes, call individual updates. If no, do nothing
          constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
          using message_ptr_type = decltype( *(std::get<n>(msg_).begin()) );
-         if constexpr(l.SendsMessage()) {
-           const INDEX no_messages = std::get<n>(msg_).size();
-           if(no_messages > 0) {
+         if constexpr(l.sends_message_to_adjacent_factor()) {
+           if(!std::get<n>(msg_).empty()) {
+             auto& msgs = std::get<n>(msg_);
+             auto msg_begin = msgs.begin();
+             auto msg_end = msgs.end();
 
              if constexpr(l.CanCallSendMessages()) {
+
+               const INDEX no_messages = std::get<n>(msg_).size();
                const INDEX no_active_messages = std::count_if(omegaIt, omegaIt+no_messages, [](REAL x){ return x > 0.0; });
                const REAL omega_sum = std::accumulate(omegaIt, omegaIt+no_messages, 0.0);
                residual_omega += omega_sum;
                if(no_active_messages > 0) { 
-                 // build array of messages that are actually called
-                 if(no_active_messages <= active_messages_array_size) {
-                   auto msgs = get_active_messages_array(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt);
-                   l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, residual_omega);
-                 } else {
-                   auto msgs = get_active_messages_vector(std::get<n>(msg_).begin(), std::get<n>(msg_).end(), omegaIt, no_active_messages);
-                   l.SendMessages(factor_, msgs.begin(), msgs.begin()+no_active_messages, residual_omega);
-                 }
+                 auto msg_begin_c = conditional_message_iterator_begin(msg_begin, omegaIt);
+                 auto msg_end_c = conditional_message_iterator_end(msg_begin, msg_end, omegaIt);
+                 l.SendMessages(factor_, msg_begin_c, msg_end_c, residual_omega);
+                 //l.SendMessages(factor_, conditional_message_iterator(msgs.begin(), omegaIt), conditional_message_iterator_end( msgs.begin(), msgs.end(), omegaIt));
                } 
                omegaIt += no_messages;
   
              } else {
   
-               for(auto it = std::get<n>(msg_).begin(); it != std::get<n>(msg_).end(); ++it, ++omegaIt) {
+               for(auto it = msgs.begin(); it != msgs.end(); ++it, ++omegaIt) {
                  if(*omegaIt != 0.0) {
                    residual_omega += *omegaIt;
                    l.SendMessage(&factor_, *it, residual_omega); 
@@ -2425,68 +2750,12 @@ public:
    } 
 #endif
 
-   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX) const 
-   {
-      assert(false);
-      throw std::runtime_error("index out of bound");
-      return nullptr;
-   }
-
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   const MessageTypeAdapter* GetMessage(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX msgNo) const 
-   {
-      constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      if(msgNo < std::get<n>(msg_).size()) {
-         auto it = std::get<n>(msg_).begin();
-         for(INDEX i=0; i<msgNo; ++i) { ++it; }
-         return &(*it);
-         //return  std::get<n>(msg_)[msgNo]; 
-      }
-      else return GetMessage(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, msgNo - std::get<n>(msg_).size());
-   }
-   const MessageTypeAdapter* GetMessage(const INDEX n) const final
-   {
-      assert(n<no_messages());
-      return GetMessage(MESSAGE_DISPATCHER_TYPELIST{}, n);
-   }
-
-   template<typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   FactorTypeAdapter* GetConnectedFactor(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX) const 
-   {
-      throw std::runtime_error("message index out of bound");
-   }
-   template<typename MESSAGE_DISPATCHER_TYPE, typename ...MESSAGE_DISPATCHER_TYPES_REST>
-   FactorTypeAdapter* GetConnectedFactor(meta::list<MESSAGE_DISPATCHER_TYPE, MESSAGE_DISPATCHER_TYPES_REST...>, const INDEX cur_msg_idx) const // to get the current message_type
-   {
-      constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
-      const INDEX no_msgs = std::get<n>(msg_).size();
-      if(cur_msg_idx < no_msgs) {
-         //auto msg = std::get<n>(msg_)[cur_msg_idx];
-         // do zrobienia: not most efficient way
-         auto it = std::get<n>(msg_).begin();
-         for(INDEX i=0; i<cur_msg_idx; ++i) { ++it; }
-         auto msg = &(*it);
-         assert(msg != nullptr);
-         if(msg->GetLeftFactor() == static_cast<const FactorTypeAdapter*>(this)) { return msg->GetRightFactor(); }
-         else { return msg->GetLeftFactor(); }
-      } else {
-         return GetConnectedFactor(meta::list<MESSAGE_DISPATCHER_TYPES_REST...>{}, cur_msg_idx - no_msgs);
-      }
-   }
-   FactorTypeAdapter* GetConnectedFactor (const INDEX msg_idx) const final
-   { 
-      auto f = GetConnectedFactor(MESSAGE_DISPATCHER_TYPELIST{}, msg_idx);
-      assert(f != this);
-      return f;
-   }
-
    bool ReceivesMessage() const
    {
       bool can_receive = false;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this,&can_receive](auto l) {
          constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-         if(l.ReceivesMessage() && std::get<n>(msg_).size() > 0) {
+         if(l.receives_message_from_adjacent_factor() && !std::get<n>(msg_).empty()) {
             can_receive = true;
          }
       });
@@ -2499,7 +2768,7 @@ public:
       bool calls_send = false;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            if(l.SendsMessage() && std::get<n>(msg_).size() > 0) {
+            if(l.sends_message_to_adjacent_factor() && !std::get<n>(msg_).empty()) {
                calls_send = true;
             }
       });
@@ -2519,8 +2788,8 @@ public:
       const INDEX no_msgs = std::get<n>(msg_).size();
       if(cur_msg_idx < no_msgs) {
          MESSAGE_DISPATCHER_TYPE l;
-         assert(std::get<n>(msg_).size() > 0);
-         if( l.SendsMessage() ) {
+         assert(!std::get<n>(msg_).empty());
+         if( l.sends_message_to_adjacent_factor() ) {
             return true;
          } else {
            return false;
@@ -2547,8 +2816,8 @@ public:
       const INDEX no_msgs = std::get<n>(msg_).size();
       if(cur_msg_idx < no_msgs) {
          MESSAGE_DISPATCHER_TYPE l;
-         assert(std::get<n>(msg_).size() > 0);
-         if( l.ReceivesMessage() ) {
+         assert(!std::get<n>(msg_).empty());
+         if( l.receives_message_from_adjacent_factor() ) {
             return true;
          } else {
            return false;
@@ -2569,7 +2838,7 @@ public:
       bool calls_receive_restricted = false;
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
             constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-            if(l.CanCallReceiveRestrictedMessage() && std::get<n>(msg_).size() > 0) {
+            if(l.CanCallReceiveRestrictedMessage() && !std::get<n>(msg_).empty()) {
                calls_receive_restricted = true;
             }
       });
@@ -2750,6 +3019,46 @@ public:
 
      return runtime;
    }
+
+   std::vector<FactorTypeAdapter*> get_adjacent_factors() const
+   {
+       std::vector<FactorTypeAdapter*> v;
+       v.reserve(no_messages());
+
+       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+               constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+               auto msg_begin = std::get<n>(msg_).begin();
+               auto msg_end = std::get<n>(msg_).end();
+               for(auto it = msg_begin; it != msg_end; ++it) {
+                   v.push_back(l.get_adjacent_factor(*it)); 
+               }
+       });
+
+       return v; 
+   }
+
+   std::vector<message_trait> get_messages() const
+   {
+       std::vector<message_trait> v;
+       v.reserve(no_messages());
+
+       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [&](auto l) {
+               constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+               Chirality c = l.get_chirality();
+               auto msg_begin = std::get<n>(msg_).begin();
+               auto msg_end = std::get<n>(msg_).end();
+               for(auto it = msg_begin; it != msg_end; ++it) {
+                   message_trait t = {l.get_adjacent_factor(*it), c, 
+                                      l.sends_message_to_adjacent_factor(), l.receives_message_from_adjacent_factor(),
+                                      l.adjacent_factor_sends_message(), l.adjacent_factor_receives_message()
+                                     };
+                   v.push_back(t);
+               }
+       });
+
+       return v; 
+   }
+
 protected:
    // pool memory allocator specific for this factor container
    // note: the below construction is not perfect when more than one solver is run simultaneously: The same allocator is used, yet the optimization problems are different + not thread safe.
@@ -2778,11 +3087,11 @@ protected:
    };
    struct get_left_msg_container_type_list {
       template<class MSG_CONTAINER_TYPE> 
-         using invoke = typename message_container_selector<MSG_CONTAINER_TYPE, MSG_CONTAINER_TYPE::no_left_factors(), MSG_CONTAINER_TYPE::no_right_factors(), Chirality::left>::type;//LIST::LeftMessageContainerStorageType;
+         using invoke = typename message_container_selector<MSG_CONTAINER_TYPE, MSG_CONTAINER_TYPE::no_left_factors(), MSG_CONTAINER_TYPE::no_right_factors(), MSG_CONTAINER_TYPE::estimated_no_left_factors(), MSG_CONTAINER_TYPE::estimated_no_right_factors(), Chirality::left>::type;//LIST::LeftMessageContainerStorageType;
    };
    struct get_right_msg_container_type_list {
       template<class MSG_CONTAINER_TYPE>
-         using invoke = typename message_container_selector<MSG_CONTAINER_TYPE, MSG_CONTAINER_TYPE::no_left_factors(), MSG_CONTAINER_TYPE::no_right_factors(), Chirality::right>::type;//LIST::LeftMessageContainerStorageType;
+         using invoke = typename message_container_selector<MSG_CONTAINER_TYPE, MSG_CONTAINER_TYPE::no_left_factors(), MSG_CONTAINER_TYPE::no_right_factors(), MSG_CONTAINER_TYPE::estimated_no_left_factors(), MSG_CONTAINER_TYPE::estimated_no_right_factors(), Chirality::right>::type;//LIST::LeftMessageContainerStorageType;
    };
 
    using left_msg_list = meta::transform< meta::filter<typename FACTOR_MESSAGE_TRAIT::MessageList, get_left_msg>, get_msg_type_list>;
@@ -2824,69 +3133,6 @@ private:
    using msg_storage_type = meta::apply<meta::quote<std::tuple>, msg_container_type_list>;
    msg_storage_type msg_;
 
-   // transform message container type list to message iterator type list
-   struct message_iterator_type {
-      template<class MESSAGE_STORAGE>
-         using invoke = typename MESSAGE_STORAGE::iterator;
-   };
-   using left_message_iterator_type_list = meta::transform< left_msg_container_list, message_iterator_type >;
-   using right_message_iterator_type_list = meta::transform< right_msg_container_list, message_iterator_type >;
-
-   using message_iterator_type_list = meta::concat<left_message_iterator_type_list, right_message_iterator_type_list>;
-   using message_iterator_variant_type = meta::apply<meta::quote<std::variant>, message_iterator_type_list>;
-public:
-
-class message_iterator : public MessageIterator
-{
-    message_iterator(msg_storage_type& m)
-        : msg_(m),
-        cur_iterator(std::get<0>(msg_).begin()),
-        end_iterator(std::get<0>(msg_).end())
-    {}
-
-   bool operator==(const message_iterator& rhs) const 
-   { 
-       if(cur_iterator == rhs.cur_iterator) {
-           assert(end_iterator == rhs.end_iterator);
-       }
-       return cur_iterator == rhs.cur_iterator; 
-   }
-   bool operator!=(const message_iterator& rhs) const { return !(*this == rhs); }
-   const MessageTypeAdapter& operator*() const { return *cur_iterator; }
-   const MessageTypeAdapter& operator->() const { return *cur_iterator; }
-   FactorTypeAdapter* GetConnectedFactor() const 
-   { 
-       assert(false);
-       return nullptr;
-   }
-   bool SendsMessage() const  
-   { 
-       assert(false);
-       return true;
-   } 
-
-   bool operator!=(const MessageIterator& rhs) const { return !operator==(rhs); }
-    message_iterator& operator++()
-    {
-        if(cur_iterator == end_iterator) { // switch to new type
-            (cur_iterator, end_iterator) = std::visit([this](auto&& it) {
-                    constexpr std::size_t msg_type_no = it.index();
-                    return std::tie(std::get<msg_type_no>(this->msg_).begin(), std::get<msg_type_no>(this->msg_).end());
-            }, cur_iterator);
-        } else {
-            ++cur_iterator;
-        }
-
-    }
-private:
-    msg_storage_type& msg_;
-    message_iterator_variant_type cur_iterator;
-    message_iterator_variant_type end_iterator;
-};
-
-
-
-
    REAL EvaluatePrimal() const final
    {
       //return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
@@ -2899,6 +3145,8 @@ private:
    // if no two messages have the same endpoints, an ordinary mutex is enough.
    std::recursive_mutex mutex_;
 #endif
+
+public:
 
    // functions for interfacing with external solver interface DD_ILP
 

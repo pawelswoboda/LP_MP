@@ -380,6 +380,53 @@ private:
   T* end_;
 };
 
+// additionally store free space so that no allocation is needed for small objects
+template<typename T, std::size_t N>
+class small_vector : public vector<T>
+{
+protected:
+    void allocate(const std::size_t s)
+    {
+        if(s <= N) {
+            this->begin_ = local_.begin();
+            this->end_ = local_.begin() + s;
+            std::fill(this->end(), local_.end(), std::numeric_limits<REAL>::infinity());
+        } else {
+            vector<T>::allocate(s);
+        }
+    }
+
+public:
+    template<typename ITERATOR>
+    small_vector(ITERATOR begin, ITERATOR end)
+    {
+        allocate();
+    }
+
+    small_vector(const INDEX size)
+    {
+        allocate(size);
+    }
+
+    small_vector(const INDEX size, const T val)
+    {
+        allocate(size);
+        std::fill(this->begin(), this->end(), val);
+    }
+
+    ~small_vector()
+    {
+        if(!is_small()) {
+            this->deallocate();
+        } 
+    }
+
+private:
+    bool is_small() const { return this->size() < N; }
+    alignas(REAL_ALIGNMENT*sizeof(REAL)) std::array<T,N> local_;
+};
+
+
 template<typename T, INDEX N>
 using array_impl = std::array<T,N>;
 

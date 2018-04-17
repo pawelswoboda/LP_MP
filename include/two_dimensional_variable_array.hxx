@@ -97,17 +97,25 @@ public:
       void operator=(const VEC& o) 
       { 
         assert(o.size() == this->size());
-        for(INDEX i=0; i<this->size(); ++i) {
+        const auto s = this->size();
+        for(INDEX i=0; i<s; ++i) {
           (*this)[i] = o[i];
         }
       }
       T operator[](const INDEX i) const { assert(i < size()); return begin_[i]; } // possibly do not implement this function but return reference, for copying elements may be costly for sizeof(T) big. Look up std::vector
       T& operator[](const INDEX i) { assert(i < size()); return begin_[i]; }
       INDEX size() const {  return (end_ - begin_); }
+
       T* begin() { return begin_; }
       T* end() { return end_; }
+      auto rbegin() { return std::make_reverse_iterator(end()); }
+      auto rend() { return std::make_reverse_iterator(begin()); }
+
       T const* begin() const { return begin_; }
       T const* end() const { return end_; }
+      auto rbegin() const { return std::make_reverse_iterator(end()); }
+      auto rend() const { return std::make_reverse_iterator(begin()); }
+
       private:
          T* begin_;
          T* end_;
@@ -136,16 +144,40 @@ public:
    struct iterator : public std::iterator< std::random_access_iterator_tag, T* > {
      iterator(T** x) : x_(x) {}
      void operator++() { ++x_; }
+     void operator--() { --x_; }
      iterator& operator+=(const INDEX i) { x_+=i; return *this; }
+     iterator& operator-=(const INDEX i) { x_-=i; return *this; }
      iterator operator+(const INDEX i) { iterator it({x_ + i}); return it; }
      iterator operator-(const INDEX i) { iterator it({x_ - i}); return it; }
-     const INDEX operator-(const iterator it) { return x_ - it.x_; }
+     auto operator-(const iterator it) const { return x_ - it.x_; }
      ArrayAccessObject operator*() { return ArrayAccessObject(*x_,*(x_+1)); }
+     const ArrayAccessObject operator*() const { return ArrayAccessObject(*x_,*(x_+1)); }
+     bool operator==(const iterator it) const { return x_ == it.x_; }
+     bool operator!=(const iterator it) const { return !(*this == it); }
+     T** x_; // pointer to current
+   };
+
+   struct reverse_iterator : public std::iterator_traits< T* > {
+     reverse_iterator(T** x) : x_(x) {}
+     void operator++() { --x_; }
+     void operator--() { ++x_; }
+     reverse_iterator& operator+=(const INDEX i) { x_-=i; return *this; }
+     reverse_iterator& operator-=(const INDEX i) { x_+=i; return *this; }
+     reverse_iterator operator+(const INDEX i) { reverse_iterator it({x_ - i}); return it; }
+     reverse_iterator operator-(const INDEX i) { reverse_iterator it({x_ + i}); return it; }
+     auto operator-(const reverse_iterator it) const { return it.x_ - x_; }
+     ArrayAccessObject operator*() { return ArrayAccessObject(*(x_-1),*x_); }
+     const ArrayAccessObject operator*() const { return ArrayAccessObject(*(x_-1),*x_); }
+     bool operator==(const reverse_iterator it) const { return x_ == it.x_; }
+     bool operator!=(const reverse_iterator it) const { return !(*this == it); }
      T** x_; // pointer to current
    };
 
    iterator begin() { return iterator(p_); }
    iterator end() { return iterator(p_+dim1_); }
+
+   reverse_iterator rbegin() { return reverse_iterator(p_+dim1_); }
+   reverse_iterator rend() { return reverse_iterator(p_); }
 
    struct size_iterator : public std::iterator< std::random_access_iterator_tag, std::size_t > {
      size_iterator(T** x) : x_(x) {}
