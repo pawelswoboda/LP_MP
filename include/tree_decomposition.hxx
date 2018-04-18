@@ -8,16 +8,20 @@
 namespace LP_MP {
 
 // given factors connected as a tree, solve it.
+template<typename FMC>
 class factor_tree {
 public:
    // add messages from leaves to root upward
-   void AddMessage(MessageTypeAdapter* m, Chirality c) // chirality denotes which factor is nearer the root
+   template<typename MESSAGE_CONTAINER_TYPE>
+   void add_message( MESSAGE_CONTAINER_TYPE& msg, Chirality c) // chirality denotes which factor is nearer the root
    {
-      tree_messages_.push_back(std::make_tuple(m, c));
+
    }
 
    void init()
    {
+       assert(false);
+      /*
       std::set<FactorTypeAdapter*> factor_set;
       for(auto tree_msg : tree_messages_) {
          auto* msg = std::get<0>(tree_msg);
@@ -29,11 +33,14 @@ public:
       assert(factors_.size() == tree_messages_.size() + 1);
 
       assert(tree_valid());
+      */
    }
 
    // check whether messages are arranged correctly
    bool tree_valid() const
    {
+       assert(false);
+       /*
      // build graph out of tree messages and check whether all edges point towards root
      std::vector<std::vector<int>> tree(factors_.size());
      std::unordered_map<FactorTypeAdapter*, int> factor_map;
@@ -95,10 +102,13 @@ public:
      assert(visited[root] == false);
 
      return true; 
+       */
    }
 
    REAL solve()
    {
+       assert(false);
+       /*
       assert(factors_.size() == tree_messages_.size() + 1); // otherwise call init
       // send messages up the tree
       for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
@@ -142,10 +152,12 @@ public:
       assert(std::abs(lower_bound() - primal_cost()) <= eps);
       assert(std::abs(value - primal_cost()) <= eps);
       return value;
+       */
    }
 
    bool primal_consistent() const 
    {
+       /*
       for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
          auto* m = std::get<0>(*it);
          if(!m->CheckPrimalConsistency()) {
@@ -153,6 +165,7 @@ public:
          }
       }
       return true; 
+      */
    }
 
    REAL primal_cost() const
@@ -200,7 +213,14 @@ public:
       return factors;
    }
 
-   std::vector< std::tuple<MessageTypeAdapter*, Chirality>> tree_messages_; // messages forming a tree. Chirality says which side comprises the lower  factor
+   struct free_message_container {
+      template<class MESSAGE_CONTAINER_TYPE>
+         using invoke = typename MESSAGE_CONTAINER_TYPE::free_message_container_type;
+   };
+   using free_message_container_type_list = meta::transform< typename FMC::MessageList, free_message_container >;
+   using free_message_variant = meta::apply<meta::quote<std::variant>, free_message_container_type_list>;
+   std::vector< std::tuple<free_message_variant, Chirality> > tree_messages_;
+
    std::vector<FactorTypeAdapter*> factors_;
 
 protected:
@@ -518,11 +538,11 @@ protected:
 };
 
 // extends factor_tree by collection of Lagrangean factors
-template<typename LAGRANGEAN_FACTOR>
-class LP_tree_Lagrangean : public factor_tree {
+template<typename FMC, typename LAGRANGEAN_FACTOR>
+class LP_tree_Lagrangean : public factor_tree<FMC> {
 public:
-  LP_tree_Lagrangean(factor_tree& t)
-    : factor_tree(t)
+  LP_tree_Lagrangean(factor_tree<FMC>& t)
+    : factor_tree<FMC>(t)
   {}
 
    template<typename VECTOR1>
@@ -622,7 +642,7 @@ public:
 
   void init()
   {
-    factor_tree::init();
+    factor_tree<FMC>::init();
     dual_size_in_bytes_ = compute_dual_size_in_bytes();
     primal_size_in_bytes_ = compute_primal_size_in_bytes();
   }
@@ -649,12 +669,12 @@ public:
 };
 
 // do zrobienia: templatize base class
-template<typename LAGRANGEAN_FACTOR, typename DECOMPOSITION_SOLVER>
-class LP_with_trees : public LP
+template<typename FMC, typename LAGRANGEAN_FACTOR, typename DECOMPOSITION_SOLVER>
+class LP_with_trees : public LP<FMC>
 {
 public:
    LP_with_trees(TCLAP::CmdLine& cmd)
-     : LP(cmd),
+     : LP<FMC>(cmd),
      tree_decomposition_begin_arg_("","treeDecompositionBegin","after how many iterations to start tree decomposition based optimization", false, 0, "", cmd)
   {}
 
@@ -691,9 +711,9 @@ public:
      }
    }
 
-   void add_tree(factor_tree& t)
+   void add_tree(factor_tree<FMC>& t)
    { 
-     LP_tree_Lagrangean<LAGRANGEAN_FACTOR> lt(t);
+     LP_tree_Lagrangean<FMC,LAGRANGEAN_FACTOR> lt(t);
      trees_.push_back(lt);
    }
 
@@ -838,7 +858,7 @@ public:
    {
      const INDEX tree_decomposition_iter = tree_decomposition_begin_arg_.getValue();
      if(iteration < tree_decomposition_iter) {
-       LP::ComputePass(iteration);
+       LP<FMC>::ComputePass(iteration);
      } else if(iteration == tree_decomposition_iter) {
        construct_decomposition();
        static_cast<DECOMPOSITION_SOLVER*>(this)->optimize_decomposition(iteration); 
@@ -853,7 +873,7 @@ public:
      if(constructed_decomposition) {
        return static_cast<DECOMPOSITION_SOLVER*>(this)->decomposition_lower_bound();
      } else {
-       return LP::LowerBound();
+       return LP<FMC>::LowerBound();
      }
    }
 
@@ -882,17 +902,18 @@ public:
 
 
 protected:
-   std::vector<LP_tree_Lagrangean<LAGRANGEAN_FACTOR>> trees_; // store for each tree the associated Lagrangean factors.
+   std::vector<LP_tree_Lagrangean<FMC,LAGRANGEAN_FACTOR>> trees_; // store for each tree the associated Lagrangean factors.
    INDEX Lagrangean_vars_size_;
    TCLAP::ValueArg<INDEX> tree_decomposition_begin_arg_; 
    bool constructed_decomposition = false;
 };
 
 // perform subgradient ascent with Polyak's step size with estimated optimum
-class LP_subgradient_ascent : public LP_with_trees<Lagrangean_factor_quadratic, LP_subgradient_ascent> // better: perform projected subgradient ascent with Lagrangean_factor_zero_sum
+template<typename FMC>
+class LP_subgradient_ascent : public LP_with_trees<FMC, Lagrangean_factor_quadratic, LP_subgradient_ascent<FMC>> // better: perform projected subgradient ascent with Lagrangean_factor_zero_sum
 {
 public:
-   using LP_with_trees::LP_with_trees;
+   using LP_with_trees<FMC, Lagrangean_factor_quadratic, LP_subgradient_ascent<FMC>>::LP_with_trees;
 
    void construct_decomposition() {}
 
@@ -900,9 +921,9 @@ public:
    {
       REAL current_lower_bound = 0.0;
       std::vector<REAL> subgradient(this->no_Lagrangean_vars(), 0.0);
-      for(INDEX i=0; i<trees_.size(); ++i) {
-         current_lower_bound += trees_[i].solve();
-         trees_[i].compute_mapped_subgradient(subgradient); // note that mapping has one extra component!
+      for(INDEX i=0; i<this->trees_.size(); ++i) {
+         current_lower_bound += this->trees_[i].solve();
+         this->trees_[i].compute_mapped_subgradient(subgradient); // note that mapping has one extra component!
          //trees_[i].primal_cost();
       }
       best_lower_bound = std::max(current_lower_bound, best_lower_bound);
@@ -912,7 +933,7 @@ public:
       const REAL step_size = (best_lower_bound - current_lower_bound + subgradient.size())/(10.0 + iteration) / subgradient_one_norm;
 
       std::cout << "stepsize = " << step_size << ", absolute value of subgradient = " << subgradient_one_norm << "\n";
-      add_weights(&subgradient[0], step_size);
+      this->add_weights(&subgradient[0], step_size);
    }
 
 private:

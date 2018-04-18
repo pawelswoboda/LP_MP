@@ -1487,13 +1487,20 @@ template<typename FMC>
 double LP<FMC>::LowerBound() const
 {
   double lb = constant_;
+  for_each_tuple(factors_, [&lb,this](auto& v) {
+          for(auto* f : v) {
+              lb += f->LowerBound();
+              assert(std::isfinite(lb));
+          }
+  });
+  return lb;
+
 #pragma omp parallel for reduction(+:lb)
   for(INDEX i=0; i<f_.size(); ++i) {
     lb += f_[i]->LowerBound();
     assert( f_[i]->LowerBound() > -10000000.0);
     assert(std::isfinite(lb));
-  }
-  return lb;
+  } 
 }
 
 template<typename FMC>

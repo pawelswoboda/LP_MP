@@ -59,6 +59,9 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasReceiveRestrictedMessageFromLeft, ReceiveRestr
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessagesToRight,SendMessagesToRight)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasSendMessagesToLeft, SendMessagesToLeft)
 
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_send_message_to_right_improvement, send_message_to_right_improvement)
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_send_message_to_left_improvement, send_message_to_left_improvement)
+
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasRepamRight, RepamRight)
 LP_MP_FUNCTION_EXISTENCE_CLASS(HasRepamLeft, RepamLeft)
 
@@ -77,6 +80,13 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(has_create_constraints, create_constraints)
 
 LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(IsAssignable, operator[])
 }
+
+template<typename FMC>
+struct empty_message_fmc
+{
+using FactorList = typename FMC::FactorList;
+using MessageList = meta::list<>;
+};
 
 // function getters for statically dispatching ReceiveMessage and SendMessage to left and right side correctly, used in FactorContainer
 template<typename MSG_CONTAINER>
@@ -127,7 +137,7 @@ struct LeftMessageFuncGetter
 
    constexpr static Chirality get_chirality() { return Chirality::left; }
 
-   static auto* get_adjacent_factor(MSG_CONTAINER& msg) { return msg.GetRightFactor(); }
+   static auto* get_adjacent_factor(const MSG_CONTAINER& msg) { return msg.GetRightFactor(); }
 };
 
 template<typename MSG_CONTAINER>
@@ -176,7 +186,7 @@ struct RightMessageFuncGetter
 
    constexpr static Chirality get_chirality() { return Chirality::right; }
 
-   static auto* get_adjacent_factor(MSG_CONTAINER& msg) { return msg.GetLeftFactor(); }
+   static auto* get_adjacent_factor(const MSG_CONTAINER& msg) { return msg.GetLeftFactor(); }
 };
 
 template<class MSG_CONTAINER, template<typename> class FuncGetter>
@@ -270,7 +280,7 @@ struct MessageDispatcher
    }
    constexpr static Chirality get_chirality() { return FuncGetter<MSG_CONTAINER>::get_chirality(); }
 
-   static auto* get_adjacent_factor(MSG_CONTAINER& msg) { return FuncGetter<MSG_CONTAINER>::get_adjacent_factor(msg); }
+   static auto* get_adjacent_factor(const MSG_CONTAINER& msg) { return FuncGetter<MSG_CONTAINER>::get_adjacent_factor(msg); }
 };
 
 template<typename MSG_CONTAINER>
@@ -356,7 +366,8 @@ class MessageContainer : //public MessageTypeAdapter,
                          public next_msg_container_selector< MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO,ESTIMATED_NO_OF_LEFT_FACTORS,ESTIMATED_NO_OF_RIGHT_FACTORS>, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::right>::type
 {
 public:
-   using leftFactorNumber_t = std::integral_constant<INDEX, LEFT_FACTOR_NO>;
+   using FMC = FACTOR_MESSAGE_TRAIT;
+
    static constexpr INDEX leftFactorNumber = LEFT_FACTOR_NO;
    static constexpr INDEX rightFactorNumber = RIGHT_FACTOR_NO;
 
@@ -401,12 +412,11 @@ public:
    }
    */
 
-   //MessageContainer(MESSAGE_TYPE msg_op, LeftFactorContainer* const l, RightFactorContainer* const r) 
-   //   ://MessageStorageType(),
-   //   msg_op_(msg_op),
-   //   leftFactor_(l),
-   //   rightFactor_(r)
-   //{
+   MessageContainer(LeftFactorContainer* const l, RightFactorContainer* const r, MESSAGE_TYPE msg_op) 
+       : msg_op_(msg_op),
+       leftFactor_(l),
+       rightFactor_(r)
+   {
       //leftFactor_->template AddMessage<MessageDispatcher<MessageContainerType, LeftMessageFuncGetter>, MessageContainerType>(this);
       //rightFactor_->template AddMessage<MessageDispatcher<MessageContainerType, RightMessageFuncGetter>, MessageContainerType>(this);
       //int status;
@@ -418,12 +428,13 @@ public:
       //std::cout << "left factor type = " << abi::__cxa_demangle(typeid(LeftFactorContainer).name(),0,0,&status) << "\n";
       //std::cout << "right factor type = " << abi::__cxa_demangle(typeid(RightFactorContainer).name(),0,0,&status) << "\n";
       // register messages in factors
-   //}
+   }
+
 
    ~MessageContainer() {
       static_assert(meta::unique<typename FACTOR_MESSAGE_TRAIT::MessageList>::size() == FACTOR_MESSAGE_TRAIT::MessageList::size(), 
             "Message list must have unique elements");
-      static_assert(MESSAGE_NO >= 0 && MESSAGE_NO < FACTOR_MESSAGE_TRAIT::MessageList::size(), "message number must be smaller than length of message list");
+      //static_assert(MESSAGE_NO >= 0 && MESSAGE_NO < FACTOR_MESSAGE_TRAIT::MessageList::size(), "message number must be smaller than length of message list");
       static_assert(leftFactorNumber < FACTOR_MESSAGE_TRAIT::FactorList::size(), "left factor number out of bound");
       static_assert(rightFactorNumber < FACTOR_MESSAGE_TRAIT::FactorList::size(), "right factor number out of bound");
       // do zrobienia: put message constraint here, i.e. which methods MESSAGE_TYPE must minimally implement
@@ -445,6 +456,14 @@ public:
    //   //assert(false);
    //   //global_real_block_allocator.deallocate(mem,sizeof(FactorContainerType));
    //}
+
+   using free_message_container_type = MessageContainer<MESSAGE_TYPE, LEFT_FACTOR_NO, RIGHT_FACTOR_NO, MPS, 0,0, empty_message_fmc<FMC>, MESSAGE_NO>;
+   // return message container not embedded in message storage
+   free_message_container_type free_message()
+   {
+       free_message_container_type m(leftFactor_, rightFactor_, msg_op_);
+       return m; 
+   }
 
    void send_message_to_left(const REAL omega = 1.0) 
    {
@@ -476,9 +495,19 @@ public:
    }
 #endif
 
+   constexpr static bool can_compute_send_message_to_left_improvement()
+   {
+      return FunctionExistence::has_send_message_to_left_improvement<MessageType, REAL, LeftFactorType, RightFactorType>(); 
+   }
+
    REAL send_message_to_left_improvement()
    {
-       return msg_op_.send_message_to_left_improvement(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+       if constexpr(can_compute_send_message_to_left_improvement()) {
+           return msg_op_.send_message_to_left_improvement(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+       } else {
+           assert(false);
+           return 0.0;
+       }
    }
 
    void send_message_to_right(const REAL omega = 1.0) 
@@ -511,9 +540,19 @@ public:
    }
 #endif
 
+   constexpr static bool can_compute_send_message_to_right_improvement()
+   {
+      return FunctionExistence::has_send_message_to_right_improvement<MessageType, REAL, LeftFactorType, RightFactorType>(); 
+   }
+
    REAL send_message_to_right_improvement()
    {
-       return msg_op_.send_message_to_right_improvement(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+       if constexpr(can_compute_send_message_to_right_improvement()) {
+           return msg_op_.send_message_to_right_improvement(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+       } else {
+           assert(false);
+           return 0.0;
+       }
    }
 
    constexpr static bool
@@ -1096,8 +1135,8 @@ public:
    FactorTypeAdapter* GetLeftFactorTypeAdapter() const { return leftFactor_; }
    FactorTypeAdapter* GetRightFactorTypeAdapter() const { return rightFactor_; }
    // do zrobienia: Rename Get{Left|Right}FactorContainer
-   LeftFactorContainer* GetLeftFactor() const { return leftFactor_; }
-   RightFactorContainer* GetRightFactor() const { return rightFactor_; }
+   auto* GetLeftFactor() const { return leftFactor_; }
+   auto* GetRightFactor() const { return rightFactor_; }
 
    void SetLeftFactor(FactorTypeAdapter* l) 
    {
@@ -1502,8 +1541,6 @@ protected:
    MessageType msg_op_; // possibly inherit privately from MessageType to apply empty base optimization when applicable
    LeftFactorContainer* leftFactor_;
    RightFactorContainer* rightFactor_;
-   //REAL omega_forward_, omega_backward_; // only store for messages that are actually sent!
-   //bool receive_forward_, bool receive_backward_; // only store for messages that are actually received!
 };
 
 
@@ -1517,7 +1554,7 @@ public:
 
     static constexpr std::size_t message_storage_byte_size() 
     {
-        return N*(sizeof(message_type) + 4*sizeof(void*));
+        return N*(sizeof(message_type) + 5*sizeof(void*));
 
         /*
         constexpr auto no_left_factors = MESSAGE_CONTAINER_TYPE::no_left_factors();
@@ -1931,6 +1968,7 @@ struct message_container_selector {
 };
 
 
+
 // container class for factors. Here we hold the factor, all connected messages, reparametrization storage and perform reparametrization and coordination for sending and receiving messages.
 // derives from REPAM_STORAGE_TYPE to mixin a class for storing the reparametrized potential
 // implements the interface from FactorTypeAdapter for access from LP_MP
@@ -1983,6 +2021,13 @@ public:
       Allocator::get().deallocate((FactorContainerType*) mem);
       //assert(false);
       //global_real_block_allocator.deallocate((double*)mem,sizeof(FactorContainerType)/sizeof(REAL)+1);
+   }
+
+   using empty_message_storage_factor_container = FactorContainer<FACTOR_TYPE, empty_message_fmc<FMC>, FACTOR_NO, COMPUTE_PRIMAL_SOLUTION>;
+   empty_message_storage_factor_container* no_message_factor_clone()
+   {
+       auto* c = new empty_message_storage_factor_container(factor_); 
+       return c;
    }
 
    virtual FactorTypeAdapter* clone() const final
@@ -2988,7 +3033,15 @@ public:
   template<typename MESSAGE_TYPE>
   auto get_messages() const 
   {
-     return std::get< get_message_number<MESSAGE_TYPE>() >(msg_);
+      std::vector<MESSAGE_TYPE*> messages;
+      constexpr auto n = get_message_number<MESSAGE_TYPE>();
+      messages.reserve(std::get<n>(msg_.size()));
+      auto msg_begin = std::get<n>(msg_).begin();
+      auto msg_end = std::get<n>(msg_).end();
+      for(auto msg_it=msg_begin; msg_it!=msg_end; ++msg_it) {
+          messages.push_back( &*msg_it );
+      }
+      return messages;
   }
    
 protected:
