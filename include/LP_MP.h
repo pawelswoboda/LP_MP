@@ -330,7 +330,7 @@ public:
 
    void ComputeAnisotropicWeights2();
    template<typename FACTOR_ITERATOR, typename FACTOR_SORT_ITERATOR>
-   void ComputeAnisotropicWeights2(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, two_dim_variable_array<REAL>& omega); 
+   void ComputeAnisotropicWeights2(FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorItEnd, FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, weight_array& omega, receive_array& receive_mask); 
 
    void ComputeUniformWeights();
 
@@ -415,7 +415,7 @@ public:
           ComputeAnisotropicWeights2();
           omega_anisotropic2_valid_ = true;
         }
-        return omega_storage{omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_, full_receive_mask_backward_, full_receive_mask_backward_};
+        return omega_storage{omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_, receive_mask_anisotropic2_forward_, receive_mask_anisotropic2_backward_};
       } else if(repamMode_ == LPReparametrizationMode::Uniform) {
         if(!omega_isotropic_valid_) {
           ComputeUniformWeights();
@@ -485,6 +485,7 @@ protected:
    receive_array anisotropic_receive_mask_forward_, anisotropic_receive_mask_backward_;
    bool omega_anisotropic2_valid_ = false;
    two_dim_variable_array<REAL> omegaForwardAnisotropic2_, omegaBackwardAnisotropic2_;
+   receive_array receive_mask_anisotropic2_forward_, receive_mask_anisotropic2_backward_;
    bool omega_isotropic_valid_ = false;
    two_dim_variable_array<REAL> omegaForwardIsotropic_, omegaBackwardIsotropic_;
    bool omega_isotropic_damped_valid_ = false;
@@ -504,6 +505,7 @@ protected:
    LPReparametrizationMode repamMode_ = LPReparametrizationMode::Undefined;
 
    TCLAP::ValueArg<std::string> reparametrization_type_arg_; // shared|residual|partition|overlapping_partition|adaptive
+   TCLAP::ValueArg<INDEX> inner_iteration_number_arg_;
    enum class reparametrization_type {shared,residual,partition,overlapping_partition,adaptive};
    reparametrization_type reparametrization_type_;
 #ifdef LP_MP_PARALLEL
@@ -562,6 +564,7 @@ protected:
 template<typename FMC> 
 LP<FMC>::LP(TCLAP::CmdLine& cmd)
 : reparametrization_type_arg_("","reparametrizationType","message sending type: ", false, "shared", "{shared|residual|partition|overlapping_partition|adaptive}", cmd)
+, inner_iteration_number_arg_("","innerIteration","number of iterations in inner loop in partition reparamtrization, default = 5",false,5,&positiveIntegerConstraint,cmd) 
 #ifdef LP_MP_PARALLEL
 , num_lp_threads_arg_("","numLpThreads","number of threads for message passing, default = 1",false,1,&positiveIntegerConstraint,cmd)
 #endif
@@ -577,6 +580,7 @@ LP<FMC>::~LP()
 template<typename FMC>
 LP<FMC>::LP(LP& o) // no const because of o.num_lp_threads_arg_.getValue() not being const!
   : reparametrization_type_arg_("","reparametrizationType","message sending type: ", false, o.reparametrization_type_arg_.getValue(), "{shared|residual|partition|overlapping_partition|adaptive}" )
+, inner_iteration_number_arg_("","innerIteration","number of iterations in inner loop in partition reparamtrization, default = 5",false,o.inner_iteration_number_arg_.getValue(),&positiveIntegerConstraint) 
 #ifdef LP_MP_PARALLEL
     , num_lp_threads_arg_("","numLpThreads","number of threads for message passing, default = 1",false,o.num_lp_threads_arg_.getValue(),&positiveIntegerConstraint)
 #endif
@@ -875,9 +879,9 @@ inline void LP<FMC>::ComputePass(const INDEX iteration)
    if(reparametrization_type_ == reparametrization_type::partition ) {
        //ComputeForwardPass();
        //ComputeBackwardPass();
-       compute_partition_pass(1);
+       compute_partition_pass(inner_iteration_number_arg_.getValue());
    } else if(reparametrization_type_ == reparametrization_type::overlapping_partition) {
-       compute_overlapping_partition_pass(10);
+       compute_overlapping_partition_pass(inner_iteration_number_arg_.getValue());
    } else {
        ComputeForwardPass();
        ComputeBackwardPass();
@@ -1022,8 +1026,8 @@ inline void LP<FMC>::ComputeAnisotropicWeights()
 template<typename FMC>
 inline void LP<FMC>::ComputeAnisotropicWeights2()
 {
-  ComputeAnisotropicWeights2(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic2_);
-  ComputeAnisotropicWeights2(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic2_);
+  ComputeAnisotropicWeights2(forwardOrdering_.begin(), forwardOrdering_.end(), f_forward_sorted_.begin(), f_forward_sorted_.end(), omegaForwardAnisotropic2_, receive_mask_anisotropic2_forward_);
+  ComputeAnisotropicWeights2(backwardOrdering_.begin(), backwardOrdering_.end(), f_backward_sorted_.begin(), f_backward_sorted_.end(), omegaBackwardAnisotropic2_, receive_mask_anisotropic2_backward_);
 
   omega_valid(omegaForwardAnisotropic2_);
   omega_valid(omegaBackwardAnisotropic2_);
@@ -1080,7 +1084,7 @@ template<typename FACTOR_ITERATOR, typename FACTOR_SORT_ITERATOR>
 void LP<FMC>::ComputeAnisotropicWeights2(
       FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt, // sorted pointers to factors
       FACTOR_SORT_ITERATOR factor_sort_begin, FACTOR_SORT_ITERATOR factor_sort_end, // sorted factor indices in f_
-      two_dim_variable_array<REAL>& omega)
+      weight_array& omega, receive_array& receive_mask)
 {
    std::vector<INDEX> f_sorted_inverse(std::distance(factor_sort_begin, factor_sort_end)); // factor index in order they were added to sorted order
 #pragma omp parallel for
@@ -1108,19 +1112,8 @@ void LP<FMC>::ComputeAnisotropicWeights2(
       }
    }
 
-   std::vector<INDEX> omega_size(f_.size());
-   {
-     INDEX c=0;
-     for(auto it=factorIt; it!=factorEndIt; ++it) {
-       if((*it)->FactorUpdated()) {
-         omega_size[c] = (*it)->no_send_messages();
-         ++c;
-       }
-     }
-     omega_size.resize(c);
-   }
-
-   omega = two_dim_variable_array<REAL>(omega_size);
+   omega = allocate_omega(factorIt, factorEndIt);
+   receive_mask = allocate_receive_mask(factorIt, factorEndIt);
 
    {
       INDEX c=0;
@@ -1128,19 +1121,28 @@ void LP<FMC>::ComputeAnisotropicWeights2(
          const INDEX i = std::distance(factorIt, it);
          assert(i == f_sorted_inverse[ factor_address_to_index_[*it] ]);
          if((*it)->FactorUpdated()) {
-            INDEX k=0;
+            std::size_t k_send=0;
+            std::size_t k_receive=0;
             auto msgs = (*it)->get_messages();
             for(auto msg_it : msgs) {
-               if(msg_it.sends_to_adjacent_factor) {
-                  auto* f_connected = msg_it.adjacent_factor;
-                  const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
-                  assert(i != j);
-                  if(i<j) {
-                     omega[c][k] = 1.0/REAL(no_send_messages_later[i]);
-                  } else {
-                     omega[c][k] = 0.0;
-                  } 
-                  ++k;
+                auto* f_connected = msg_it.adjacent_factor;
+                const INDEX j = f_sorted_inverse[ factor_address_to_index_[f_connected] ];
+                if(msg_it.sends_to_adjacent_factor) {
+                    assert(i != j);
+                    if(i<j) {
+                        omega[c][k_send] = 1.0/REAL(no_send_messages_later[i]);
+                    } else {
+                        omega[c][k_send] = 0.0;
+                    } 
+                    ++k_send;
+                }
+                if(msg_it.receives_from_adjacent_factor) {
+                    if(j<i) {
+                        receive_mask[c][k_receive] = 1;
+                    } else {
+                        receive_mask[c][k_receive] = 0;
+                    }
+                    ++k_receive;
                }
             }
             ++c;
@@ -1241,16 +1243,19 @@ void LP<FMC>::ComputeAnisotropicWeights( FACTOR_ITERATOR factorIt, FACTOR_ITERAT
    std::vector<std::size_t> first_receiving_factor(n, 0); // what is the last (in the order given by factor iterator) factor that receives a message?
 
    for(auto f_it=factorIt; f_it!=factorEndIt; ++f_it) {
+       assert(factor_address_to_sorted_index.count(*f_it) > 0);
        const auto f_index = factor_address_to_sorted_index[*f_it];
        const auto messages = (*f_it)->get_messages();
        for(auto m : messages) {
            if(factor_address_to_sorted_index.count(m.adjacent_factor)) {
                const auto adjacent_index = factor_address_to_sorted_index[m.adjacent_factor]; 
-               if(m.receives_from_adjacent_factor && adjacent_index < f_index) {
+               if(m.adjacent_factor_receives && adjacent_index > f_index) {
                    no_receiving_factors_later[f_index]++;
                }
                last_receiving_factor[f_index] = std::max(last_receiving_factor[f_index], adjacent_index);
                first_receiving_factor[f_index] = std::min(first_receiving_factor[f_index], adjacent_index);
+               //last_receiving_factor[adjacent_index] = std::max(last_receiving_factor[adjacent_index], f_index);
+               //first_receiving_factor[adjacent_index] = std::min(first_receiving_factor[adjacent_index], f_index);
            }
        }
    }
@@ -1261,7 +1266,7 @@ void LP<FMC>::ComputeAnisotropicWeights( FACTOR_ITERATOR factorIt, FACTOR_ITERAT
        for(auto m : messages) {
            if(factor_address_to_sorted_index.count(m.adjacent_factor)) {
                const auto adjacent_index = factor_address_to_sorted_index[m.adjacent_factor]; 
-               if(m.sends_to_adjacent_factor && (f_index < adjacent_index || last_receiving_factor[f_index] > adjacent_index) ) {
+               if(m.sends_to_adjacent_factor && (f_index < adjacent_index || last_receiving_factor[adjacent_index] > f_index) ) {
                    no_send_factors_later[f_index]++;
                }
            }
@@ -1487,20 +1492,13 @@ template<typename FMC>
 double LP<FMC>::LowerBound() const
 {
   double lb = constant_;
-  for_each_tuple(factors_, [&lb,this](auto& v) {
-          for(auto* f : v) {
-              lb += f->LowerBound();
-              assert(std::isfinite(lb));
-          }
-  });
-  return lb;
-
 #pragma omp parallel for reduction(+:lb)
   for(INDEX i=0; i<f_.size(); ++i) {
     lb += f_[i]->LowerBound();
     assert( f_[i]->LowerBound() > -10000000.0);
     assert(std::isfinite(lb));
-  } 
+  }
+  return lb;
 }
 
 template<typename FMC>
