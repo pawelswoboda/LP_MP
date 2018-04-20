@@ -349,6 +349,8 @@ struct next_msg_container_selector {
        
 };
 
+class AbstractMessageContainer { };
+
 
 // Class holding message and left and right factor
 // do zrobienia: possibly replace {LEFT|RIGHT}_FACTOR_NO by their type
@@ -360,7 +362,7 @@ template<typename MESSAGE_TYPE,
          INDEX MESSAGE_NO,
          INDEX ESTIMATED_NO_OF_LEFT_FACTORS = 4, INDEX ESTIMATED_NO_OF_RIGHT_FACTORS = 4
          >
-class MessageContainer : //public MessageTypeAdapter,
+class MessageContainer : public AbstractMessageContainer,
                          // when NO_OF_LEFT_FACTORS is zero, we hold factors in linked list
                          public next_msg_container_selector< MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO,ESTIMATED_NO_OF_LEFT_FACTORS,ESTIMATED_NO_OF_RIGHT_FACTORS>, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::left>::type,
                          public next_msg_container_selector< MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO,ESTIMATED_NO_OF_LEFT_FACTORS,ESTIMATED_NO_OF_RIGHT_FACTORS>, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::right>::type
@@ -3004,6 +3006,13 @@ public:
       return ar.size(); 
    }
 
+   REAL EvaluatePrimal() const final
+   {
+      //return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
+      //return factor_.EvaluatePrimal(primalIt + primalOffset_);
+      return factor_.EvaluatePrimal();
+   }
+
    REAL LowerBound() const final {
       //return factor_.LowerBound(*this); 
       return factor_.LowerBound(); 
@@ -3185,13 +3194,6 @@ private:
 
    using msg_storage_type = meta::apply<meta::quote<std::tuple>, msg_container_type_list>;
    msg_storage_type msg_;
-
-   REAL EvaluatePrimal() const final
-   {
-      //return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
-      //return factor_.EvaluatePrimal(primalIt + primalOffset_);
-      return factor_.EvaluatePrimal();
-   }
 
 #ifdef LP_MP_PARALLEL
    // a recursive mutex is required only for SendMessagesTo{Left|Right}, as multiple messages may be have the same endpoints. Then the corresponding lock is acquired multiple times.
