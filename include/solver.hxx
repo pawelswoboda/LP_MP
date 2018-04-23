@@ -253,7 +253,7 @@ public:
          });
          this->WritePrimal();
       }
-      return c.error;
+      return !c.error;
    }
 
 
