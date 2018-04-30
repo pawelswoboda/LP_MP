@@ -27,12 +27,12 @@ static std::vector<std::string> default_solver_options = {
 // binds together problem constructors and solver and organizes input/output
 // base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
 
-template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR>
+template<typename LP_TYPE, typename VISITOR>
 class Solver {
 
 public:
-   using FMC = FACTOR_MESSAGE_CONNECTION;
-   using SolverType = Solver<FMC,LP_TYPE,VISITOR>;
+   using SolverType = Solver<LP_TYPE, VISITOR>;
+   using FMC = typename LP_TYPE::FMC;
    using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
 
    // default parameters
@@ -244,6 +244,8 @@ public:
       }
       if(!c.error) {
          this->End();
+         RegisterPrimal();
+         lowerBound_ = lp_.LowerBound();
          // possibly primal has been computed in end. Call visitor again
          visitor_.end(this->lowerBound_, this->bestPrimalCost_);
          static_if<visitor_has_solution()>([this](auto f) {
@@ -251,7 +253,7 @@ public:
          });
          this->WritePrimal();
       }
-      return c.error;
+      return !c.error;
    }
 
 

@@ -114,7 +114,7 @@ public:
     cur_ = archive_;
   }
 
-  serialization_archive(allocate_archive& a)
+  serialization_archive(const allocate_archive& a)
   {
      const INDEX size_in_bytes = a.size();
 
@@ -157,28 +157,29 @@ public:
 
   ~serialization_archive()
   {
-    //assert(archive_ != nullptr); // can be true when memory was released!
-    if(archive_ != nullptr) {
-      delete[] archive_;
-    }
+     release_memory();
   }
 
   void aquire_memory(const INDEX size_in_bytes)
   {
+     release_memory();
      archive_ = new char[size_in_bytes];
      end_ = archive_ + size_in_bytes;
      assert(archive_ != nullptr);
      cur_ = archive_;
-  } 
-
-  void release_memory()
-  { 
-     archive_ = nullptr;
-     cur_ = nullptr;
-     end_ = nullptr;
   }
 
-  bool operator==(serialization_archive& o) const
+  void release_memory()
+  {
+     if(archive_ != nullptr) {
+        delete[] archive_;
+        archive_ = nullptr;
+        cur_ = nullptr;
+        end_ = nullptr;
+     }
+  }
+
+  bool operator==(const serialization_archive& o) const
   {
      if(size() != o.size()) { 
         return false;
