@@ -69,4 +69,18 @@ add_subdirectory("external/DD_ILP")
 target_link_libraries(LP_MP INTERFACE DD_ILP)
 
 enable_testing()
-add_subdirectory(test) 
+add_subdirectory(test)
+
+option(BUILD_DOC "Build documentation" OFF)
+if(BUILD_DOC)
+  find_package(Doxygen REQUIRED)
+  configure_file(Doxyfile.in Doxyfile @ONLY)
+  add_custom_target(docs-lpmp
+    COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
+    COMMENT "Generating API documentation with Doxygen"
+    VERBATIM)
+  if(NOT TARGET docs)
+    add_custom_target(docs ALL)
+  endif()
+  add_dependencies(docs docs-lpmp)
+endif()
