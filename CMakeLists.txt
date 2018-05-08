@@ -16,6 +16,7 @@ option(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
 include(ExternalProject)
 externalproject_add( conicBundle_Project
   URL http://www-user.tu-chemnitz.de/~helmberg/ConicBundle/CB_v0.3.11.tgz
+  URL_HASH SHA256=f5a6774c24b2f71c31b5bdcadc0ac310f3862275ea4097a4ca3d6731876701c8
   PATCH_COMMAND patch -s -d ${PROJECT_BINARY_DIR}/external/ConicBundle -p1 < ${PROJECT_SOURCE_DIR}/external/ConicBundle-v0.3.11.patch -N -r -
   SOURCE_DIR "${PROJECT_BINARY_DIR}/external/ConicBundle"
   CONFIGURE_COMMAND ""
@@ -68,4 +69,18 @@ add_subdirectory("external/DD_ILP")
 target_link_libraries(LP_MP INTERFACE DD_ILP)
 
 enable_testing()
-add_subdirectory(test) 
+add_subdirectory(test)
+
+option(BUILD_DOC "Build documentation" OFF)
+if(BUILD_DOC)
+  find_package(Doxygen REQUIRED)
+  configure_file(Doxyfile.in Doxyfile @ONLY)
+  add_custom_target(docs-lpmp
+    COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
+    COMMENT "Generating API documentation with Doxygen"
+    VERBATIM)
+  if(NOT TARGET docs)
+    add_custom_target(docs ALL)
+  endif()
+  add_dependencies(docs docs-lpmp)
+endif()

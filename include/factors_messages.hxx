@@ -349,6 +349,8 @@ struct next_msg_container_selector {
        
 };
 
+class AbstractMessageContainer { };
+
 
 // Class holding message and left and right factor
 // do zrobienia: possibly replace {LEFT|RIGHT}_FACTOR_NO by their type
@@ -360,7 +362,7 @@ template<typename MESSAGE_TYPE,
          INDEX MESSAGE_NO,
          INDEX ESTIMATED_NO_OF_LEFT_FACTORS = 4, INDEX ESTIMATED_NO_OF_RIGHT_FACTORS = 4
          >
-class MessageContainer : //public MessageTypeAdapter,
+class MessageContainer : public AbstractMessageContainer,
                          // when NO_OF_LEFT_FACTORS is zero, we hold factors in linked list
                          public next_msg_container_selector< MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO,ESTIMATED_NO_OF_LEFT_FACTORS,ESTIMATED_NO_OF_RIGHT_FACTORS>, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::left>::type,
                          public next_msg_container_selector< MessageContainer<MESSAGE_TYPE,LEFT_FACTOR_NO,RIGHT_FACTOR_NO,MPS,NO_OF_LEFT_FACTORS,NO_OF_RIGHT_FACTORS,FACTOR_MESSAGE_TRAIT,MESSAGE_NO,ESTIMATED_NO_OF_LEFT_FACTORS,ESTIMATED_NO_OF_RIGHT_FACTORS>, NO_OF_LEFT_FACTORS, NO_OF_RIGHT_FACTORS, Chirality::right>::type
@@ -3004,6 +3006,13 @@ public:
       return ar.size(); 
    }
 
+   REAL EvaluatePrimal() const final
+   {
+      //return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
+      //return factor_.EvaluatePrimal(primalIt + primalOffset_);
+      return factor_.EvaluatePrimal();
+   }
+
    REAL LowerBound() const final {
       //return factor_.LowerBound(*this); 
       return factor_.LowerBound(); 
@@ -3186,13 +3195,6 @@ private:
    using msg_storage_type = meta::apply<meta::quote<std::tuple>, msg_container_type_list>;
    msg_storage_type msg_;
 
-   REAL EvaluatePrimal() const final
-   {
-      //return factor_.EvaluatePrimal(*this,primalIt + primalOffset_);
-      //return factor_.EvaluatePrimal(primalIt + primalOffset_);
-      return factor_.EvaluatePrimal();
-   }
-
 #ifdef LP_MP_PARALLEL
    // a recursive mutex is required only for SendMessagesTo{Left|Right}, as multiple messages may be have the same endpoints. Then the corresponding lock is acquired multiple times.
    // if no two messages have the same endpoints, an ordinary mutex is enough.
@@ -3292,9 +3294,15 @@ public:
    template<typename EXTERNAL_SOLVER>
    void load_costs_impl(EXTERNAL_SOLVER& s)
    {
+      // FIXME: This code relies on UNDEFINED BEHAVIOUR!
+      // The order of argument evaluation for function calls is undefined
+      // behaviour even in C++17! At the same time, the side_effects of
+      // `add_objective` and `convert_primal` must take effect in exactly the
+      // same order.
+
       // load external solver variables corresponding to reparametrization ones and add reparametrization as cost
       auto vars = factor_.export_variables();
-      std::apply([this,&s](auto... x){ ((this->add_objective(s,x)), ...); },  vars);
+      std::apply([this,&s](auto... x){ std::make_tuple((this->add_objective(s,x), 0)...); }, vars);
       //auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->leftFactor_->load_external_variables(s, x)...); }, vars);
       // for all variables,
    }
@@ -3303,6 +3311,9 @@ public:
    template<typename SOLVER>
    void convert_primal_impl(SOLVER& s)
    {
+      // FIXME: This code relies on UNDEFINED BEHAVIOUR!
+      // See explanation in function `load_costs_impl`.
+
       auto vars = factor_.export_variables();
       auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->load_external_variables(s, x)...); }, vars); 
 

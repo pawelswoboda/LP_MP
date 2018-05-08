@@ -184,7 +184,7 @@ inline MessageIterator FactorTypeAdapter::end()  { return MessageIterator(this, 
 */
 
 
-template<typename FMC>
+template<typename FMC_TYPE>
 class LP {
    struct message_trait
    {
@@ -194,6 +194,8 @@ class LP {
    };
 
 public:
+   using FMC = FMC_TYPE;
+
    LP(TCLAP::CmdLine& cmd);
    ~LP();
    LP(LP& o);
@@ -237,6 +239,23 @@ public:
        return f;
    }
 
+   template<typename CALLABLE>
+   void for_each_factor(CALLABLE c) const
+   {
+#ifndef NDEBUG
+      INDEX count = 0;
+#endif
+      for_each_tuple(factors_, [&](auto &fac_vec) {
+        for (auto* fac : fac_vec) {
+          c(fac);
+#ifndef NDEBUG
+          ++count;
+#endif
+        }
+      });
+      assert(count == f_.size());
+   }
+
    INDEX GetNumberOfFactors() const { return f_.size(); }
    FactorTypeAdapter* GetFactor(const INDEX i) const { return f_[i]; }
 
@@ -267,6 +286,24 @@ public:
        std::get<msg_idx>(messages_).push_back(m);
        return m;
    }
+
+   template<typename CALLABLE>
+   void for_each_message(CALLABLE c) const
+   {
+#ifndef NDEBUG
+      INDEX count = 0;
+#endif
+      for_each_tuple(messages_, [&](auto &msg_vec) {
+        for (auto* msg : msg_vec) {
+          c(msg);
+#ifndef NDEBUG
+          ++count;
+#endif
+        }
+      });
+      assert(count == m_.size());
+   }
+
    //virtual INDEX AddMessage(MessageTypeAdapter* m);
    message_trait GetMessage(const INDEX i) const { return m_[i]; }
    INDEX GetNumberOfMessages() const { return m_.size(); }
