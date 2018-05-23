@@ -6,7 +6,8 @@
 
 namespace LP_MP {
 
-class LP_tree_FWMAP : public LP_with_trees<Lagrangean_factor_FWMAP, LP_tree_FWMAP> {
+template<typename FMC>
+class LP_tree_FWMAP : public LP_with_trees<FMC, Lagrangean_factor_FWMAP, LP_tree_FWMAP<FMC> > {
 public:
    // for the Frank Wolfe implementation
    // to do: change the FWMAP implementation and make these methods virtual instead of static.
@@ -15,7 +16,7 @@ public:
    static double max_fn(double* wi, FWMAP::YPtr _y, FWMAP::TermData term_data)
    {
      
-      LP_tree_Lagrangean<Lagrangean_factor_FWMAP>* t = (LP_tree_Lagrangean<Lagrangean_factor_FWMAP>*) term_data;
+      LP_tree_Lagrangean<FMC, Lagrangean_factor_FWMAP>* t = (LP_tree_Lagrangean<FMC, Lagrangean_factor_FWMAP>*) term_data;
 
       // first add weights to problem
       // we only need to add Lagrange variables to Lagrangean_factors_ (others are not shared)
@@ -35,7 +36,7 @@ public:
    // copy values provided by subgradient from Lagrangean factors into ai
    static void copy_fn(double* ai, FWMAP::YPtr _y, FWMAP::TermData term_data)
    {
-      LP_tree_Lagrangean<Lagrangean_factor_FWMAP>* t = (LP_tree_Lagrangean<Lagrangean_factor_FWMAP>*) term_data;
+      LP_tree_Lagrangean<FMC, Lagrangean_factor_FWMAP>* t = (LP_tree_Lagrangean<FMC, Lagrangean_factor_FWMAP>*) term_data;
 
       // possibly this is not needed anymore
       std::fill(ai, ai+t->dual_size(), double(0.0));
@@ -50,7 +51,7 @@ public:
 
    static double dot_product_fn(double* wi, FWMAP::YPtr _y, FWMAP::TermData term_data)
    {
-      LP_tree_Lagrangean<Lagrangean_factor_FWMAP>* t = (LP_tree_Lagrangean<Lagrangean_factor_FWMAP>*) term_data;
+      LP_tree_Lagrangean<FMC, Lagrangean_factor_FWMAP>* t = (LP_tree_Lagrangean<FMC, Lagrangean_factor_FWMAP>*) term_data;
 
       // read in primal solution
       t->read_in_primal(_y);
@@ -68,7 +69,7 @@ public:
    {
      LP_with_trees<Lagrangean_factor_FWMAP>::Begin(); 
      // add to mapping an extra dimension
-     for(auto& t : trees_) {
+     for(auto& t : this->trees_) {
        t.mapping().push_back(this->Lagrangean_vars_size_);
      } 
    }
@@ -81,10 +82,10 @@ public:
 
    FWMAP* build_up_solver()
    {
-      auto* bundle_solver = new FWMAP(this->no_Lagrangean_vars(), trees_.size(), LP_tree_FWMAP::max_fn, LP_tree_FWMAP::copy_fn, LP_tree_FWMAP::dot_product_fn);//int d, int n, MaxFn max_fn, CopyFn copy_fn, DotProductFn dot_product_fn);
+      auto* bundle_solver = new FWMAP(this->no_Lagrangean_vars(), this->trees_.size(), LP_tree_FWMAP::max_fn, LP_tree_FWMAP::copy_fn, LP_tree_FWMAP::dot_product_fn);//int d, int n, MaxFn max_fn, CopyFn copy_fn, DotProductFn dot_product_fn);
 
-      for(INDEX i=0; i<trees_.size(); ++i) {
-         auto& t = trees_[i];
+      for(INDEX i=0; i<this->trees_.size(); ++i) {
+         auto& t = this->trees_[i];
          const INDEX primal_size_in_bytes = t.primal_size_in_bytes();
 
          bundle_solver->SetTerm(i, &t, t.mapping().size(), &t.mapping()[0], t.primal_size_in_bytes()); // although mapping is of length di + 1 (the last entry being di itself, its length must be given as di!
@@ -108,7 +109,7 @@ public:
 
 public:
    LP_tree_FWMAP(TCLAP::CmdLine& cmd) 
-     : LP_with_trees(cmd),
+     : LP_with_trees<FMC, Lagrangean_factor_FWMAP, LP_tree_FWMAP<FMC> >(cmd),
      proximal_weight_arg_("","proximalWeight","inverse weight for the proximal term", false, 1.0, "", cmd)
   {
     bundle_solver = nullptr;

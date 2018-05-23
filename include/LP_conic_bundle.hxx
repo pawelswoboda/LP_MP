@@ -6,9 +6,10 @@
 
 namespace LP_MP {
 
-class LP_conic_bundle : public LP_with_trees<Lagrangean_factor_star, LP_conic_bundle>, public ConicBundle::FunctionOracle {
+template<typename FMC>
+class LP_conic_bundle : public LP_with_trees<FMC, Lagrangean_factor_star, LP_conic_bundle<FMC> >, public ConicBundle::FunctionOracle {
 public:
-   using LP_with_trees::LP_with_trees;
+   using LP_with_trees<FMC, Lagrangean_factor_star, LP_conic_bundle<FMC> >::LP_with_trees;
 
    void construct_decomposition()
    {
@@ -32,14 +33,6 @@ public:
          std::cout << "\nconic bundle has terminated\n\n";
          cb_solver_.print_termination_code(std::cout);
       }
-   }
-
-   void ComputeForwardPassAndPrimal(const INDEX iteration) 
-   {}
-
-   void ComputeBackwardPassAndPrimal(const INDEX iteration) 
-   {
-      ComputePass(iteration);
    }
 
    int evaluate(const ConicBundle::DVector& x, double relprec, 
@@ -76,7 +69,7 @@ public:
       // load Lagrangean variables
       this->add_weights(&Lagrangean_vars[0], -1.0);
 
-      const REAL lb = LP_with_trees::decomposition_lower_bound();
+      const REAL lb = LP_with_trees<FMC, Lagrangean_factor_star, LP_conic_bundle<FMC> >::decomposition_lower_bound();
       // remove Lagrangean variables again
       this->add_weights(&Lagrangean_vars[0], +1.0);
 

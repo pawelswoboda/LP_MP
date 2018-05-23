@@ -157,12 +157,12 @@ public:
 
   ~serialization_archive()
   {
-     release_memory();
+     free_memory();
   }
 
   void aquire_memory(const INDEX size_in_bytes)
   {
-     release_memory();
+     free_memory();
      archive_ = new char[size_in_bytes];
      end_ = archive_ + size_in_bytes;
      assert(archive_ != nullptr);
@@ -170,6 +170,12 @@ public:
   }
 
   void release_memory()
+  {
+      archive_ = nullptr;
+      cur_ = nullptr;
+      end_ = nullptr; 
+  }
+  void free_memory()
   {
      if(archive_ != nullptr) {
         delete[] archive_;

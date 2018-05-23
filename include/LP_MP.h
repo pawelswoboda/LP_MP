@@ -225,8 +225,9 @@ public:
    template<typename FACTOR_CONTAINER_TYPE, typename... ARGS>
    FACTOR_CONTAINER_TYPE* add_factor(ARGS... args)
    {
-       auto* f = new FACTOR_CONTAINER_TYPE(args...);
        set_flags_dirty();
+
+       auto* f = new FACTOR_CONTAINER_TYPE(args...);
        assert(factor_address_to_index_.size() == f_.size());
        f_.push_back(f);
 

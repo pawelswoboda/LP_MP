@@ -13,34 +13,30 @@ class factor_tree {
 public:
    // add messages from leaves to root upward
    template<typename MESSAGE_CONTAINER_TYPE>
-   void add_message( MESSAGE_CONTAINER_TYPE& msg, Chirality c) // chirality denotes which factor is nearer the root
+   void add_message( MESSAGE_CONTAINER_TYPE* msg, Chirality c) // chirality denotes which factor is nearer the root
    {
-
+       tree_messages_.push_back( std::make_tuple( msg->free_message(), c) ); 
    }
 
    void init()
    {
-       assert(false);
-      /*
-      std::set<FactorTypeAdapter*> factor_set;
-      for(auto tree_msg : tree_messages_) {
-         auto* msg = std::get<0>(tree_msg);
-         factor_set.insert(msg->GetLeftFactor());
-         factor_set.insert(msg->GetRightFactor());
-      }
-      factors_.assign( factor_set.begin(), factor_set.end() );
-      std::sort(factors_.begin(), factors_.end());
-      assert(factors_.size() == tree_messages_.size() + 1);
+       std::set<FactorTypeAdapter*> factor_set;
+       for(auto tree_msg : tree_messages_) {
+           std::visit([&](auto&& m) {
+               factor_set.insert(m.GetLeftFactor());
+               factor_set.insert(m.GetRightFactor()); 
+               }, std::get<0>(tree_msg) );
+       }
+       factors_.assign( factor_set.begin(), factor_set.end() );
+       std::sort(factors_.begin(), factors_.end());
+       assert(factors_.size() == tree_messages_.size() + 1);
 
-      assert(tree_valid());
-      */
+       assert(tree_valid());
    }
 
    // check whether messages are arranged correctly
    bool tree_valid() const
    {
-       assert(false);
-       /*
      // build graph out of tree messages and check whether all edges point towards root
      std::vector<std::vector<int>> tree(factors_.size());
      std::unordered_map<FactorTypeAdapter*, int> factor_map;
@@ -48,19 +44,20 @@ public:
        factor_map.insert({ factors_[i], i });
      }
      for(auto& tree_msg : tree_messages_) {
-         auto* msg = std::get<0>(tree_msg);
-         auto c = std::get<1>(tree_msg);
-         auto* left = msg->GetLeftFactor();
-         const int left_idx = factor_map[left];
-         auto* right = msg->GetRightFactor();
-         const int right_idx = factor_map[right];
-         // point messages here towards leaves
-         if(c == Chirality::left) {
-           tree[left_idx].push_back(right_idx); 
-         } else {
-           assert(c == Chirality::right);
-           tree[right_idx].push_back(left_idx); 
-         } 
+         std::visit([&](auto&& msg) {
+            auto c = std::get<1>(tree_msg);
+            auto* left = msg.GetLeftFactor();
+            const int left_idx = factor_map[left];
+            auto* right = msg.GetRightFactor();
+            const int right_idx = factor_map[right];
+            // point messages here towards leaves
+            if(c == Chirality::left) {
+                tree[left_idx].push_back(right_idx); 
+            } else {
+                assert(c == Chirality::right);
+                tree[right_idx].push_back(left_idx); 
+            } 
+         }, std::get<0>(tree_msg) );
      }
      // determine root: it is the single index without incoming edges
      std::vector<int> no_incoming_edges(factors_.size(), 0);
@@ -84,67 +81,68 @@ public:
      // check whether messages are in correct order: from bottom to top
      std::vector<int> visited(tree.size(), false);
      for(auto& tree_msg : tree_messages_) {
-         auto* msg = std::get<0>(tree_msg);
-         auto c = std::get<1>(tree_msg);
-         auto* left = msg->GetLeftFactor();
-         const int left_idx = factor_map[left];
-         auto* right = msg->GetRightFactor();
-         const int right_idx = factor_map[right];
-         // point messages here towards leaves
-         if(c == Chirality::left) {
-           visited[right_idx] = true;
-           assert(visited[left_idx] == false);
-         } else {
-           visited[left_idx] = true;
-           assert(visited[right_idx] == false); 
-         }
+         std::visit([&](auto&& msg) {
+            auto c = std::get<1>(tree_msg);
+            auto* left = msg.GetLeftFactor();
+            const int left_idx = factor_map[left];
+            auto* right = msg.GetRightFactor();
+            const int right_idx = factor_map[right];
+            // point messages here towards leaves
+            if(c == Chirality::left) {
+                visited[right_idx] = true;
+                assert(visited[left_idx] == false);
+            } else {
+                visited[left_idx] = true;
+                assert(visited[right_idx] == false); 
+            }
+        }, std::get<0>(tree_msg) );
      }
      assert(visited[root] == false);
 
      return true; 
-       */
    }
 
    REAL solve()
    {
-       assert(false);
-       /*
       assert(factors_.size() == tree_messages_.size() + 1); // otherwise call init
       // send messages up the tree
       for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
-         auto* m = std::get<0>(*it);
          Chirality c = std::get<1>(*it);
-         m->send_message_up(c);
+          std::visit([c](auto&& msg) {
+              msg.send_message_up(c);
+          }, std::get<0>(*it) );
       }
       // compute primal for topmost factor
       // also init primal for top factor, all other primals were initialized already by send_message_up
       REAL value = 0.0;
       {
-         auto* msg = std::get<0>(tree_messages_.back());
-         Chirality c = std::get<1>(tree_messages_.back());
-         if(c == Chirality::right) {
-            // init primal for right factor!
-            msg->GetRightFactorTypeAdapter()->init_primal();
-            msg->GetRightFactorTypeAdapter()->MaximizePotentialAndComputePrimal();
-            value = msg->GetRightFactorTypeAdapter()->EvaluatePrimal();
-         } else {
-            assert(c == Chirality::left);
-            msg->GetLeftFactorTypeAdapter()->init_primal(); 
-            msg->GetLeftFactorTypeAdapter()->MaximizePotentialAndComputePrimal(); 
-            value = msg->GetLeftFactorTypeAdapter()->EvaluatePrimal();
-         }
+          const Chirality c = std::get<1>(tree_messages_.back());
+          std::visit([&](auto&& msg) {
+              if(c == Chirality::right) {
+                // init primal for right factor!
+                msg.GetRightFactorTypeAdapter()->init_primal();
+                msg.GetRightFactorTypeAdapter()->MaximizePotentialAndComputePrimal();
+                value = msg.GetRightFactorTypeAdapter()->EvaluatePrimal();
+              } else {
+                assert(c == Chirality::left);
+                msg.GetLeftFactorTypeAdapter()->init_primal(); 
+                msg.GetLeftFactorTypeAdapter()->MaximizePotentialAndComputePrimal(); 
+                value = msg.GetLeftFactorTypeAdapter()->EvaluatePrimal();
+              } 
+          }, std::get<0>(tree_messages_.back()) );
       }
       // track down optimal primal solution
       for(auto it = tree_messages_.rbegin(); it!= tree_messages_.rend(); ++it) {
-         auto* msg = std::get<0>(*it);
          Chirality c = std::get<1>(*it);
-         msg->track_solution_down(c);
-         if(c == Chirality::right) {
-            value += msg->GetLeftFactorTypeAdapter()->EvaluatePrimal();
-         } else {
-            assert(c == Chirality::left);
-            value += msg->GetRightFactorTypeAdapter()->EvaluatePrimal();
-         }
+         std::visit([&](auto&& msg) {
+             msg.track_solution_down(c);
+             if(c == Chirality::right) {
+                value += msg.GetLeftFactorTypeAdapter()->EvaluatePrimal();
+             } else {
+                assert(c == Chirality::left);
+                value += msg.GetRightFactorTypeAdapter()->EvaluatePrimal();
+             } 
+         }, std::get<0>(*it) );
       } 
 
       // check if primal cost is equal to lower bound
@@ -152,20 +150,20 @@ public:
       assert(std::abs(lower_bound() - primal_cost()) <= eps);
       assert(std::abs(value - primal_cost()) <= eps);
       return value;
-       */
    }
 
    bool primal_consistent() const 
    {
-       /*
       for(auto it = tree_messages_.begin(); it!= tree_messages_.end(); ++it) {
-         auto* m = std::get<0>(*it);
-         if(!m->CheckPrimalConsistency()) {
-            return false;
+         const bool consistent = std::visit([&](auto&& msg) {
+            return msg.CheckPrimalConsistency();
+         }, std::get<0>(*it) );
+
+         if(!consistent) { 
+             return false;
          }
       }
       return true; 
-      */
    }
 
    REAL primal_cost() const
@@ -689,17 +687,19 @@ public:
        } 
 
        for(auto tree_msg : t.tree_messages_) {
-         auto* m = std::get<0>(tree_msg);
-         auto* left = m->GetLeftFactor();
-         auto* right = m->GetRightFactor();
-         if(copy_to_original_factor.find(left) != copy_to_original_factor.end()) {
-           auto* left_original = copy_to_original_factor.find(left)->second;
-           m->SetLeftFactor(left_original);
-         }
-         if(copy_to_original_factor.find(right) != copy_to_original_factor.end()) {
-           auto* right_original = copy_to_original_factor.find(right)->second;
-           m->SetRightFactor(right_original);
-         }
+         std::visit([&](auto&& m) {
+             auto* left = m.GetLeftFactor();
+             auto* right = m.GetRightFactor();
+
+            if(copy_to_original_factor.find(left) != copy_to_original_factor.end()) {
+                auto* left_original = copy_to_original_factor.find(left)->second;
+                m.SetLeftFactor(left_original);
+            }
+            if(copy_to_original_factor.find(right) != copy_to_original_factor.end()) {
+                auto* right_original = copy_to_original_factor.find(right)->second;
+                m.SetRightFactor(right_original);
+            }
+         }, std::get<0>(tree_msg) );
        } 
      }
 
@@ -779,17 +779,18 @@ public:
          
          // redirect links from messages in trees that are directed to current factor
          for(auto tree_msg : trees_[i].tree_messages_) {
-            auto* m = std::get<0>(tree_msg);
-            auto* left = m->GetLeftFactor();
-            auto* right = m->GetRightFactor();
-            if(factor_mapping[i].find(left) != factor_mapping[i].end()) {
-               auto* left_copy = factor_mapping[i].find(left)->second;
-               m->SetLeftFactor(left_copy);
-            }
-            if(factor_mapping[i].find(right) != factor_mapping[i].end()) {
-               auto* right_copy = factor_mapping[i].find(right)->second;
-               m->SetRightFactor(right_copy);
-            }
+             std::visit([&](auto&& m) {
+                 auto* left = m.GetLeftFactor();
+                 auto* right = m.GetRightFactor();
+                 if(factor_mapping[i].find(left) != factor_mapping[i].end()) {
+                    auto* left_copy = factor_mapping[i].find(left)->second;
+                    m.SetLeftFactor(left_copy);
+                 }
+                 if(factor_mapping[i].find(right) != factor_mapping[i].end()) {
+                    auto* right_copy = factor_mapping[i].find(right)->second;
+                    m.SetRightFactor(right_copy);
+                 }
+                 }, std::get<0>(tree_msg));
          }
          // search for factor in tree and change it as well
          for(auto& f : t.factors_) {

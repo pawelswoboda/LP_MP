@@ -14,8 +14,8 @@ Solvers are provided in separate projects and include
 ## Optimization techniques
 Optimization techniques include
 * **Messsage passing [1]**,
-* **Subgradient ascent with a bundle method based on the Frank-Wolfe algorithm [2]**, [original implementation](http://pub.ist.ac.at/~vnk/papers/FWMAP.html).
-* An interface to **external solvers** is provided by [DD_ILP](https://github.com/pawelswoboda/DD_ILP).
+* **Subgradient ascent with a proximal bundle method based on the Frank-Wolfe algorithm [2]**, [Vladimir Kolmogorov's](http://http://pub.ist.ac.at/~vnk/) [original implementation](http://pub.ist.ac.at/~vnk/papers/FWMAP.html).
+* **External solvers** can be  is provided by [DD_ILP](https://github.com/pawelswoboda/DD_ILP).
 
 
 ## Installation

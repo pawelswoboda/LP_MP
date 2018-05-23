@@ -84,13 +84,19 @@ struct test_message {
   template<typename LEFT_FACTOR, typename MSG>
   void send_message_to_right(const LEFT_FACTOR& l, MSG msg, const REAL omega)
   {
-    msg -= omega*l.cost; 
+      const auto min = l.cost.min();
+      auto m = l.cost;
+      for(auto& x : m) { x -= min; }
+      msg -= omega*m; 
   }
 
   template<typename RIGHT_FACTOR, typename MSG>
   void send_message_to_left(const RIGHT_FACTOR& r, MSG msg, const REAL omega)
   {
-    msg -= omega*r.cost; 
+      const auto min = r.cost.min();
+      auto m = r.cost;
+      for(auto& x : m) { x -= min; }
+      msg -= omega*m; 
   }
 
   template<typename LEFT_FACTOR, typename RIGHT_FACTOR>
@@ -133,53 +139,40 @@ struct test_FMC { // factor message connection
 template<typename LP_TYPE>
 void build_test_model(LP_TYPE& lp)
 {
-  auto* f1 = new typename test_FMC::factor(0,1);
-  lp.AddFactor(f1);
+  auto* f1 = lp.template add_factor<typename test_FMC::factor>(0,1);
   {
-    factor_tree t1;
-    auto* f2 = new typename test_FMC::factor(1,0);
-    auto* f3 = new typename test_FMC::factor(0,0);
-    lp.AddFactor(f2);
-    lp.AddFactor(f3);
-    lp.add_message<typename test_FMC::message>(f1,f2);
-    lp.add_message<typename test_FMC::message>(f1,f3);
-    auto* m12 = new typename test_FMC::message(f1,f2);
-    auto* m13 = new typename test_FMC::message(f1,f3);
-    lp.AddMessage(m13);
-    t1.AddMessage(m12, Chirality::left);
-    t1.AddMessage(m13, Chirality::left);
+    static_assert( std::is_same_v<typename LP_TYPE::FMC, test_FMC> );
+    factor_tree<test_FMC> t1;
+    auto* f2 = lp.template add_factor<typename test_FMC::factor>(1,0);
+    auto* f3 = lp.template add_factor<typename test_FMC::factor>(0,0);
+    auto* m12 = lp.template add_message<typename test_FMC::message>(f1,f2);
+    auto* m13 = lp.template add_message<typename test_FMC::message>(f1,f3);
+    t1.add_message(m12, Chirality::left);
+    t1.add_message(m13, Chirality::left);
     t1.init();
     lp.add_tree(t1);
   }
 
   {
-    factor_tree t2;
-    auto* f2 = new typename test_FMC::factor(1,0);
-    auto* f3 = new typename test_FMC::factor(0,0);
-    lp.AddFactor(f2);
-    lp.AddFactor(f3);
-    auto* m12 = new typename test_FMC::message(f1,f2);
-    auto* m23 = new typename test_FMC::message(f2,f3);
-    lp.AddMessage(m12);
-    lp.AddMessage(m23);
-    t2.AddMessage(m12, Chirality::right);
-    t2.AddMessage(m23, Chirality::left);
+    factor_tree<test_FMC> t2;
+    auto* f2 = lp.template add_factor<typename test_FMC::factor>(1,0);
+    auto* f3 = lp.template add_factor<typename test_FMC::factor>(0,0);
+    auto* m12 = lp.template add_message<typename test_FMC::message>(f1,f2);
+    auto* m23 = lp.template add_message<typename test_FMC::message>(f2,f3);
+    t2.add_message(m12, Chirality::right);
+    t2.add_message(m23, Chirality::left);
     t2.init();
     lp.add_tree(t2);
   }
 
   {
-    factor_tree t3;
-    auto* f2 = new typename test_FMC::factor(1,0);
-    auto* f3 = new typename test_FMC::factor(0,0);
-    lp.AddFactor(f2);
-    lp.AddFactor(f3);
-    auto* m12 = new typename test_FMC::message(f1,f2);
-    auto* m23 = new typename test_FMC::message(f2,f3);
-    lp.AddMessage(m12);
-    lp.AddMessage(m23);
-    t3.AddMessage(m12, Chirality::right);
-    t3.AddMessage(m23, Chirality::left);
+    factor_tree<test_FMC> t3;
+    auto* f2 = lp.template add_factor<typename test_FMC::factor>(1,0);
+    auto* f3 = lp.template add_factor<typename test_FMC::factor>(0,0);
+    auto* m12 = lp.template add_message<typename test_FMC::message>(f1,f2);
+    auto* m23 = lp.template add_message<typename test_FMC::message>(f2,f3);
+    t3.add_message(m12, Chirality::right);
+    t3.add_message(m23, Chirality::left);
     t3.init();
     lp.add_tree(t3);
   }
