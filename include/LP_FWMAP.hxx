@@ -6,9 +6,10 @@
 
 namespace LP_MP {
 
-template<typename FMC>
-class LP_tree_FWMAP : public LP_with_trees<FMC, Lagrangean_factor_FWMAP, LP_tree_FWMAP<FMC> > {
+template<typename FMC_TYPE>
+class LP_tree_FWMAP : public LP_with_trees<FMC_TYPE, Lagrangean_factor_FWMAP, LP_tree_FWMAP<FMC_TYPE> > {
 public:
+    using FMC = FMC_TYPE;
    // for the Frank Wolfe implementation
    // to do: change the FWMAP implementation and make these methods virtual instead of static.
    // _y is the primal labeling to be computed

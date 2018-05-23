@@ -6,9 +6,10 @@
 
 namespace LP_MP {
 
-template<typename FMC>
-class LP_conic_bundle : public LP_with_trees<FMC, Lagrangean_factor_star, LP_conic_bundle<FMC> >, public ConicBundle::FunctionOracle {
+template<typename FMC_TYPE>
+class LP_conic_bundle : public LP_with_trees<FMC_TYPE, Lagrangean_factor_star, LP_conic_bundle<FMC_TYPE> >, public ConicBundle::FunctionOracle {
 public:
+   using FMC = FMC_TYPE;
    using LP_with_trees<FMC, Lagrangean_factor_star, LP_conic_bundle<FMC> >::LP_with_trees;
 
    void construct_decomposition()

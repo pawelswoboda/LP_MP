@@ -122,11 +122,24 @@ public:
 
    struct message_trait {
        FactorTypeAdapter* adjacent_factor;
-       Chirality c; // is f on the left or on the right
+       Chirality chirality; // is f on the left or on the right
        bool sends_to_adjacent_factor;
        bool receives_from_adjacent_factor;
        bool adjacent_factor_sends;
        bool adjacent_factor_receives;
+
+       message_trait reverse(FactorTypeAdapter* f) const
+       {
+           message_trait m;
+           m.adjacent_factor = f;
+           if(chirality == Chirality::left) { m.chirality = Chirality::right; }
+           else { assert(chirality == Chirality::right); m.chirality = Chirality::left; }
+           m.sends_to_adjacent_factor = adjacent_factor_sends;
+           m.adjacent_factor_sends = sends_to_adjacent_factor;
+           m.receives_from_adjacent_factor = adjacent_factor_receives;
+           m.adjacent_factor_receives = receives_from_adjacent_factor;
+           return m;
+       }
    };
    virtual std::vector<message_trait> get_messages() const = 0;
 };
@@ -225,9 +238,8 @@ public:
    template<typename FACTOR_CONTAINER_TYPE, typename... ARGS>
    FACTOR_CONTAINER_TYPE* add_factor(ARGS... args)
    {
-       set_flags_dirty();
-
        auto* f = new FACTOR_CONTAINER_TYPE(args...);
+       set_flags_dirty();
        assert(factor_address_to_index_.size() == f_.size());
        f_.push_back(f);
 
@@ -238,23 +250,6 @@ public:
        constexpr auto factor_idx = factor_tuple_index<FACTOR_CONTAINER_TYPE>();
        std::get<factor_idx>(factors_).push_back(f);
        return f;
-   }
-
-   template<typename CALLABLE>
-   void for_each_factor(CALLABLE c) const
-   {
-#ifndef NDEBUG
-      INDEX count = 0;
-#endif
-      for_each_tuple(factors_, [&](auto &fac_vec) {
-        for (auto* fac : fac_vec) {
-          c(fac);
-#ifndef NDEBUG
-          ++count;
-#endif
-        }
-      });
-      assert(count == f_.size());
    }
 
    INDEX GetNumberOfFactors() const { return f_.size(); }
@@ -275,36 +270,19 @@ public:
 
        auto* m_l = l->template add_message<MESSAGE_CONTAINER_TYPE,Chirality::left>(r,args...);
        auto* m_r = r->template add_message<MESSAGE_CONTAINER_TYPE,Chirality::right>(l,args...);
+       assert(m_l != nullptr || m_r != nullptr);
 
        l->set_left_msg(m_r);
        r->set_right_msg(m_l); 
 
        auto* m = (m_l != nullptr ? m_l : m_r);
-       assert(m != nullptr);
+       assert(m != nullptr && (m == m_l || m == m_r));
        m_.push_back({l,r, m->SendsMessageToLeft(), m->SendsMessageToRight(), m->ReceivesMessageFromLeft(), m->ReceivesMessageFromRight()});
 
        constexpr auto msg_idx = message_tuple_index<MESSAGE_CONTAINER_TYPE>();
        std::get<msg_idx>(messages_).push_back(m);
        return m;
    }
-
-   template<typename CALLABLE>
-   void for_each_message(CALLABLE c) const
-   {
-#ifndef NDEBUG
-      INDEX count = 0;
-#endif
-      for_each_tuple(messages_, [&](auto &msg_vec) {
-        for (auto* msg : msg_vec) {
-          c(msg);
-#ifndef NDEBUG
-          ++count;
-#endif
-        }
-      });
-      assert(count == m_.size());
-   }
-
    //virtual INDEX AddMessage(MessageTypeAdapter* m);
    message_trait GetMessage(const INDEX i) const { return m_[i]; }
    INDEX GetNumberOfMessages() const { return m_.size(); }
@@ -571,6 +549,9 @@ protected:
    template<typename FACTOR_ITERATOR, typename FACTOR_MASK_ITERATOR>
    std::vector<FactorTypeAdapter*> get_masked_factors( FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, FACTOR_MASK_ITERATOR factor_mask_begin, FACTOR_MASK_ITERATOR factor_mask_end);
    void reduce_optimization_factors();
+
+   template<typename ITERATOR_1, typename ITERATOR_2>
+   std::vector<FactorTypeAdapter*> concatenate_factors(ITERATOR_1 f1_begin, ITERATOR_1 f1_end, ITERATOR_2 f2_begin, ITERATOR_2 f2_end);
 
    REAL constant_ = 0;
 
@@ -920,6 +901,8 @@ inline void LP<FMC>::ComputePass(const INDEX iteration)
        compute_partition_pass(inner_iteration_number_arg_.getValue());
    } else if(reparametrization_type_ == reparametrization_type::overlapping_partition) {
        compute_overlapping_partition_pass(inner_iteration_number_arg_.getValue());
+       ComputeForwardPass();
+       ComputeBackwardPass();
    } else {
        ComputeForwardPass();
        ComputeBackwardPass();
@@ -1106,15 +1089,17 @@ inline bool LP<FMC>::CheckPrimalConsistency() const
 {
    volatile bool consistent=true; // or use std::atomic<bool>?
 
-#pragma omp parallel for shared(consistent)
-   for(INDEX i=0; i<f_.size(); ++i) {
-      if(!consistent) continue;
-      if(!f_[i]->check_primal_consistency()) {
-          consistent = false;
-      }
-   }
-   if(debug()) { std::cout << "primal solution consistent: " << (consistent ? "true" : "false") << "\n"; }
-   return consistent;
+    for_each_tuple(factors_, [&consistent,this](auto& v) {
+            for(auto* f : v) {
+                if(!consistent) continue;
+                if(!f->check_primal_consistency()) {
+                    consistent = false;
+                }
+            }
+    });
+
+    if(debug()) { std::cout << "primal solution consistent: " << (consistent ? "true" : "false") << "\n"; }
+    return consistent;
 }
 
 template<typename FMC>
@@ -1275,37 +1260,22 @@ void LP<FMC>::ComputeAnisotropicWeights( FACTOR_ITERATOR factorIt, FACTOR_ITERAT
    // compute the following numbers: 
    // 1) #{factors after current one, to which messages are sent from current factor}
    // 2) #{factors after current one, which receive messages from current one}
-   std::vector<std::size_t> no_send_factors_later(n, 0); // no of messages over which messages are sent from given factor in given direction
    std::vector<std::size_t> no_receiving_factors_later(n, 0); // number of factors later than current one receiving message from current one
    std::vector<std::size_t> last_receiving_factor(n, 0); // what is the last (in the order given by factor iterator) factor that receives a message?
-   std::vector<std::size_t> first_receiving_factor(n, 0); // what is the last (in the order given by factor iterator) factor that receives a message?
+   std::vector<std::size_t> first_receiving_factor(n, std::numeric_limits<std::size_t>::max()); // what is the last (in the order given by factor iterator) factor that receives a message?
+
 
    for(auto f_it=factorIt; f_it!=factorEndIt; ++f_it) {
        assert(factor_address_to_sorted_index.count(*f_it) > 0);
        const auto f_index = factor_address_to_sorted_index[*f_it];
        const auto messages = (*f_it)->get_messages();
-       for(auto m : messages) {
-           if(factor_address_to_sorted_index.count(m.adjacent_factor)) {
+       for(const auto m : messages) {
+           if(factor_address_to_sorted_index.count(m.adjacent_factor) > 0) {
                const auto adjacent_index = factor_address_to_sorted_index[m.adjacent_factor]; 
                if(m.adjacent_factor_receives && adjacent_index > f_index) {
                    no_receiving_factors_later[f_index]++;
-               }
-               last_receiving_factor[f_index] = std::max(last_receiving_factor[f_index], adjacent_index);
-               first_receiving_factor[f_index] = std::min(first_receiving_factor[f_index], adjacent_index);
-               //last_receiving_factor[adjacent_index] = std::max(last_receiving_factor[adjacent_index], f_index);
-               //first_receiving_factor[adjacent_index] = std::min(first_receiving_factor[adjacent_index], f_index);
-           }
-       }
-   }
-
-   for(auto f_it=factorIt; f_it!=factorEndIt; ++f_it) {
-       const auto f_index = factor_address_to_sorted_index[*f_it];
-       const auto messages = (*f_it)->get_messages();
-       for(auto m : messages) {
-           if(factor_address_to_sorted_index.count(m.adjacent_factor)) {
-               const auto adjacent_index = factor_address_to_sorted_index[m.adjacent_factor]; 
-               if(m.sends_to_adjacent_factor && (f_index < adjacent_index || last_receiving_factor[adjacent_index] > f_index) ) {
-                   no_send_factors_later[f_index]++;
+                   last_receiving_factor[f_index] = std::max(last_receiving_factor[f_index], adjacent_index);
+                   first_receiving_factor[f_index] = std::min(first_receiving_factor[f_index], adjacent_index);
                }
            }
        }
@@ -1352,80 +1322,110 @@ void LP<FMC>::ComputeAnisotropicWeights( FACTOR_ITERATOR factorIt, FACTOR_ITERAT
                }
            }
        } 
-
-       // revisit all factors in iteration list and possibly add to no_send_factors_later
-       for(auto f_it=factorIt; f_it!=factorEndIt; ++f_it) {
-           const auto f_index = std::distance(factorIt, f_it);
-           const auto messages = (*f_it)->get_messages();
-           for(const auto m : messages) {
-               if(factor_address_to_sorted_index.count(m.adjacent_factor) == 0) {
-                   auto max_adjacent_receiving_idx = max_adjacent_receiving[m.adjacent_factor];
-                   if(m.sends_to_adjacent_factor && max_adjacent_receiving_idx > f_index) {
-                       no_send_factors_later[f_index]++;
-                   }
-               }
-           } 
-       }
    }
 
    omega = allocate_omega(factorIt, factorEndIt);
    receive_mask = allocate_receive_mask(factorIt, factorEndIt);
 
+   auto receives_msg = [&](FactorTypeAdapter* factor, const std::size_t factor_index, auto m) 
+   { 
+       auto* adjacent_factor = m.adjacent_factor;
+       assert(adjacent_factor != factor);
+       assert(factor_address_to_sorted_index.count(factor) > 0 && factor_address_to_sorted_index[factor] == factor_index);
+       assert(m.receives_from_adjacent_factor == true);
+       if(factor_address_to_sorted_index.count(adjacent_factor) > 0) {
+           const auto adjacent_factor_index = factor_address_to_sorted_index[adjacent_factor];
+           if(adjacent_factor_index < factor_index)  { return true; }
+           if(first_receiving_factor[adjacent_factor_index] < factor_index) { return true; }
+           return false;
+       } else {
+           assert(n < f_.size());
+           const auto min_adjacent_sending_index = min_adjacent_sending[adjacent_factor];
+           if(min_adjacent_sending_index < factor_index) { return true; }
+           return false;
+       } 
+   };
+
+   auto sends_msg = [&](FactorTypeAdapter* factor, const std::size_t factor_index, auto m) 
+   { 
+       auto* adjacent_factor = m.adjacent_factor;
+       assert(adjacent_factor != factor);
+       assert(factor_address_to_sorted_index.count(factor) > 0 && factor_address_to_sorted_index[factor] == factor_index);
+       assert(m.sends_to_adjacent_factor == true);
+       if(factor_address_to_sorted_index.count(adjacent_factor) > 0) {
+           const auto adjacent_factor_index = factor_address_to_sorted_index[adjacent_factor];
+           //if(m.adjacent_factor_receives && receives_msg(adjacent_factor, adjacent_factor_index, m.reverse(factor))) { return false; }
+           if(factor_index < adjacent_factor_index && adjacent_factor->FactorUpdated()) { return true; }
+           if(last_receiving_factor[adjacent_factor_index] > factor_index) { return true; }
+           return false;
+       } else {
+           assert(n < f_.size());
+           const auto max_adjacent_receiving_index = max_adjacent_receiving[adjacent_factor];
+           if(factor_index < max_adjacent_receiving_index) { return true; }
+           return false; 
+       }
+   };
+
+
    {
       std::size_t c=0;
       for(auto f_it=factorIt; f_it!=factorEndIt; ++f_it) {
-          const auto factor_index = factor_address_to_sorted_index[*f_it];
-          const auto f_index = factor_address_to_index_[*f_it];
-          if((*f_it)->FactorUpdated()) {
+          auto* factor = *f_it;
+          if(factor->FactorUpdated()) {
+              const auto factor_index = factor_address_to_sorted_index[factor];
+              const auto f_index = factor_address_to_index_[factor];
               std::size_t k_send = 0;
               std::size_t k_receive = 0;
-              for(auto m : (*f_it)->get_messages()) {
-                  if(m.sends_to_adjacent_factor) {
-                      const REAL send_weight = 1.0 / REAL(no_receiving_factors_later[factor_index] + std::max(std::size_t(no_send_factors_later[factor_index]), (*f_it)->no_send_messages() - std::size_t(no_send_factors_later[factor_index])));
-                      if(factor_address_to_sorted_index.count(m.adjacent_factor)) {
-                          const auto adjacent_index = factor_address_to_sorted_index[m.adjacent_factor];
-                          if(factor_index<adjacent_index || last_receiving_factor[adjacent_index] > factor_index) {
-                              omega[c][k_send] = send_weight;
-                          } else {
-                              omega[c][k_send] = 0.0;
-                          } 
+               
+              // indicate which messages are sent and received
+              const auto msgs = factor->get_messages();
+              for(auto m : msgs) {
+                  if(m.sends_to_adjacent_factor ) {
+                      if(sends_msg(factor, factor_index, m)) {
+                          omega[c][k_send] = 1.0;
                       } else {
-                          const auto max_adjacent_receiving_index = max_adjacent_receiving[m.adjacent_factor];
-                          if(factor_index < max_adjacent_receiving_index) {
-                              omega[c][k_send] = send_weight;
-                          } else {
-                              omega[c][k_send] = 0.0;
-                          } 
-                      }
+                          omega[c][k_send] = 0.0;
+                      } 
                       ++k_send; 
                   }
 
                   if(m.receives_from_adjacent_factor) {
-                      if(factor_address_to_sorted_index.count(m.adjacent_factor)) {
-                          const auto adjacent_index = factor_address_to_sorted_index[m.adjacent_factor];
-                          if(adjacent_index<factor_index && first_receiving_factor[factor_index] < adjacent_index) {
-                              receive_mask[c][k_receive] = true; 
-                          } else {
-                              receive_mask[c][k_receive] = false; 
-                          }
+                      if(receives_msg(factor, factor_index, m)) {
+                          receive_mask[c][k_receive] = 1; 
                       } else {
-                          const auto min_adjacent_sending_index = min_adjacent_sending[m.adjacent_factor];
-                          if(min_adjacent_sending_index < factor_index) {
-                              receive_mask[c][k_receive] = true; 
-                          } else {
-                              receive_mask[c][k_receive] = false; 
-                          }
+                          receive_mask[c][k_receive] = 0; 
                       }
                       ++k_receive; 
                   } 
               }
-              assert(k_receive == (*f_it)->no_receive_messages());
-              assert(k_send == (*f_it)->no_send_messages());
+
+              assert(k_receive == factor->no_receive_messages());
+              assert(k_send == factor->no_send_messages());
+
+              // set omega reweighting values
+              const auto no_send_messages_anisotropic = std::count(omega[c].begin(), omega[c].end(), 1.0);
+              const auto no_send_messages = factor->no_send_messages();
+              const auto leave_weight = [&]() {
+                  if(no_receiving_factors_later[factor_index] > 0) return 1.0;
+                  if(no_send_messages - no_send_messages_anisotropic  > no_send_messages_anisotropic) return 1.0;
+                  return 0.0;
+              }();
+
+              // higher weight than SRMP chooses, that still leaves something in the factor, exactly when SRMP does so.
+              const double weight = 1.0 / double(leave_weight + no_send_messages_anisotropic);
+
+              // srmp option:
+              const auto srmp_weight = 1.0/double(no_receiving_factors_later[factor_index] + std::max(no_send_messages_anisotropic, no_send_messages - no_send_messages_anisotropic));
+
+              if(no_send_messages_anisotropic > 0) {
+                  for(auto& x : omega[c]) { if(x > 0) { x *= srmp_weight; } }
+              }
 
               assert(std::accumulate(omega[c].begin(), omega[c].end(), 0.0) <= 1.0 + eps);
               ++c;
           }
       }
+      assert(c == omega.size());
    }
 
    // check whether all messages were added to m_. Possibly, this can be automated: Traverse all factors, get all messages, add them to m_ and avoid duplicates along the way.
@@ -1444,23 +1444,22 @@ void LP<FMC>::ComputeUniformWeights(
     FACTOR_ITERATOR factorIt, FACTOR_ITERATOR factorEndIt,
     weight_array& omega, const REAL leave_weight)
 {
-   assert(leave_weight >= 0.0 && leave_weight <= 1.0);
+   assert(leave_weight >= 0.0);
    assert(factorEndIt - factorIt == f_.size());
 
    omega = allocate_omega(factorIt, factorEndIt);
 
    std::size_t c=0;
    for(auto it=factorIt; it != factorEndIt; ++it) {
-     const INDEX f_index = factor_address_to_index_[ *it ];
+     const auto f_index = factor_address_to_index_[ *it ];
      if((*it)->FactorUpdated()) {
-       INDEX k=0;
+       std::size_t k=0;
        auto msgs = (*it)->get_messages();
+       const auto weight = 1.0/REAL(omega[c].size() + leave_weight);
        for(auto msg_it : msgs) {
            if(msg_it.sends_to_adjacent_factor) {
-           auto* f_connected = msg_it.adjacent_factor;;
-           const INDEX connected_index = factor_address_to_index_[f_connected];
-           omega[c][k] = (1.0/REAL(omega[c].size() + leave_weight));
-           ++k;
+               omega[c][k] = weight;
+               ++k;
          }
        }
        assert(k == omega[c].size());
@@ -1529,27 +1528,28 @@ void LP<FMC>::compute_full_receive_mask(FACTOR_ITERATOR factor_begin, FACTOR_ITE
 template<typename FMC>
 double LP<FMC>::LowerBound() const
 {
-  double lb = constant_;
-#pragma omp parallel for reduction(+:lb)
-  for(INDEX i=0; i<f_.size(); ++i) {
-    lb += f_[i]->LowerBound();
-    assert( f_[i]->LowerBound() > -10000000.0);
-    assert(std::isfinite(lb));
-  }
-  return lb;
+    double lb = constant_;
+    for_each_tuple(factors_, [&lb,this](auto& v) {
+            for(auto* f : v) {
+                lb += f->LowerBound();
+                assert(std::isfinite(lb));
+            }
+    });
+    return lb;
 }
 
 template<typename FMC>
 double LP<FMC>::EvaluatePrimal() {
-  const bool consistent = CheckPrimalConsistency();
-  if(consistent == false) return std::numeric_limits<REAL>::infinity();
+    const bool consistent = CheckPrimalConsistency();
+    if(consistent == false) return std::numeric_limits<REAL>::infinity();
 
-  double cost = constant_;
-#pragma omp parallel for reduction(+:cost)
-  for(INDEX i=0; i<f_.size(); ++i) {
-    assert(f_[i]->LowerBound() <= f_[i]->EvaluatePrimal() + eps);
-    cost += f_[i]->EvaluatePrimal();
-  }
+    double cost = constant_;
+    for_each_tuple(factors_, [&cost,this](auto& v) {
+            for(auto* f : v) {
+                cost += f->EvaluatePrimal();
+            }
+    });
+    return cost;
 
   if(debug()) { std::cout << "primal cost = " << cost << "\n"; }
 
@@ -1639,7 +1639,7 @@ std::vector<bool> LP<FMC>::get_inconsistent_mask(const std::size_t no_fatten_rou
     }
   };
 
-  for(INDEX iter=0; iter<no_fatten_rounds; ++iter) {
+  for(std::size_t iter=0; iter<no_fatten_rounds; ++iter) {
     fatten();
   }
 
@@ -1667,6 +1667,17 @@ std::vector<FactorTypeAdapter*> LP<FMC>::get_masked_factors(
   }
 
   return factors;
+}
+
+template<typename FMC>
+template<typename ITERATOR_1, typename ITERATOR_2>
+std::vector<FactorTypeAdapter*> LP<FMC>::concatenate_factors(ITERATOR_1 f1_begin, ITERATOR_1 f1_end, ITERATOR_2 f2_begin, ITERATOR_2 f2_end)
+{
+    std::vector<FactorTypeAdapter*> f;
+    f.reserve(std::distance(f1_begin, f1_end) + std::distance(f2_begin, f2_end));
+    std::copy(f1_begin, f1_end, std::back_inserter(f));
+    std::copy(f2_begin, f2_end, std::back_inserter(f)); 
+    return f; 
 }
 
 template<typename FMC>
@@ -1764,11 +1775,7 @@ inline void LP<FMC>::construct_factor_partition()
     omega_partition_forward_pass_push_.resize(factor_partition_.size()-1);
     receive_mask_partition_forward_pass_push_.resize(factor_partition_.size()-1);
     for(std::size_t i=0; i<factor_partition_.size()-1; ++i) {
-        std::vector<FactorTypeAdapter*> f;
-        f.reserve(factor_partition_[i].size() + factor_partition_[i+1].size());
-        std::copy(factor_partition_[i].begin(), factor_partition_[i].end(), std::back_inserter(f));
-        std::copy(factor_partition_[i+1].rbegin(), factor_partition_[i+1].rend(), std::back_inserter(f));
-
+        auto f = concatenate_factors(factor_partition_[i].begin(), factor_partition_[i].end(), factor_partition_[i+1].rbegin(), factor_partition_[i+1].rend());
         ComputeAnisotropicWeights( f.begin(), f.end(), omega_partition_forward_pass_push_[i], receive_mask_partition_forward_pass_push_[i]); 
     }
 
@@ -1776,23 +1783,9 @@ inline void LP<FMC>::construct_factor_partition()
     receive_mask_partition_backward_pass_push_.resize(factor_partition_.size()-1);
     for(std::size_t ri=0; ri<factor_partition_.size()-1; ++ri) {
         const std::size_t i = factor_partition_.size() - ri - 1;
-        std::vector<FactorTypeAdapter*> f;
-        f.reserve(factor_partition_[i].size() + factor_partition_[i-1].size());
-        std::copy(factor_partition_[i].begin(), factor_partition_[i].end(), std::back_inserter(f));
-        std::copy(factor_partition_[i-1].rbegin(), factor_partition_[i-1].rend(), std::back_inserter(f));
-
+        auto f = concatenate_factors(factor_partition_[i].begin(), factor_partition_[i].end(), factor_partition_[i-1].rbegin(), factor_partition_[i-1].rend());
         ComputeAnisotropicWeights( f.begin(), f.end(), omega_partition_backward_pass_push_[ri], receive_mask_partition_backward_pass_push_[ri]); 
     }
-}
-
-template<typename ITERATOR_1, typename ITERATOR_2>
-std::vector<FactorTypeAdapter*> concatenate_factors(ITERATOR_1 f1_begin, ITERATOR_1 f1_end, ITERATOR_2 f2_begin, ITERATOR_2 f2_end)
-{
-    std::vector<FactorTypeAdapter*> f;
-    f.reserve(std::distance(f1_begin, f1_end) + std::distance(f2_begin, f2_end));
-    std::copy(f1_begin, f1_end, std::back_inserter(f));
-    std::copy(f2_begin, f2_end, std::back_inserter(f)); 
-    return f; 
 }
 
 template<typename FMC>
@@ -1913,10 +1906,7 @@ void LP<FMC>::compute_partition_pass(const std::size_t no_passes)
         } 
         // push all messages forward
         if(i < factor_partition_.size()-1) {
-            std::vector<FactorTypeAdapter*> f;
-            f.reserve(factor_partition_[i].size() + factor_partition_[i+1].size());
-            std::copy(factor_partition_[i].begin(), factor_partition_[i].end(), std::back_inserter(f));
-            std::copy(factor_partition_[i+1].rbegin(), factor_partition_[i+1].rend(), std::back_inserter(f));
+            auto f = concatenate_factors(factor_partition_[i].begin(), factor_partition_[i].end(), factor_partition_[i+1].rbegin(), factor_partition_[i+1].rend());
             ComputePass(f.begin(), f.end(), omega_partition_forward_pass_push_[i].begin(), receive_mask_partition_forward_pass_push_[i].begin());
         }
         //ComputePass(factor_partition_[i].begin(), factor_partition_[i].end(), omega_partition_forward_pass_push_forward_[i].begin(), receive_mask_partition_forward_pass_push_forward_[i].begin());
@@ -1931,10 +1921,7 @@ void LP<FMC>::compute_partition_pass(const std::size_t no_passes)
         } 
         // push all messages backward
         if(i != 0) {
-            std::vector<FactorTypeAdapter*> f;
-            f.reserve(factor_partition_[i].size() + factor_partition_[i-1].size());
-            std::copy(factor_partition_[i].begin(), factor_partition_[i].end(), std::back_inserter(f));
-            std::copy(factor_partition_[i-1].rbegin(), factor_partition_[i-1].rend(), std::back_inserter(f));
+            auto f = concatenate_factors(factor_partition_[i].begin(), factor_partition_[i].end(), factor_partition_[i-1].rbegin(), factor_partition_[i-1].rend());
             ComputePass(f.begin(), f.end(), omega_partition_backward_pass_push_[ri].begin(), receive_mask_partition_backward_pass_push_[ri].begin());
         }
         //ComputePass(factor_partition_[i].begin(), factor_partition_[i].end(), omega_partition_forward_pass_push_backward_[ri].begin(), receive_mask_partition_forward_pass_push_backward_[ri].begin());
