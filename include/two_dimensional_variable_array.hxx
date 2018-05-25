@@ -80,6 +80,7 @@ public:
        }
        os << "\n";
      }
+     return os;
    }
 
    template<typename ITERATOR>
