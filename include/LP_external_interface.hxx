@@ -41,13 +41,18 @@ public:
 
 private:
   void construct() {
+    s_.init_variable_loading();
+
     if (external_variable_counter_.size() > 0)
       return; // already constructed
 
-    this->for_each_factor([&](auto* f) {
+    // Can't use `for_each_factor` here, as the order is different than `f_`
+    // and we rely on `factor_address_to_index_` which gets updated in
+    // `add_factor`.
+    for (auto* f : this->f_) {
       external_variable_counter_.push_back(s_.get_variable_counters());
       f->construct_constraints(s_);
-    });
+    }
 
     this->for_each_message([&](auto* m) {
       const INDEX left_factor_no = this->factor_address_to_index_[m->GetLeftFactor()];
@@ -60,9 +65,8 @@ private:
     });
 
     s_.init_variable_loading();
-    this->for_each_factor([&](auto* f) {
+    for (auto* f : this->f_) // Some note regarding `f_` as above.
       f->load_costs(s_);
-    });
   }
 
   external_solver s_;
