@@ -29,7 +29,15 @@ public:
   void solve()
   {
     construct();
-    s_.solve();
+    if (!s_.solve())
+      throw std::runtime_error("External solver was unable to optimize model.");
+
+    s_.init_variable_loading();
+    for (auto* f : this->f_) {
+      f->convert_primal(s_);
+    }
+
+    assert(this->CheckPrimalConsistency());
   }
 
   void write_to_file(const std::string& filename) {
