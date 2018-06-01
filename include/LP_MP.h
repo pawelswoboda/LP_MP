@@ -674,33 +674,6 @@ LP<FMC>::LP(LP& o) // no const because of o.num_lp_threads_arg_.getValue() not b
   constant_ = o.constant_;
 }
 
-//INDEX LP::AddMessage(MessageTypeAdapter* m)
-//{
-//  set_flags_dirty();
-//  m_.push_back(m);
-  // do zrobienia: check whether left and right factors are in f_
-
-  //////////////////////////////////////////////////////
-  // check whether left and right factor has all different factors connected to it, likewise with the right one
-  /*
-     std::vector<FactorTypeAdapter*> fc;
-     auto f_left = m->GetLeftFactor();
-     for(auto mIt=f_left->begin(); mIt!=f_left->end(); ++mIt) {
-     fc.push_back( &*mIt ); // dereference iterator to factor and then take address of factor
-     }
-     assert( HasUniqueValues(fc) );
-     fc.clear();
-     auto f_right = m->GetRightFactor();
-     for(auto mIt=f_right->begin(); mIt!=f_right->end(); ++mIt) {
-     fc.push_back( &*mIt ); // dereference iterator to factor and then take address of factor
-     }
-     assert( HasUniqueValues(fc) );
-   */
-  ////////////////////////////////////////////////////
-
-//  return m_.size() - 1;
-//}
-
 template<typename FMC>
 void LP<FMC>::ForwardPassFactorRelation(FactorTypeAdapter* f1, FactorTypeAdapter* f2) 
 { 
@@ -913,6 +886,8 @@ template<typename FMC>
 void LP<FMC>::ComputeForwardPass()
 {
   const auto omega = get_omega();
+  assert(omega.forward.size() == omega.receive_mask_forward.size());
+  assert(omega.backward.size() == omega.receive_mask_backward.size());
 #ifdef LP_MP_PARALLEL
   ComputePassSynchronized(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), omega.forward.begin(), omega.forward.end(), synchronize_forward_.begin(), synchronize_forward_.end()); 
 #else
@@ -1597,6 +1572,7 @@ void LP<FMC>::set_flags_dirty()
   omega_isotropic_damped_valid_ = false;
   omega_mixed_valid_ = false;
   factor_partition_valid_ = false;
+  full_receive_mask_valid_ = false;
 #ifdef LP_MP_PARALLEL
   synchronization_valid_ = false;
 #endif
