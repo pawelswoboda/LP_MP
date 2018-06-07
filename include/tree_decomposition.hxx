@@ -12,9 +12,8 @@ template<typename FMC>
 class factor_tree {
 public:
    // add messages from leaves to root upward
-   // chirality denotes which factor is nearer the root
    template<typename MESSAGE_CONTAINER_TYPE>
-   void add_message( MESSAGE_CONTAINER_TYPE* msg, Chirality c)
+   void add_message( MESSAGE_CONTAINER_TYPE* msg, Chirality c) // chirality denotes which factor is nearer the root
    {
        tree_messages_.push_back( std::make_tuple( msg->free_message(), c) ); 
    }
@@ -103,7 +102,6 @@ public:
      return true; 
    }
 
-   // return cost of tree
    REAL solve()
    {
       assert(factors_.size() == tree_messages_.size() + 1); // otherwise call init
@@ -149,52 +147,10 @@ public:
 
       // check if primal cost is equal to lower bound
       assert(primal_consistent());
-      assert(subgradient_consistent());
       assert(std::abs(lower_bound() - primal_cost()) <= eps);
       assert(std::abs(value - primal_cost()) <= eps);
       return value;
    }
-
-   bool subgradient_consistent() const
-   {
-       std::vector<double> test_subgradient;
-       for(auto* f : this->factors_) {
-           const auto factor_size = f->dual_size();
-           const auto offset = test_subgradient.size();
-           test_subgradient.resize( offset + factor_size );
-           f->subgradient(&test_subgradient[offset], +1.0); 
-       }
-
-       serialization_archive potential;
-       potential.aquire_memory(test_subgradient.size() * sizeof(double));
-       save_archive ar(potential);
-       for(auto* f : this->factors_) {
-           f->serialize_dual(ar);
-       } 
-
-       std::size_t offset = 0;
-       double* potential_begin = (double*) potential.begin();
-       for(auto* f : this->factors_) {
-           const auto factor_size = f->dual_size();
-           double dot_product = 0;
-           for(std::size_t i=offset; i<offset+factor_size; ++i) {
-               dot_product += test_subgradient[i] * potential_begin[i];
-           }
-           if(std::abs(dot_product - f->LowerBound()) > eps) {
-               return false;
-           }
-           offset += factor_size;
-       }
-
-       double dot_product = 0;
-       for(std::size_t i=0; i<test_subgradient.size(); ++i) {
-           dot_product += test_subgradient[i] * potential_begin[i];
-       }
-
-       return (std::abs(dot_product - lower_bound()) <= eps);
-       return true;
-   }
-
 
    bool primal_consistent() const 
    {
@@ -767,13 +723,13 @@ public:
      constructed_decomposition = true;
       // first, go over all Lagrangean factors in each tree and count how often factor is shared
       struct Lagrangean_counting {
-         std::vector<std::size_t> trees;
+         //INDEX position = 0; // counter for enumerating in which position (i.e. in how many trees was factor already observed)
+         std::vector<INDEX> trees;
          std::vector<LAGRANGEAN_FACTOR> factors;
-         std::size_t offset = 0; // offset into dual weights
+         INDEX offset = 0; // offset into dual weights
       };
       std::unordered_map<FactorTypeAdapter*, Lagrangean_counting > Lagrangean_factors;
-
-      for(std::size_t i=0; i<trees_.size(); ++i) {
+      for(INDEX i=0; i<trees_.size(); ++i) {
          for(auto* f : trees_[i].factors_) {
             auto it = Lagrangean_factors.find(f);
             if(it == Lagrangean_factors.end()) {
@@ -791,60 +747,55 @@ public:
         auto* f = it.first;
         auto L = it.second;
         auto& tree_indices = L.trees;
-        const auto no_occurences = tree_indices.size();
+        const INDEX no_occurences = tree_indices.size();
         if(no_occurences > 1) {
           f->divide(no_occurences);
           //L.factors.push_back(LAGRANGEAN_FACTOR(f));
 
-          for(const auto i : tree_indices) {
+          for(INDEX i : tree_indices) {
             auto* f_copy = f->clone(); // do zrobienia: possibly not all pointers to messages have to be cloned as well
-            //std::cout << "copy factor " << f << " to " << f_copy << "\n"; 
-            reinterpret_cast<typename FMC::UnaryFactor*>(f)->GetFactor()->print_potential();
             L.factors.push_back(LAGRANGEAN_FACTOR(f_copy));
             factor_mapping[i].insert(std::make_pair(f, f_copy)); 
           }
 
-          const auto no_Lagrangean_vars = LAGRANGEAN_FACTOR::joint_no_Lagrangean_vars( L.factors );
+          const INDEX no_Lagrangean_vars = LAGRANGEAN_FACTOR::joint_no_Lagrangean_vars( L.factors );
           LAGRANGEAN_FACTOR::init_Lagrangean_variables( L.factors, Lagrangean_vars_size_ );
 
           assert(tree_indices.size() == L.factors.size());
-          for(std::size_t i=0; i<L.factors.size(); ++i) {
-            const auto tree_index = tree_indices[i];
+          for(INDEX i=0; i<L.factors.size(); ++i) {
+            const INDEX tree_index = tree_indices[i];
             trees_[tree_index].Lagrangean_factors_.push_back(L.factors[i]);
             trees_[tree_index].original_factors_.push_back(f);
           }
           
-          //std::cout << "remove me: " << no_Lagrangean_vars << "; " << Lagrangean_vars_size_ << "\n";
+          std::cout << no_Lagrangean_vars << "; " << Lagrangean_vars_size_ << "\n";
           Lagrangean_vars_size_ += no_Lagrangean_vars;
         }
       }
 
       // Redirect links to factors in relevant messages
-      for(std::size_t i=0; i<trees_.size(); ++i) {
+      for(INDEX i=0; i<trees_.size(); ++i) {
          auto& t = trees_[i];
          
          // redirect links from messages in trees that are directed to current factor
-         for(auto& tree_msg : trees_[i].tree_messages_) {
+         for(auto tree_msg : trees_[i].tree_messages_) {
              std::visit([&](auto&& m) {
                  auto* left = m.GetLeftFactor();
                  auto* right = m.GetRightFactor();
                  if(factor_mapping[i].find(left) != factor_mapping[i].end()) {
                     auto* left_copy = factor_mapping[i].find(left)->second;
-                    //std::cout << "reset link to " << left_copy << "\n";
                     m.SetLeftFactor(left_copy);
                  }
                  if(factor_mapping[i].find(right) != factor_mapping[i].end()) {
-                     assert(false); // only currently, remove
                     auto* right_copy = factor_mapping[i].find(right)->second;
                     m.SetRightFactor(right_copy);
                  }
                  }, std::get<0>(tree_msg));
          }
          // search for factor in tree and change it as well
-         for(auto f : t.factors_) {
+         for(auto& f : t.factors_) {
             if(factor_mapping[i].find(f) != factor_mapping[i].end()) {
                auto* f_copy = factor_mapping[i].find(f)->second;
-                //std::cout << "reset factor " << f << " in factor list to " << f_copy << "\n";
                f = f_copy;
             } 
          }
@@ -858,7 +809,7 @@ public:
       // construct mapping from Lagrangean variables of each tree to whole Lagrangean variables
       //mapping_.reserve(trees_.size());
       for(auto& t : trees_) {
-         std::size_t local_offset = 0;
+         INDEX local_offset = 0;
          std::vector<int> m;
          m.reserve(t.dual_size());
          for(auto& L : t.Lagrangean_factors_) {
@@ -871,8 +822,6 @@ public:
 
       // check map validity: each entry in m (except last one) must occur exactly twice
       assert(mapping_valid()); 
-
-      assert(trees_.size() > 1); // otherwise just solve tree and be done
 
       static_cast<DECOMPOSITION_SOLVER*>(this)->construct_decomposition();
    }
@@ -925,8 +874,6 @@ public:
      if(constructed_decomposition) {
        return static_cast<DECOMPOSITION_SOLVER*>(this)->decomposition_lower_bound();
      } else {
-         std::cout << "kwas\n";
-         assert(false);
        return LP<FMC>::LowerBound();
      }
    }
@@ -964,10 +911,10 @@ protected:
 
 // perform subgradient ascent with Polyak's step size with estimated optimum
 template<typename FMC>
-class LP_subgradient_ascent : public LP_with_trees<FMC, Lagrangean_factor_star, LP_subgradient_ascent<FMC>> // better: perform projected subgradient ascent with Lagrangean_factor_zero_sum
+class LP_subgradient_ascent : public LP_with_trees<FMC, Lagrangean_factor_quadratic, LP_subgradient_ascent<FMC>> // better: perform projected subgradient ascent with Lagrangean_factor_zero_sum
 {
 public:
-   using LP_with_trees<FMC, Lagrangean_factor_star, LP_subgradient_ascent<FMC>>::LP_with_trees;
+   using LP_with_trees<FMC, Lagrangean_factor_quadratic, LP_subgradient_ascent<FMC>>::LP_with_trees;
 
    void construct_decomposition() {}
 
@@ -975,17 +922,16 @@ public:
    {
       REAL current_lower_bound = 0.0;
       std::vector<REAL> subgradient(this->no_Lagrangean_vars(), 0.0);
-      for(std::size_t i=0; i<this->trees_.size(); ++i) {
+      for(INDEX i=0; i<this->trees_.size(); ++i) {
          current_lower_bound += this->trees_[i].solve();
          this->trees_[i].compute_mapped_subgradient(subgradient); // note that mapping has one extra component!
          //trees_[i].primal_cost();
       }
-
       best_lower_bound = std::max(current_lower_bound, best_lower_bound);
       assert(std::find_if(subgradient.begin(), subgradient.end(), [](auto x) { return x != 0.0 && x != 1.0 && x != -1.0; }) == subgradient.end());
       const REAL subgradient_one_norm = std::accumulate(subgradient.begin(), subgradient.end(), 0.0, [=](REAL s, REAL x) { return s + std::abs(x); });
 
-      const REAL step_size = (best_lower_bound - current_lower_bound + subgradient.size())/REAL(subgradient.size() + iteration) / (eps + subgradient_one_norm);
+      const REAL step_size = (best_lower_bound - current_lower_bound + subgradient.size())/(10.0 + iteration) / subgradient_one_norm;
 
       std::cout << "stepsize = " << step_size << ", absolute value of subgradient = " << subgradient_one_norm << "\n";
       this->add_weights(&subgradient[0], step_size);
