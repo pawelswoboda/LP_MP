@@ -914,7 +914,7 @@ template<typename FMC>
 class LP_subgradient_ascent : public LP_with_trees<FMC, Lagrangean_factor_quadratic, LP_subgradient_ascent<FMC>> // better: perform projected subgradient ascent with Lagrangean_factor_zero_sum
 {
 public:
-   using LP_with_trees<FMC, Lagrangean_factor_quadratic, LP_subgradient_ascent<FMC>>::LP_with_trees;
+   using LP_with_trees<FMC, Lagrangean_factor_star, LP_subgradient_ascent<FMC>>::LP_with_trees;
 
    void construct_decomposition() {}
 

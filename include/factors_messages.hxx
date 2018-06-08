@@ -1593,6 +1593,9 @@ public:
    {
       if(c == Chirality::right) { // right factor is top one
          leftFactor_->GetFactor()->init_primal();
+         if constexpr(LeftFactorContainer::CanMaximizePotentalAndComputePrimal()) {
+             leftFactor_->MaximizePotentialAndComputePrimal();
+         }
          this->send_message_to_right();
          //static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
          //      f(this)->ReceiveMessageFromLeftContainer();
@@ -1605,6 +1608,9 @@ public:
          //});
       } else {
          rightFactor_->GetFactor()->init_primal();
+         if constexpr(RightFactorContainer::CanMaximizePotentalAndComputePrimal()) {
+             rightFactor_->MaximizePotentialAndComputePrimal();
+         }
          this->send_message_to_left();
          //static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
          //      f(this)->ReceiveMessageFromRightContainer();
