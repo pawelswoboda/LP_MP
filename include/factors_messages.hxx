@@ -1593,9 +1593,12 @@ public:
    {
       if(c == Chirality::right) { // right factor is top one
          leftFactor_->GetFactor()->init_primal();
-         if constexpr(LeftFactorContainer::CanMaximizePotentalAndComputePrimal()) {
-             leftFactor_->MaximizePotentialAndComputePrimal();
-         }
+         //if constexpr(LeftFactorContainer::CanMaximizePotentalAndComputePrimal()) {
+         //    leftFactor_->MaximizePotentialAndComputePrimal();
+         //}
+        static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f) {
+               f(leftFactor_)->MaximizePotentialAndComputePrimal(); 
+         });
          this->send_message_to_right();
          //static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
          //      f(this)->ReceiveMessageFromLeftContainer();
@@ -1608,9 +1611,12 @@ public:
          //});
       } else {
          rightFactor_->GetFactor()->init_primal();
-         if constexpr(RightFactorContainer::CanMaximizePotentalAndComputePrimal()) {
-             rightFactor_->MaximizePotentialAndComputePrimal();
-         }
+         //if constexpr(RightFactorContainer::CanMaximizePotentalAndComputePrimal()) {
+         //    rightFactor_->MaximizePotentialAndComputePrimal();
+         //}
+         static_if<RightFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f) {
+               f(rightFactor_)->MaximizePotentialAndComputePrimal(); 
+         });
          this->send_message_to_left();
          //static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
          //      f(this)->ReceiveMessageFromRightContainer();
