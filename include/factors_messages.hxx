@@ -1592,11 +1592,12 @@ public:
    virtual void send_message_up(Chirality c) 
    {
       if(c == Chirality::right) { // right factor is top one
-         leftFactor_->GetFactor()->init_primal();
          if constexpr(LeftFactorContainer::CanMaximizePotentialAndComputePrimal()) {
+             leftFactor_->GetFactor()->init_primal();
              leftFactor_->MaximizePotentialAndComputePrimal();
          }
          this->send_message_to_right();
+         leftFactor_->GetFactor()->init_primal();
          //static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
          //      f(this)->ReceiveMessageFromLeftContainer();
          //}).else_([&](auto) {
@@ -1607,11 +1608,12 @@ public:
          //      });
          //});
       } else {
-         rightFactor_->GetFactor()->init_primal();
          if constexpr(RightFactorContainer::CanMaximizePotentialAndComputePrimal()) {
+             rightFactor_->GetFactor()->init_primal();
              rightFactor_->MaximizePotentialAndComputePrimal();
          }
          this->send_message_to_left();
+         rightFactor_->GetFactor()->init_primal();
          //static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
          //      f(this)->ReceiveMessageFromRightContainer();
          //}).else_([&](auto) {
@@ -1631,21 +1633,27 @@ public:
       // we check whether we can receive restricted messages from upper and compute primal in lower. If yes, we receive restricted message, compute primal in lower factor and propagate it back to upper factor.
       if(c == Chirality::right) {
          //leftFactor_->init_primal(); // initialization is already done in upward pass
-         static_if<MessageContainerType::CanComputeLeftFromRightPrimal()>([&](auto f) {
-               f(msg_op_).ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-         });
-         static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f2) {
-               f2(leftFactor_)->MaximizePotentialAndComputePrimal(); 
-         });
+          if constexpr(MessageContainerType::CanComputeLeftFromRightPrimal()) {
+              msg_op_.ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+          } else {
+              assert(false);
+          }
+
+          if constexpr(LeftFactorContainer::CanMaximizePotentialAndComputePrimal()) {
+              leftFactor_->MaximizePotentialAndComputePrimal(); 
+          }
       } else {
          assert(c == Chirality::left);
          //rightFactor_->init_primal();
-         static_if<MessageContainerType::CanComputeRightFromLeftPrimal()>([&](auto f) {
-               f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-         });
-         static_if<RightFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f2) {
-               f2(rightFactor_)->MaximizePotentialAndComputePrimal(); 
-         });
+         if constexpr(MessageContainerType::CanComputeRightFromLeftPrimal()) {
+               msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+         } else {
+             assert(false);
+         }
+
+         if constexpr(RightFactorContainer::CanMaximizePotentialAndComputePrimal()) {
+               rightFactor_->MaximizePotentialAndComputePrimal(); 
+         }
       }
       return;
 

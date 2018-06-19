@@ -3,6 +3,7 @@
 
 #include "tree_decomposition.hxx"
 #include "FW-MAP.h"
+#include <cassert>
 
 namespace LP_MP {
 
@@ -65,29 +66,19 @@ public:
       return v;
    }
 
-   /*
    void Begin()
    {
-     LP_with_trees<Lagrangean_factor_FWMAP>::Begin(); 
-     // add to mapping an extra dimension
-     for(auto& t : this->trees_) {
-       t.mapping().push_back(this->Lagrangean_vars_size_);
-     } 
-   }
-   */
-
-   void construct_decomposition()
-   {
-     bundle_solver = build_up_solver();
+       LP_with_trees<FMC_TYPE, Lagrangean_factor_FWMAP, LP_tree_FWMAP<FMC_TYPE> >::construct_decomposition();
+       bundle_solver = build_up_solver();
    }
 
    FWMAP* build_up_solver()
    {
       auto* bundle_solver = new FWMAP(this->no_Lagrangean_vars(), this->trees_.size(), LP_tree_FWMAP::max_fn, LP_tree_FWMAP::copy_fn, LP_tree_FWMAP::dot_product_fn);//int d, int n, MaxFn max_fn, CopyFn copy_fn, DotProductFn dot_product_fn);
 
-      for(INDEX i=0; i<this->trees_.size(); ++i) {
+      for(std::size_t i=0; i<this->trees_.size(); ++i) {
          auto& t = this->trees_[i];
-         const INDEX primal_size_in_bytes = t.primal_size_in_bytes();
+         const auto primal_size_in_bytes = t.primal_size_in_bytes();
 
          bundle_solver->SetTerm(i, &t, t.mapping().size(), &t.mapping()[0], t.primal_size_in_bytes()); // although mapping is of length di + 1 (the last entry being di itself, its length must be given as di!
       }
@@ -104,6 +95,8 @@ public:
 
    REAL decomposition_lower_bound() const
    {
+     const auto lb2 = LP_with_trees<FMC_TYPE, Lagrangean_factor_FWMAP, LP_tree_FWMAP<FMC_TYPE> >::decomposition_lower_bound();
+     std::cout << "remove me lb = " << lb2 << "\n";
      return lb_; 
    }
 

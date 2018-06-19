@@ -541,8 +541,20 @@ private:
 template<typename T=REAL>
 class matrix : public matrix_expression<T,matrix<T>> {
 public:
-   T& operator[](const INDEX i) { return vec_[i]; }
-   const T operator[](const INDEX i) const { return vec_[i]; }
+   T& operator[](const INDEX i) 
+   { 
+      assert(i<size());
+      const std::size_t x1 = i/dim2();
+      const std::size_t x2 = i%dim2();
+      return (*this)(x1,x2);
+   }
+   const T operator[](const INDEX i) const 
+   { 
+      assert(i<size());
+      const std::size_t x1 = i/dim2();
+      const std::size_t x2 = i%dim2();
+      return (*this)(x1,x2);
+   }
    INDEX size() const { return dim1()*dim2(); }
    template<typename ARCHIVE>
    void serialize(ARCHIVE& ar)

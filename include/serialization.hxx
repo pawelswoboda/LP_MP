@@ -215,11 +215,13 @@ public:
      cur_ = archive_;
   } 
 
+  char* begin() { return archive_; }
+  char* end() { return end_; }
+
 private:
   char* archive_ = nullptr;
   char* end_ = nullptr;
   char* cur_;
-
 };
 
 // write data into archive
@@ -270,10 +272,16 @@ public:
   void serialize(const matrix<T>& m)
   {
      T* s = (T*) ar.cur_address();
-     for(auto it=m.begin(); it!=m.end(); ++it) {
-       *s = *it;
-       ++s; 
+     for(std::size_t i=0; i<m.dim1(); ++i) {
+         for(std::size_t j=0; j<m.dim2(); ++j) {
+             *s = m(i,j);
+             ++s;
+         }
      }
+     //for(auto it=m.begin(); it!=m.end(); ++it) {
+     //  *s = *it;
+     //  ++s; 
+     //}
      const INDEX size_in_bytes = sizeof(T)*m.size();
      ar.advance(size_in_bytes);
   }
@@ -313,7 +321,6 @@ public:
      serialize(t);
      (*this)(types...);
   }
-
 
 private:
   serialization_archive& ar; 
