@@ -149,7 +149,6 @@ void build_test_model(LP_TYPE& lp)
     auto* m13 = lp.template add_message<typename test_FMC::message>(f1,f3);
     t1.add_message(m12, Chirality::left);
     t1.add_message(m13, Chirality::left);
-    t1.init();
     lp.add_tree(t1);
   }
 
@@ -161,7 +160,6 @@ void build_test_model(LP_TYPE& lp)
     auto* m23 = lp.template add_message<typename test_FMC::message>(f2,f3);
     t2.add_message(m12, Chirality::right);
     t2.add_message(m23, Chirality::left);
-    t2.init();
     lp.add_tree(t2);
   }
 
@@ -173,7 +171,6 @@ void build_test_model(LP_TYPE& lp)
     auto* m23 = lp.template add_message<typename test_FMC::message>(f2,f3);
     t3.add_message(m12, Chirality::right);
     t3.add_message(m23, Chirality::left);
-    t3.init();
     lp.add_tree(t3);
   }
 }
