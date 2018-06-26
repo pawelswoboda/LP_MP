@@ -929,8 +929,6 @@ public:
      if(constructed_decomposition) {
        return static_cast<DECOMPOSITION_SOLVER*>(this)->decomposition_lower_bound();
      } else {
-         std::cout << "kwas\n";
-         assert(false);
        return LP<FMC>::LowerBound();
      }
    }
