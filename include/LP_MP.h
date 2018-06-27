@@ -18,8 +18,6 @@
 #include "topological_sort.hxx"
 #include <memory>
 #include <iterator>
-#include "primal_solution_storage.hxx"
-#include "lp_interface/lp_interface.h"
 #include "two_dimensional_variable_array.hxx"
 #include "union_find.hxx"
 #include <thread>

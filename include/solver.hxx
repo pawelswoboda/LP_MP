@@ -13,7 +13,6 @@
 #include "template_utilities.hxx"
 #include "static_if.hxx"
 #include "tclap/CmdLine.h"
-#include "lp_interface/lp_interface.h"
 
 namespace LP_MP {
 
