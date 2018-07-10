@@ -182,7 +182,7 @@ public:
       return *this;
    }
 
-   vector& operator+=(vector<T> o)
+   vector& operator+=(const vector<T>& o)
    {
      static_assert(std::is_same<T,double>::value,"");
       assert(size() == o.size());
@@ -691,6 +691,17 @@ public:
       assert(this->size() == o.size() && o.dim2_ == dim2_);
       vec_ = o.vec_;
    }
+
+   matrix& operator+=(const matrix<T>& o)
+   {
+     static_assert(std::is_same<T,double>::value,"");
+      assert(dim1() == o.dim1());
+      assert(dim2() == o.dim2());
+      vec_ += o.vec_;
+      return *this;
+   }
+
+
    T& operator()(const INDEX x1, const INDEX x2) { assert(x1<dim1() && x2<dim2()); return vec_[x1*padded_dim2() + x2]; }
    const T& operator()(const INDEX x1, const INDEX x2) const { assert(x1<dim1() && x2<dim2()); return vec_[x1*padded_dim2() + x2]; }
    T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) { assert(x3 == 0); return (*this)(x1,x2); } // sometimes we treat a matrix as a tensor with trivial last dimension
@@ -894,6 +905,15 @@ public:
          (*this)[i] = o[i]; 
       }
    }
+   tensor3& operator+=(const tensor3<T>& o)
+   {
+       static_assert(std::is_same<T,double>::value,"");
+       assert(dim1() == o.dim1());
+       assert(dim2() == o.dim2());
+       assert(dim3() == o.dim3());
+       this->operator+=(o);
+       return *this;
+   } 
    T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) { 
       assert(x1<dim1() && x2<dim2() && x3<dim3());
       return (*this)[x1*dim2_*dim3_ + x2*dim3_ + x3]; 
