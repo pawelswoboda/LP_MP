@@ -22,16 +22,12 @@
 #include "template_utilities.hxx"
 #include "function_existence.hxx"
 #include "meta/meta.hpp"
-#include "static_if.hxx" // remove
 #include "MemoryPool.h"
 
 #include "memory_allocator.hxx"
 
 #include "LP_MP.h"
 
-// do zrobienia: remove these
-//#include "factors/reparametrization_storage.hxx"  // also delete file
-//#include "messages/message_storage.hxx"
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -1184,22 +1180,6 @@ public:
           rightFactor_->propagate_primal_through_messages();
         }
       }
-
-      /*
-      static_if<CanComputeRightFromLeftPrimalWithoutReturn()>([&](auto f) {
-        f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-        rightFactor_->PropagatePrimal();
-        rightFactor_->propagate_primal_through_messages();
-      }).else_([&](auto) {
-         static_if<MessageContainerType::CanComputeRightFromLeftPrimalWithReturn()>([&](auto f) {
-               const bool changed = f(msg_op_).ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-               if(changed) {
-                  rightFactor_->PropagatePrimal();
-                  rightFactor_->propagate_primal_through_messages();
-               }
-         });
-      });
-      */
    }
 
    void ComputeLeftFromRightPrimal()
@@ -1570,24 +1550,6 @@ public:
    bool ReceivesMessageFromLeft() const { return receives_message_from_left_constexpr(); }
    bool ReceivesMessageFromRight() const { return receives_message_from_right_constexpr(); }
 
-   /*
-   constexpr static bool
-   can_construct_constraints()
-   {
-      return has_construct_sat_clauses<MessageType,void,sat_solver&, LeftFactorType, RightFactorType, sat_var, sat_var>();
-   }
-
-   void construct_sat_clauses(sat_solver& s, sat_var left_var, sat_var right_var) 
-   {
-      static_if<can_construct_sat_clauses()>([&](auto f) {
-            f(msg_op_).construct_sat_clauses(s, *leftFactor_->GetFactor(), *rightFactor_->GetFactor(), left_var, right_var);
-            });
-      if(!can_construct_sat_clauses()) {
-         assert(false);
-      }
-   }
-   */ 
-   
    // for traversing a tree
    virtual void send_message_up(Chirality c) 
    {
@@ -1598,15 +1560,6 @@ public:
          }
          this->send_message_to_right();
          leftFactor_->GetFactor()->init_primal();
-         //static_if<CanCallReceiveMessageFromLeftContainer()>([&](auto f) {
-         //      f(this)->ReceiveMessageFromLeftContainer();
-         //}).else_([&](auto) {
-         //      static_if<MessageContainerType::CanCallSendMessageToRightContainer()>([&](auto f) {
-         //               f(this)->SendMessageToRightContainer(leftFactor_->GetFactor(),1.0);
-         //      }).else_([](auto) {
-         //         assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
-         //      });
-         //});
       } else {
          if constexpr(RightFactorContainer::CanMaximizePotentialAndComputePrimal()) {
              rightFactor_->GetFactor()->init_primal();
@@ -1614,15 +1567,6 @@ public:
          }
          this->send_message_to_left();
          rightFactor_->GetFactor()->init_primal();
-         //static_if<CanCallReceiveMessageFromRightContainer()>([&](auto f) {
-         //      f(this)->ReceiveMessageFromRightContainer();
-         //}).else_([&](auto) {
-         //      static_if<MessageContainerType::CanCallSendMessageToLeftContainer()>([&](auto f) {
-         //               f(this)->SendMessageToLeftContainer(rightFactor_->GetFactor(),1.0);
-         //      }).else_([](auto) {
-         //         assert(false); // possibly try to call SendMessagesToRightContainer with exactly one message
-         //      });
-         //});
       }
    }
 
@@ -1656,73 +1600,6 @@ public:
          }
       }
       return;
-
-
-      // if this is not possible, we propagate primal labeling of upper to lower
-      if(c == Chirality::right) { // right factor is upper
-         static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromRightContainer()>([&](auto f) {
-                  // receive restricted messages 
-                  serialization_archive ar(leftFactor_->GetFactor(), leftFactor_->GetFactor()+1, [](auto& f, auto& ar) { f.serialize_dual(ar); });
-                  save_archive s_ar(ar);
-                  leftFactor_->GetFactor()->serialize_dual( s_ar );
-
-                  f(this)->ReceiveRestrictedMessageFromRightContainer();
-
-                  // compute primal in lower
-                  leftFactor_->MaximizePotentialAndComputePrimal();
-
-                  // restore dual reparametrization to before restricted messages were sent.
-                  load_archive l_ar(ar);
-                  leftFactor_->GetFactor()->serialize_dual( l_ar );
-
-                  // propagate back to upper
-                  f(this)->ComputeRightFromLeftPrimal(); 
-
-         }).else_([&](auto) {
-            static_if<MessageContainerType::CanComputeLeftFromRightPrimal()>([&](auto f) {
-                  f(this)->ComputeLeftFromRightPrimal();
-                  static_if<LeftFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f2) {
-                        f2(leftFactor_)->MaximizePotentialAndComputePrimal(); 
-                  });
-            }).else_([&](auto) {
-               assert(false);
-            });
-         });
-
-      } else if(c == Chirality::left) { // left factor is upper
-         static_if<RightFactorContainer::CanMaximizePotentialAndComputePrimal() && CanCallReceiveRestrictedMessageFromLeftContainer()>([&](auto f) {
-                  std::stringstream ss;
-                  // receive restricted messages 
-                  serialization_archive ar(rightFactor_->GetFactor(), rightFactor_->GetFactor()+1, [](auto& f, auto& ar) { f.serialize_dual(ar); });
-                  save_archive s_ar(ar);
-                  rightFactor_->GetFactor()->serialize_dual( s_ar );
-
-                  f(this)->ReceiveRestrictedMessageFromLeftContainer();
-
-                  // compute primal in lower
-                  rightFactor_->MaximizePotentialAndComputePrimal();
-
-                  // restore dual reparametrization to before restricted messages were sent.
-                  load_archive l_ar(ar);
-                  rightFactor_->GetFactor()->serialize_dual( l_ar );
-
-                  // propagate back to upper
-                  f(this)->ComputeLeftFromRightPrimal(); 
-
-         }).else_([&](auto) {
-            static_if<MessageContainerType::CanComputeRightFromLeftPrimal()>([&](auto f) {
-                  f(this)->ComputeRightFromLeftPrimal();
-                  static_if<RightFactorContainer::CanMaximizePotentialAndComputePrimal()>([&](auto f2) {
-                        f2(rightFactor_)->MaximizePotentialAndComputePrimal(); 
-                  });
-            }).else_([&](auto) {
-               assert(false);
-            });
-         });
-
-      } else {
-         assert(false);
-      }
    }
 
    // construct constraints
@@ -3275,6 +3152,15 @@ public:
    {
       arithmetic_archive<operation::division> ar(val);
       factor_.serialize_dual(ar);
+   }
+
+   virtual void add(FactorTypeAdapter* other) final
+   {
+       assert(dynamic_cast<FactorContainer*>(other) != nullptr);
+       auto* o = static_cast<FactorContainer*>(other);
+       auto vars = factor_.export_variables();
+       auto other_vars = o->GetFactor()->export_variables();
+       for_each_tuple_pair(vars, other_vars, [](auto& var_1, auto& var_2) { var_1 += var_2; });
    }
 
    virtual INDEX primal_size_in_bytes() final

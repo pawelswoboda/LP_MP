@@ -16,6 +16,9 @@ int main(int argc, char** argv)
   s.Solve();
 
   test( std::abs(s.GetLP().decomposition_lower_bound() - 1.0) <= eps );
+
+  s.GetLP().write_back_reparametrization();
+  test(std::abs(s.GetLP().original_factors_lower_bound() - 1.0) <= eps);
 }
 
 

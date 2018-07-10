@@ -687,6 +687,7 @@ public:
     ar.release_memory();
   }
 
+
 //protected:
    INDEX primal_size_in_bytes_;
    INDEX dual_size_in_bytes_;
@@ -793,7 +794,7 @@ public:
         auto L = it.second;
         auto& tree_indices = L.trees;
         const auto no_occurences = tree_indices.size();
-        if(no_occurences > 1) {
+        if(no_occurences > 1) { // FIXME: we should also clone factors occuring only once
           f->divide(no_occurences);
           //L.factors.push_back(LAGRANGEAN_FACTOR(f));
 
@@ -942,6 +943,11 @@ public:
      return lb; 
    }
 
+   REAL original_factors_lower_bound() const
+   {
+       return LP<FMC>::LowerBound(); 
+   }
+
    void add_weights(const double* w, const REAL scaling) 
    {
       for(INDEX i=0; i<trees_.size(); ++i) {
@@ -956,6 +962,24 @@ public:
       }
    }
 
+  // write back reparametrization of tree decomposition factor into original factors
+  void write_back_reparametrization()
+  {
+      // first set original factors to zero
+      for(auto& t : trees_) {
+          assert(t.original_factors_.size() == t.Lagrangean_factors_.size());
+          for(std::size_t i=0; i<t.original_factors_.size(); ++i) {
+              t.original_factors_[i]->divide(std::numeric_limits<REAL>::infinity()); 
+          }
+      } 
+      // now add up reparametrizations from all factors in decomposition
+      for(auto& t : trees_) {
+          assert(t.original_factors_.size() == t.Lagrangean_factors_.size());
+          for(std::size_t i=0; i<t.original_factors_.size(); ++i) {
+              t.original_factors_[i]->add(t.Lagrangean_factors_[i].f); 
+          }
+      }
+  } 
 
 protected:
    std::vector<LP_tree_Lagrangean<FMC,LAGRANGEAN_FACTOR>> trees_; // store for each tree the associated Lagrangean factors.
