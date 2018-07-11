@@ -20,10 +20,10 @@ namespace LP_MP {
 
    };
 
-   bool operator<(const triplet_candidate& l, const triplet_candidate& r) {
+   inline bool operator<(const triplet_candidate& l, const triplet_candidate& r) {
       return l.cost > r.cost;
    }
-   bool operator==(const triplet_candidate& l, const triplet_candidate& r) {
+   inline bool operator==(const triplet_candidate& l, const triplet_candidate& r) {
       return l.i == r.i && l.j == r.j && l.k == r.k;
    }
 
@@ -84,6 +84,8 @@ namespace LP_MP {
          *nodes_[i].last = arc({cost, &nodes_[j]});
          if(i+1<nodes_.size()) {
             assert(nodes_[i].last < nodes_[i+1].first);
+         } else {
+            assert(nodes_[i].last <= &arcs_.back());
          }
          nodes_[i].last += 1;
       }
@@ -182,6 +184,8 @@ namespace LP_MP {
          MASK_OP mask_op
          )
       {
+         assert(startNode != endNode);
+         assert(startNode < g.size() && endNode < g.size());
          Reset();
          visit.push_back({startNode, 0});
          Label1(startNode);
@@ -197,6 +201,7 @@ namespace LP_MP {
             const INDEX distance = visit.front()[1];
             visit.pop_front();
 
+            assert(g[i].begin() < g[i].end());
 
             if(Labelled1(i)) {
                for(auto* a=g[i].begin(); a->cost>=th && a!=g[i].end(); ++a) { 
@@ -250,9 +255,6 @@ private:
    INDEX flag1, flag2;
 };
 
-
-
-
-};
+} // namespace LP_MP
 
 #endif

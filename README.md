@@ -1,40 +1,31 @@
 LP_MP
 ========
 
+[![Build Status](https://travis-ci.org/pawelswoboda/LP_MP.svg?branch=master)](https://travis-ci.org/pawelswoboda/LP_MP)
 
-LP_MP is a C++ framework for developing scalable convergent message passing solvers for a wide range of LP-relaxations to discrete optimization problems.
-For a theoretical introduction to the techniques used and the class of problems that can be optimized see [here](https://arxiv.org/abs/1612.05460).
+LP_MP is a C++ framework for developing scalable dual (Lagrangean) decomposition based algorithms solvers for a wide range of LP-relaxations to discrete optimization problems.
+For a theoretical introduction to the techniques used and the class of problems that can be optimized see [1].
 
 ## Solvers
-We provide solvers for the following optimization problems:
-* **Discrete graphical models**: message passing as done by TRWS, SRMP or MPLP, input in opengm (hdf5) or [uai](http://www.cs.huji.ac.il/project/PASCAL/fileFormat.php) format (text). Tightening with [frustrated cycles](http://cs.nyu.edu/~dsontag/papers/sontag_uai12.pdf) is also supported.
-* **Multicut**, (also known as correlation clustering) with cycle<!--, odd wheel and odd bicycle wheel --> and odd wheel inequality separation, input in opengm, a custom format used by [Andres' graph package](https://github.com/bjoern-andres/graph) (both hdf5) and a simple text format. Primal solutions are obtained with the efficient [Kernighan&Lin algorithm](https://github.com/bjoern-andres/graph).
-* **Lifted multicut**, which additionally has lifted edges consituting soft connectivity priors. Input formats, inequalities and primal heuristic are similar to multicut.
-<!---* **(Asymmetric) Multiway cut with input in the opengm format. -->
-* **Graph matching**, input accepted in the format as used by the [dual decomposition graph matching solver of Vladimir Kolmogorov](http://pub.ist.ac.at/~vnk/software/GraphMatching-v1.02.src.zip) or in a custom uai format (both text).
-* **Multi-label discrete tomography**, with input accpeted in a custom uai format (text).
-<!---* **Tracking by detection** for some cell-tracking problems, with input in a custom text format.-->
+Solvers are provided in separate projects and include
+* **[Discrete graphical models](https://github.com/pawelswoboda/LP_MP-MRF)**,
+* **[Multicut](https://github.com/pawelswoboda/LP_MP-Cut)**, 
+* **[Graph matching](https://github.com/pawelswoboda/LP_MP-QAP)**, 
+* **[Discrete tomography](https://github.com/pawelswoboda/LP_MP-Discrete-tomography)**.
 
-<!---*
-Additionally, interfaces to the (I)LP-solvers [gurobi](http://www.gurobi.com) and [cplex](http://www.ibm.com/software/integration/optimization/cplex-optimizer/) are available for solving the above optimization problems. In this case the message passing solvers can act as pre-solvers and initial bound providers, improving performance of the subsequent optimization performed by the LP-solvers.
--->
+## Optimization techniques
+Optimization techniques include
+* **Messsage passing [1]**,
+* **Subgradient ascent with a proximal bundle method based on the Frank-Wolfe algorithm [2]**, [Vladimir Kolmogorov's](http://http://pub.ist.ac.at/~vnk/) [original implementation](http://pub.ist.ac.at/~vnk/papers/FWMAP.html).
+* An interface to **external solvers** is provided by [DD_ILP](https://github.com/pawelswoboda/DD_ILP).
 
-Parallel optimization can be enabled in cmake by setting `LP_MP_PARALLEL` to `ON`.
-
-SAT-based rounding can be enabled for some problems by setting `WITH_SAT_BASED_ROUNDING` to `ON`.
-
-A large number of datasets can be automatically downloaded for evaluating solvers.
 
 ## Installation
-Type `git clone https://github.com/pawelswoboda/LP_MP.git` for downloading and `cmake` for building.
+Type `git clone https://github.com/pawelswoboda/LP_MP.git` for downloading, then `cd LP_MP` and `git submodule update --init` for downloading dependencies` and finally `cmake` for building.
 
 Prerequisites:
-* Clang 3.8 or GCC 5.4 upwards
-* HDF5 (for inputs in hdf5 format)
-* Gurobi (for the gurobi interface. Compile libgurobi_c++ with clang if you use clang for compiling LP_MP)
-* CPLEX (for the cplex interface)
-* Sqlite3 (for evaluation)
+* Clang 5.0 or GCC 7.0 upwards for C++17 compatibility.
 
-## Contact
-* [Paul Swoboda](https://github.com/pawelswoboda)
-* [Jan Kuske](https://github.com/DerJFK)
+## References
+* [1]: [`P. Swoboda, J. Kuske and B. Savchynskyy. A Dual Ascent Framework for Lagrangean Decomposition of Combinatorial Problems. In CVPR 2017.`](http://openaccess.thecvf.com/content_cvpr_2017/html/Swoboda_A_Dual_Ascent_CVPR_2017_paper.html)
+* [2]: `P. Swoboda and V. Kolmogorov. MAP inference via Block-Coordinate Frank-Wolfe Algorithm. arXiv.`

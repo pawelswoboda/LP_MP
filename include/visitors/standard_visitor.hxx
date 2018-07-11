@@ -45,7 +45,8 @@ namespace LP_MP {
             primalTime_(0)
       {}
 
-      LpControl begin(LP& lp) // called, after problem is constructed. 
+      template<typename LP_TYPE>
+      LpControl begin(LP_TYPE& lp) // called, after problem is constructed. 
       {
          try {
             maxIter_ = maxIterArg_.getValue();
@@ -277,7 +278,8 @@ namespace LP_MP {
          //cmd.xorAdd(tightenConstraintsMaxArg_,tightenConstraintsPercentageArg_); // do zrobienia: this means that exactly one must be chosen. We want at most one to be chosen
       }
 
-      LpControl begin(LP& lp) // called, after problem is constructed. 
+      template<typename LP_TYPE>
+      LpControl begin(LP_TYPE& lp) // called, after problem is constructed. 
       {
          try {
             tighten_ = tightenArg_.getValue();

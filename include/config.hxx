@@ -12,12 +12,25 @@
 #include <limits>
 #include "tclap/CmdLine.h"
 
+#define SIMDPP_ARCH_X86_AVX2
+#include "simdpp/simd.h"
+
 // type definitions for LP_MP
 
 namespace LP_MP {
 
+   // to do: use type definitions for SIMD types
+
    // data types for all floating point/integer operations 
+   // float is inaccurate for large problems and I observed oscillation. Possibly, soem sort of numerical stabilization needs to be employed
+   //using REAL = float;
+   //constexpr std::size_t REAL_ALIGNMENT = 8;
+   //using REAL_VECTOR = simdpp::float32<REAL_ALIGNMENT>;
+
    using REAL = double;
+   constexpr std::size_t REAL_ALIGNMENT = 4;
+   using REAL_VECTOR = simdpp::float64<REAL_ALIGNMENT>;
+
    using INDEX = unsigned int;
    using UNSIGNED_INDEX = INDEX;
    using SIGNED_INDEX = int; // note: must be the same as flow type in MinCost
@@ -26,10 +39,24 @@ namespace LP_MP {
    using LONG_INDEX = long unsigned int;
 
    enum class Chirality {left,right};
-   enum class MessageSendingType {SRMP,MPLP}; // also add full, for always sending and receiving messages
+   enum class MessageSendingType {SRMP,MPLP};
    enum class Direction {forward, backward};
 
-   constexpr REAL eps = 1e-8;
+   enum class message_passing_schedule {
+     left, // messages are received from left and sent by left
+     right, // messages are received from right and sent by right
+     full, // messages are received and send in both directions
+     only_send, // messages are only sent
+     none // message is not called during message passing
+   }; 
+
+   constexpr REAL eps = std::is_same<REAL,float>::value ? 1e-6 : 1e-8;
+   // verbosity levels: 0: silent
+   //                   1: important diagnostics, e.g. lower bound, upper bound, runtimes
+   //                   2: debug informations
+   static INDEX verbosity = 0; 
+   static bool diagnostics() { return verbosity >= 1; }
+   static bool debug() { return verbosity >= 2; }
    
    // shortcuts to indicate how many messages a factor holds
    constexpr SIGNED_INDEX variableMessageNumber = 0;
@@ -44,15 +71,16 @@ namespace LP_MP {
    constexpr SIGNED_INDEX variableMessageSize = -1;
 
    // do zrobienia: maybe put this into LP_MP.h
-   enum class LPReparametrizationMode {Anisotropic, Uniform, DampedUniform, Mixed, Undefined};
+   enum class LPReparametrizationMode {Anisotropic, Anisotropic2, Uniform, DampedUniform, Mixed, Undefined};
 
    inline LPReparametrizationMode LPReparametrizationModeConvert(const std::string& s)
    {
       //feenableexcept(FE_INVALID | FE_OVERFLOW);
       const std::string uniform = "uniform";
       if(s == "anisotropic") {
-         //return LpReparametrizationMode({mode::anisotropic,0.0});
          return LPReparametrizationMode::Anisotropic;
+      } else if(s == "anisotropic2") {
+         return LPReparametrizationMode::Anisotropic2;
       } else if(s == "uniform") {
          return LPReparametrizationMode::Uniform;
       } else if(s == "damped_uniform") {
@@ -82,7 +110,7 @@ namespace LP_MP {
    // hash function for various types
    namespace hash {
       // equivalent of boost hash combine
-      size_t hash_combine( size_t lhs, size_t rhs ) {
+      inline size_t hash_combine( size_t lhs, size_t rhs ) {
          lhs^= rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2);
          return lhs;
       }
@@ -98,7 +126,9 @@ namespace LP_MP {
       }
    }
 
-   REAL normalize(const REAL x) {
+   template<typename T>
+   T normalize(const T x) {
+      static_assert(std::is_same<T,double>::value || std::is_same<T,float>::value,"");
       assert(!std::isnan(x));
       if(std::isfinite(x)) {
          return x;
@@ -130,9 +160,6 @@ namespace LP_MP {
          bool check(const INDEX& value) const { return value > 0; };
    };
    static PositiveIntegerConstraint positiveIntegerConstraint;
-
-
-
 }
 
 // insert hash functions from above into standard namespace
@@ -148,13 +175,6 @@ namespace std
         }
     };
 }
-
-//template class MinCost<LP_MP::SIGNED_INDEX,LP_MP::REAL>;
-
-//template class MinCost<int,int>;
-//template class MinCost<int,size_t>;
-//template class MinCost<int,double>;
-//template class MinCost<int,float>;
 
 #endif // LP_MP_CONFIG_HXX
 

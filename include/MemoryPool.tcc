@@ -98,12 +98,19 @@ template <typename T, size_t BlockSize>
 MemoryPool<T, BlockSize>::~MemoryPool()
 noexcept
 {
+  int pool_size;
+  int no_objects = 0;
   slot_pointer_ curr = currentBlock_;
   while (curr != nullptr) {
     slot_pointer_ prev = curr->next;
     operator delete(reinterpret_cast<void*>(curr));
     curr = prev;
+    pool_size += BlockSize;
+    no_objects += NO_ELEMENTS_IN_MEMORY_POOL;
   }
+  int status;
+  std::cout << "peak pool size for " << abi::__cxa_demangle(typeid(T).name(),0,0,&status) << " = " << pool_size/(1024*1024) << " Mb\n";
+  std::cout << "~ " << pool_size/sizeof(T) << " objects of size " << sizeof(T) << " bytes\n";
 }
 
 

@@ -1,3 +1,6 @@
+#ifndef LP_MP_TOPOLOGICAL_SORT
+#define LP_MP_TOPOLOGICAL_SORT
+
 // Compute topological sorting of a DAG
 #include <iostream>
 #include <list>
@@ -15,6 +18,8 @@ class Graph
 {
     INDEX V;    // number of vertices
     std::vector<std::list<INDEX> > adj;
+    bool sorting_valid(const std::vector<INDEX>& ordering) const;
+
 public:
     inline Graph(INDEX V);   
     inline void addEdge(INDEX v, INDEX w);
@@ -28,14 +33,37 @@ Graph::Graph(INDEX V)
 }
 
 // add directed edge from v to w
-void Graph::addEdge(INDEX v, INDEX w)
+inline void Graph::addEdge(INDEX v, INDEX w)
 {
    assert(v<V && w<V);
    adj[v].push_back(w); 
 }
 
-std::vector<INDEX> Graph::topologicalSort()
+inline bool Graph::sorting_valid(const std::vector<INDEX>& ordering) const
 {
+  std::vector<INDEX> inverse_ordering(ordering.size());
+  for(INDEX i=0; i<ordering.size(); ++i) {
+    inverse_ordering[ordering[i]] = i; 
+  }
+
+   // check validity of sorting
+   for(INDEX i=0; i<adj.size(); ++i) {
+     for(const INDEX j : adj[i]) {
+       assert(inverse_ordering[i] != inverse_ordering[j]);
+       if(inverse_ordering[i] > inverse_ordering[j]) {
+         return false; 
+       }
+     }
+   }
+   return true; 
+}
+
+
+inline std::vector<INDEX> Graph::topologicalSort()
+{
+  if(debug()) {
+    std::cout << "sort " << adj.size() << " elements subject to " << std::accumulate(adj.begin(), adj.end(), INDEX(0), [](INDEX s, auto& a) { return s + a.size(); }) << " ordering constraints\n";
+  }
    /*
    std::vector<bool> visited(V,false);
    std::vector<INDEX> order;
@@ -110,8 +138,13 @@ std::vector<INDEX> Graph::topologicalSort()
    assert(postOrder.size() == INDEX(V));
    assert(LP_MP::HasUniqueValues(postOrder));
    std::reverse(postOrder.begin(),postOrder.end());
+
+   assert(sorting_valid(postOrder));
+
    return std::move(postOrder);
 }
 
 } // end namespace Topological_Sort
 } // end namespace LP_MP
+
+#endif // LP_MP_TOPOLOGICAL_SORT

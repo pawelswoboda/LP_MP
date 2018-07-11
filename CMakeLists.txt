@@ -1,50 +1,36 @@
-cmake_minimum_required(VERSION 2.8.12)
 project(LP_MP)
 
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
+cmake_minimum_required(VERSION 2.8.12)
 
 set(LP_MP_VERSION_MAJOR 0)
 set(LP_MP_VERSION_MINOR 1)
 
-# Options
-OPTION(BUILD_GRAPH_MATCHING "Build graph matching" ON)
-OPTION(BUILD_GRAPH_MATCHING_EVALUATION "Build graph matching evaluation" OFF)
-OPTION(BUILD_MULTICUT "Build multicut" ON)
-OPTION(BUILD_MULTICUT_EVALUATION "Build multicut evaluation" OFF)
-OPTION(BUILD_GRAPHICAL_MODEL "Build graphical model" ON)
-OPTION(BUILD_DISCRETE_TOMOGRAPHY "Build discrete tomography solver" ON)
-OPTION(BUILD_CELL_TRACKING "Build cell tracking solver" OFF)
-OPTION(BUILD_MORAL_LINEAGE_TRACING "Build moral lineage tracing solver" OFF)
-OPTION(BUILD_DISCRETE_TOMOGRAPHY_EVALUATION "Build discrete tomography evaluation" OFF)
-OPTION(BUILD_TESTS "Build tests" ON)
-OPTION(WITH_GUROBI "LP interface to gurobi" OFF)
-OPTION(WITH_CPLEX "LP interface to Cplex" OFF)
-OPTION(WITH_SAT_BASED_ROUNDING "Use the glucose SAT solver to decode a primal solution based on reparametrization" OFF)
-OPTION(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
-
-# C++14
-add_compile_options(-std=c++14)
+# C++11
+add_compile_options(-std=c++17)
 
 # compiler options
-add_definitions(-DIL_STD) # legacy setting for CPLEX
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-   #add_definitions(-ffast-math -fno-finite-math-only) # adding only -ffast-math will result in infinity and nan not being checked (but e.g. graph matching and discrete tomography have infinite costs)
-   add_definitions(-march=native)
-endif()
+add_definitions(-march=native)
 
-option(BUILD_PYTHON OFF)
+option(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
 
-# automatically downloaded repositories
-# can this possibly be done in one place only, i.e. in the superbuild?
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/meta/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/Catch/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/cpp_sort/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/tclap/include")
-#include_directories("${CMAKE_CURRENT_SOURCE_DIR}/external/lingeling-ala")
+include(ExternalProject)
+externalproject_add( conicBundle_Project
+  URL http://www-user.tu-chemnitz.de/~helmberg/ConicBundle/CB_v0.3.11.tgz
+  URL_HASH SHA256=f5a6774c24b2f71c31b5bdcadc0ac310f3862275ea4097a4ca3d6731876701c8
+  PATCH_COMMAND patch -s -d ${PROJECT_BINARY_DIR}/external/ConicBundle -p1 < ${PROJECT_SOURCE_DIR}/external/ConicBundle-v0.3.11.patch -N -r -
+  SOURCE_DIR "${PROJECT_BINARY_DIR}/external/ConicBundle"
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND "make"
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND ""
+  )
+
+add_library(CONIC_BUNDLE STATIC IMPORTED GLOBAL)
+set_target_properties(CONIC_BUNDLE PROPERTIES INCLUDE_DIRECTORIES "${PROJECT_BINARY_DIR}/external/ConicBundle/include")
+set_target_properties(CONIC_BUNDLE PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/external/ConicBundle/lib/libcb.a")
 
 # Parallelisation support
 if(PARALLEL_OPTIMIZATION)
-
   add_definitions(-DLP_MP_PARALLEL) 
 
   FIND_PACKAGE(OpenMP REQUIRED)
@@ -57,20 +43,44 @@ if(PARALLEL_OPTIMIZATION)
 
 endif(PARALLEL_OPTIMIZATION)
 
-IF(UNIX AND NOT APPLE)
-   find_library(TR rt)
-   set(LINK_RT true)
-   message(STATUS "Linking to RT is enabled")
-else()
-   set(LINK_RT false)
-   message(STATUS "Linking to RT is disabled")
+#IF(UNIX AND NOT APPLE)
+#   find_library(TR rt)
+#   set(LINK_RT true)
+#   message(STATUS "Linking to RT is enabled")
+#else()
+#   set(LINK_RT false)
+#   message(STATUS "Linking to RT is disabled")
+#endif()
+
+
+add_library(LP_MP INTERFACE)
+target_include_directories(LP_MP INTERFACE include)
+target_include_directories(LP_MP INTERFACE external/TCLAP/include)
+
+target_include_directories(LP_MP INTERFACE "external/libsimdpp")
+target_include_directories(LP_MP INTERFACE "external/meta/include")
+target_include_directories(LP_MP INTERFACE "external/cpp-sort/include")
+target_include_directories(LP_MP INTERFACE "external/TCLAP/include")
+target_include_directories(LP_MP INTERFACE "external/BCFW-Bundle/include")
+target_include_directories(LP_MP INTERFACE "${PROJECT_BINARY_DIR}/external/ConicBundle/include")
+
+add_subdirectory("external/BCFW-Bundle") 
+add_subdirectory("external/DD_ILP")
+target_link_libraries(LP_MP INTERFACE DD_ILP)
+
+enable_testing()
+add_subdirectory(test)
+
+option(BUILD_DOC "Build documentation" OFF)
+if(BUILD_DOC)
+  find_package(Doxygen REQUIRED)
+  configure_file(Doxyfile.in Doxyfile @ONLY)
+  add_custom_target(docs-lpmp
+    COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
+    COMMENT "Generating API documentation with Doxygen"
+    VERBATIM)
+  if(NOT TARGET docs)
+    add_custom_target(docs ALL)
+  endif()
+  add_dependencies(docs docs-lpmp)
 endif()
-
-file(GLOB_RECURSE headers include/*.hxx)
-include_directories(include)
-
-# TODO refactor this too !
-include_directories(lib)
-add_subdirectory(lib)
-
-add_subdirectory(src)

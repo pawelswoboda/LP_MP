@@ -13,66 +13,59 @@
 #include "template_utilities.hxx"
 #include "static_if.hxx"
 #include "tclap/CmdLine.h"
-#include "lp_interface/lp_interface.h"
 
 namespace LP_MP {
 
-   static char * default_solver_options[5] { "", "-i", "", "--maxIter", "1000" };
+static std::vector<std::string> default_solver_options = {
+   {""}, 
+   {"-i"}, {""}, 
+   {"--maxIter"}, {"1000"}
+};
 
 // class containing the LP, problem constructor list, input function and visitor
 // binds together problem constructors and solver and organizes input/output
 // base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
 
-// empty rounder that is used by default in Solver
-// if the rounder is not used / exposed
-struct EmptyRounder {
-    EmptyRounder() {}
-    static std::string name() {
-        return "EmptyRounder";
-    }
-};
-
-template<typename FACTOR_MESSAGE_CONNECTION, typename LP_TYPE, typename VISITOR, typename ROUNDER = EmptyRounder>
+template<typename LP_TYPE, typename VISITOR>
 class Solver {
 
 public:
-   using FMC = FACTOR_MESSAGE_CONNECTION;
-   using SolverType = Solver<FMC,LP_TYPE,VISITOR,ROUNDER>;
+   using SolverType = Solver<LP_TYPE, VISITOR>;
+   using FMC = typename LP_TYPE::FMC;
    using ProblemDecompositionList = typename FMC::ProblemDecompositionList;
-   using RounderType = ROUNDER;
 
-   // FIXME how does the constructor with default arguments work,
-   // if it does not call the private constructor?
    // default parameters
-   Solver() : Solver(5, default_solver_options) {}
 
-   Solver(int argc, char** argv, const RounderType & rounder = RounderType()) : Solver(ProblemDecompositionList{}, rounder) 
+   Solver() : Solver(default_solver_options) {}
+
+   Solver(int argc, char** argv) : Solver(ProblemDecompositionList{}) 
    {
       cmd_.parse(argc,argv);
       Init_(); 
    }
-   Solver(std::vector<std::string> options, const RounderType & rounder = RounderType()) : Solver(ProblemDecompositionList{}, rounder)
+   Solver(std::vector<std::string> options) : Solver(ProblemDecompositionList{})
    {
-      //std::cout << "Here we are !" << std::endl;
       cmd_.parse(options);
       Init_(); 
    }
 
 private:
    template<typename... PROBLEM_CONSTRUCTORS>
-   Solver(meta::list<PROBLEM_CONSTRUCTORS...>&& pc_list, const RounderType & rounder)
+   Solver(meta::list<PROBLEM_CONSTRUCTORS...>&& pc_list)
      :
         cmd_(std::string("Command line options for ") + FMC::name, ' ', "0.0.1"),
         lp_(cmd_),
         inputFileArg_("i","inputFile","file from which to read problem instance",false,"","file name",cmd_),
         outputFileArg_("o","outputFile","file to write solution",false,"","file name",cmd_),
-        visitor_(cmd_),
-        rounder_(rounder)
+        verbosity_arg_("v","verbosity","verbosity level: 0 = silent, 1 = important runtime information, 2 = further diagnostics",false,1,"0,1,2",cmd_),
+        visitor_(cmd_)
    {
       for_each_tuple(this->problemConstructor_, [this](auto& l) {
            assert(l == nullptr);
            l = new typename std::remove_pointer<typename std::remove_reference<decltype(l)>::type>::type(*this); // note: this is not so nice: if problem constructor needs other problem constructors, those must already be allocated, otherwise address is invalid. This is only a problem for circular references, though, otherwise order problem constructors accordingly. This should be resolved when std::tuple will be constructed without move and copy constructors.
       }); 
+
+      std::cout << std::setprecision(10);
    }
 
 public:
@@ -92,6 +85,8 @@ public:
       try {  
          inputFile_ = inputFileArg_.getValue();
          outputFile_ = outputFileArg_.getValue();
+         verbosity = verbosity_arg_.getValue();
+         if(verbosity > 2) { throw TCLAP::ArgException("verbosity must be 0,1 or 2"); }
       } catch (TCLAP::ArgException &e) {
          std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
          exit(1);
@@ -132,13 +127,15 @@ public:
          if(!output_file.is_open()) {
             throw std::runtime_error("could not open file " + outputFile_);
          }
+         
+         output_file << solution_; // to do: not so nice, better have primal serialized, write back into factors, then write primal?
 
-         for_each_tuple(this->problemConstructor_, [this,&output_file](auto* l) {
-               using pc_type = typename std::remove_pointer<decltype(l)>::type;
-               static_if<SolverType::CanWritePrimalIntoFile<pc_type>()>([&](auto f) {
-                     f(*l).WritePrimal(output_file);
-               });
-         }); 
+         //for_each_tuple(this->problemConstructor_, [this,&output_file](auto* l) {
+         //      using pc_type = typename std::remove_pointer<decltype(l)>::type;
+         //      static_if<SolverType::CanWritePrimalIntoFile<pc_type>()>([&](auto f) {
+         //            f(*l).WritePrimal(output_file);
+         //      });
+         //}); 
       }
    }
 
@@ -146,10 +143,10 @@ public:
    {
       std::stringstream ss;
 
-      for_each_tuple(this->problemConstructor_, [&ss,this](auto& l) {
-            using pc_type = typename std::remove_reference<decltype(l)>::type;
+      for_each_tuple(this->problemConstructor_, [&ss,this](auto* l) {
+            using pc_type = typename std::remove_pointer<decltype(l)>::type;
             static_if<SolverType::CanWritePrimalIntoString<pc_type>()>([&](auto f) {
-                  f(l).WritePrimal(ss);
+                  f(*l).WritePrimal(ss);
             });
       }); 
 
@@ -231,6 +228,10 @@ public:
    
    int Solve()
    {
+      if(debug()) {
+         std::cout << "lower bound before optimization = " << lp_.LowerBound() << "\n";
+      }
+
       this->Begin();
       LpControl c = visitor_.begin(this->lp_);
       while(!c.end && !c.error) {
@@ -238,10 +239,12 @@ public:
          this->Iterate(c);
          this->PostIterate(c);
          c = visitor_.visit(c, this->lowerBound_, this->bestPrimalCost_);
-         this->WritePrimal();
+         ++iter;
       }
       if(!c.error) {
          this->End();
+         RegisterPrimal();
+         lowerBound_ = lp_.LowerBound();
          // possibly primal has been computed in end. Call visitor again
          visitor_.end(this->lowerBound_, this->bestPrimalCost_);
          static_if<visitor_has_solution()>([this](auto f) {
@@ -249,7 +252,7 @@ public:
          });
          this->WritePrimal();
       }
-      return c.error;
+      return !c.error;
    }
 
 
@@ -267,7 +270,7 @@ public:
 
    // what to do for improving lower bound, typically ComputePass or ComputePassAndPrimal
    virtual void Iterate(LpControl c) {
-      lp_.ComputePass();
+      lp_.ComputePass(iter);
    } 
 
    // what to do after one iteration of message passing, e.g. primal computation and/or tightening
@@ -299,6 +302,7 @@ public:
                   f(*l).End();
             });
       }); 
+      lp_.End();
    }
 
    // register evaluated primal solution
@@ -316,27 +320,28 @@ public:
    void RegisterPrimal()
    {
       const REAL cost = lp_.EvaluatePrimal();
-      std::cout << "register primal cost = " << cost << "\n"; 
+      if(debug()) { std::cout << "register primal cost = " << cost << "\n"; }
       if(cost < bestPrimalCost_) {
          // assume solution is feasible
          const bool feasible = CheckPrimalConsistency();
          if(feasible) {
+            if(debug()) {
+               std::cout << "solution feasible\n";
+            }
             bestPrimalCost_ = cost;
             solution_ = write_primal_into_string();
-         }
+         } else {
+            if(debug()) {
+               std::cout << "solution infeasible\n";
+            }
+         } 
       }
    }
 
    REAL lower_bound() const { return lowerBound_; }
    REAL primal_cost() const { return bestPrimalCost_; }
 
-   virtual RounderType & GetRounder()
-   {
-     return rounder_;
-   }
-
 protected:
-
    TCLAP::CmdLine cmd_;
 
    LP_TYPE lp_;
@@ -360,13 +365,15 @@ protected:
    std::string inputFile_;
    std::string outputFile_;
 
+   TCLAP::ValueArg<INDEX> verbosity_arg_;
+
    REAL lowerBound_;
    // while Solver does not know how to compute primal, derived solvers do know. After computing a primal, they are expected to register their primals with the base solver
    REAL bestPrimalCost_ = std::numeric_limits<REAL>::infinity();
    std::string solution_;
 
    VISITOR visitor_;
-   RounderType rounder_;
+   INDEX iter = 0;
 };
 
 // local rounding interleaved with message passing 
@@ -379,20 +386,17 @@ public:
   virtual void Iterate(LpControl c)
   {
     if(c.computePrimal) {
-      SOLVER::lp_.ComputeForwardPassAndPrimal(iter);
+      SOLVER::lp_.ComputeForwardPassAndPrimal(this->iter);
       this->RegisterPrimal();
-      SOLVER::lp_.ComputeBackwardPassAndPrimal(iter);
+      SOLVER::lp_.ComputeBackwardPassAndPrimal(this->iter);
       this->RegisterPrimal();
     } else {
       SOLVER::Iterate(c);
     }
-    ++iter;
   }
 
 private:
-   INDEX iter = 0;
 };
-
 
 // rounding based on primal heuristics provided by problem constructor
 template<typename SOLVER>
@@ -453,13 +457,13 @@ public:
          this->RegisterPrimal();
          // alternatively  compute forward and backward based rounding
          if(cur_primal_computation_direction_ == Direction::forward) {
-            std::cout << "compute primal for forward pass\n";
+            if(verbosity >= 2) { std::cout << "compute primal for forward pass\n"; }
             this->lp_.ComputeForwardPassAndPrimal(iter);
             this->lp_.ComputeBackwardPass();
             cur_primal_computation_direction_ = Direction::backward;
          } else {
             assert(cur_primal_computation_direction_ == Direction::backward);
-            std::cout << "compute primal for backward pass\n";
+            if(verbosity >= 2) { std::cout << "compute primal for backward pass\n"; }
             this->lp_.ComputeForwardPass();
             this->lp_.ComputeBackwardPassAndPrimal(iter);
             cur_primal_computation_direction_ = Direction::forward;
@@ -478,203 +482,6 @@ private:
 
 
 
-
-template<typename SOLVER, typename LP_INTERFACE>
-class LpSolver : public SOLVER {
-public:
-   LpSolver() :
-      SOLVER(),
-      LPOnly_("","onlyLp","using lp solver without reparametrization",SOLVER::cmd_),
-      RELAX_("","relax","solve the mip relaxation",SOLVER::cmd_),
-      timelimit_("","LpTimelimit","timelimit for the lp solver",false,3600.0,"positive real number",SOLVER::cmd_),
-      roundBound_("","LpRoundValue","A small value removes many variables",false,std::numeric_limits<REAL>::infinity(),"positive real number",SOLVER::cmd_),
-      threads_("","LpSolverThreads","number of threads to call Lp solver routine",false,1,"integer",SOLVER::cmd_),
-      LpThreadsArg_("","LpThreads","number of threads used by the lp solver",false,1,"integer",SOLVER::cmd_),
-      LpInterval_("","LpInterval","each n steps the lp solver will be executed if possible",false,1,"integer",SOLVER::cmd_)
-  {}
-      
-   ~LpSolver(){}
-   
-    template<class T,class E>
-    class FactorMessageIterator {
-    public:
-      FactorMessageIterator(T w,INDEX i)
-        : wrapper_(w),idx(i){ }
-      FactorMessageIterator& operator++() {++idx;return *this;}
-      FactorMessageIterator operator++(int) {FactorMessageIterator tmp(*this); operator++(); return tmp;}
-      bool operator==(const FactorMessageIterator& rhs) {return idx==rhs.idx;}
-      bool operator!=(const FactorMessageIterator& rhs) {return idx!=rhs.idx;}
-      E* operator*() {return wrapper_(idx);}
-      E* operator->() {return wrapper_(idx);}
-      INDEX idx;
-    private:
-      T wrapper_;
-    };
-   
-    void RunLpSolver(int displayLevel=0)
-    {
-       std::unique_lock<std::mutex> guard(this->LpChangeMutex);
-       auto FactorWrapper = [&](INDEX i){ return SOLVER::lp_.GetFactor(i);};
-       FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItBegin(FactorWrapper,0);
-       FactorMessageIterator<decltype(FactorWrapper),FactorTypeAdapter> FactorItEnd(FactorWrapper,SOLVER::lp_.GetNumberOfFactors());
-
-       auto MessageWrapper = [&](INDEX i){ return SOLVER::lp_.GetMessage(i);};
-       FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItBegin(MessageWrapper,0);
-       FactorMessageIterator<decltype(MessageWrapper),MessageTypeAdapter> MessageItEnd(MessageWrapper,SOLVER::lp_.GetNumberOfMessages());
-
-       LP_INTERFACE solver(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,!RELAX_.getValue());
-
-       solver.ReduceLp(FactorItBegin,FactorItEnd,MessageItBegin,MessageItEnd,VariableThreshold_);
-       PrimalSolutionStorage x(FactorItBegin,FactorItEnd); // we need to initialize it here, as the lp might change later.
-       guard.unlock();
-
-       solver.SetTimeLimit(timelimit_.getValue());
-       solver.SetNumberOfThreads(LpThreadsArg_.getValue());
-       solver.SetDisplayLevel(displayLevel);
-
-       auto status = solver.solve();
-       std::cout << "solved lp instance\n";
-       //  TODO: we need a better way to decide, when the number of variables get increased/decreased
-       //  e.g. What to do if the solver hit the timelimit? 
-       if( status == 0 || status == 3 ){     
-          // Jan: this is only admissible when we have an integral solution, not in RELAXed mode!       
-          for(INDEX i=0;i<x.size();i++){
-             x[i] = solver.GetVariableValue(i);
-          }
-
-          std::unique_lock<std::mutex> guard(LpChangeMutex);
-          this->RegisterPrimal(x, solver.GetObjectiveValue());
-          guard.unlock();
-
-          if( status == 0){
-             std::cout << "Optimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
-          } else {
-             std::cout << "Suboptimal solution found by Lp Solver with value: " << solver.GetObjectiveValue() << std::endl;
-          }
-
-          std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
-          // if solution found, decrease number of variables
-          std::cout << "feas decrease" << std::endl;
-          VariableThreshold_ *= 0.75;
-          ub_ = std::min(ub_,solver.GetObjectiveValue());
-       }
-       else if( status == 4){ // hit the timelimit
-          std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
-          VariableThreshold_ *= 0.6;
-          std::cout << "time decrease" << std::endl;
-       }
-       else {
-          std::lock_guard<std::mutex> lck(UpdateUbLpMutex);
-          // if ilp infeasible, increase number of variables
-          std::cout << "infeas increase" << std::endl;
-          VariableThreshold_ *= 1.3;
-       }
-    }
-
-    void IterateLpSolver()
-    {
-       while(runLp_) {
-          std::unique_lock<std::mutex> WakeLpGuard(WakeLpSolverMutex_);
-          WakeLpSolverCond.wait(WakeLpGuard);
-          WakeLpGuard.unlock();
-          if(!runLp_) { break; }
-          RunLpSolver();
-       }
-    }
-
-    void Begin()
-    {
-       {
-          std::unique_lock<std::mutex> guard(LpChangeMutex);
-          SOLVER::Begin();
-       }
-
-       LpThreads_.resize(threads_.getValue());
-       for(INDEX i=0;i<threads_.getValue();i++){
-          LpThreads_[i] = std::thread([&,this] () { this->IterateLpSolver(); });
-       }
-
-       VariableThreshold_ = roundBound_.getValue();
-    }
-
-    void PreIterate(LpControl c)
-    {
-       std::unique_lock<std::mutex> guard(LpChangeMutex);
-       SOLVER::PreIterate(c);
-    }
-
-    void Iterate(LpControl c)
-    {
-       std::unique_lock<std::mutex> guard(LpChangeMutex);
-       SOLVER::Iterate(c);
-    }
-
-    void PostIterate(LpControl c)
-    {
-      // wait, as in PostIterate tightening can take place
-       {
-          std::unique_lock<std::mutex> guard(LpChangeMutex);
-          SOLVER::PostIterate(c);
-       }
-
-      if( curIter_ % LpInterval_.getValue() == 0 ){
-         std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
-         WakeLpSolverCond.notify_one();
-         //std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Jan: why sleep here?
-      }
-      ++curIter_;
-    }
-
-    void End()
-    {
-      {
-         std::unique_lock<std::mutex> guard(LpChangeMutex);
-         SOLVER::End();
-      }
-
-      runLp_ = false;
-      std::cout << "stop lp solvers\n";
-      std::unique_lock<std::mutex> WakeUpGuard(WakeLpSolverMutex_);
-      WakeLpSolverCond.notify_all();
-      WakeUpGuard.unlock();
-
-      std::cout << "construct final lp solver\n";
-      std::thread th([&,this]() { this->RunLpSolver(1); });
-      th.join();
-
-      for(INDEX i=0;i<threads_.getValue();i++){
-         if(LpThreads_[i].joinable()){
-            LpThreads_[i].join();
-         }
-      }
-
-      std::cout << "\n";
-      std::cout << "The best objective computed by ILP is " << ub_ << "\n";
-      std::cout << "Best overall objective = " << this->bestPrimalCost_ << "\n";
-    }
-
-private:
-  TCLAP::ValueArg<REAL> timelimit_;
-  TCLAP::ValueArg<REAL> roundBound_;
-  TCLAP::ValueArg<INDEX> threads_;
-  TCLAP::ValueArg<INDEX> LpThreadsArg_;
-  TCLAP::ValueArg<INDEX> LpInterval_;
-  TCLAP::SwitchArg LPOnly_;
-  TCLAP::SwitchArg RELAX_;
-  //TCLAP::SwitchArg EXPORT_;
-  
-  std::mutex LpChangeMutex;
-
-  std::mutex UpdateUbLpMutex;
-  std::mutex WakeLpSolverMutex_;
-  std::condition_variable WakeLpSolverCond;
-
-  bool runLp_ = true;
-  std::vector<std::thread> LpThreads_;
-  REAL VariableThreshold_;
-  REAL ub_ = std::numeric_limits<REAL>::infinity();
-  INDEX curIter_ = 1;
-};
 
 // Macro for generating main function 
 // do zrobienia: get version number automatically from CMake 
