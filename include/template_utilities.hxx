@@ -30,9 +30,6 @@ namespace LP_MP {
                std::make_index_sequence<N>{});
       }
 
-   template<class LIST> using tuple_from_list = meta::apply<meta::quote<std::tuple>, LIST>;
-
-
    // iterate over two tuples in order
    template <typename Tuple, typename F, std::size_t ...Indices>
       void for_each_tuple_pair_impl(Tuple&& tuple_1, Tuple&& tuple_2, F&& f, std::index_sequence<Indices...>) {
@@ -48,6 +45,9 @@ namespace LP_MP {
          for_each_tuple_pair_impl(std::forward<Tuple>(tuple_1), std::forward<Tuple>(tuple_2), std::forward<F>(f),
                std::make_index_sequence<N>{});
       }
+
+
+   template<class LIST> using tuple_from_list = meta::apply<meta::quote<std::tuple>, LIST>;
 }
 
 #endif // LP_MP_TEMPLATE_UTILITIES

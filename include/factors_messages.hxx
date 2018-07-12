@@ -74,7 +74,8 @@ LP_MP_FUNCTION_EXISTENCE_CLASS(HasMaximizePotentialAndComputePrimal, MaximizePot
 
 LP_MP_FUNCTION_EXISTENCE_CLASS(has_apply, apply)
 
-LP_MP_FUNCTION_EXISTENCE_CLASS(has_create_constraints, create_constraints)
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_construct_constraints, construct_constraints)
+LP_MP_FUNCTION_EXISTENCE_CLASS(has_convert_primal, convert_primal)
 
 LP_MP_ASSIGNMENT_FUNCTION_EXISTENCE_CLASS(IsAssignable, operator[])
 }
@@ -1606,21 +1607,51 @@ public:
    template<typename SOLVER>
    void construct_constraints_impl(SOLVER& s, const typename DD_ILP::variable_counters& left_variable_counters, const typename DD_ILP::variable_counters& right_variable_counters)
    {
-      auto current_variable_counters = s.get_variable_counters();
+       if constexpr(can_construct_constraints()) {
+           auto current_variable_counters = s.get_variable_counters();
 
-      auto left_vars = leftFactor_->GetFactor()->export_variables();
-      s.set_variable_counters(left_variable_counters);
-      auto left_external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->leftFactor_->load_external_variables(s, x)...); }, left_vars);
+           auto left_vars = leftFactor_->GetFactor()->export_variables();
+           s.set_variable_counters(left_variable_counters);
+           auto left_external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->leftFactor_->load_external_variables(s, x)...); }, left_vars);
 
-      auto right_vars = rightFactor_->GetFactor()->export_variables();
-      s.set_variable_counters(right_variable_counters);
-      auto right_external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->rightFactor_->load_external_variables(s, x)...); }, right_vars);
+           auto right_vars = rightFactor_->GetFactor()->export_variables();
+           s.set_variable_counters(right_variable_counters);
+           auto right_external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->rightFactor_->load_external_variables(s, x)...); }, right_vars);
 
-      auto t = std::tuple_cat(std::tie(*leftFactor_->GetFactor()), left_external_vars, std::tie(*rightFactor_->GetFactor()), right_external_vars);
-      auto construct_constraints_fun = [this,&s](auto... x) { this->msg_op_.construct_constraints(s, x...); };
-      std::apply(construct_constraints_fun, t);
+           auto t = std::tuple_cat(std::tie(*leftFactor_->GetFactor()), left_external_vars, std::tie(*rightFactor_->GetFactor()), right_external_vars);
+           auto construct_constraints_fun = [this,&s](auto... x) { this->msg_op_.construct_constraints(s, x...); };
+           std::apply(construct_constraints_fun, t);
 
-      s.set_variable_counters(current_variable_counters);
+           s.set_variable_counters(current_variable_counters);
+       } else {
+           assert(false);
+       }
+   }
+
+   template<typename SOLVER_TYPE, typename LEFT_EXTERNAL_VARS_TUPLE, typename RIGHT_EXTERNAL_VARS_TUPLE, std::size_t... lI, std::size_t... rI>
+   constexpr static bool can_construct_constraints_impl(std::index_sequence<lI...>, std::index_sequence<rI...>)
+   {
+       return FunctionExistence::has_construct_constraints<
+           MessageType, void, SOLVER_TYPE&,
+           LeftFactorType&, std::tuple_element_t<lI,LEFT_EXTERNAL_VARS_TUPLE>...,
+           RightFactorType&, std::tuple_element_t<rI,RIGHT_EXTERNAL_VARS_TUPLE>...
+               >(); 
+
+   }
+
+   constexpr static bool can_construct_constraints()
+   {
+       using solver_type = DD_ILP::external_solver_interface<DD_ILP::problem_export>;
+
+       using left_factor_variable_types = typename std::invoke_result<decltype(&LeftFactorType::export_variables)()>::type; 
+       using left_external_vars_types = decltype(std::declval<LeftFactorContainer>().template get_external_vars<solver_type>( std::declval<solver_type&>() ));
+       auto lI = std::make_index_sequence< std::tuple_size<left_external_vars_types>::value >{};
+
+       using right_factor_variable_types = typename std::invoke_result<decltype(&RightFactorType::export_variables)()>::type; 
+       using right_external_vars_types = decltype(std::declval<RightFactorContainer>().template get_external_vars<solver_type>( std::declval<solver_type&>() ));
+       auto rI = std::make_index_sequence< std::tuple_size<right_external_vars_types>::value >{};
+
+       return can_construct_constraints_impl<solver_type, left_external_vars_types, right_external_vars_types>(lI, rI); 
    }
 
    virtual void construct_constraints(
@@ -3361,7 +3392,7 @@ public:
 
 private:
 
-   using msg_storage_type = meta::apply<meta::quote<std::tuple>, msg_container_type_list>;
+   using msg_storage_type = tuple_from_list<msg_container_type_list>;
    msg_storage_type msg_;
 
 #ifdef LP_MP_PARALLEL
@@ -3446,19 +3477,29 @@ public:
    void add_objective(EXTERNAL_SOLVER& s, const tensor3<REAL>& cost)
    { s.add_tensor_objective(cost); }
 
+   template<typename EXTERNAL_SOLVER>
+   auto get_external_vars(EXTERNAL_SOLVER& s)
+   {
+       auto vars = factor_.export_variables();
+       auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->convert_variables_to_external(s, x)...); }, vars);
+       return external_vars; 
+   }
+
    // functions for implementing external solver interface
    template<typename EXTERNAL_SOLVER>
    void construct_constraints_impl(EXTERNAL_SOLVER& s)
    {
-      // transform exported variables to external solver variables
-      auto vars = factor_.export_variables();
-      auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->convert_variables_to_external(s, x)...); }, vars);
+       if constexpr(can_construct_constraints()) {
+           // transform exported variables to external solver variables
+           auto external_vars = get_external_vars(s);
 
-      // unpack tuple and call construct_constraints function of factor
-      auto construct_constraints_fun = [this,&s](auto... x) { this->factor_.construct_constraints(s, x...); };
-      std::apply(construct_constraints_fun, external_vars);
+           // unpack tuple and call construct_constraints function of factor
+           auto construct_constraints_fun = [this,&s](auto... x) { this->factor_.construct_constraints(s, x...); };
+           std::apply(construct_constraints_fun, external_vars);
+       } else {
+           assert(false);
+       }
    }
-
 
    template<typename EXTERNAL_SOLVER>
    void load_costs_impl(EXTERNAL_SOLVER& s)
@@ -3470,17 +3511,64 @@ public:
       // for all variables,
    }
 
-
    template<typename SOLVER>
    void convert_primal_impl(SOLVER& s)
    {
-      auto vars = factor_.export_variables();
-      auto external_vars = std::apply([this,&s](auto... x){ return std::make_tuple(this->load_external_variables(s, x)...); }, vars); 
+       if constexpr(can_convert_primal()) {
+           auto external_vars = get_external_vars(s);
 
-      auto convert_primal_fun = [this,&s](auto... x) { this->factor_.convert_primal(s, x...); };
-      std::apply(convert_primal_fun, external_vars);
+           auto convert_primal_fun = [this,&s](auto... x) { this->factor_.convert_primal(s, x...); };
+           std::apply(convert_primal_fun, external_vars);
 
-      //propagate_primal_through_messages();
+           //propagate_primal_through_messages();
+       } else {
+           assert(false);
+       }
+
+       struct C { double Func(char, int&); };
+       typename std::result_of<decltype(&C::Func)(C, char, int&)>::type g = 3.14;
+   }
+
+   template<typename SOLVER_TYPE, typename EXTERNAL_VARS_TUPLE, std::size_t... Is>
+   constexpr static bool can_construct_constraints_impl(std::index_sequence<Is...>)
+   {
+       return FunctionExistence::has_construct_constraints<
+           FactorType, void, SOLVER_TYPE&,
+           std::tuple_element_t<Is,EXTERNAL_VARS_TUPLE>...
+               >(); 
+
+   }
+   constexpr static bool can_construct_constraints()
+   {
+       // test whether construct_constraints works with DD_ILP::external_solver_interface<DD_ILP::problem_export>
+       using solver_type = DD_ILP::external_solver_interface<DD_ILP::problem_export>;
+       using factor_variable_types = typename std::invoke_result<decltype(&FactorType::export_variables)()>::type;
+
+       using external_vars_types = decltype(std::declval<FactorContainerType>().template get_external_vars<solver_type>( std::declval<solver_type&>() ));
+       auto I = std::make_index_sequence< std::tuple_size<external_vars_types>::value >{};
+
+       return can_construct_constraints_impl<solver_type, external_vars_types>(I);
+   }
+
+   template<typename SOLVER_TYPE, typename EXTERNAL_VARS_TUPLE, std::size_t... Is>
+   constexpr static bool can_convert_primal_impl(std::index_sequence<Is...>)
+   {
+       return FunctionExistence::has_convert_primal<
+           FactorType, void, SOLVER_TYPE&,
+           std::tuple_element_t<Is,EXTERNAL_VARS_TUPLE>...
+               >(); 
+
+   }
+   constexpr static bool can_convert_primal()
+   {
+       // test whether convert_primal works with DD_ILP::external_solver_interface<DD_ILP::problem_export>
+       using solver_type = DD_ILP::external_solver_interface<DD_ILP::problem_export>;
+       using factor_variable_types = typename std::invoke_result<decltype(&FactorType::export_variables)()>::type;
+
+       using external_vars_types = decltype(std::declval<FactorContainerType>().template get_external_vars<solver_type>( std::declval<solver_type&>() ));
+       auto I = std::make_index_sequence< std::tuple_size<external_vars_types>::value >{};
+
+       return can_convert_primal_impl<solver_type, external_vars_types>(I);
    }
 
    virtual void construct_constraints(DD_ILP::external_solver_interface<DD_ILP::sat_solver>& s) final { construct_constraints_impl(s); }
