@@ -13,6 +13,7 @@
 #include <limits>
 #include <exception>
 #include <unordered_map>
+#include <unordered_set>
 #include "template_utilities.hxx"
 #include <assert.h>
 #include "topological_sort.hxx"
@@ -372,6 +373,10 @@ public:
    void ComputePassAndPrimal(const INDEX iteration);
    void ComputeForwardPassAndPrimal(const INDEX iteration);
    void ComputeBackwardPassAndPrimal(const INDEX iteration);
+
+   // compute pass with interleaved primal rounding on subset of potentials only. This can be used for horizon tracking and discrete tomography.
+   template<typename FACTOR_ITERATOR, Direction DIRECTION>
+   void ComputePassAndPrimal(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end);
 
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename RECEIVE_MASK_ITERATOR>
    void ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, RECEIVE_MASK_ITERATOR receive_mask_it, const INDEX iteration);
@@ -1530,6 +1535,53 @@ double LP<FMC>::EvaluatePrimal() {
   return cost;
 }
 
+
+template<typename FMC>
+template<typename FACTOR_ITERATOR, Direction DIRECTION>
+void LP<FMC>::ComputePassAndPrimal(FACTOR_ITERATOR factor_begin, const FACTOR_ITERATOR factor_end)
+{
+    SortFactors();
+
+    // filter out factors that that are not needed
+    std::unordered_set<FactorTypeAdapter*> factor_set;
+    for(auto f_it=factor_begin; f_it!=factor_begin; ++f_it) { factor_set.insert(*f_it); }
+    auto filter_predicate = [&factor_set](FactorTypeAdapter* f) { return factor_set.count(f) != 0; };
+
+    // forward
+    std::vector<FactorTypeAdapter*> filtered_factors;
+    std::vector<FactorTypeAdapter*> filtered_factors_update;
+    if(DIRECTION == Direction::forward) {
+        std::remove_copy_if(forwardOrdering_.begin(), forwardOrdering_.end(), std::back_inserter(filtered_factors), filter_predicate);
+        std::remove_copy_if(forwardUpdateOrdering_.begin(), forwardUpdateOrdering_.end(), std::back_inserter(filtered_factors_update), filter_predicate);
+    } else {
+        assert(DIRECTION == Direction::backward);
+        std::remove_copy_if(backwardUpdateOrdering_.begin(), backwardUpdateOrdering_.end(), std::back_inserter(filtered_factors_update), filter_predicate);
+        std::remove_copy_if(backwardOrdering_.begin(), backwardOrdering_.end(), std::back_inserter(filtered_factors), filter_predicate);
+    }
+
+    weight_array omega;
+    receive_array receive_mask;
+    ComputeAnisotropicWeights( filtered_factors.begin(), filtered_factors.end(), omega, receive_mask);
+
+    // prune masks: set weights going to factors outside to zero
+    for(std::size_t i=0; i<filtered_factors_update.size(); ++i) {
+        auto messages = filtered_factors_update[i]->get_messages();
+        std::size_t j_omega = 0;
+        std::size_t j_receive = 0;
+        for(std::size_t j=0; j<messages.size(); ++j) {
+            auto* adjacent_factor = messages[j].adjacent_factor;
+            const bool adjacent_factor_in = filter_predicate(adjacent_factor);
+            if(messages[j].sends_to_adjacent_factor && !adjacent_factor_in) {
+                receive_mask[i][j_receive++] = 0;
+            }
+            if(messages[j].receives_from_adjacent_factor && !adjacent_factor_in) {
+                omega[i][j_omega++] = 0;
+            }
+        } 
+    }
+
+    ComputePassAndPrimal(filtered_factors.begin(), filtered_factors.end(), omega.begin(), receive_mask.begin(), std::numeric_limits<INDEX>::max());
+}
 
 template<typename FMC>
 template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename RECEIVE_MASK_ITERATOR>
