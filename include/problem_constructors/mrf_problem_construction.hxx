@@ -924,7 +924,7 @@ namespace UaiMrfInput {
                matrix<REAL> pairwise_cost(dim1,dim2);
                for(INDEX l1=0; l1<dim1; ++l1) {
                   for(INDEX l2=0; l2<dim2; ++l2) {
-                     pairwise_cost(l1,l2) = input.function_tables_[i][l2*dim1 + l1];
+                     pairwise_cost(l1,l2) = input.function_tables_[i][l1*dim2 + l2];
                   }
                }
                mrf.AddPairwiseFactor(var1,var2,pairwise_cost); // or do we have to transpose the values?
