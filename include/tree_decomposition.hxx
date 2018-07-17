@@ -154,7 +154,7 @@ public:
       // check if primal cost is equal to lower bound
       for(auto* f : factors_) { assert( std::abs(f->EvaluatePrimal() - f->LowerBound()) <= eps); }
       assert(primal_consistent());
-      assert(subgradient_consistent());
+      //assert(subgradient_consistent()); // we cannot do this since not every factor has subgradient method
       assert(std::abs(lower_bound() - primal_cost()) <= eps);
       assert(std::abs(value - primal_cost()) <= eps);
       return value;
@@ -835,7 +835,6 @@ public:
                     m.SetLeftFactor(left_copy);
                  }
                  if(factor_mapping[i].find(right) != factor_mapping[i].end()) {
-                     assert(false); // only currently, remove
                     auto* right_copy = factor_mapping[i].find(right)->second;
                     m.SetRightFactor(right_copy);
                  }
