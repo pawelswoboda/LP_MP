@@ -1170,32 +1170,32 @@ public:
    {
       rightFactor_->conditionally_init_primal(leftFactor_->primal_access_);
 
-      if constexpr (CanComputeRightFromLeftPrimalWithoutReturn()) {
-        msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-        rightFactor_->PropagatePrimal();
-        rightFactor_->propagate_primal_through_messages(); 
-      } else if constexpr (MessageContainerType::CanComputeRightFromLeftPrimalWithReturn()) {
+      if constexpr (MessageContainerType::CanComputeRightFromLeftPrimalWithReturn()) {
         const bool changed = msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
         if(changed) {
           rightFactor_->PropagatePrimal();
           rightFactor_->propagate_primal_through_messages();
         }
-      }
+      } else if constexpr (CanComputeRightFromLeftPrimalWithoutReturn()) {
+        msg_op_.ComputeRightFromLeftPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+        rightFactor_->PropagatePrimal();
+        rightFactor_->propagate_primal_through_messages(); 
+      } 
    }
 
    void ComputeLeftFromRightPrimal()
    {
       leftFactor_->conditionally_init_primal(rightFactor_->primal_access_);
-      if constexpr(CanComputeLeftFromRightPrimalWithoutReturn()) {
-        msg_op_.ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
-        leftFactor_->PropagatePrimal();
-        leftFactor_->propagate_primal_through_messages();
-      } else if constexpr(CanComputeLeftFromRightPrimalWithReturn()) {
+      if constexpr(CanComputeLeftFromRightPrimalWithReturn()) {
           const bool changed = msg_op_.ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
           if(changed) {
               leftFactor_->PropagatePrimal();
               leftFactor_->propagate_primal_through_messages();
           }
+      } else if constexpr(CanComputeLeftFromRightPrimalWithoutReturn()) {
+        msg_op_.ComputeLeftFromRightPrimal(*leftFactor_->GetFactor(), *rightFactor_->GetFactor());
+        leftFactor_->PropagatePrimal();
+        leftFactor_->propagate_primal_through_messages();
       }
    }
 

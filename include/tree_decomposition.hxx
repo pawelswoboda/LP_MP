@@ -721,7 +721,19 @@ public:
 
    ~LP_with_trees()
    {
-     // redirect messages back to original factors
+       redirect_messages_to_original();
+
+       // delete copies of factors
+       for(auto& t : trees_) {
+           for(auto& L : t.Lagrangean_factors_) {
+               delete L.f;
+           }
+       }
+   }
+
+   // redirect messages back to original factors
+   void redirect_messages_to_original()
+   {
      for(auto& t : trees_) {
        assert(t.original_factors_.size() == t.Lagrangean_factors_.size());
        std::unordered_map<FactorTypeAdapter*, FactorTypeAdapter*> copy_to_original_factor;
@@ -744,14 +756,7 @@ public:
             }
          }, std::get<0>(tree_msg) );
        } 
-     }
-
-     // delete copies of factors
-     for(auto& t : trees_) {
-       for(auto& L : t.Lagrangean_factors_) {
-         delete L.f;
-       }
-     }
+     } 
    }
 
    void add_tree(factor_tree<FMC>& t)
@@ -964,6 +969,8 @@ public:
   // write back reparametrization of tree decomposition factor into original factors
   void write_back_reparametrization()
   {
+      redirect_messages_to_original();
+
       // first set original factors to zero
       for(auto& t : trees_) {
           assert(t.original_factors_.size() == t.Lagrangean_factors_.size());

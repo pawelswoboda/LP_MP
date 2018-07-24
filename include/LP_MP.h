@@ -376,7 +376,7 @@ public:
 
    // compute pass with interleaved primal rounding on subset of potentials only. This can be used for horizon tracking and discrete tomography.
    template<typename FACTOR_ITERATOR, Direction DIRECTION>
-   void ComputePassAndPrimal(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end);
+   void ComputePassAndPrimal(FACTOR_ITERATOR factor_begin, FACTOR_ITERATOR factor_end, const INDEX iteration);
 
    template<typename FACTOR_ITERATOR, typename OMEGA_ITERATOR, typename RECEIVE_MASK_ITERATOR>
    void ComputePassAndPrimal(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factorEndIt, OMEGA_ITERATOR omegaIt, RECEIVE_MASK_ITERATOR receive_mask_it, const INDEX iteration);
@@ -1538,7 +1538,7 @@ double LP<FMC>::EvaluatePrimal() {
 
 template<typename FMC>
 template<typename FACTOR_ITERATOR, Direction DIRECTION>
-void LP<FMC>::ComputePassAndPrimal(FACTOR_ITERATOR factor_begin, const FACTOR_ITERATOR factor_end)
+void LP<FMC>::ComputePassAndPrimal(FACTOR_ITERATOR factor_begin, const FACTOR_ITERATOR factor_end, const INDEX iteration)
 {
     SortFactors();
 
@@ -1586,7 +1586,7 @@ void LP<FMC>::ComputePassAndPrimal(FACTOR_ITERATOR factor_begin, const FACTOR_IT
         } 
     }
 
-    ComputePassAndPrimal(filtered_factors_update.begin(), filtered_factors_update.end(), omega.begin(), receive_mask.begin(), std::numeric_limits<INDEX>::max());
+    ComputePassAndPrimal(filtered_factors_update.begin(), filtered_factors_update.end(), omega.begin(), receive_mask.begin(), iteration);
 }
 
 template<typename FMC>
