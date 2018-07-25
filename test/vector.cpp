@@ -15,6 +15,9 @@ int main() {
 
     test(v.min() == -1.0); 
     std::cout << v;
+
+    test(v.min_except(0) == 0.0);
+    test(v.min_except(1) == -1.0);
   }
 
   { // matrix minima

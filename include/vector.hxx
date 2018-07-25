@@ -308,6 +308,16 @@ public:
      }
    }
 
+   T min_except(const std::size_t i) const
+   {
+       assert(i < this->size());
+       const auto val = (*this)[i];
+       begin_[i] = std::numeric_limits<REAL>::infinity();
+       const auto min_val = this->min();
+       begin_[i] = val;
+       return min_val;
+   }
+
    void min(const T val)
    {
      assert(false); // should not be used
