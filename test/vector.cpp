@@ -1,11 +1,40 @@
 #include "test.h"
 #include "vector.hxx"
+#include <random>
+
+
 
 using namespace LP_MP;
+
+void test_vector_minima(const std::size_t n, std::random_device& rd)
+{
+    std::mt19937 gen{rd()};
+    std::normal_distribution<> dist{5,2};
+
+    vector<REAL> v(n);
+    for(std::size_t i=0; i<n; ++i) {
+        v[i] = dist(gen);
+    }
+
+    test(v.min() == *std::min_element(v.begin(), v.end())); 
+
+    test(v.min_except(0) == *std::min_element(v.begin()+1, v.end()));
+    for(std::size_t i=1; i<n-1; ++i) {
+        const auto min_except = std::min( *std::min_element(v.begin(), v.begin() + i), *std::min_element(v.begin()+i+1, v.end()));
+        test(v.min_except(i) == min_except);
+    }
+    test(v.min_except(n-1) == *std::min_element(v.begin(), v.begin()+n-1));
+
+    const auto two_min = v.two_min();
+    std::sort(v.begin(), v.end());
+    test(v[0] == two_min[0]);
+    test(v[1] == two_min[1]);
+}
 
 int main() {
 
   { // vector minimum
+
     vector<REAL> v(5);
     v[0] = -1.0;
     v[1] = 0.0;
@@ -18,6 +47,18 @@ int main() {
 
     test(v.min_except(0) == 0.0);
     test(v.min_except(1) == -1.0);
+
+    auto two_min = v.two_min();
+    test(two_min[0] == -1.0);
+    test(two_min[1] == 0.0);
+  }
+
+  { // random vector tests
+    std::random_device rd{};
+
+    for(std::size_t n=2; n<100; ++n) {
+        test_vector_minima(n, rd);
+    }
   }
 
   { // matrix minima

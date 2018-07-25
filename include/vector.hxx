@@ -343,36 +343,89 @@ public:
 
    std::array<T,2> two_min() const
    {
-     //assert(std::is_same<T,float>::value == true);
+       assert(size() >= 2);
 
-     simdpp::float32<8> min_val = simdpp::make_float(std::numeric_limits<REAL>::infinity());
-     simdpp::float32<8> second_min_val = simdpp::make_float(std::numeric_limits<REAL>::infinity());
-     for(auto it=begin_; it<end_; it+=8) {
-         simdpp::float32<8> tmp = simdpp::load( it );
-         simdpp::float32<8> tmp_min = simdpp::min(tmp, min_val);
-         simdpp::float32<8> tmp_max = simdpp::max(tmp, min_val);
-         min_val = tmp_min;
-         second_min_val = simdpp::min(tmp_max, second_min_val); 
-     }
+       if constexpr(std::is_same<T,float>::value) {
 
-     // second minimum is the minimum of the second minimum in vector min and the minimum in second_min_val
-     simdpp::float32<4> x1;
-     simdpp::float32<4> y1;
-     simdpp::split(min_val, x1, y1);
-     simdpp::float32<4> min2 = simdpp::min(x1, y1);
-     simdpp::float32<4> max2 = simdpp::max(x1, y1);
+           assert(false); // does not work yet
+           simdpp::float32<8> min_val = simdpp::make_float(std::numeric_limits<REAL>::infinity());
+           simdpp::float32<8> second_min_val = simdpp::make_float(std::numeric_limits<REAL>::infinity());
+           for(auto it=begin_; it<end_; it+=8) {
+               simdpp::float32<8> tmp = simdpp::load( it );
+               simdpp::float32<8> tmp_min = simdpp::min(tmp, min_val);
+               simdpp::float32<8> tmp_max = simdpp::max(tmp, min_val);
+               min_val = tmp_min;
+               second_min_val = simdpp::min(tmp_max, second_min_val); 
+           }
 
-     std::array<T,4> min_array; //
-     min_array[0] = min2.vec(0); //min2.vec(1), min2.vec(2), min2.vec(3)});
-     const auto min3 = two_smallest_elements<T>(min_array.begin(), min_array.end());
-     //const REAL min = simdpp::reduce_min(min2);
-     const REAL second_min = std::min({simdpp::reduce_min(second_min_val), simdpp::reduce_min(max2), min3[1]});
-     assert(second_min >= min3[0]);
-     return std::array<T,2>({min3[0], second_min});
-     /*
-     simdpp::float32<2> x2;
-     simdpp::float32<2> y2;
-     simdpp::split(min2, x2, y2);
+           // second minimum is the minimum of the second minimum in vector min and the minimum in second_min_val
+           simdpp::float32<4> x1;
+           simdpp::float32<4> y1;
+           simdpp::split(min_val, x1, y1);
+           simdpp::float32<4> min2 = simdpp::min(x1, y1);
+           simdpp::float32<4> max2 = simdpp::max(x1, y1);
+
+           std::array<T,4> min_array; //
+           min_array[0] = min2.vec(0); //min2.vec(1), min2.vec(2), min2.vec(3)});
+           const auto min3 = two_smallest_elements<T>(min_array.begin(), min_array.end());
+           //const REAL min = simdpp::reduce_min(min2);
+           const REAL second_min = std::min({simdpp::reduce_min(second_min_val), simdpp::reduce_min(max2), min3[1]});
+           assert(second_min >= min3[0]);
+           return std::array<T,2>({min3[0], second_min});
+
+   } else if constexpr(std::is_same<T,double>::value) {
+
+           simdpp::float64<4> min_val = simdpp::make_float(std::numeric_limits<REAL>::infinity());
+           simdpp::float64<4> second_min_val = simdpp::make_float(std::numeric_limits<REAL>::infinity());
+           for(auto it=begin_; it<end_; it+=4) {
+               simdpp::float64<4> tmp = simdpp::load( it );
+               simdpp::float64<4> tmp_min = simdpp::min(tmp, min_val);
+               simdpp::float64<4> tmp_max = simdpp::max(tmp, min_val);
+               min_val = tmp_min;
+               second_min_val = simdpp::min(tmp_max, second_min_val); 
+           }
+
+           // second minimum is the minimu of the second minimum in vector min and the minimum in second_min_val
+
+           T smallest = std::numeric_limits<T>::infinity();
+           T second_smallest = std::numeric_limits<T>::infinity();
+           //for(std::size_t i=0; i<4; ++i) {
+               {
+               const T min = std::min(smallest, simdpp::extract<0>(min_val));
+               const T max = std::max(smallest, simdpp::extract<0>(min_val));
+               smallest = min;
+               second_smallest = std::min(max, second_smallest);
+               }
+               {
+               const T min = std::min(smallest, simdpp::extract<1>(min_val));
+               const T max = std::max(smallest, simdpp::extract<1>(min_val));
+               smallest = min;
+               second_smallest = std::min(max, second_smallest);
+               }
+               { 
+               const T min = std::min(smallest, simdpp::extract<2>(min_val));
+               const T max = std::max(smallest, simdpp::extract<2>(min_val));
+               smallest = min;
+               second_smallest = std::min(max, second_smallest);
+               }
+               { 
+               const T min = std::min(smallest, simdpp::extract<3>(min_val));
+               const T max = std::max(smallest, simdpp::extract<3>(min_val));
+               smallest = min;
+               second_smallest = std::min(max, second_smallest);
+               }
+           //}
+           second_smallest = std::min(second_smallest, simdpp::reduce_min(second_min_val));
+
+           return {smallest, second_smallest};
+
+   } else {
+       assert(false);
+   }
+           /*
+              simdpp::float32<2> x2;
+              simdpp::float32<2> y2;
+              simdpp::split(min2, x2, y2);
      simdpp::float32<2> min3 = simdpp::min(x2, y2);
      simdpp::float32<2> max3 = simdpp::max(x2, y2);
 
