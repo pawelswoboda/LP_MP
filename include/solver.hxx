@@ -63,6 +63,7 @@ private:
       for_each_tuple(this->problemConstructor_, [this](auto& l) {
            assert(l == nullptr);
            l = new typename std::remove_pointer<typename std::remove_reference<decltype(l)>::type>::type(*this); // note: this is not so nice: if problem constructor needs other problem constructors, those must already be allocated, otherwise address is invalid. This is only a problem for circular references, though, otherwise order problem constructors accordingly. This should be resolved when std::tuple will be constructed without move and copy constructors.
+           assert(l != nullptr);
       }); 
 
       std::cout << std::setprecision(10);
@@ -92,6 +93,8 @@ public:
          exit(1);
       }
    }
+
+   const std::string& get_input_file() const { return inputFile_; }
 
    template<class INPUT_FUNCTION, typename... ARGS>
    bool ReadProblem(INPUT_FUNCTION inputFct, ARGS... args)
