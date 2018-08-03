@@ -11,7 +11,6 @@
 #include "LP_MP.h"
 #include "function_existence.hxx"
 #include "template_utilities.hxx"
-#include "static_if.hxx"
 #include "tclap/CmdLine.h"
 
 namespace LP_MP {
@@ -148,9 +147,9 @@ public:
 
       for_each_tuple(this->problemConstructor_, [&ss,this](auto* l) {
             using pc_type = typename std::remove_pointer<decltype(l)>::type;
-            static_if<SolverType::CanWritePrimalIntoString<pc_type>()>([&](auto f) {
-                  f(*l).WritePrimal(ss);
-            });
+            if constexpr(SolverType::CanWritePrimalIntoString<pc_type>()) {
+                l->WritePrimal(ss);
+            }
       }); 
 
       std::string sol = ss.str();
@@ -171,14 +170,14 @@ public:
       bool feasible = true;
       for_each_tuple(this->problemConstructor_, [this,&feasible](auto* l) {
             using pc_type = typename std::remove_pointer<decltype(l)>::type;
-            static_if<SolverType::CanCheckPrimalConsistency<pc_type>()>([&](auto f) {
+            if constexpr(SolverType::CanCheckPrimalConsistency<pc_type>()) {
                   if(feasible) {
-                     const bool feasible_pc = f(*l).CheckPrimalConsistency();
+                     const bool feasible_pc = l->CheckPrimalConsistency();
                      if(!feasible_pc) {
                         feasible = false;
                      }
                   }
-            });
+            }
       });
 
       if(feasible) {
@@ -203,9 +202,9 @@ public:
       INDEX constraints_added = 0;
       for_each_tuple(this->problemConstructor_, [this,maxConstraints,&constraints_added](auto* l) {
             using pc_type = typename std::remove_pointer<decltype(l)>::type;
-            static_if<SolverType::CanTighten<pc_type>()>([&](auto f) {
-                  constraints_added += f(*l).Tighten(maxConstraints);
-            });
+            if constexpr(SolverType::CanTighten<pc_type>()) {
+                  constraints_added += l->Tighten(maxConstraints);
+            }
        });
 
       return constraints_added;
@@ -250,9 +249,9 @@ public:
          lowerBound_ = lp_.LowerBound();
          // possibly primal has been computed in end. Call visitor again
          visitor_.end(this->lowerBound_, this->bestPrimalCost_);
-         static_if<visitor_has_solution()>([this](auto f) {
-               f(this)->visitor_.solution(this->solution_);
-         });
+         if constexpr(visitor_has_solution()) {
+               this->visitor_.solution(this->solution_);
+         }
          this->WritePrimal();
       }
       return !c.error;
@@ -301,9 +300,9 @@ public:
    {
       for_each_tuple(this->problemConstructor_, [this](auto* l) {
             using pc_type = typename std::remove_pointer<decltype(l)>::type;
-            static_if<SolverType::CanCallEnd<pc_type>()>([&](auto f) {
-                  f(*l).End();
-            });
+            if constexpr(SolverType::CanCallEnd<pc_type>()) {
+                  l->End();
+            }
       }); 
       lp_.End();
    }
@@ -422,9 +421,9 @@ public:
       // for this, first we have to wait until the rounding procedure has read off everything from the LP model before optimizing further
       for_each_tuple(this->problemConstructor_, [this](auto* l) {
             using pc_type = typename std::remove_pointer<decltype(l)>::type;
-            static_if<ProblemConstructorRoundingSolver<SOLVER>::CanComputePrimal<pc_type>()>([&](auto f) {
-                  f(*l).ComputePrimal();
-            });
+            if constexpr(ProblemConstructorRoundingSolver<SOLVER>::CanComputePrimal<pc_type>()) {
+                  l->ComputePrimal();
+            }
       });
    }
 
