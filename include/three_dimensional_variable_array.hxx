@@ -51,7 +51,7 @@ public:
         const auto offset = dimensions_[x1].offset;
         return data_[offset + x2*dim3(x1) + x3]; 
     }
-    T operator()(const INDEX x1, const INDEX x2, const INDEX x3) const 
+    const T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) const 
     {
         assert(x1<dim1() && x2<dim2(x1) && x3<dim3(x1));
         const auto offset = dimensions_[x1].offset;
