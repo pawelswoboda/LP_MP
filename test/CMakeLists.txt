@@ -16,7 +16,7 @@ target_link_libraries(test_FWMAP LP_MP FW-MAP lingeling)
 add_test(test_FWMAP test_FWMAP)
 
 add_executable(test_conic_bundle test_conic_bundle.cpp)
-target_link_libraries(test_conic_bundle CONIC_BUNDLE LP_MP lingeling)
+target_link_libraries(test_conic_bundle cb LP_MP lingeling)
 add_test(test_conic_bundle test_conic_bundle)
 
 #add_executable(two_dimensional_variable_array two_dimensional_variable_array.cpp)

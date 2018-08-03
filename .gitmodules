@@ -16,3 +16,6 @@
 [submodule "external/DD_ILP"]
 	path = external/DD_ILP
 	url = https://github.com/pawelswoboda/DD_ILP.git
+[submodule "external/ConicBundle"]
+	path = external/ConicBundle
+	url = https://github.com/pawelswoboda/ConicBundle.git
