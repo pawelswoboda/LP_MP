@@ -55,7 +55,7 @@ public:
     {
         assert(x1<dim1() && x2<dim2(x1) && x3<dim3(x1));
         const auto offset = dimensions_[x1].offset;
-        return (*this)[offset + x2*dim3(x1) + x3]; 
+        return data_[offset + x2*dim3(x1) + x3]; 
     }      
 
     const INDEX dim1() const { return dimensions_.size(); }

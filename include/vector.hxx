@@ -293,6 +293,8 @@ public:
      //  assert(false);
      //}
 
+     assert((std::size_t(begin_) % 32) == 0);
+
      if(std::is_same<T,float>::value || std::is_same<T,double>::value) {
 
        REAL_VECTOR min_val = simdpp::load( begin_ );
