@@ -329,7 +329,7 @@ public:
    //void ComputeWeights(const LPReparametrizationMode m);
    void set_reparametrization(const LPReparametrizationMode r) { repamMode_ = r; }
 
-   bool omega_valid(const weight_array& omega) const;
+   void omega_valid(const weight_array& omega) const;
 
    void ComputeAnisotropicWeights();
    template<typename FACTOR_ITERATOR>
@@ -1005,7 +1005,7 @@ void LP<FMC>::ComputePass(FACTOR_ITERATOR factorIt, const FACTOR_ITERATOR factor
 }
 
 template<typename FMC>
-bool LP<FMC>::omega_valid(const weight_array& omega) const
+void LP<FMC>::omega_valid(const weight_array& omega) const
 {
     for(std::size_t i=0; i<omega.size(); ++i) {
         assert(*std::min_element(omega[i].begin(), omega[i].end()) >= 0.0);
@@ -1721,7 +1721,7 @@ inline void LP<FMC>::construct_factor_partition()
 
     SortFactors();
 
-    UnionFind uf(f_.size());
+    union_find uf(f_.size());
     for(auto p : partition_graph) {
         const auto i = factor_address_to_index_[p[0]];
         const auto j = factor_address_to_index_[p[1]];

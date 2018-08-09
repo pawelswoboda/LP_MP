@@ -2197,6 +2197,15 @@ public:
       return c;
    }
 
+   // helper function for getting the index in msg_ of given MESSAGE_DISPATCHER_TYPE
+   template<typename MESSAGE_DISPATCHER_TYPE>
+   static constexpr INDEX FindMessageDispatcherTypeIndex()
+   {
+      constexpr INDEX n = meta::find_index<MESSAGE_DISPATCHER_TYPELIST, MESSAGE_DISPATCHER_TYPE>::value;
+      static_assert(n < meta::size<MESSAGE_DISPATCHER_TYPELIST>::value,"");
+      return n;
+   } 
+
    template<typename MESSAGE_CONTAINER_TYPE, Chirality CHIRALITY, typename ADJACENT_FACTOR, typename... ARGS>
    auto add_message(ADJACENT_FACTOR* a_f, ARGS... args)
    {
@@ -2382,14 +2391,13 @@ public:
        }
    }
 
-   // do zrobienia: rename PropagatePrimalThroughMessages
    virtual void propagate_primal_through_messages() final
    {
       meta::for_each(MESSAGE_DISPATCHER_TYPELIST{}, [this](auto l) {
-            if constexpr(l.CanComputePrimalThroughMessage()) {
-                  constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
-                  auto msg_begin = std::get<n>(msg_).begin();
-                  auto msg_end = std::get<n>(msg_).end();
+            constexpr auto n = FactorContainerType::FindMessageDispatcherTypeIndex<decltype(l)>();
+            auto msg_begin = std::get<n>(msg_).begin();
+            auto msg_end = std::get<n>(msg_).end();
+            if constexpr(l.CanComputePrimalThroughMessage()) { // strangely, we cannot have this before, since otherwise gcc-8.1 complaints.
                   for(auto it = msg_begin; it != msg_end; ++it) {
                      l.ComputePrimalThroughMessage(*it);
                   }
@@ -3376,16 +3384,6 @@ protected:
    using MESSAGE_DISPATCHER_TYPELIST = meta::concat<left_dispatcher_list, right_dispatcher_list>;
 
 public:
-   // helper function for getting the index in msg_ of given MESSAGE_DISPATCHER_TYPE
-   template<typename MESSAGE_DISPATCHER_TYPE>
-   static constexpr INDEX FindMessageDispatcherTypeIndex()
-   {
-      constexpr auto n = meta::find_index<MESSAGE_DISPATCHER_TYPELIST, MESSAGE_DISPATCHER_TYPE>::value;
-      static_assert(n < meta::size<MESSAGE_DISPATCHER_TYPELIST>::value,"");
-      return n;
-   }
-
-
    // construct tuple holding messages for left and right dispatch
    // the tuple will hold some container for the message type. The container type is specified in the {Left|Right}MessageContainerStorageType fields of MessageList
    using msg_container_type_list = meta::concat<left_msg_container_list, right_msg_container_list>;

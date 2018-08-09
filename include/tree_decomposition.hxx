@@ -69,7 +69,7 @@ public:
      }
      assert(1 == std::count(no_incoming_edges.begin(), no_incoming_edges.end(), 0));
      // check if tree is connected
-     UnionFind uf(tree.size());
+     union_find uf(tree.size());
      for(INDEX i=0; i<tree.size(); ++i) {
        for(int j : tree[i]) {
          uf.merge(i,j);

@@ -1,4 +1,3 @@
-
 add_executable(vector vector.cpp ${headers})
 target_link_libraries( vector LP_MP m stdc++ pthread )
 add_test( vector vector )
@@ -18,6 +17,10 @@ add_test(test_FWMAP test_FWMAP)
 add_executable(test_conic_bundle test_conic_bundle.cpp)
 target_link_libraries(test_conic_bundle cb LP_MP lingeling)
 add_test(test_conic_bundle test_conic_bundle)
+
+add_executable(graph_test graph_test.cpp)
+target_link_libraries(graph_test LP_MP)
+add_test(graph_test graph_test)
 
 #add_executable(two_dimensional_variable_array two_dimensional_variable_array.cpp)
 #target_link_libraries(two_dimensional_variable_array LP_MP)

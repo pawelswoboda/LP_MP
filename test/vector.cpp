@@ -2,8 +2,6 @@
 #include "vector.hxx"
 #include <random>
 
-
-
 using namespace LP_MP;
 
 void test_vector_minima(const std::size_t n, std::random_device& rd)

@@ -15,12 +15,17 @@ template<typename T>
 class two_dim_variable_array
 {
 public:
+   two_dim_variable_array() : dim1_(0), p_(nullptr) {}
+
    template<typename T2>
    two_dim_variable_array(const two_dim_variable_array<T2>& data)
    {
      allocate_memory(data.size_begin(), data.size_end());
-     initialize(data);
+     if constexpr(std::is_same<T,T2>::value) {
+	     initialize(data);
+     }
    }
+
    template<typename T2>
    void initialize(const two_dim_variable_array<T2>& data) {
       for(INDEX i=0; i<data.size(); ++i) {
@@ -40,10 +45,6 @@ public:
    {
       allocate_memory(begin,end);
    }
-   two_dim_variable_array() 
-     :dim1_(0),
-     p_(nullptr)
-   {}
    two_dim_variable_array<T>& operator=(const two_dim_variable_array& o)
    {
      if(p_ != nullptr) { free(p_); }
@@ -193,6 +194,15 @@ public:
 
    size_iterator size_begin() const { return size_iterator(p_); }
    size_iterator size_end() const { return size_iterator(p_+dim1_); }
+
+   void set(const T& val)
+   {
+	   for(std::size_t i=0; i<size(); ++i) {
+		   for(std::size_t j=0; j<(*this)[i].size(); ++j) {
+			   (*this)(i,j) = val;
+		   }
+	   }
+   }
 
 private:
    template<typename ITERATOR>

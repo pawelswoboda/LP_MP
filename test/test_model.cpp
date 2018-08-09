@@ -40,7 +40,6 @@ int main()
         test(f3->no_messages() == 1);
         test(f3->no_send_messages() == 0);
 
-        //s.GetLP().solve();
         std::cout << "lower bound before optimization = " << s.GetLP().LowerBound() << "\n";
         s.Solve();
         std::cout << "lower bound after optimization = " << s.GetLP().LowerBound() << "\n";
