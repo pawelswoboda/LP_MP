@@ -4,6 +4,7 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <queue>
 #include "two_dimensional_variable_array.hxx"
 #include "union_find.hxx"
 #include "help_functions.hxx"
@@ -13,13 +14,21 @@ namespace LP_MP {
 	// possibly templatize for support for sister pointers and masking edges out
 	template<typename EDGE_INFORMATION, bool SUPPORT_SISTER=true, bool SUPPORT_MASKING=false>
 	class graph {
+        public:
+
 		using type = graph<EDGE_INFORMATION, SUPPORT_SISTER, SUPPORT_MASKING>;
-		public:
+        using edge_information = EDGE_INFORMATION;
+
 		class edge_type {
 			public:
-			const std::size_t tail() const { return sister_->head(); }
+			const std::size_t tail() const 
+            { 
+                assert(sister_->sister_ == this);
+                return sister_->head(); 
+            }
 			const std::size_t head() const { return head_; }
 			const edge_type& sister() const { return *sister_; }
+			edge_type& sister() { return *sister_; }
 
 			EDGE_INFORMATION& edge() { return edge_; }
 			const EDGE_INFORMATION& edge() const { return edge_; }
@@ -32,10 +41,17 @@ namespace LP_MP {
 			EDGE_INFORMATION edge_;
 		};
 
-		// compute sorted adjacency list representation of graph given by edges.
-		// TO DO: initialize EDGE_INFORMATION from EDGE_ITERATOR (by additional optional lambda?)
+        graph() {}
+
+        constexpr static auto no_op = [](const auto& edge) { return EDGE_INFORMATION{}; };
 		template<typename EDGE_ITERATOR>
 		graph(EDGE_ITERATOR edge_begin, EDGE_ITERATOR edge_end)
+        : graph(edge_begin, edge_end, no_op)
+		{}
+
+		// compute sorted adjacency list representation of graph given by edges.
+		template<typename EDGE_ITERATOR, typename EDGE_INFORMATION_LAMBDA>
+		graph(EDGE_ITERATOR edge_begin, EDGE_ITERATOR edge_end, EDGE_INFORMATION_LAMBDA f)
 		{
 			std::vector<std::size_t> adjacency_list_count;
 			// first determine size for adjacency_list
@@ -53,9 +69,13 @@ namespace LP_MP {
 			for(auto edge_it=edge_begin; edge_it!=edge_end; ++edge_it) {
 				const auto i = (*edge_it)[0];
 				const auto j = (*edge_it)[1];
+
 				edges_[i][adjacency_list_count[i]].head_ = j;
+                edges_[i][adjacency_list_count[i]].edge() = f(*edge_it);
 				adjacency_list_count[i]++;
+
 				edges_[j][adjacency_list_count[j]].head_ = i;
+                edges_[j][adjacency_list_count[j]].edge() = f(*edge_it);
 				adjacency_list_count[j]++;
 			}
 
@@ -64,8 +84,14 @@ namespace LP_MP {
 				std::sort(edges_[i].begin(), edges_[i].end());
 			}
 
-			// set sister pointers
-			std::fill(adjacency_list_count.begin(), adjacency_list_count.end(), 0);
+            set_sister_pointers();
+            check_graph();
+		}
+
+        void set_sister_pointers()
+        {
+            for(std::size_t i=0; i<edges_.size(); ++i) { assert(std::is_sorted(edges_[i].begin(), edges_[i].end())); }
+            std::vector<std::size_t> adjacency_list_count(edges_.size(), 0);
 			for(std::size_t i=0; i<edges_.size(); ++i) {
 				for(auto edge_it=edges_[i].begin(); edge_it!=edges_[i].end(); ++edge_it) {
 					if(edge_it->head() > i) {
@@ -76,20 +102,15 @@ namespace LP_MP {
 					} 
 				} 
 			}
+        }
 
-			// check that graph is simple
-			for(std::size_t i=0; i<edges_.size(); ++i) {
-				assert(std::unique(edges_[i].begin(), edges_[i].end(), [](const edge_type& e1, const edge_type& e2){ return e1.head() == e2.head(); }) == edges_[i].end());
-			}
-
-			// check that all sister pointers have been set correctly 
-			for(std::size_t i=0; i<edges_.size(); ++i) {
-				for(std::size_t e=0; e<edges_[i].size(); ++e) {
-					assert(edges_(i,e).tail() == i);
-					assert(edges_(i,e).sister_->sister_ == &edges_(i,e));
-				}
-			}
-		}
+        // TODO: implement move operator
+        graph& operator=(const graph& o)
+        {
+            edges_ = o.edges_;
+            set_sister_pointers();
+            return *this;
+        }
 
 		template<typename LAMBDA>
 		void for_each_edge(LAMBDA f) const
@@ -130,11 +151,11 @@ namespace LP_MP {
 
 		std::size_t no_nodes() const { return edges_.size(); }
 		std::size_t no_edges(const std::size_t i) const { return edges_[i].size(); }
-		std::size_t edge_no(edge_type* e) const
+		std::size_t edge_no(const edge_type* e) const
 		{
 			const std::size_t i = e->tail();
-			assert(std::distance(edges_[i].begin(), e) < no_edges(i));
-			return std::distance(edges_[i].begin(), e); 
+			assert(std::distance(const_cast<const edge_type*>(edges_[i].begin()), e) < no_edges(i));
+			return std::distance(const_cast<const edge_type*>(edges_[i].begin()), e); 
 		}
 		std::size_t edge_no(const edge_type& e) const
 		{
@@ -312,151 +333,191 @@ namespace LP_MP {
 			return contract(edge_begin, edge_end, standard_merge_func);
 		}
 
+        void check_graph() const
+        {
+            for(std::size_t i=0; i<edges_.size(); ++i) {
+                // check that graph is simple 
+                assert(std::is_sorted(edges_[i].begin(), edges_[i].end()));
 
-		// bfs search
-		/*
-		struct bfs_data {
-			struct item { std::size_t parent; std::size_t flag; };
-			bfs_data(const graph& g) 
-			{
-				d.resize(g.size());
-				for(INDEX i=0; i<d.size(); ++i) {
-					d[i].flag = 0;
-				}
-				flag1 = 0;
-				flag2 = 1;
-			}
-			void reset() 
-			{
-				visit.clear();
-				flag1 += 2;
-				flag2 += 2; 
-			}
-			item& operator[](const INDEX i) { return d[i]; }
+                // check sister pointers have been set correctly
+                for(auto edge_it=edges_[i].begin(); edge_it!=edges_[i].end(); ++edge_it) {
+                    assert(&edge_it->sister().sister() == &(*edge_it));
+                    assert(edge_it->tail() == i);
+                    if(edge_it+1 != edges_[i].end()) {
+                        assert(edge_it->head() < (edge_it+1)->head());
+                    } 
+                }
 
-			void label1(const INDEX i) { d[i].flag = flag1; }
-			void label2(const INDEX i) { d[i].flag = flag2; }
-			bool labelled(const INDEX i) const { return Labelled1(i) || Labelled2(i); }
-			bool labelled1(const INDEX i) const { return d[i].flag == flag1; }
-			bool labelled2(const INDEX i) const { return d[i].flag == flag2; }
+                // check access with indices
+                for(std::size_t e=0; e<edges_[i].size(); ++e) {
+                    assert(edges_(i,e).tail() == i);
+                    assert(edges_(i,e).sister_->sister_ == &edges_(i,e));
+                    assert(edge_present(i,edges_(i,e).head()));
+                    assert(edge_no(&(edges_(i,e))) == e);
+                }
+            }
+        }
 
-			std::size_t& parent(const INDEX i) { return d[i].parent; }
-			std::size_t parent(const INDEX i) const { return d[i].parent; }
+        private:
+        two_dim_variable_array<edge_type> edges_;
+    };
 
-			std::tuple<REAL,std::vector<INDEX>> TracePath(const INDEX i1, const INDEX i2, const REAL cost_i1i2) const 
-			{
-				REAL c = cost_i1i2;
-				std::vector<INDEX> path({i1});
-				INDEX j=i1;
-				while(Parent(j) != j) {
-					c = std::min(c, Cost(j) );
-					j = Parent(j);
-					path.push_back(j);
-				}
-				std::reverse(path.begin(),path.end());
-				path.push_back(i2);
-				j=i2;
-				while(Parent(j) != j) {
-					c = std::min(c, Cost(j) );
-					j = Parent(j);
-					path.push_back(j);
-				}
+    template<typename EDGE_TYPE>
+    std::vector<std::size_t> nodes_of_path(const std::vector<EDGE_TYPE*>& edges)
+    {
+        assert(edges.size() > 0);
+        std::vector<std::size_t> path;
+        path.reserve(edges.size()+1);
+        path.push_back(edges[0]->tail());
+        for(std::size_t i=0; i<edges.size()-1; ++i) { assert(edges[i]->head() == edges[i+1]->tail()); }
+        for(auto* e : edges) {
+            path.push_back(e->head());
+        }
+        return path;
+    }
 
-				return std::move(std::make_tuple(c,std::move(path)));
-			}
+    // bfs search
+    template<typename GRAPH>
+    struct bfs_data {
+        using edge_type = typename GRAPH::edge_type;
+        using edge_information = typename GRAPH::edge_information;
 
-			//static auto no_mask_op = [](const INDEX i, const INDEX j, const REAL weight) { return true; };
-			static bool no_mask_op(const INDEX, const INDEX, const REAL) { return true;}
+        struct item { 
+            edge_information e;
+            std::size_t parent;
+            std::size_t flag; 
+        };
 
-			// do bfs with thresholded costs and iteratively lower threshold until enough cycles are found
-			// only consider edges that have cost equal or larger than th
-			std::tuple<REAL, std::vector<INDEX>> FindPath(const INDEX startNode, const INDEX endNode, const Graph& g, const REAL th = 0.0)
-			{
-				return FindPath(startNode, endNode, g, th, no_mask_op);
-			}
+        bfs_data(const GRAPH& _g) : g(_g)
+        {
+            g.check_graph();
+            d.resize(g.no_nodes());
+            for(auto& i : d) { i.flag = 0; }
+            flag1 = 0;
+            flag2 = 1;
+        }
+        void reset() 
+        {
+            visit.clear();
+            flag1 += 2;
+            flag2 += 2; 
+        }
+        item& operator[](const std::size_t i) { return d[i]; }
 
-			template<typename MASK_OP>
-				std::tuple<REAL,std::vector<INDEX>> 
-				FindPath(
-						const INDEX startNode, const INDEX endNode, const Graph& g, const REAL th,
-						MASK_OP mask_op
-					)
-				{
-					assert(startNode != endNode);
-					assert(startNode < g.size() && endNode < g.size());
-					Reset();
-					visit.push_back({startNode, 0});
-					Label1(startNode);
-					Parent(startNode) = startNode;
-					Cost(startNode) = std::numeric_limits<REAL>::infinity();
-					visit.push_back({endNode, 0});
-					Label2(endNode);
-					Parent(endNode) = endNode;
-					Cost(endNode) = std::numeric_limits<REAL>::infinity();
+        void label1(const std::size_t i) { d[i].flag = flag1; }
+        void label2(const std::size_t i) { d[i].flag = flag2; }
+        bool labelled(const std::size_t i) const { return labelled1(i) || labelled2(i); }
+        bool labelled1(const std::size_t i) const { return d[i].flag == flag1; }
+        bool labelled2(const std::size_t i) const { return d[i].flag == flag2; }
 
-					while(!visit.empty()) {
-						const INDEX i = visit.front()[0];
-						const INDEX distance = visit.front()[1];
-						visit.pop_front();
+        std::size_t& parent(const std::size_t i) { return d[i].parent; }
+        std::size_t parent(const std::size_t i) const { return d[i].parent; } 
 
-						assert(g[i].begin() < g[i].end());
+        template<typename EDGE_OP>
+        std::vector<std::size_t> trace_path(const std::size_t i1, const std::size_t i2, EDGE_OP edge_op) const
+        {
+            assert(i1 != i2);
 
-						if(Labelled1(i)) {
-							for(auto* a=g[i].begin(); a->cost>=th && a!=g[i].end(); ++a) { 
-								auto* head = a->head;
-								const INDEX j = g[head];
+            std::vector<std::size_t> path;
+            path.push_back(i1);
+            std::size_t j=i1;
+            while(parent(j) != j) {
+                edge_op(j, parent(j), d[j].e);
+                j = parent(j);
+                path.push_back(j);
+            }
+            std::reverse(path.begin(),path.end());
+            path.push_back(i2);
+            j=i2;
+            while(parent(j) != j) {
+                edge_op(j, parent(j), d[j].e);
+                j = parent(j);
+                path.push_back(j);
+            }
 
-								if(mask_op(i,j,a->cost)) {
-
-									if(!Labelled(j)) {
-										visit.push_back({j, distance+1});
-										Parent(j) = i;
-										Cost(j) = a->cost;
-										Label1(j);
-									} else if(Labelled2(j)) { // shortest path found
-										// trace back path from j to endNode and from i to startNode
-										return std::move(TracePath(i,j, a->cost));
-									}
-
-								}
-							}
-						} else {
-							assert(Labelled2(i));
-							for(auto* a=g[i].begin(); a->cost>=th && a!=g[i].end(); ++a) { 
-								auto* head = a->head;
-								const INDEX j = g[head];
-
-								if(mask_op(i,j,a->cost)) {
-
-									if(!Labelled(j)) {
-										visit.push_back({j, distance+1});
-										Parent(j) = i;
-										Cost(j) = a->cost;
-										Label2(j);
-									} else if(Labelled1(j)) { // shortest path found
-										// trace back path from j to endNode and from i to startNode
-										return std::move(TracePath(i,j, a->cost));
-									}
-
-								}
-							}
-						}
+            return path;
+        }
 
 
-					}
-					return std::make_tuple(-std::numeric_limits<REAL>::infinity(),std::vector<INDEX>(0));
-				}
+        // do bfs with thresholded costs and iteratively lower threshold until enough cycles are found
+        // only consider edges that have cost equal or larger than th
+        constexpr static auto no_mask_op = [](const auto i, const auto j, const auto& edge_info) -> bool { return true; };
+        constexpr static auto no_edge_op = [](const auto i, const auto j, const edge_information& edge_info) {};
+        auto find_path(const std::size_t start_node, const std::size_t end_node)
+        {
+            return find_path(start_node, end_node, no_mask_op, no_edge_op);
+        }
 
-			private:
-			std::vector<item> d;
-			std::deque<std::array<std::size_t,2>> visit; // node number, distance from start or end 
-			std::size_t flag1, flag2;
-		};
-	*/
+        template<typename MASK_OP, typename EDGE_OP>
+        std::vector<std::size_t> find_path(const std::size_t start_node, const std::size_t end_node, MASK_OP mask_op, EDGE_OP edge_op)
+        {
+            assert(start_node != end_node);
+            assert(start_node < g.no_nodes() && end_node < g.no_nodes());
+            reset();
+            visit.push_back({start_node, 0});
+            label1(start_node);
+            parent(start_node) = start_node;
+            visit.push_back({end_node, 0});
+            label2(end_node);
+            parent(end_node) = end_node;
 
-		private:
-		two_dim_variable_array<edge_type> edges_;
-	};
+            while(!visit.empty()) {
+                const std::size_t i = visit.front()[0];
+                const std::size_t distance = visit.front()[1];
+                visit.pop_front();
+
+                assert(g.begin(i) < g.end(i));
+
+                if(labelled1(i)) {
+                    for(auto a_it=g.begin(i); a_it!=g.end(i); ++a_it) { 
+                        const std::size_t j = a_it->head();
+
+                        if(mask_op(i,j,*a_it)) {
+
+                            if(!labelled(j)) {
+                                visit.push_back({j, distance+1});
+                                d[j].e = a_it->edge();
+                                parent(j) = i;
+                                label1(j);
+                            } else if(labelled2(j)) { // shortest path found
+                                // trace back path from j to end_node and from i to start_node
+                                return trace_path(i,j, edge_op);
+                            }
+
+                        }
+                    }
+                } else {
+                    assert(labelled2(i));
+                    for(auto a_it=g.begin(i); a_it!=g.end(i); ++a_it) { 
+                        const std::size_t j = a_it->head();
+
+                        if(mask_op(i,j,a_it->edge())) {
+
+                            if(!labelled(j)) {
+                                visit.push_back({j, distance+1});
+                                d[j].e = a_it->edge();
+                                parent(j) = i;
+                                label2(j);
+                            } else if(labelled1(j)) { // shortest path found
+                                // trace back path from j to end_node and from i to start_node
+                                return trace_path(i,j, edge_op);
+                            }
+
+                        }
+                    }
+                }
+
+
+            }
+            return std::vector<std::size_t>({});
+        }
+
+        private:
+        std::vector<item> d;
+        std::deque<std::array<std::size_t,2>> visit; // node number, distance from start or end 
+        std::size_t flag1, flag2;
+        const GRAPH& g;
+    };
 
 } // namespace LP_MP
 

@@ -25,6 +25,7 @@ static std::vector<std::string> default_solver_options = {
 // binds together problem constructors and solver and organizes input/output
 // base class for solvers with primal rounding, e.g. LP-based rounding heuristics, message passing rounding and rounding provided by problem constructors.
 
+
 template<typename LP_TYPE, typename VISITOR>
 class Solver {
 
@@ -147,7 +148,7 @@ public:
 
       for_each_tuple(this->problemConstructor_, [&ss,this](auto* l) {
             using pc_type = typename std::remove_pointer<decltype(l)>::type;
-            if constexpr(SolverType::CanWritePrimalIntoString<pc_type>()) {
+            if constexpr(this->CanWritePrimalIntoString<pc_type>()) {
                 l->WritePrimal(ss);
             }
       }); 
@@ -156,8 +157,8 @@ public:
       return std::move(sol);
    }
 
-   // invoke the corresponding functions of problem constructors
    LP_MP_FUNCTION_EXISTENCE_CLASS(HasCheckPrimalConsistency,CheckPrimalConsistency)
+   // invoke the corresponding functions of problem constructors
    template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanCheckPrimalConsistency()
@@ -170,7 +171,7 @@ public:
       bool feasible = true;
       for_each_tuple(this->problemConstructor_, [this,&feasible](auto* l) {
             using pc_type = typename std::remove_pointer<decltype(l)>::type;
-            if constexpr(SolverType::CanCheckPrimalConsistency<pc_type>()) {
+            if constexpr(this->CanCheckPrimalConsistency<pc_type>()) {
                   if(feasible) {
                      const bool feasible_pc = l->CheckPrimalConsistency();
                      if(!feasible_pc) {
@@ -202,7 +203,7 @@ public:
       INDEX constraints_added = 0;
       for_each_tuple(this->problemConstructor_, [this,maxConstraints,&constraints_added](auto* l) {
             using pc_type = typename std::remove_pointer<decltype(l)>::type;
-            if constexpr(SolverType::CanTighten<pc_type>()) {
+            if constexpr(this->CanTighten<pc_type>()) {
                   constraints_added += l->Tighten(maxConstraints);
             }
        });
@@ -224,9 +225,7 @@ public:
    visitor_has_solution()
    {
       return has_solution<VISITOR, void, std::string>();
-   }
-   
-
+   } 
    
    int Solve()
    {
@@ -287,21 +286,21 @@ public:
       }
    } 
 
+   LP_MP_FUNCTION_EXISTENCE_CLASS(HasEnd,End) 
    // called after last iteration
-   LP_MP_FUNCTION_EXISTENCE_CLASS(HasEnd,End)
    template<typename PROBLEM_CONSTRUCTOR>
    constexpr static bool
    CanCallEnd()
    {
       return HasEnd<PROBLEM_CONSTRUCTOR, void>();
-   }
+   } 
 
    virtual void End() 
    {
       for_each_tuple(this->problemConstructor_, [this](auto* l) {
             using pc_type = typename std::remove_pointer<decltype(l)>::type;
-            if constexpr(SolverType::CanCallEnd<pc_type>()) {
-                  l->End();
+            if constexpr(this->CanCallEnd<pc_type>()) {
+                l->End();
             }
       }); 
       lp_.End();
