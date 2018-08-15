@@ -2,6 +2,8 @@
 #define LP_MP_THREE_DIMENSIONAL_VARIABLE_ARRAY_HXX
 
 #include <vector>
+#include <array>
+#include <cassert>
 
 namespace LP_MP {
 
@@ -46,26 +48,26 @@ public:
         data_.resize(size);
     }
 
-    T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) { 
+    T& operator()(const std::size_t x1, const std::size_t x2, const std::size_t x3) { 
         assert(x1<dim1() && x2<dim2(x1) && x3<dim3(x1));
         const auto offset = dimensions_[x1].offset;
         return data_[offset + x2*dim3(x1) + x3]; 
     }
-    const T& operator()(const INDEX x1, const INDEX x2, const INDEX x3) const 
+    const T& operator()(const std::size_t x1, const std::size_t x2, const std::size_t x3) const 
     {
         assert(x1<dim1() && x2<dim2(x1) && x3<dim3(x1));
         const auto offset = dimensions_[x1].offset;
         return data_[offset + x2*dim3(x1) + x3]; 
     }      
 
-    const INDEX dim1() const { return dimensions_.size(); }
-    const INDEX size() const { return dim1(); }
-    const INDEX dim2(const INDEX x1) const
+    const std::size_t dim1() const { return dimensions_.size(); }
+    const std::size_t size() const { return dim1(); }
+    const std::size_t dim2(const std::size_t x1) const
     {
         assert(x1<dim1());
         return dimensions_[x1][0];
     }
-    const INDEX dim3(const INDEX x1) const
+    const std::size_t dim3(const std::size_t x1) const
     {
         assert(x1<dim1());
         return dimensions_[x1][1];
