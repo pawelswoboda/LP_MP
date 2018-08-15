@@ -15,9 +15,9 @@ public:
     three_dimensional_variable_array() {}
 
     template<typename ITERATOR>
-    three_dimensional_variable_array(ITERATOR size_begin, ITERATOR size_end)
+    three_dimensional_variable_array(ITERATOR size_begin, ITERATOR size_end, T value = 0)
     : dimensions_(std::distance(size_begin, size_end)),
-    data_(size(size_begin, size_end), 0)
+    data_(size(size_begin, size_end), value)
     {
         std::size_t offset = 0;
         for(std::size_t i=0; i<std::distance(size_begin, size_end); ++i) {
@@ -29,7 +29,7 @@ public:
     }
 
     template<typename ITERATOR>
-    void resize(ITERATOR size_begin, ITERATOR size_end)
+    void resize(ITERATOR size_begin, ITERATOR size_end, T value = 0)
     {
         assert(dimensions_.size() == 0);
         dimensions_.resize(std::distance(size_begin, size_end));
@@ -45,7 +45,7 @@ public:
             size += dimensions_[i][0] * dimensions_[i][1];
         } 
 
-        data_.resize(size);
+        data_.resize(size, value);
     }
 
     T& operator()(const std::size_t x1, const std::size_t x2, const std::size_t x3) { 
