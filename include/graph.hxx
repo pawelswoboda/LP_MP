@@ -172,12 +172,12 @@ namespace LP_MP {
 		void for_each_triangle(LAMBDA f) const
 		{
 			struct triangle_intersection_type {
-				triangle_intersection_type(std::size_t _k, edge_type* _ik, edge_type* _jk) : k(_k), ik(_ik), jk(_jk) {}
+				triangle_intersection_type(std::size_t _k, const edge_type* _ik, const edge_type* _jk) : k(_k), ik(_ik), jk(_jk) {}
 				std::size_t k;
-				edge_type* ik;
-				edge_type* jk;
+				const edge_type* ik;
+				const edge_type* jk;
 			};
-			auto edge_intersection_merge = [](edge_type& e1, edge_type& e2) -> triangle_intersection_type { 
+			auto edge_intersection_merge = [](const edge_type& e1, const edge_type& e2) -> triangle_intersection_type { 
 				assert(e1.head() == e2.head());
 				const auto k = e1.head();
 				return triangle_intersection_type(k, &e1, &e2);

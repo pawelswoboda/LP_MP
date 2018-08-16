@@ -19,10 +19,8 @@
 
 namespace LP_MP {
 
-   // to do: use type definitions for SIMD types
-
    // data types for all floating point/integer operations 
-   // float is inaccurate for large problems and I observed oscillation. Possibly, soem sort of numerical stabilization needs to be employed
+   // float is inaccurate for large problems and I observed oscillation. Possibly, some sort of numerical stabilization needs to be employed
    //using REAL = float;
    //constexpr std::size_t REAL_ALIGNMENT = 8;
    //using REAL_VECTOR = simdpp::float32<REAL_ALIGNMENT>;
@@ -31,15 +29,15 @@ namespace LP_MP {
    constexpr std::size_t REAL_ALIGNMENT = 4;
    using REAL_VECTOR = simdpp::float64<REAL_ALIGNMENT>;
 
-   using INDEX = unsigned int;
+   using INDEX = std::size_t;
    using UNSIGNED_INDEX = INDEX;
-   using SIGNED_INDEX = int; // note: must be the same as flow type in MinCost
+   using SIGNED_INDEX = long int; // note: must be the same as flow type in MinCost
    using SHORT_INDEX = unsigned char;
    using LONG_SIGNED_INDEX = long int;
    using LONG_INDEX = long unsigned int;
 
    enum class Chirality {left,right};
-   enum class MessageSendingType {SRMP,MPLP};
+   enum class MessageSendingType {SRMP,MPLP}; // TODO: remove
    enum class Direction {forward, backward};
 
    enum class message_passing_schedule {

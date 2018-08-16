@@ -63,7 +63,7 @@ void BuildIndexMaps(ITERATOR fIt, const ITERATOR fEndIt, std::map<F,I>& elemToIn
 {
    // do zrobienia: - reserve space, 
    //               - possibly use hash_map for speed
-   for(INDEX i=0; fIt+i!=fEndIt; ++i) {
+   for(std::size_t i=0; fIt+i!=fEndIt; ++i) {
       elemToIndex.insert(std::make_pair(*(fIt+i),i));
       indexToElem.insert(std::make_pair(i,*(fIt+i)));
    }
@@ -108,8 +108,8 @@ std::array<T,2> two_smallest_elements(ITERATOR begin, ITERATOR end)
   T smallest = std::numeric_limits<T>::infinity();
   T second_smallest = std::numeric_limits<T>::infinity();
   for(; begin!=end; ++begin) {
-    const REAL min = std::min(smallest, *begin);
-    const REAL max = std::max(smallest, *begin);
+    const auto min = std::min(smallest, *begin);
+    const auto max = std::max(smallest, *begin);
     smallest = min;
     second_smallest = std::min(max, second_smallest);
   }
@@ -122,8 +122,8 @@ std::array<T,2> two_largest_elements(ITERATOR begin, ITERATOR end)
   T largest = -std::numeric_limits<T>::infinity();
   T second_largest = -std::numeric_limits<T>::infinity();
   for(; begin!=end; ++begin) {
-    const REAL max = std::max(largest, *begin);
-    const REAL min = std::min(largest, *begin);
+    const auto max = std::max(largest, *begin);
+    const auto min = std::min(largest, *begin);
     largest = max;
     second_largest = std::max(min, second_largest);
   }
@@ -148,7 +148,7 @@ std::pair<T,T> SmallestValues(const A& v)
    assert(v.size() > 1);
    T min_val = std::numeric_limits<T>::infinity();
    T second_min_val = std::numeric_limits<T>::infinity();
-   for(INDEX i=0; i<v.size(); ++i) {
+   for(std::size_t i=0; i<v.size(); ++i) {
       
       assert(false); 
    }
@@ -169,16 +169,16 @@ void NormalizeVector(std::vector<T>& v)
 
 // compute permutation of v1 onto v2
 template<typename VECTOR>
-std::vector<INDEX> ComputePermutation(const VECTOR& v1, const VECTOR& v2)
+std::vector<std::size_t> ComputePermutation(const VECTOR& v1, const VECTOR& v2)
 {
    assert(v1.size() == v2.size());
    //assert(std::is_unique(v1));
-   std::map<typename std::remove_reference<typename std::remove_cv<decltype(v1[0])>::type>::type,INDEX> m;
-   for(INDEX i=0; i<v1.size(); ++i) {
+   std::map<typename std::remove_reference<typename std::remove_cv<decltype(v1[0])>::type>::type,std::size_t> m;
+   for(std::size_t i=0; i<v1.size(); ++i) {
       m.insert(std::make_pair(v1[i],i));
    }
-   std::vector<INDEX> perm(v1.size());
-   for(INDEX i=0; i<v2.size(); ++i) {
+   std::vector<std::size_t> perm(v1.size());
+   for(std::size_t i=0; i<v2.size(); ++i) {
       perm[i] = m[v2[i]]; 
    }
    return perm;

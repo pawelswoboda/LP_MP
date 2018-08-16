@@ -2331,7 +2331,6 @@ public:
       return FunctionExistence::HasMaximizePotential<FactorType,void>();
    }
 
-
    void UpdateFactorPrimal(const weight_slice& omega, const receive_slice& receive_mask, INDEX primal_access) final
    {
 #ifdef LP_MP_PARALLEL
@@ -2439,7 +2438,6 @@ public:
             }
       });
    }
-
 
    template<typename WEIGHT_VEC>
    void ReceiveMessages(const WEIGHT_VEC& receive_mask) 
@@ -2631,6 +2629,45 @@ public:
        return conditional_message_iterator<MSG_ITERATOR,WEIGHT_ITERATOR>(last_active_msg, weight_it); 
    }
 
+   template<typename MESSAGE_DISPATCHER_TYPE>
+   void send_messages_impl(const REAL omega = 1.0)
+   {
+      constexpr INDEX n = FactorContainerType::FindMessageDispatcherTypeIndex<MESSAGE_DISPATCHER_TYPE>();
+      if constexpr(MESSAGE_DISPATCHER_TYPE::sends_message_to_adjacent_factor()) {
+         auto msg_begin = std::get<n>(msg_).begin();
+         auto msg_end = std::get<n>(msg_).end();
+
+         if constexpr(MESSAGE_DISPATCHER_TYPE::CanCallSendMessages()) {
+
+            const auto no_messages = std::get<n>(msg_).size(); 
+
+            if(no_messages > 1) { 
+               MESSAGE_DISPATCHER_TYPE::SendMessages(factor_, msg_begin, msg_end, omega);
+            } else {
+               MESSAGE_DISPATCHER_TYPE::SendMessage(&factor_, *msg_begin, omega); 
+            } 
+         } else {
+            const auto individual_omega = omega/double(no_messages);
+            for(auto msg_it = msg_begin; msg_it != msg_end; ++msg_it) {
+               MESSAGE_DISPATCHER_TYPE::SendMessage(&factor_, *msg_it, individual_omega); 
+            }
+         } 
+      }
+   }
+
+   template<typename MESSAGE_TYPE>
+   void send_messages_to_left(const REAL omega = 1.0)
+   {
+      using message_dispatcher_type = MessageDispatcher<MESSAGE_TYPE, RightMessageFuncGetter>;
+      return send_messages_impl<message_dispatcher_type>(omega);
+   } 
+
+   template<typename MESSAGE_TYPE>
+   void send_messages_to_right(const REAL omega = 1.0)
+   {
+      using message_dispatcher_type = MessageDispatcher<MESSAGE_TYPE, LeftMessageFuncGetter>;
+      return send_messages_impl<message_dispatcher_type>(omega);
+   } 
 
    void call_send_messages(FactorType& factor, const REAL send_weight)
    {

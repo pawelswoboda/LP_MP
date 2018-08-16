@@ -17,7 +17,6 @@ class two_dim_variable_array
 public:
    two_dim_variable_array() {}
 
-/*
    template<typename T2>
    two_dim_variable_array(const two_dim_variable_array<T2>& data)
    {
@@ -26,7 +25,6 @@ public:
 	     initialize(data);
      }
    }
-   */
 
    template<typename T2>
    void initialize(const two_dim_variable_array<T2>& data) {
@@ -179,8 +177,19 @@ public:
    reverse_iterator rbegin() { return reverse_iterator(&data_[0],&offsets_.back()); }
    reverse_iterator rend() { return reverse_iterator(&data_[0],&offsets_[0]); }
 
-   auto size_begin() const { assert(offsets_.size() > 0); return offsets_.begin(); }
-   auto size_end() const { assert(offsets_.size() > 0); return offsets_.end()-1; }
+   struct size_iterator : public std::iterator_traits<const std::size_t*> {
+      size_iterator(const std::size_t* _offset) : offset(_offset) {}
+      std::size_t operator*() const { return *(offset+1) - *offset; } 
+      void operator++() { ++offset; }
+      auto operator-(const size_iterator it) const { return offset - it.offset; }
+      size_iterator operator-(const std::size_t i) const { size_iterator it(offset-i); return it; }
+      bool operator==(const size_iterator it) const { return offset == it.offset; }
+      bool operator!=(const size_iterator it) const { return !(*this == it); }
+      const std::size_t* offset;
+   };
+
+   auto size_begin() const { assert(offsets_.size() > 0); return size_iterator({&offsets_[0]}); }
+   auto size_end() const { assert(offsets_.size() > 0); return size_iterator({&offsets_.back()}); }
 
    void set(const T& val)
    {

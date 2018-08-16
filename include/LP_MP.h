@@ -1382,7 +1382,7 @@ void LP<FMC>::ComputeAnisotropicWeights( FACTOR_ITERATOR factorIt, FACTOR_ITERAT
               assert(k_send == factor->no_send_messages());
 
               // set omega reweighting values
-              const auto no_send_messages_anisotropic = std::count(omega[c].begin(), omega[c].end(), 1.0);
+              const std::size_t no_send_messages_anisotropic = std::count(omega[c].begin(), omega[c].end(), 1.0);
               const auto no_send_messages = factor->no_send_messages();
               const auto leave_weight = [&]() {
                   if(no_receiving_factors_later[factor_index] > 0) return 1.0;
