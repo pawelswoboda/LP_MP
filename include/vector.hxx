@@ -32,6 +32,7 @@ public:
        os << v[i] << " ";
      }
      os << "\n";
+     return os;
    }
 };
 
@@ -55,6 +56,7 @@ public:
        }
        os << "\n";
      }
+     return os;
    }
 };
 

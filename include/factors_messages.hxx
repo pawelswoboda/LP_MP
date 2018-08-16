@@ -383,6 +383,188 @@ struct next_msg_container_selector {
        
 };
 
+// this view of the message container is given to left and right factor respectively when receiving or sending messages
+class test_zero_message_val {
+   public:
+      test_zero_message_val()
+      {}
+
+      test_zero_message_val& operator-=(const REAL x)
+      {
+         assert( std::abs(x) <= eps);
+         return *this;
+      }
+      test_zero_message_val& operator+=(const REAL x)
+      {
+         assert(false);
+         return *this;
+      }
+};
+
+
+template<typename MESSAGE_CONTAINER_TYPE>
+class test_zero_message : public MESSAGE_CONTAINER_TYPE {
+   public:
+      test_zero_message_val operator[](const INDEX i) 
+      {
+         return test_zero_message_val();
+      }
+
+      template<typename ARRAY>
+      test_zero_message& operator-=(const ARRAY& diff) 
+      {
+         for(std::size_t i=0; i<diff.size(); ++i) {
+            assert( std::abs(diff[i]) <= eps );
+         }
+         return *this;
+      }
+};
+
+// class for storing a callback upon new assignment of message: update left and right factors
+// convention is as follows: original message is for right factor. Inverted message is for left one
+template<typename MESSAGE_CONTAINER_TYPE, Chirality CHIRALITY>
+class MsgVal {
+   public:
+      MsgVal(MESSAGE_CONTAINER_TYPE* msg, const INDEX dim) : 
+         msg_(msg), 
+         dim_(dim)
+   {}
+      // do zrobienia: do not support this operation! Goal is to not hold messages anymore, except for implicitly held reparametrizations.
+      /*
+         MsgVal& operator=(const REAL x) __attribute__ ((always_inline))
+         {
+         assert(false);
+         const REAL diff = x - msg_->operator[](dim_);
+      // set new message
+      static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) = x;
+      // propagate difference to left and right factor
+      msg_->RepamLeft( diff, dim_);
+      msg_->RepamRight( diff, dim_);
+      return *this;
+      }
+       */
+      MsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
+      {
+         if(CHIRALITY == Chirality::right) { // message is computed by right factor
+            msg_->RepamLeft( +x, dim_);
+            msg_->RepamRight(-x, dim_);
+         } else if (CHIRALITY == Chirality::left) { // message is computed by left factor
+            msg_->RepamLeft(  -x, dim_);
+            msg_->RepamRight( +x, dim_);
+            //msg_->RepamLeft( +x, dim_);
+            //msg_->RepamRight( +x, dim_);
+         } else {
+            assert(false);
+         }
+         return *this;
+      }
+      MsgVal& operator+=(const REAL x) __attribute__ ((always_inline))
+      {
+         assert(false);
+         if(CHIRALITY == Chirality::right) { // message is computed by right factor
+            msg_->RepamLeft( x, dim_);
+            msg_->RepamRight( x, dim_);
+         } else if(CHIRALITY == Chirality::left) { // message is computed by left factor
+            msg_->RepamLeft( x, dim_);
+            msg_->RepamRight( x, dim_);
+            //msg_->RepamLeft( -x, dim_);
+            //msg_->RepamRight( -x, dim_);
+         } else {
+            assert(false);
+         }
+         return *this;
+      }
+      // do zrobienia: this value should never be used. Remove function
+      //operator REAL() const __attribute__ ((always_inline)) { return static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_); }
+   private:
+      MESSAGE_CONTAINER_TYPE* const msg_;
+      const INDEX dim_;
+};
+
+
+   // this view of the message container is given to left and right factor respectively when receiving or sending messages
+   template<typename MESSAGE_CONTAINER_TYPE, Chirality CHIRALITY>
+   class MessageContainerView : public MESSAGE_CONTAINER_TYPE {
+   public:
+      //using MessageContainerType;
+      MsgVal<MESSAGE_CONTAINER_TYPE,CHIRALITY> operator[](const INDEX i) 
+      {
+         return MsgVal<MESSAGE_CONTAINER_TYPE,CHIRALITY>(this,i);
+      }
+
+      template<typename ARRAY>
+      MESSAGE_CONTAINER_TYPE& operator-=(const ARRAY& diff) {
+        // note: order of below operations is important: When the message is e.g. just the potential, we must reparametrize the other side first!
+        if(CHIRALITY == Chirality::right) {
+          this->RepamLeft(diff);
+          this->RepamRight(-diff);
+        } else if(CHIRALITY == Chirality::left) {
+          this->RepamRight(diff);
+          this->RepamLeft(-diff);
+        } else {
+          assert(false);
+        }
+        return *this;
+      }
+
+   };
+
+   // for primal computation: record message change only in one side and into a special array
+   template<typename MESSAGE_CONTAINER_TYPE, Chirality CHIRALITY>
+   class OneSideMsgVal {
+   public:
+      OneSideMsgVal(MESSAGE_CONTAINER_TYPE* msg, const INDEX dim) : 
+         msg_(msg), 
+         dim_(dim)
+      {}
+
+      OneSideMsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
+      {
+         if(CHIRALITY == Chirality::right) { // message is received by right factor
+            msg_->RepamRight(-x, dim_);
+         } else if (CHIRALITY == Chirality::left) { // message is received by left factor
+            msg_->RepamLeft(-x, dim_);
+         } else {
+            assert(false);
+         }
+         return *this;
+      }
+
+      OneSideMsgVal& operator+=(const REAL x) __attribute__ ((always_inline))
+      {
+         assert(false);
+         return *this;
+      }
+
+   private:
+      MESSAGE_CONTAINER_TYPE* const msg_;
+      const INDEX dim_;
+   };
+
+// this view is given to receive restricted message operations. 
+// Reparametrization is recorded only on one side
+template<typename MESSAGE_CONTAINER_TYPE, Chirality CHIRALITY>
+class OneSideMessageContainerView : public MESSAGE_CONTAINER_TYPE {
+   public:
+      //using MessageContainerType;
+      OneSideMsgVal<MESSAGE_CONTAINER_TYPE, CHIRALITY> operator[](const INDEX i) 
+      {
+         return OneSideMsgVal<MESSAGE_CONTAINER_TYPE, CHIRALITY>(this,i);
+      }
+
+      template<typename ARRAY>
+         MESSAGE_CONTAINER_TYPE& operator-=(const ARRAY& diff) {
+            if(CHIRALITY == Chirality::right) {
+               this->RepamRight(-diff);
+            } else if(CHIRALITY == Chirality::left) {
+               this->RepamLeft(-diff);
+            } else {
+               assert(false);
+            }
+            return *this;
+         } 
+};
+
 
 // Class holding message and left and right factor
 // do zrobienia: possibly replace {LEFT|RIGHT}_FACTOR_NO by their type
@@ -503,40 +685,6 @@ public:
        return m; 
    }
 
-   // this view of the message container is given to left and right factor respectively when receiving or sending messages
-   class test_zero_message_val {
-   public:
-      test_zero_message_val()
-      {}
-
-      test_zero_message_val& operator-=(const REAL x)
-      {
-          assert( std::abs(x) <= eps);
-          return *this;
-      }
-      test_zero_message_val& operator+=(const REAL x)
-      {
-         assert(false);
-         return *this;
-      }
-   };
-
-   class test_zero_message : public MessageContainerType {
-   public:
-      test_zero_message_val operator[](const INDEX i) 
-      {
-         return test_zero_message_val();
-      }
-
-      template<typename ARRAY>
-      test_zero_message& operator-=(const ARRAY& diff) {
-        for(std::size_t i=0; i<diff.size(); ++i) {
-            assert( std::abs(diff[i]) <= eps );
-        }
-        return *this;
-      }
-   };
-
    void send_message_to_left(const REAL omega = 1.0) 
    {
       send_message_to_left(rightFactor_->GetFactor(), omega);
@@ -547,7 +695,7 @@ public:
      test_send_message_to_left();
 #endif
 
-     msg_op_.send_message_to_left(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega); 
+     msg_op_.send_message_to_left(*r, *static_cast<MessageContainerView<MessageContainerType,Chirality::right>*>(this), omega); 
    }
 
    void test_send_message_to_left()
@@ -556,9 +704,9 @@ public:
        // rewire rightFactor_, so that a message to left will reparametrize the copy
        RightFactorContainer* r = rightFactor_;
        rightFactor_ = &right_factor_copy;
-       msg_op_.send_message_to_left(*right_factor_copy.GetFactor(), *static_cast<OneSideMessageContainerView<Chirality::right>*>(this), 1.0);
+       msg_op_.send_message_to_left(*right_factor_copy.GetFactor(), *static_cast<OneSideMessageContainerView<MessageContainerType, Chirality::right>*>(this), 1.0);
        // send again the message. It should be zero now.
-       msg_op_.send_message_to_left(*right_factor_copy.GetFactor(), *static_cast<test_zero_message*>(this), 1.0); 
+       msg_op_.send_message_to_left(*right_factor_copy.GetFactor(), *static_cast<test_zero_message<MessageContainerType>*>(this), 1.0); 
        rightFactor_ = r;
    }
 
@@ -572,7 +720,7 @@ public:
      auto& mtx = GetLeftFactor()->mutex_;
      std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock()) {
-       msg_op_.send_message_to_left(*r, *static_cast<MessageContainerView<Chirality::right>*>(this), omega); 
+       msg_op_.send_message_to_left(*r, *static_cast<MessageContainerView<MessageContainerType,Chirality::right>*>(this), omega); 
      } else {
 #ifndef NDEBUG
        if(debug()) {
@@ -608,7 +756,7 @@ public:
      test_send_message_to_right();
 #endif
 
-     msg_op_.send_message_to_right(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega); 
+     msg_op_.send_message_to_right(*l, *static_cast<MessageContainerView<MessageContainerType,Chirality::left>*>(this), omega); 
    }
 
    void test_send_message_to_right()
@@ -617,9 +765,9 @@ public:
        // rewire rightFactor_, so that a message to right will reparametrize the copy
        LeftFactorContainer* r = leftFactor_;
        leftFactor_ = &left_factor_copy;
-       msg_op_.send_message_to_right(*left_factor_copy.GetFactor(), *static_cast<OneSideMessageContainerView<Chirality::left>*>(this), 1.0);
+       msg_op_.send_message_to_right(*left_factor_copy.GetFactor(), *static_cast<OneSideMessageContainerView<MessageContainerType, Chirality::left>*>(this), 1.0);
        // send again the message. It should be zero now.
-       msg_op_.send_message_to_right(*left_factor_copy.GetFactor(), *static_cast<test_zero_message*>(this), 1.0); 
+       msg_op_.send_message_to_right(*left_factor_copy.GetFactor(), *static_cast<test_zero_message<MessageContainerType>*>(this), 1.0); 
        leftFactor_ = r;
    }
 
@@ -633,7 +781,7 @@ public:
      auto& mtx = GetRightFactor()->mutex_;
      std::unique_lock<std::recursive_mutex> lck(mtx,std::defer_lock);
      if(lck.try_lock()) {
-       msg_op_.send_message_to_right(*l, *static_cast<MessageContainerView<Chirality::left>*>(this), omega); 
+       msg_op_.send_message_to_right(*l, *static_cast<MessageContainerView<MessageContainerType,Chirality::left>*>(this), omega); 
      } else {
 #ifndef NDEBUG
        if(debug()) {
@@ -699,7 +847,7 @@ public:
    void ReceiveRestrictedMessageFromRightContainer()
    {
       rightFactor_->conditionally_init_primal(leftFactor_->primal_access_);
-      msg_op_.ReceiveRestrictedMessageFromRight(*(rightFactor_->GetFactor()), *static_cast<OneSideMessageContainerView<Chirality::left>*>(this));
+      msg_op_.ReceiveRestrictedMessageFromRight(*(rightFactor_->GetFactor()), *static_cast<OneSideMessageContainerView<MessageContainerType, Chirality::left>*>(this));
    }
 
    constexpr static bool 
@@ -738,7 +886,7 @@ public:
    void ReceiveRestrictedMessageFromLeftContainer()
    {
       leftFactor_->conditionally_init_primal(rightFactor_->primal_access_);
-      msg_op_.ReceiveRestrictedMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<OneSideMessageContainerView<Chirality::right>*>(this));
+      msg_op_.ReceiveRestrictedMessageFromLeft(*(leftFactor_->GetFactor()), *static_cast<OneSideMessageContainerView<MessageContainerType, Chirality::right>*>(this));
    }
 
 
@@ -787,17 +935,15 @@ public:
       return FunctionExistence::HasSendMessagesToLeft<MessageType, void, RightFactorType, MSG_ARRAY_ITERATOR, MSG_ARRAY_ITERATOR, REAL>();
    }
 
-   template<Chirality C> class MessageContainerView; // forward declaration. Put MessageIteratorView after definition of MessageContainerView
-
    template<Chirality CHIRALITY, typename MESSAGE_ITERATOR>
    class MessageIteratorView {
        public:
            MessageIteratorView(MESSAGE_ITERATOR it) : it_(it) {} 
-           const MessageContainerView<CHIRALITY>& operator*() const {
-               return *(static_cast<MessageContainerView<CHIRALITY>*>( &*it_ )); 
+           const MessageContainerView<MessageContainerType,CHIRALITY>& operator*() const {
+               return *(static_cast<MessageContainerView<MessageContainerType,CHIRALITY>*>( &*it_ )); 
            }
-           MessageContainerView<CHIRALITY>& operator*() {
-               return *(static_cast<MessageContainerView<CHIRALITY>*>( &*it_ )); 
+           MessageContainerView<MessageContainerType,CHIRALITY>& operator*() {
+               return *(static_cast<MessageContainerView<MessageContainerType,CHIRALITY>*>( &*it_ )); 
            }
            MessageIteratorView<CHIRALITY,MESSAGE_ITERATOR>& operator++() {
                ++it_;
@@ -813,17 +959,15 @@ public:
            MESSAGE_ITERATOR it_;
    };
 
-   template<Chirality CHIRALITY> class OneSideMessageContainerView; // forward declaration
-
    template<Chirality CHIRALITY, typename MESSAGE_ITERATOR>
    class one_sided_message_iterator_view {
        public:
            one_sided_message_iterator_view(MESSAGE_ITERATOR it) : it_(it) {} 
-           const OneSideMessageContainerView<CHIRALITY>& operator*() const {
-               return *(static_cast<OneSideMessageContainerView<CHIRALITY>*>( &*it_ )); 
+           const OneSideMessageContainerView<MessageContainerType, CHIRALITY>& operator*() const {
+               return *(static_cast<OneSideMessageContainerView<MessageContainerType, CHIRALITY>*>( &*it_ )); 
            }
-           OneSideMessageContainerView<CHIRALITY>& operator*() {
-               return *(static_cast<OneSideMessageContainerView<CHIRALITY>*>( &*it_ )); 
+           OneSideMessageContainerView<MessageContainerType, CHIRALITY>& operator*() {
+               return *(static_cast<OneSideMessageContainerView<MessageContainerType, CHIRALITY>*>( &*it_ )); 
            }
            one_sided_message_iterator_view<CHIRALITY,MESSAGE_ITERATOR>& operator++() {
                ++it_;
@@ -845,11 +989,11 @@ public:
        public:
            test_zero_message_iterator_view(MESSAGE_ITERATOR it) : it_(it) {} 
 
-           const test_zero_message& operator*() const {
-               return *static_cast<test_zero_message*>(&*it_);
+           const test_zero_message<MessageContainerType>& operator*() const {
+               return *static_cast<test_zero_message<MessageContainerType>*>(&*it_);
            }
-           test_zero_message& operator*() {
-               return *static_cast<test_zero_message*>(&*it_);
+           test_zero_message<MessageContainerType>& operator*() {
+               return *static_cast<test_zero_message<MessageContainerType>*>(&*it_);
            }
            test_zero_message_iterator_view<MESSAGE_ITERATOR>& operator++() {
                ++it_;
@@ -1353,152 +1497,6 @@ public:
       assert(dynamic_cast<RightFactorContainer*>(r));
       rightFactor_ = static_cast<RightFactorContainer*>(r); 
    }
-
-   // class for storing a callback upon new assignment of message: update left and right factors
-   // convention is as follows: original message is for right factor. Inverted message is for left one
-   template<Chirality CHIRALITY>
-   class MsgVal {
-   public:
-      MsgVal(MessageContainerType* msg, const INDEX dim) : 
-         msg_(msg), 
-         dim_(dim)
-      {}
-      // do zrobienia: do not support this operation! Goal is to not hold messages anymore, except for implicitly held reparametrizations.
-      /*
-      MsgVal& operator=(const REAL x) __attribute__ ((always_inline))
-      {
-         assert(false);
-         const REAL diff = x - msg_->operator[](dim_);
-         // set new message
-         static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_) = x;
-         // propagate difference to left and right factor
-         msg_->RepamLeft( diff, dim_);
-         msg_->RepamRight( diff, dim_);
-         return *this;
-      }
-      */
-      MsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
-      {
-         if(CHIRALITY == Chirality::right) { // message is computed by right factor
-            msg_->RepamLeft( +x, dim_);
-            msg_->RepamRight(-x, dim_);
-         } else if (CHIRALITY == Chirality::left) { // message is computed by left factor
-            msg_->RepamLeft(  -x, dim_);
-            msg_->RepamRight( +x, dim_);
-            //msg_->RepamLeft( +x, dim_);
-            //msg_->RepamRight( +x, dim_);
-         } else {
-            assert(false);
-         }
-         return *this;
-      }
-      MsgVal& operator+=(const REAL x) __attribute__ ((always_inline))
-      {
-         assert(false);
-         if(CHIRALITY == Chirality::right) { // message is computed by right factor
-            msg_->RepamLeft( x, dim_);
-            msg_->RepamRight( x, dim_);
-         } else if(CHIRALITY == Chirality::left) { // message is computed by left factor
-            msg_->RepamLeft( x, dim_);
-            msg_->RepamRight( x, dim_);
-            //msg_->RepamLeft( -x, dim_);
-            //msg_->RepamRight( -x, dim_);
-         } else {
-            assert(false);
-         }
-         return *this;
-      }
-      // do zrobienia: this value should never be used. Remove function
-      //operator REAL() const __attribute__ ((always_inline)) { return static_cast<typename MessageContainerType::MessageStorageType*>(msg_)->operator[](dim_); }
-   private:
-      MessageContainerType* const msg_;
-      const INDEX dim_;
-   };
-
-   // this view of the message container is given to left and right factor respectively when receiving or sending messages
-   template<Chirality CHIRALITY>
-   class MessageContainerView : public MessageContainerType {
-   public:
-      //using MessageContainerType;
-      MsgVal<CHIRALITY> operator[](const INDEX i) 
-      {
-         return MsgVal<CHIRALITY>(this,i);
-      }
-
-      template<typename ARRAY>
-      MessageContainerType& operator-=(const ARRAY& diff) {
-        // note: order of below operations is important: When the message is e.g. just the potential, we must reparametrize the other side first!
-        if(CHIRALITY == Chirality::right) {
-          RepamLeft(diff);
-          RepamRight(-diff);
-        } else if(CHIRALITY == Chirality::left) {
-          RepamRight(diff);
-          RepamLeft(-diff);
-        } else {
-          assert(false);
-        }
-        return *this;
-      }
-
-   };
-
-   // for primal computation: record message change only in one side and into a special array
-   template<Chirality CHIRALITY>
-   class OneSideMsgVal
-   {
-   public:
-      OneSideMsgVal(MessageContainerType* msg, const INDEX dim) : 
-         msg_(msg), 
-         dim_(dim)
-      {}
-
-      OneSideMsgVal& operator-=(const REAL x) __attribute__ ((always_inline))
-      {
-         if(CHIRALITY == Chirality::right) { // message is received by right factor
-            msg_->RepamRight(-x, dim_);
-         } else if (CHIRALITY == Chirality::left) { // message is received by left factor
-            msg_->RepamLeft(-x, dim_);
-         } else {
-            assert(false);
-         }
-         return *this;
-      }
-
-      OneSideMsgVal& operator+=(const REAL x) __attribute__ ((always_inline))
-      {
-         assert(false);
-         return *this;
-      }
-
-   private:
-      MessageContainerType* const msg_;
-      const INDEX dim_;
-   };
-
-   // this view is given to receive restricted message operations. 
-   // Reparametrization is recorded only on one side
-   template<Chirality CHIRALITY>
-   class OneSideMessageContainerView : public MessageContainerType {
-   public:
-      //using MessageContainerType;
-      OneSideMsgVal<CHIRALITY> operator[](const INDEX i) 
-      {
-         return OneSideMsgVal<CHIRALITY>(this,i);
-      }
-
-      template<typename ARRAY>
-      MessageContainerType& operator-=(const ARRAY& diff) {
-        if(CHIRALITY == Chirality::right) {
-          RepamRight(-diff);
-        } else if(CHIRALITY == Chirality::left) {
-          RepamLeft(-diff);
-        } else {
-          assert(false);
-        }
-        return *this;
-      }
-
-   };
 
 
    // there must be four different implementations of msg updating with SIMD: 

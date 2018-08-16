@@ -13,7 +13,6 @@ add_definitions(-march=native)
 
 option(PARALLEL_OPTIMIZATION "Enable parallel optimization" OFF)
 
-add_subdirectory(external/ConicBundle)
 
 # Parallelisation support
 if(PARALLEL_OPTIMIZATION)
@@ -42,16 +41,17 @@ endif(PARALLEL_OPTIMIZATION)
 add_library(LP_MP INTERFACE)
 target_include_directories(LP_MP INTERFACE include)
 target_include_directories(LP_MP INTERFACE external/TCLAP/include)
+target_include_directories(LP_MP INTERFACE external/libsimdpp)
+target_include_directories(LP_MP INTERFACE external/meta/include)
+target_include_directories(LP_MP INTERFACE external/cpp-sort/include)
+target_include_directories(LP_MP INTERFACE external/TCLAP/include)
+target_include_directories(LP_MP INTERFACE external/BCFW-Bundle/include)
+target_include_directories(LP_MP INTERFACE external/ConicBundle/include)
 
-target_include_directories(LP_MP INTERFACE "external/libsimdpp")
-target_include_directories(LP_MP INTERFACE "external/meta/include")
-target_include_directories(LP_MP INTERFACE "external/cpp-sort/include")
-target_include_directories(LP_MP INTERFACE "external/TCLAP/include")
-target_include_directories(LP_MP INTERFACE "external/BCFW-Bundle/include")
-target_include_directories(LP_MP INTERFACE "${PROJECT_BINARY_DIR}/external/ConicBundle/include")
+add_subdirectory(external/BCFW-Bundle) 
+add_subdirectory(external/DD_ILP)
+add_subdirectory(external/ConicBundle)
 
-add_subdirectory("external/BCFW-Bundle") 
-add_subdirectory("external/DD_ILP")
 target_link_libraries(LP_MP INTERFACE DD_ILP)
 
 enable_testing()

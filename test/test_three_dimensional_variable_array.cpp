@@ -12,7 +12,7 @@ void test_three_dimensional_variable_array(T val_1, T val_2)
 
    for(std::size_t n=2; n<100; ++n) {
       std::mt19937 gen{rd()};
-      std::uniform_int_distribution<> dist{0,1000};
+      std::uniform_int_distribution<> dist{0,40};
       std::vector<std::array<std::size_t,2>> size(n);
       for(auto& x : size) {
          x[0] = dist(gen);
