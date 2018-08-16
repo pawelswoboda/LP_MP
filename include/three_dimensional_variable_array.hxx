@@ -17,47 +17,43 @@ public:
     template<typename ITERATOR>
     std::size_t set_dimensions(ITERATOR size_begin, ITERATOR size_end)
     {
+        dimensions_.clear();
+        dimensions_.reserve(std::distance(size_begin, size_end));
         std::size_t offset = 0;
         std::size_t size = 0;
         for(std::size_t i=0; i<std::distance(size_begin, size_end); ++i) {
-            dimensions_[i][0] = size_begin[i][0];
-            dimensions_[i][1] = size_begin[i][1];
-            dimensions_[i].offset = offset;
-            offset += dimensions_[i][0] * dimensions_[i][1];
-            size += dimensions_[i][0] * dimensions_[i][1];
+           dimensions_.push_back( dim_entry(size_begin[i][0], size_begin[i][1], offset) );
+           offset += dimensions_[i][0] * dimensions_[i][1];
+           size += dimensions_[i][0] * dimensions_[i][1];
         } 
         return size;
     }
 
     template<typename ITERATOR>
     three_dimensional_variable_array(ITERATOR size_begin, ITERATOR size_end)
-    : dimensions_(std::distance(size_begin, size_end))
     {
-       const auto size = set_dimensions(size_begin, size_end);
-       data_.resize(size);
+       const auto s = set_dimensions(size_begin, size_end);
+       data_.resize(s);
     }
 
     template<typename ITERATOR>
-       three_dimensional_variable_array(ITERATOR size_begin, ITERATOR size_end, T value)
-       : dimensions_(std::distance(size_begin, size_end))
-   {
-      set_dimensions(size_begin, size_end);
-      data_.resize(size, value);
-   }
+    three_dimensional_variable_array(ITERATOR size_begin, ITERATOR size_end, T value)
+    {
+       const auto s = set_dimensions(size_begin, size_end);
+       data_.resize(s, value);
+    }
 
     template<typename ITERATOR>
-    void resize(ITERATOR size_begin, ITERATOR size_end, T value = 0)
+    void resize(ITERATOR size_begin, ITERATOR size_end, T value)
     {
-       dimensions_.resize(std::distance(size_begin, size_end));
-       const auto size = set_dimensions(size_begin, size_end);
-       data_.resize(size,value);
+       const auto s = set_dimensions(size_begin, size_end);
+       data_.resize(s, value);
     }
 
     template<typename ITERATOR>
     void resize(ITERATOR size_begin, ITERATOR size_end)
     {
-       dimensions_.resize(std::distance(size_begin, size_end));
-       const auto size = set_dimensions(size_begin, size_end);
+       const auto s = set_dimensions(size_begin, size_end);
        data_.resize(size);
     }
 
@@ -98,6 +94,7 @@ public:
 
         const std::size_t dim1() const { return dim1_; }
         const std::size_t dim2() const { return dim2_; }
+        const std::size_t size() const { return dim1()*dim2(); }
         const T& operator()(const std::size_t x1, const std::size_t x2) const 
         { 
             assert(x1<dim1() && x2<dim2());
@@ -118,6 +115,7 @@ public:
 
         const std::size_t dim1() const { return dim1_; }
         const std::size_t dim2() const { return dim2_; }
+        const std::size_t size() const { return dim1()*dim2(); }
         const T& operator()(const std::size_t x1, const std::size_t x2) const 
         { 
             assert(x1<dim1() && x2<dim2());
@@ -159,7 +157,8 @@ private:
         return s;
     }
     struct dim_entry: public std::array<std::size_t,2> { // dim2, dim3
-        std::size_t offset; // offset into data array
+       dim_entry(const std::size_t dim_1, const std::size_t dim_2, const std::size_t _offset) : std::array<std::size_t,2>({dim_1,dim_2}), offset(_offset) {}
+       std::size_t offset; // offset into data array
     };
 
     std::vector<dim_entry> dimensions_; 

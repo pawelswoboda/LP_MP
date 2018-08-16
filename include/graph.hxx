@@ -228,7 +228,7 @@ namespace LP_MP {
 			std::sort(node_degrees.begin(), node_degrees.end(), [](const node_degree& n1, const node_degree& n2) { return n1.degree > n2.degree; });
 
 			// structure for recording masked edges
-			two_dim_variable_array<unsigned char> edge_mask(edges_);
+			two_dim_variable_array<unsigned char> edge_mask(edges_.size_begin(), edges_.size_end());
 			edge_mask.set(true);
 
 			std::vector<std::vector<std::size_t>> U(no_nodes());

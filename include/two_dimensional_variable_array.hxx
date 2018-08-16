@@ -16,36 +16,29 @@ class two_dim_variable_array
 {
 public:
    two_dim_variable_array() {}
-
-   template<typename T2>
-   two_dim_variable_array(const two_dim_variable_array<T2>& data)
-   {
-     allocate_memory(data.size_begin(), data.size_end());
-     if constexpr(std::is_same<T,T2>::value) {
-	     initialize(data);
-     }
-   }
-
-   template<typename T2>
-   void initialize(const two_dim_variable_array<T2>& data) {
-      for(std::size_t i=0; i<data.size(); ++i) {
-         for(std::size_t j=0; j<data[i].size(); ++j) {
-            (*this)[i][j] = data[i][j];
-         };
-      }
+   ~two_dim_variable_array() {
+      static_assert(!std::is_same_v<T,bool>, "value type cannot be bool");
    }
 
    // iterator holds size of each dimension of the two dimensional array
    template<typename I>
    two_dim_variable_array(const std::vector<I>& size)
    {
-      allocate_memory(size.begin(), size.end());
+      const std::size_t s = set_dimensions(size.begin(), size.end());
+      data_.resize(s);
    }
    // iterator holds size of each dimension of the two dimensional array
    template<typename ITERATOR>
-   two_dim_variable_array(ITERATOR begin, ITERATOR end)
+   two_dim_variable_array(ITERATOR size_begin, ITERATOR size_end)
    {
-      allocate_memory(begin,end);
+      const std::size_t s = set_dimensions(size_begin, size_end);
+      data_.resize(s);
+   }
+   template<typename ITERATOR>
+   two_dim_variable_array(ITERATOR size_begin, ITERATOR size_end, T val)
+   {
+      const std::size_t s = set_dimensions(size_begin, size_end);
+      data_.resize(s, val);
    }
 
    /*
@@ -63,7 +56,14 @@ public:
    template<typename ITERATOR>
    void resize(ITERATOR begin, ITERATOR end)
    {
-      allocate_memory(begin,end);
+      const std::size_t size = set_dimensions(begin,end);
+      data_.resize(size); 
+   }
+   template<typename ITERATOR>
+   void resize(ITERATOR begin, ITERATOR end, T val)
+   {
+      const std::size_t size = set_dimensions(begin,end);
+      data_.resize(size, val); 
    }
 
    struct ConstArrayAccessObject
@@ -202,18 +202,18 @@ public:
 
 private:
    template<typename ITERATOR>
-   void allocate_memory(ITERATOR begin, ITERATOR end)
+   std::size_t set_dimensions(ITERATOR begin, ITERATOR end)
    {
       // first calculate amount of memory needed in bytes
       const auto s = std::distance(begin, end);
-      std::size_t data_size = 0;
+      offsets_.clear();
       offsets_.reserve(s);
       offsets_.push_back(0);
       for(auto it=begin; it!=end; ++it) {
-          offsets_.push_back( offsets_.back() + *it );
-          data_size += *it;
+         assert(*it >= 0);
+         offsets_.push_back( offsets_.back() + *it );
       }
-      data_.resize(data_size);
+      return offsets_.back();
    }
 
    std::vector<std::size_t> offsets_;
