@@ -15,25 +15,8 @@ public:
     three_dimensional_variable_array() {}
 
     template<typename ITERATOR>
-    three_dimensional_variable_array(ITERATOR size_begin, ITERATOR size_end)
-    : dimensions_(std::distance(size_begin, size_end)),
-    data_(size(size_begin, size_end), 0)
+    std::size_t set_dimensions(ITERATOR size_begin, ITERATOR size_end)
     {
-        std::size_t offset = 0;
-        for(std::size_t i=0; i<std::distance(size_begin, size_end); ++i) {
-            dimensions_[i][0] = size_begin[i][0];
-            dimensions_[i][1] = size_begin[i][1];
-            dimensions_[i].offset = offset;
-            offset += dimensions_[i][0] * dimensions_[i][1];
-        }
-    }
-
-    template<typename ITERATOR>
-    void resize(ITERATOR size_begin, ITERATOR size_end)
-    {
-        assert(dimensions_.size() == 0);
-        dimensions_.resize(std::distance(size_begin, size_end));
-
         std::size_t offset = 0;
         std::size_t size = 0;
         for(std::size_t i=0; i<std::distance(size_begin, size_end); ++i) {
@@ -41,11 +24,41 @@ public:
             dimensions_[i][1] = size_begin[i][1];
             dimensions_[i].offset = offset;
             offset += dimensions_[i][0] * dimensions_[i][1];
-
             size += dimensions_[i][0] * dimensions_[i][1];
         } 
+        return size;
+    }
 
-        data_.resize(size);
+    template<typename ITERATOR>
+    three_dimensional_variable_array(ITERATOR size_begin, ITERATOR size_end)
+    : dimensions_(std::distance(size_begin, size_end))
+    {
+       const auto size = set_dimensions(size_begin, size_end);
+       data_.resize(size);
+    }
+
+    template<typename ITERATOR>
+       three_dimensional_variable_array(ITERATOR size_begin, ITERATOR size_end, T value)
+       : dimensions_(std::distance(size_begin, size_end))
+   {
+      set_dimensions(size_begin, size_end);
+      data_.resize(size, value);
+   }
+
+    template<typename ITERATOR>
+    void resize(ITERATOR size_begin, ITERATOR size_end, T value = 0)
+    {
+       dimensions_.resize(std::distance(size_begin, size_end));
+       const auto size = set_dimensions(size_begin, size_end);
+       data_.resize(size,value);
+    }
+
+    template<typename ITERATOR>
+    void resize(ITERATOR size_begin, ITERATOR size_end)
+    {
+       dimensions_.resize(std::distance(size_begin, size_end));
+       const auto size = set_dimensions(size_begin, size_end);
+       data_.resize(size);
     }
 
     T& operator()(const std::size_t x1, const std::size_t x2, const std::size_t x3) { 

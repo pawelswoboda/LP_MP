@@ -1,3 +1,11 @@
+add_executable(test_two_dimensional_variable_array test_two_dimensional_variable_array.cpp)
+target_link_libraries(test_two_dimensional_variable_array  LP_MP m stdc++)
+add_test(test_two_dimensional_variable_array  test_two_dimensional_variable_array) 
+
+add_executable(test_three_dimensional_variable_array test_three_dimensional_variable_array.cpp)
+target_link_libraries(test_three_dimensional_variable_array  LP_MP m stdc++)
+add_test(test_three_dimensional_variable_array  test_three_dimensional_variable_array) 
+
 add_executable(vector vector.cpp ${headers})
 target_link_libraries( vector LP_MP m stdc++ pthread )
 add_test( vector vector )
