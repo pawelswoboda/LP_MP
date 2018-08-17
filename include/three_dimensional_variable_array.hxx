@@ -54,7 +54,7 @@ public:
     void resize(ITERATOR size_begin, ITERATOR size_end)
     {
        const auto s = set_dimensions(size_begin, size_end);
-       data_.resize(size);
+       data_.resize(s);
     }
 
     T& operator()(const std::size_t x1, const std::size_t x2, const std::size_t x3) { 
